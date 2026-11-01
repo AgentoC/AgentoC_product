@@ -19,6 +19,10 @@ test setup is described in the main README. The broader `npm test` suite is
 still being verified across operating systems; a partial test result must not be
 reported as complete cross-platform coverage.
 
+The public CI also starts a disposable local source instance and checks its
+health endpoint, web root, and web bootstrap asset. This smoke check does not
+configure a provider or validate remote connectivity.
+
 Keep private configuration, keys, service data, personal screenshots, build
 outputs, and test instance data outside the Git-visible tree. The boundary script
 checks file names and locations only; it is not a content-level secret scan.

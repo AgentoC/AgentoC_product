@@ -27,3 +27,18 @@ jobs:
       - run: node tests/test-redirect-sensitive-headers.mjs
       - run: node tests/test-risk-dataset-benchmark.mjs
       - run: node --test --test-concurrency=1 tests/test-harness-registry.mjs tests/test-harness-policy.mjs tests/test-provider-contract.mjs tests/test-claude-adapter.mjs tests/test-accounts-server.mjs tests/test-demo-account-session.mjs tests/test-turn-broker-capability.mjs
+      - name: Start isolated source instance
+        shell: bash
+        run: |
+          node scripts/launch-test-instance.mjs --port 45678 --ttl 60 > "$RUNNER_TEMP/agentoc-smoke.log" 2>&1 &
+          launcher_pid=$!
+          trap 'kill "$launcher_pid" 2>/dev/null || true; wait "$launcher_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:45678/healthz > /dev/null; then ready=1; break; fi
+            if ! kill -0 "$launcher_pid" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then cat "$RUNNER_TEMP/agentoc-smoke.log"; exit 1; fi
+          curl --fail --silent http://127.0.0.1:45678/ > /dev/null
+          curl --fail --silent http://127.0.0.1:45678/chat/bootstrap.js > /dev/null
