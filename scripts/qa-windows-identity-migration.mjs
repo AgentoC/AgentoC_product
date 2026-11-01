@@ -1,0 +1,21 @@
+// Explicit read-only installed-state audit. Writes evidence only in workspace.
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { randomBytes, createHash } from 'node:crypto';
+import { assessWindowsIdentityMigration } from '../lib/windows-identity-migration.mjs';
+if (process.platform !== 'win32' || process.argv.length !== 3 || process.argv[2] !== '--audit') throw new Error('Explicit --audit on Windows required; this tool cannot apply a migration');
+const source = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const caseId = randomBytes(16).toString('hex'), root = join(source, 'artifacts/showcase/T2-current-20261017/identity-migration/audit-' + caseId);
+await mkdir(root, { recursive: true });
+const files = ['scripts/audit-windows-identity-migration.ps1', 'lib/windows-identity-migration.mjs', 'scripts/qa-windows-identity-migration.mjs', 'packaging/windows/AgentoC.ServiceHost.cs', 'packaging/windows/AgentoC.wxs', 'packaging/windows/install-agentoc.ps1'];
+const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+const sourceFiles = await Promise.all(files.map(async path => ({ path, sha256: hash(await readFile(join(source, path))) })));
+const { stdout } = await promisify(execFile)('C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', join(source, files[0])], { windowsHide: true, timeout: 30000, maxBuffer: 131072 });
+const snapshot = JSON.parse(stdout.replace(/^\uFEFF/, '').trim()), assessment = assessWindowsIdentityMigration(snapshot);
+for (const item of sourceFiles) if (hash(await readFile(join(source, item.path))) !== item.sha256) throw new Error('Audit source changed during execution');
+await writeFile(join(root, 'inventory.json'), JSON.stringify(snapshot, null, 2) + '\n');
+await writeFile(join(root, 'assessment.json'), JSON.stringify({ caseId, recordedAt: new Date().toISOString(), sourceFiles, ...assessment }, null, 2) + '\n');
+console.log(JSON.stringify({ caseId, auditCompleted: true, migrationReady: false, blockers: assessment.blockers, evidence: root }));

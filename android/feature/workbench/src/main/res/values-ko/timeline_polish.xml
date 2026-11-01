@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="timeline_details_show">세부정보 펼치기</string>
+    <string name="timeline_thinking">생각</string>
+    <string name="timeline_details_hide">세부정보 접기</string>
+    <string name="timeline_input">입력</string>
+    <string name="timeline_output">출력</string>
+    <string name="timeline_exit_code">종료 코드: %1$d</string>
+    <string name="timeline_done">완료</string>
+    <string name="timeline_failed">실패</string>
+    <string name="timeline_running">실행 중</string>
+    <string name="timeline_pending">대기 중</string>
+    <string name="timeline_send_failed">전송하지 못했어요</string>
+    <string name="timeline_retry">다시 시도</string>
+</resources>

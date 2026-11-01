@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"claude-fixture"}
+{"type":"assistant","session_id":"claude-fixture","message":{"id":"msg-edit","content":[{"type":"tool_use","id":"claude-tool-edit","name":"Edit","input":{"file_path":"/workspace/src/example.js","old_string":"before","new_string":"after"}}]}}
+{"type":"user","session_id":"claude-fixture","message":{"content":[{"type":"tool_result","tool_use_id":"claude-tool-edit","content":"edit applied","is_error":false}]}}
+{"type":"result","subtype":"success","session_id":"claude-fixture","usage":{"input_tokens":10,"output_tokens":4}}

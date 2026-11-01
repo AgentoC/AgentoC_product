@@ -1,0 +1,53 @@
+{
+  "id": "ws-push-then-http-delta",
+  "description": "WebSocket pushes streamed text_delta events (seq 5,6), the client renders them and advances its cursor, then a follow-up HTTP delta with afterSeq=6 returns nothing new. Pins cross-channel dedup via the shared latestSeq cursor plus the WS providerEventId dedup set.",
+  "sessionId": "sess-demo-003",
+  "note": "Contract-shaped fixture, not a byte-exact server capture. text_delta is transient: it is pushed live over WS but never persisted, so the HTTP persistent set never contains it. The cursor advance after WS render is what makes the subsequent HTTP delta empty.",
+  "initialRenderedLatestSeq": 4,
+  "wsPush": {
+    "type": "session_events",
+    "sessionId": "sess-demo-003",
+    "events": [
+      {
+        "seq": 5,
+        "id": "evt_000005",
+        "type": "text_delta",
+        "role": "assistant",
+        "timestamp": 1700000005000,
+        "runId": "run_def",
+        "providerEventId": "td_0001",
+        "text": "Hel"
+      },
+      {
+        "seq": 6,
+        "id": "evt_000006",
+        "type": "text_delta",
+        "role": "assistant",
+        "timestamp": 1700000005100,
+        "runId": "run_def",
+        "providerEventId": "td_0002",
+        "text": "lo"
+      }
+    ]
+  },
+  "afterWsRender": {
+    "nextRenderedLatestSeq": 6,
+    "wsDedupSetAdded": ["text_delta:td_0001", "text_delta:td_0002"],
+    "wsDedupSetNote": "filterRealtimeSessionEvents keys text_delta by 'text_delta:{providerEventId}' in seenRealtimeEventIds (LRU cap 8192), cleared on session switch."
+  },
+  "httpDeltaAfterWs": {
+    "request": { "afterSeq": 6 },
+    "response": {
+      "sessionId": "sess-demo-003",
+      "filter": "visible",
+      "events": [],
+      "operationUpdates": [],
+      "latestSeq": 6,
+      "resetRequired": false
+    },
+    "comment": "Cursor is already at 6 (WS render advanced it), and there are no persisted events with seq > 6, so the delta is empty. No cross-channel duplication."
+  },
+  "replaySuppression": {
+    "comment": "If the same text_delta (providerEventId td_0001) is pushed again over WS — e.g. a replay after a brief reconnect — filterRealtimeSessionEvents drops it because 'text_delta:td_0001' is already in seenRealtimeEventIds. The client never double-renders it."
+  }
+}

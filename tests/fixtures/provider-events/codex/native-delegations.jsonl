@@ -1,0 +1,16 @@
+{"method":"item/started","params":{"item":{"type":"collabAgentToolCall","id":"agent_a","tool":"spawn_agent","childThreadId":"codex-child-a"},"timestamp":2001}}
+{"method":"item/started","params":{"item":{"type":"collabAgentToolCall","id":"agent_a","tool":"send_input"},"timestamp":2002}}
+{"method":"item/started","params":{"item":{"type":"collabAgentToolCall","id":"agent_a","tool":"wait"},"timestamp":2003}}
+{"method":"item/started","params":{"item":{"type":"collabAgentToolCall","id":"agent_a","tool":"mark_lost"},"timestamp":2004}}
+{"method":"item/started","params":{"item":{"type":"collabAgentToolCall","id":"agent_a","tool":"resume_agent"},"timestamp":2005}}
+{"method":"item/completed","params":{"item":{"type":"collabAgentToolCall","id":"agent_a","tool":"close_agent","status":"completed"},"timestamp":2006}}
+{"method":"item/started","params":{"item":{"type":"collabAgentToolCall","id":"agent_failed","tool":"spawn_agent","childThreadId":"codex-child-failed"},"timestamp":2010}}
+{"method":"item/completed","params":{"item":{"type":"collabAgentToolCall","id":"agent_failed","tool":"close_agent","status":"failed"},"timestamp":2011}}
+{"method":"item/started","params":{"item":{"type":"collabAgentToolCall","id":"agent_cancelled","tool":"spawn_agent","childThreadId":"codex-child-cancelled"},"timestamp":2020}}
+{"method":"item/started","params":{"item":{"type":"collabAgentToolCall","id":"agent_cancelled","tool":"cancel"},"timestamp":2021}}
+{"method":"item/started","params":{"item":{"type":"collabAgentToolCall","id":"agent_interrupted","tool":"spawn_agent","childThreadId":"codex-child-interrupted"},"timestamp":2030}}
+{"method":"item/started","params":{"item":{"type":"collabAgentToolCall","id":"agent_interrupted","tool":"interrupt"},"timestamp":2031}}
+{"method":"item/started","params":{"item":{"type":"collabAgentToolCall","id":"agent_parent","tool":"spawn_agent","childThreadId":"codex-child-parent"},"timestamp":2040}}
+{"method":"item/started","params":{"item":{"type":"collabAgentToolCall","id":"agent_nested","tool":"spawn_agent","childThreadId":"codex-child-nested","parentDelegationId":"agent_parent"},"timestamp":2041}}
+{"method":"item/completed","params":{"item":{"type":"collabAgentToolCall","id":"agent_nested","tool":"close_agent","status":"completed"},"timestamp":2042}}
+{"method":"item/completed","params":{"item":{"type":"collabAgentToolCall","id":"agent_parent","tool":"close_agent","status":"completed"},"timestamp":2043}}

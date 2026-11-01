@@ -1,0 +1,3732 @@
+/* ---- Chat area ---- */
+.chat-area {
+  flex: 1;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  overflow: hidden;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  background: var(--chat-area-bg, #fff);
+}
+.chat-area > * {
+  min-width: 0;
+}
+
+/* Scroll-to-latest floating button: surfaces when the reader scrolls away from
+   the transcript bottom; tap returns to the latest content. Anchored to the
+   input-stack (position: relative) — the column that matches the message
+   column width on desktop — so it tracks composer and keyboard height and
+   stays aligned with the transcript content, floating just above the
+   composer. When the Live Bar or queued panel is present, layout-tooling raises
+   it above that complete floating-status stack instead of letting the controls
+   share the same vertical slot. */
+.scroll-to-bottom-fab {
+  position: absolute;
+  right: 12px;
+  /* 12px, not 8px: the transcript's bottom fade-overlay zone sits right
+     above the composer or the complete floating-status stack, and a smaller
+     gap reads as "sitting on the seam" between those surfaces. */
+  bottom: calc(100% + var(--chat-floating-status-fab-offset, 0px) + 12px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: var(--surface-hover, var(--surface-glass-fallback, var(--surface-raised, var(--bg-secondary))));
+  color: var(--text);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px) scale(0.92);
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+  /* Tight floating shadow: a wider cone (6px offset / 20px blur) reaches the
+     composer's top edge 12px below and darkens the seam, reading as overlap.
+     4px offset / 12px blur fades out before the composer. */
+  box-shadow:
+    0 4px 12px rgba(16, 21, 39, 0.18),
+    0 1px 2px rgba(16, 21, 39, 0.12),
+    inset 0 0 0 1px color-mix(in srgb, var(--border-strong) 55%, transparent);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur, 18px) * 0.72)) saturate(1.08);
+  backdrop-filter: blur(calc(var(--glass-blur, 18px) * 0.72)) saturate(1.08);
+  z-index: 4;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+/* A collapsed Live Bar shares the same 44px control tier as the FAB. Keep the
+   two controls on one baseline while the capsule is present, including any
+   queued follow-up stack below it. The `:has` state is intentional: capsule
+   folding/expanding commits the Live Bar attribute synchronously, so the FAB
+   can ride the same 320ms transition as the shell and never wait for a
+   resize observer to notice that both states are the same height. */
+.input-stack:has(.live-bar[data-collapsed="capsule"]:not([hidden])) .scroll-to-bottom-fab {
+  bottom: calc(
+    100%
+    + var(--chat-queued-panel-stack-height, 0px)
+    + var(--chat-floating-status-gap, 8px)
+  );
+}
+.input-stack:has(.live-bar[data-capsule-motion]) .scroll-to-bottom-fab {
+  --chat-live-bar-fab-fold-offset: calc(
+    var(--chat-floating-status-fab-offset, 0px)
+    - var(--chat-queued-panel-stack-height, 0px)
+    + 12px
+    - var(--chat-floating-status-gap, 8px)
+  );
+  will-change: transform;
+}
+.input-stack:has(.live-bar[data-capsule-motion="collapsing"][data-collapsed="capsule"]) .scroll-to-bottom-fab {
+  /* Let the shell narrow clear of the FAB's left edge before the FAB leaves
+     its safe upper lane; this keeps the shared-element path collision-free at
+     the exact width where the two controls would otherwise graze. */
+  animation: scroll-to-bottom-fab-collapse 320ms cubic-bezier(0.16, 1, 0.3, 1) 40ms both;
+}
+.input-stack:has(.live-bar[data-capsule-motion="expanding"]:not([data-collapsed="capsule"])) .scroll-to-bottom-fab {
+  /* Expansion opens the wide bar toward the FAB, so the return control takes
+     the upper lane slightly faster than the capsule shell widens. */
+  animation: scroll-to-bottom-fab-expand 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes scroll-to-bottom-fab-collapse {
+  from { transform: translateY(calc(0px - var(--chat-live-bar-fab-fold-offset))) scale(1); }
+  to { transform: translateY(0) scale(1); }
+}
+@keyframes scroll-to-bottom-fab-expand {
+  /* The shell widens toward the FAB. Start 12px above the capsule-aligned
+     position so the control clears the shell before the first frame of the
+     shared-element expansion, then settle into the normal status lane. */
+  from { transform: translateY(calc(var(--chat-live-bar-fab-fold-offset) - 12px)) scale(1); }
+  to { transform: translateY(0) scale(1); }
+}
+.scroll-to-bottom-fab.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+}
+.scroll-to-bottom-fab.is-streaming-unread::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent, #3b82f6);
+  box-shadow: 0 0 8px var(--accent, #3b82f6);
+  animation: streaming-fab-dot-pulse 1.4s ease-in-out infinite;
+}
+@keyframes streaming-fab-dot-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.95; }
+  50% { transform: scale(1.28); opacity: 0.5; }
+}
+.scroll-to-bottom-fab .rl-icon {
+  width: 22px;
+  height: 22px;
+}
+.scroll-to-bottom-fab:hover,
+.scroll-to-bottom-fab:focus-visible {
+  background: var(--bg-tertiary, var(--surface-hover, var(--bg-secondary)));
+}
+.scroll-to-bottom-fab:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--focus-border) 55%, transparent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scroll-to-bottom-fab {
+    transition: opacity 0.01s linear;
+    transform: none;
+  }
+  .input-stack:has(.live-bar[data-capsule-motion]) .scroll-to-bottom-fab {
+    transition: opacity 0.01s linear;
+    transform: none;
+    will-change: auto;
+  }
+  .input-stack:has(.live-bar[data-capsule-motion="collapsing"][data-collapsed="capsule"]) .scroll-to-bottom-fab,
+  .input-stack:has(.live-bar[data-capsule-motion="expanding"]:not([data-collapsed="capsule"])) .scroll-to-bottom-fab {
+    animation: none;
+  }
+  .scroll-to-bottom-fab.visible {
+    transform: none;
+  }
+  .msg-failed-actions button {
+    transition: none;
+  }
+}
+
+/* The bottom overlay is measured in layout-tooling.js. The compositor FLIP
+   helper handles elements that physically move, while the existing cancellable
+   scroll animator keeps a bottom-pinned transcript visually attached to the
+   new inset. The layout variable itself is applied immediately — no global
+   padding/height transition that could thrash layout during streaming. */
+@property --chat-bottom-overlay-height {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+/* ---- Messages ---- */
+.messages {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  z-index: 0;
+  position: relative;
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 var(--chat-edge) calc(20px + var(--chat-bottom-overlay-height, 0px));
+  min-height: 0;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* The keyed timeline lets the browser retain the visible item while older
+     roots are inserted above it. */
+  overflow-anchor: auto;
+  background: transparent;
+}
+/* Older history uses an explicit scroll-height/semantic-anchor transaction.
+   Native anchoring would apply a second correction before that transaction's
+   restore frame and can make the viewport visibly jump. */
+.messages.is-prepending-history {
+  overflow-anchor: none;
+}
+.messages::before {
+  content: "";
+  display: block;
+  height: calc(var(--app-header-height) + var(--safe-top) + 20px);
+}
+.messages-inner {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  position: relative;
+}
+.messages-inner.is-session-transitioning {
+  cursor: progress;
+  /* Soft defocus indicates background transition without disorienting the user
+     or relying on an off-screen blind-spot spinner at top: 14px. */
+  opacity: 0.82;
+  filter: blur(1.5px);
+  transition:
+    opacity 180ms var(--motion-ease-emphasized, cubic-bezier(0.16, 1, 0.3, 1)),
+    filter 180ms ease;
+}
+.messages-inner.is-session-swap-in {
+  animation: session-swap-in 200ms var(--motion-ease-emphasized, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+@keyframes session-swap-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* Keep every timeline root in normal layout so browser scroll anchoring can
+   account for prepended history in the same layout transaction. */
+.messages-history-loader {
+  position: sticky;
+  z-index: 8;
+  top: calc(var(--app-header-height) + var(--safe-top) + 8px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity var(--motion-base) var(--motion-ease-out),
+    transform var(--motion-base) var(--motion-ease-out);
+}
+.messages-history-loader.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.messages-history-loader.is-leaving {
+  transition-duration: 160ms;
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.messages-history-loader__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  margin-top: 2px;
+  padding: 5px 10px 5px 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  box-shadow: var(--shadow-card-quiet);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: nowrap;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.messages-history-loader__dot {
+  position: relative;
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--notice);
+  color: var(--notice);
+}
+.messages-history-loader__dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 1px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: history-loader-spin 900ms linear infinite;
+}
+.messages-history-loader__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; color: var(--text-muted); text-align: center; padding: 48px 24px;
+  gap: 6px;
+}
+.empty-state h2 {
+  font-size: 24px; margin-bottom: 4px; color: var(--text); font-weight: 700;
+  letter-spacing: normal;
+}
+.empty-state p { font-size: 14px; line-height: 1.65; max-width: 340px; color: var(--text-muted); }
+.empty-state-actions {
+  display: none;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 18px;
+}
+.empty-state.empty-state--workspace-empty .empty-state-actions {
+  display: flex;
+}
+.empty-state-action {
+  min-width: 132px;
+  min-height: 46px;
+  padding: 12px 18px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--surface-soft, var(--bg-secondary));
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.empty-state-action.primary {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+.empty-state-action:hover {
+  border-color: var(--border-strong);
+}
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes history-entry-in {
+  from { opacity: 0; transform: translate3d(0, -6px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes history-loader-spin {
+  to { transform: rotate(360deg); }
+}
+.messages-inner .history-entry-node {
+  animation: history-entry-in 260ms var(--motion-ease-emphasized)
+    var(--history-entry-delay, 0ms) both;
+}
+/* A durable session page is a replacement snapshot, not a sequence of new
+   messages. Keep its roots stable while the parent surface crossfades in. */
+.messages-inner .history-restored-node {
+  animation: none !important;
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+.live-operation-row {
+  width: 100%;
+  min-width: 0;
+  margin: 5px 0 9px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--surface-soft, color-mix(in srgb, var(--tool-bg) 76%, transparent));
+  box-shadow:
+    var(--shadow-soft, 0 8px 20px rgba(16, 21, 39, 0.06)),
+    inset 3px 0 0 color-mix(in srgb, var(--notice) 38%, transparent);
+  color: var(--text-secondary);
+  transition:
+    background var(--motion-base) var(--motion-ease-standard),
+    box-shadow var(--motion-base) var(--motion-ease-standard),
+    opacity var(--motion-base) var(--motion-ease-standard);
+}
+.live-operation-row__summary {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) max-content 14px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 9px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.live-operation-row__summary:not(:disabled) {
+  cursor: pointer;
+}
+.live-operation-row__summary:active:not(:disabled) {
+  transform: scale(0.985);
+}
+.live-operation-row__summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--focus-border) 72%, transparent);
+  outline-offset: -2px;
+}
+.live-operation-row__mark {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  color: var(--notice);
+}
+.live-operation-row__mark::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.live-operation-row.state-running .live-operation-row__mark::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid color-mix(in srgb, currentColor 34%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: live-operation-spin 1.1s linear infinite;
+}
+.live-operation-row.state-completed .live-operation-row__mark,
+.live-operation-row.state-completed .live-operation-row__label {
+  color: var(--success);
+}
+.live-operation-row.state-completed {
+  box-shadow:
+    var(--shadow-soft, 0 8px 20px rgba(16, 21, 39, 0.06)),
+    inset 3px 0 0 color-mix(in srgb, var(--success) 44%, transparent);
+}
+.live-operation-row.state-completed .live-operation-row__mark::before {
+  content: "\2713";
+  inset: auto;
+  background: none;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 12px;
+}
+.live-operation-row.state-failed .live-operation-row__mark,
+.live-operation-row.state-failed .live-operation-row__label {
+  color: var(--error);
+}
+.live-operation-row.state-failed,
+.live-operation-row.state-declined {
+  box-shadow:
+    var(--shadow-soft, 0 8px 20px rgba(16, 21, 39, 0.06)),
+    inset 3px 0 0 color-mix(in srgb, var(--error) 52%, transparent);
+}
+.live-operation-row.state-failed .live-operation-row__mark::before,
+.live-operation-row.state-declined .live-operation-row__mark::before {
+  content: "\00d7";
+  inset: auto;
+  background: none;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 11px;
+}
+.live-operation-row.state-interrupted .live-operation-row__mark::before {
+  inset: 2px;
+  border-radius: 1px;
+  background: var(--text-muted);
+}
+.live-operation-row.state-interrupted {
+  box-shadow:
+    var(--shadow-soft, 0 8px 20px rgba(16, 21, 39, 0.06)),
+    inset 3px 0 0 color-mix(in srgb, var(--text-muted) 40%, transparent);
+}
+.live-operation-row.state-waiting_approval .live-operation-row__mark::before {
+  content: "!";
+  inset: auto;
+  background: none;
+  color: var(--warning);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 12px;
+}
+.live-operation-row.state-waiting_approval {
+  box-shadow:
+    var(--shadow-soft, 0 8px 20px rgba(16, 21, 39, 0.06)),
+    inset 3px 0 0 color-mix(in srgb, var(--warning) 52%, transparent);
+}
+.live-operation-row__label {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.live-operation-row__copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+.live-operation-row__summary-text {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 560;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.live-operation-row__copy .live-operation-row__label {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 550;
+}
+.live-operation-row__detail {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.live-operation-row__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.live-operation-row__exit {
+  color: var(--error);
+}
+.live-operation-row__chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--motion-fast) ease;
+}
+.live-operation-row__chevron .rl-icon {
+  width: 13px;
+  height: 13px;
+}
+.live-operation-row.is-expanded .live-operation-row__chevron {
+  transform: rotate(90deg);
+}
+.live-operation-row__body {
+  margin: 0 9px 8px 30px;
+  overflow: hidden;
+  border-left: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  color: var(--text-secondary);
+}
+.live-operation-row__detail-body {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 5px 8px;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.live-operation-row__runtime {
+  padding: 0 8px 6px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.live-operation-row__body[hidden] {
+  display: none !important;
+}
+.live-operation-row__output {
+  max-height: 152px;
+  margin: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 5px 8px;
+  color: var(--text-secondary);
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.live-operation-row__files {
+  display: grid;
+  gap: 3px;
+  padding: 4px 8px;
+}
+.live-operation-row__file {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.live-operation-row.activity-target-focus {
+  background: color-mix(in srgb, var(--notice) 7%, var(--tool-bg));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--notice) 30%, transparent),
+    var(--shadow-soft, 0 8px 20px rgba(16, 21, 39, 0.06)),
+    inset 3px 0 0 color-mix(in srgb, var(--notice) 60%, transparent);
+}
+@keyframes live-operation-spin {
+  to { transform: rotate(360deg); }
+}
+
+.live-operation-fold {
+  width: 100%;
+  min-width: 0;
+  margin: 5px 0 9px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--surface-soft, color-mix(in srgb, var(--tool-bg) 76%, transparent));
+  box-shadow: var(--shadow-soft, 0 8px 20px rgba(16, 21, 39, 0.06));
+  color: var(--text-secondary);
+  transition:
+    background var(--motion-base) var(--motion-ease-standard),
+    box-shadow var(--motion-base) var(--motion-ease-standard);
+}
+.live-operation-fold__summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.live-operation-fold__summary:not(:disabled) {
+  cursor: pointer;
+}
+.live-operation-fold__summary:active:not(:disabled) {
+  transform: scale(0.985);
+}
+.live-operation-fold__summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--focus-border) 72%, transparent);
+  outline-offset: -2px;
+}
+.live-operation-fold__count {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.live-operation-fold__chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--motion-fast) ease;
+}
+.live-operation-fold__chevron .rl-icon {
+  width: 13px;
+  height: 13px;
+}
+.live-operation-fold.is-expanded .live-operation-fold__chevron {
+  transform: rotate(90deg);
+}
+.live-operation-fold__body {
+  margin: 0 9px 8px 16px;
+  overflow: hidden;
+  border-left: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+}
+.live-operation-fold__body[hidden] {
+  display: none !important;
+}
+.live-operation-fold__body .live-operation-row {
+  margin: 5px 0;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+@property --mobile-live-dot-axis-offset {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 7px;
+}
+
+/* Each 7.2s cycle advances pairs and then the remaining point. The pair
+   order is AB -> BC -> AC, with the next single point completing each move. */
+@keyframes mobile-live-dot-sequence-a {
+  0% { --mobile-live-dot-axis-offset: 7px; }
+  8.333% { --mobile-live-dot-axis-offset: -7px; }
+  16.667% { --mobile-live-dot-axis-offset: -7px; }
+  25% { --mobile-live-dot-axis-offset: -7px; }
+  33.333% { --mobile-live-dot-axis-offset: 7px; }
+  41.667% { --mobile-live-dot-axis-offset: -7px; }
+  50% { --mobile-live-dot-axis-offset: -7px; }
+  58.333% { --mobile-live-dot-axis-offset: 7px; }
+  66.667% { --mobile-live-dot-axis-offset: 7px; }
+  75% { --mobile-live-dot-axis-offset: 7px; }
+  83.333% { --mobile-live-dot-axis-offset: -7px; }
+  91.667% { --mobile-live-dot-axis-offset: 7px; }
+  100% { --mobile-live-dot-axis-offset: 7px; }
+}
+
+@keyframes mobile-live-dot-sequence-b {
+  0% { --mobile-live-dot-axis-offset: 7px; }
+  8.333% { --mobile-live-dot-axis-offset: -7px; }
+  16.667% { --mobile-live-dot-axis-offset: -7px; }
+  25% { --mobile-live-dot-axis-offset: 7px; }
+  33.333% { --mobile-live-dot-axis-offset: 7px; }
+  41.667% { --mobile-live-dot-axis-offset: 7px; }
+  50% { --mobile-live-dot-axis-offset: -7px; }
+  58.333% { --mobile-live-dot-axis-offset: -7px; }
+  66.667% { --mobile-live-dot-axis-offset: 7px; }
+  75% { --mobile-live-dot-axis-offset: -7px; }
+  83.333% { --mobile-live-dot-axis-offset: -7px; }
+  91.667% { --mobile-live-dot-axis-offset: 7px; }
+  100% { --mobile-live-dot-axis-offset: 7px; }
+}
+
+@keyframes mobile-live-dot-sequence-c {
+  0% { --mobile-live-dot-axis-offset: 7px; }
+  8.333% { --mobile-live-dot-axis-offset: 7px; }
+  16.667% { --mobile-live-dot-axis-offset: -7px; }
+  25% { --mobile-live-dot-axis-offset: 7px; }
+  33.333% { --mobile-live-dot-axis-offset: 7px; }
+  41.667% { --mobile-live-dot-axis-offset: -7px; }
+  50% { --mobile-live-dot-axis-offset: -7px; }
+  58.333% { --mobile-live-dot-axis-offset: 7px; }
+  66.667% { --mobile-live-dot-axis-offset: 7px; }
+  75% { --mobile-live-dot-axis-offset: -7px; }
+  83.333% { --mobile-live-dot-axis-offset: -7px; }
+  91.667% { --mobile-live-dot-axis-offset: -7px; }
+  100% { --mobile-live-dot-axis-offset: 7px; }
+}
+
+@keyframes mobile-live-dots-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* The current-action line is rendered on both phone and desktop. Keep the
+   indicator's geometry and motion in the base rule; the mobile media query
+   below should only tune typography and spacing. */
+.mobile-live-activity-line {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  margin: 2px 0 14px;
+  color: var(--text);
+  font-size: var(--font-size-body, 16px);
+  line-height: 1.5;
+  min-height: 26px;
+  height: 26px;
+  animation: fadeIn 0.14s ease;
+}
+/* The send window shows this row before the run starts (msgAssistantPending);
+   is-leaving is its teardown fade when a send fails or is superseded. */
+.mobile-live-activity-line.is-leaving {
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 140ms ease, transform 140ms ease;
+  pointer-events: none;
+}
+.mobile-live-activity-line__dots {
+  --mobile-live-dot-radius: 7.5px;
+  position: relative;
+  top: -1px;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  transform-origin: 50% 50%;
+  will-change: transform;
+  animation: mobile-live-dots-rotate 7.2s linear infinite;
+}
+.mobile-live-activity-line__dot {
+  --mobile-live-dot-axis-offset: 7px;
+  --mobile-live-dot-angle: 0deg;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translate(-50%, -50%) rotate(var(--mobile-live-dot-angle)) translateX(var(--mobile-live-dot-axis-offset));
+  will-change: transform;
+  animation-duration: 7.2s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+.mobile-live-activity-line__dot:nth-child(1) {
+  --mobile-live-dot-angle: 0deg;
+  animation-name: mobile-live-dot-sequence-a;
+}
+.mobile-live-activity-line__dot:nth-child(2) {
+  --mobile-live-dot-angle: 120deg;
+  animation-name: mobile-live-dot-sequence-b;
+}
+.mobile-live-activity-line__dot:nth-child(3) {
+  --mobile-live-dot-angle: 240deg;
+  animation-name: mobile-live-dot-sequence-c;
+}
+.mobile-live-activity-line__label {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  height: 1.5em;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+@media (max-width: 720px) {
+  .mobile-live-activity-line {
+    font-size: var(--font-size-body, 16px);
+  }
+  .live-operation-row__summary {
+    grid-template-columns: 14px minmax(0, 1fr) max-content 14px;
+    gap: 7px;
+    min-height: 38px;
+  }
+  .live-operation-row__label {
+    display: none;
+  }
+  .live-operation-row__detail {
+    font-size: 10px;
+  }
+  .live-operation-row__body {
+    margin-left: 29px;
+  }
+  .live-operation-row__output {
+    max-height: 126px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-live-activity-line,
+  .mobile-live-activity-line__dots,
+  .mobile-live-activity-line__dot,
+  .mobile-live-activity-line__label,
+  .live-operation-row,
+  .live-operation-row__chevron,
+  .live-operation-row.state-running .live-operation-row__mark::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .mobile-live-activity-line__dots {
+    transform: none !important;
+    will-change: auto;
+  }
+  .live-operation-row.state-running .live-operation-row__mark::after {
+    border-color: color-mix(in srgb, currentColor 34%, transparent);
+  }
+  .messages-history-loader {
+    transition: none !important;
+  }
+  .messages-history-loader__dot::after {
+    animation: none !important;
+    border-right-color: currentColor;
+  }
+  .messages-inner .history-entry-node {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+}
+
+.messages-inner.restoring-session-snapshot .msg-user,
+.messages-inner.restoring-session-snapshot .msg-assistant,
+.messages-inner.restoring-session-snapshot .tool-card,
+.messages-inner.restoring-session-snapshot .thinking-block {
+  animation: none !important;
+}
+.messages-inner.is-session-transitioning .history-entry-node,
+.messages-inner.is-session-transitioning .msg-user,
+.messages-inner.is-session-transitioning .msg-assistant,
+.messages-inner.is-session-transitioning .tool-card,
+.messages-inner.is-session-transitioning .thinking-block {
+  animation: none !important;
+  transform: none !important;
+}
+
+/* ---- Session loading skeleton (shown only when a fetch is slow) ---- */
+.messages-loading-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 4px 10px;
+}
+.messages-loading-skeleton__user-row {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+}
+.messages-loading-skeleton__user-bubble {
+  width: min(52%, 280px);
+  height: 38px;
+  border-radius: 18px;
+  border-bottom-right-radius: 4px;
+}
+.messages-loading-skeleton__assistant-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+}
+.messages-loading-skeleton__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.messages-loading-skeleton__lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  max-width: min(85%, 520px);
+  padding-top: 4px;
+}
+.messages-loading-skeleton__bar {
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--text-secondary) 9%, transparent) 25%,
+    color-mix(in srgb, var(--text-secondary) 17%, transparent) 50%,
+    color-mix(in srgb, var(--text-secondary) 9%, transparent) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-sweep {
+  to { background-position: -200% 0; }
+}
+
+/* A failed attach must remain actionable after the transcript was cleared.
+   Keep the notice in the scroll host so it stays reachable while a long
+   existing transcript is retained during a background refresh. */
+.messages-session-error {
+  position: sticky;
+  z-index: 9;
+  top: calc(var(--app-header-height) + var(--safe-top) + 10px);
+  display: flex;
+  justify-content: center;
+  width: min(100%, 560px);
+  margin: 0 auto 12px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity var(--motion-base) var(--motion-ease-out),
+    transform var(--motion-base) var(--motion-ease-out);
+}
+.messages-session-error.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.messages-session-error__surface {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 14px;
+  align-items: center;
+  width: 100%;
+  padding: 14px 18px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--surface-raised, #ffffff);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
+  color: var(--text);
+  pointer-events: auto;
+}
+.messages-session-error__title,
+.messages-session-error__body {
+  min-width: 0;
+  grid-column: 1;
+}
+.messages-session-error__title {
+  color: var(--status-failed);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+.messages-session-error__body {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.messages-session-error__retry {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  min-height: 40px;
+  padding: 8px 18px;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--status-failed, #dc2626);
+  color: #ffffff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--status-failed) 32%, transparent);
+  transition: transform 120ms ease, filter 120ms ease, background 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.messages-session-error__retry:hover {
+  filter: brightness(1.08);
+}
+.messages-session-error__retry:active {
+  transform: scale(0.96);
+  filter: brightness(0.92);
+}
+.messages-session-error__retry:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+/* ---- Streaming frontier ----
+   Keep the stable prefix visually inert. A single coalesced frontier span
+   gives newly revealed text a short opacity-only arrival; it never translates
+   or changes line metrics, so the message reads as one continuous surface. */
+.streaming-text-frontier {
+  animation: streaming-text-frontier-in 100ms var(--motion-ease-standard, ease-out) both;
+}
+@keyframes streaming-text-frontier-in {
+  from { opacity: 0.58; }
+  to { opacity: 1; }
+}
+.streaming-caret {
+  display: inline-block;
+  width: 0;
+  height: 1em;
+  margin: 0;
+  padding: 0;
+  vertical-align: -0.1em;
+  position: relative;
+  border-radius: 999px;
+  background: transparent;
+  pointer-events: none;
+}
+/* The caret itself keeps the classic thin-bar shape drawn by ::after so the
+   anchor can stay zero-width (no premature line wrap) while the visible
+   geometry matches the pre-glow-bead cursor: 3px bar, soft opacity blink. */
+.streaming-caret::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  bottom: -0.08em;
+  width: 3px;
+  height: 1.05em;
+  border-radius: 999px;
+  background: currentColor;
+  animation: streaming-caret-pulse 1.1s var(--motion-ease-standard, ease-in-out) infinite;
+}
+@keyframes streaming-caret-pulse {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 0.3; }
+}
+.streaming-block-segment {
+  animation: streaming-block-in var(--motion-enter, 280ms) var(--motion-ease-emphasized, ease-out) both;
+}
+@keyframes streaming-block-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streaming-text-frontier,
+  .streaming-caret,
+  .streaming-block-segment {
+    animation: none;
+  }
+  .messages-inner.is-session-transitioning {
+    transition: none;
+    filter: none;
+  }
+  .messages-inner.is-session-swap-in,
+  .msg-user {
+    animation: none !important;
+    transform: none !important;
+  }
+  .msg-user-local-echo .msg-user-bubble {
+    transition: none;
+  }
+  .streaming-caret,
+  .streaming-caret::after,
+  .streaming-block-segment,
+  .scroll-to-bottom-fab.is-streaming-unread::after,
+  .messages-loading-skeleton__bar {
+    animation: none !important;
+  }
+}
+
+/* ---- Optimistic send echo ----
+   Network latency must not turn the user's message into a progress meter.
+   Keep the bubble at its committed contrast from the first frame: long or
+   bursty transport updates then have no visible opacity steps to amplify the
+   feeling of a stalled send. */
+.msg-user-local-echo .msg-user-bubble {
+  background: var(--user-bubble);
+  transition: none;
+}
+
+/* User message — bubble right-aligned.
+   The send-time flight to the top dock is NOT a CSS animation: it is played
+   imperatively (Web Animations API) on the echo element in
+   launchUserMessageToTop, because an Animation object ends cleanly at the
+   element's natural position and survives the echo -> committed upgrade that
+   happens on the same element. A class-driven animation here would need
+   class/timeout cleanup races and re-trigger this entry animation on removal. */
+.msg-user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-end;
+  margin-bottom: 18px;
+  animation: user-msg-launch 240ms var(--motion-ease-emphasized, cubic-bezier(0.16, 1, 0.3, 1));
+}
+@keyframes user-msg-launch {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Active turn runway spacer ensuring newly sent message always elevates to top.
+   Height is written by syncTurnViewportSpacerOnGrowth in the same task as the
+   paired scrollTop write, so it must not transition: a height transition would
+   desync scrollHeight from the already-applied scrollTop and the browser's
+   clamp would shift the transcript a second time (visible post-send jump). */
+.turn-viewport-spacer {
+  display: block;
+  width: 100%;
+  height: 0px;
+  min-height: 0;
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+/* The send window reuses the live activity row (see
+   createAssistantPendingNode), so no separate pending card is styled here. */
+.msg-user > .msg-images {
+  width: min(85%, 520px);
+  justify-content: flex-end;
+  margin: 0 0 6px;
+}
+.msg-user-bubble {
+  position: relative;
+  background: var(--user-bubble);
+  border: 1px solid transparent;
+  border-radius: 20px;
+  border-bottom-right-radius: 6px;
+  box-shadow: var(--shadow-soft, 0 7px 18px rgba(16, 21, 39, 0.06));
+  padding: 11px 16px;
+  font-size: var(--font-size-body, 16px);
+  line-height: 1.55;
+  word-wrap: break-word;
+  max-width: 85%;
+  color: var(--text);
+}
+.msg-user-bubble > .md-content,
+.msg-user-bubble > span.md-content {
+  display: block;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.msg-user-bubble .md-content p:last-child {
+  margin-bottom: 0;
+}
+.msg-user-bubble > .msg-user-content--collapsed {
+  max-height: calc(1.65em * 7);
+  overflow: hidden;
+}
+.msg-user-disclosure {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: 40px;
+  margin: 2px 0 -5px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--m3-shape-small, 8px);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.msg-user-disclosure:hover,
+.msg-user-disclosure:focus-visible {
+  background: var(--m3-state-hover, var(--surface-hover));
+  color: var(--text);
+}
+.msg-user-disclosure:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--focus-border) 56%, transparent);
+  outline-offset: 1px;
+}
+.msg-user-bubble .md-content table {
+  background: color-mix(in srgb, var(--user-bubble) 85%, var(--bg));
+  border-radius: 8px;
+  overflow: hidden;
+}
+.msg-user-bubble .md-content th {
+  background: color-mix(in srgb, var(--user-bubble) 70%, var(--bg-secondary));
+}
+.msg-user-bubble .md-content code {
+  background: color-mix(in srgb, var(--user-bubble) 70%, var(--bg-tertiary));
+}
+.msg-user-bubble .md-content pre {
+  background: color-mix(in srgb, var(--user-bubble) 70%, var(--bg-tertiary));
+}
+.color-chip {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  vertical-align: -1.5px;
+  margin-left: 3px;
+  margin-right: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+.msg-timestamp {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-secondary);
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+.msg-user-time {
+  text-align: right;
+}
+.msg-meta {
+  position: absolute;
+  /* Start the hit area at the message edge. The 4px visual breathing room
+     lives inside the metadata row so moving from the message to its actions
+     never crosses a hover gap and collapses the row underneath the pointer. */
+  top: 100%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  max-height: none;
+  margin-top: 0;
+  overflow: visible;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition: opacity 0.14s ease, transform 0.14s ease, visibility 0.14s ease;
+}
+.msg-user-bubble .msg-meta {
+  right: 0;
+  justify-content: flex-end;
+}
+.msg-assistant .msg-meta {
+  left: 0;
+  justify-content: flex-start;
+}
+.msg-meta .msg-timestamp {
+  margin-top: 0;
+}
+.msg-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.msg-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+.msg-action-btn:hover,
+.msg-action-btn:focus-visible {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.msg-action-btn:focus-visible {
+  border-color: color-mix(in srgb, var(--focus-border) 55%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--focus-border) 26%, transparent);
+  outline-offset: 2px;
+}
+.msg-action-btn.copied {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, var(--surface-soft, var(--bg-secondary)));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 26%, transparent);
+}
+.msg-action-btn.is-forking {
+  color: var(--focus-border);
+  opacity: 0.72;
+  cursor: wait;
+}
+.msg-action-btn.is-forking .rl-icon {
+  animation: msg-fork-pulse 0.9s ease-in-out infinite;
+}
+@keyframes msg-fork-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1); }
+}
+.msg-action-btn .rl-icon {
+  width: 14px;
+  height: 14px;
+}
+.msg-user:hover .msg-meta,
+.msg-user:focus-within .msg-meta,
+.msg-assistant:hover .msg-meta,
+.msg-assistant:focus-within .msg-meta {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.msg-user:not(.is-editable) .msg-action-btn--edit,
+.msg-user-local-echo .msg-meta,
+.msg-assistant.is-live .msg-meta {
+  display: none;
+}
+/* Long-press menu for user messages (copy / edit-and-resend). The menu is
+   portaled to body and positioned against the bubble by ui.js, so it remains
+   a real floating surface instead of becoming a nested card inside the sent
+   message. It stays compact and action-focused: labels are visible, rows are
+   thumb-friendly, and the surface can flip above the bubble near the bottom
+   edge of the visual viewport. */
+.msg-touch-menu {
+  position: fixed;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: min(168px, calc(100vw - 28px));
+  max-width: calc(100vw - 28px);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--surface-raised, var(--bg-secondary)) 94%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.15);
+  backdrop-filter: blur(24px) saturate(1.15);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.92) translateY(6px);
+  transform-origin: top right;
+  transition: opacity 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.msg-touch-menu[data-placement="above"] {
+  transform: scale(0.92) translateY(-6px);
+  transform-origin: bottom right;
+}
+.msg-touch-menu.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1) translateY(0);
+}
+.msg-touch-menu .msg-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 35px;
+  padding: 0 12px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  justify-content: flex-start;
+  text-align: left;
+  box-shadow: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1), color 120ms ease;
+}
+.msg-touch-menu .msg-action-btn:hover,
+.msg-touch-menu .msg-action-btn:focus-visible {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--text);
+}
+.msg-touch-menu .msg-action-btn:active {
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  transform: scale(0.985);
+}
+.msg-touch-menu .msg-action-btn + .msg-action-btn {
+  border-top: 1px solid color-mix(in srgb, var(--divider-subtle, var(--border)) 35%, transparent);
+}
+.msg-touch-menu .msg-action-btn .rl-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  transition: transform 120ms ease;
+}
+.msg-touch-menu .msg-action-btn:active .rl-icon {
+  transform: scale(0.92);
+}
+.msg-touch-menu .msg-action-btn.copied {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+.msg-touch-menu .msg-action-btn.copied .rl-icon {
+  color: var(--success);
+}
+.msg-touch-menu .msg-action-btn__label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+@media (hover: none), (pointer: coarse), (max-width: 720px) {
+  .msg-timestamp {
+    display: none !important;
+  }
+  .msg-meta {
+    position: static;
+    max-height: none;
+    margin-top: 0;
+    overflow: visible;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+    transition: none;
+  }
+  .msg-assistant.is-live .msg-meta {
+    display: none;
+  }
+  .msg-user .msg-meta,
+  .msg-user-local-echo .msg-meta {
+    display: none !important;
+  }
+  .msg-assistant .msg-meta {
+    display: flex;
+    min-height: 32px;
+    margin-top: 6px;
+  }
+  .msg-assistant .msg-actions {
+    display: inline-flex;
+    gap: 3px;
+  }
+  .msg-assistant .msg-action-btn {
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-muted);
+  }
+  .msg-assistant .msg-action-btn .rl-icon {
+    width: 16px;
+    height: 16px;
+  }
+  .msg-assistant .msg-action-btn:active {
+    background: var(--surface-hover);
+    transform: scale(0.92);
+  }
+}
+.msg-images { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+.msg-images img,
+.msg-images video {
+  max-width: 200px; max-height: 150px; border-radius: 8px; cursor: pointer;
+  object-fit: cover;
+}
+.msg-images audio {
+  border-radius: 8px;
+  max-height: none;
+  min-width: 220px;
+  background: var(--bg-secondary);
+  padding: 4px;
+  cursor: default;
+}
+.msg-images .attachment-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  background: var(--surface-soft, var(--bg-secondary));
+  box-shadow: none;
+  color: var(--text);
+  text-decoration: none;
+  width: min(320px, 100%);
+  max-width: 320px;
+  border-radius: 12px;
+}
+.msg-images .attachment-link {
+  cursor: pointer;
+}
+.msg-images .attachment-card:hover {
+  background: var(--surface-hover);
+  border-color: color-mix(in srgb, var(--divider-subtle) 82%, transparent);
+}
+.msg-images .attachment-card .attachment-file {
+  /* The download action is a sibling in the same row. Let the file shell
+     shrink beside it instead of taking the card's full width and wrapping
+     the action below the attachment metadata. */
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+.attachment-card-row .attachment-file {
+  flex: 1;
+}
+.attachment-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.attachment-file-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-hover) 58%, transparent);
+}
+.attachment-file-icon .rl-icon {
+  width: 19px;
+  height: 19px;
+  stroke-width: 1.65;
+}
+.attachment-file-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.msg-images .attachment-card .attachment-file-name {
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.msg-images .attachment-card .attachment-file-type {
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: none;
+}
+.attachment-download-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 68px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.attachment-download-btn:hover {
+  background: var(--surface-hover);
+}
+.msg-delivery {
+  max-width: min(620px, 100%);
+  animation: delivery-card-in var(--motion-enter, 260ms) var(--motion-ease-emphasized) both;
+}
+@keyframes delivery-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.delivery-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  box-sizing: border-box;
+  width: min(520px, 100%);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.delivery-card-files {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  padding: 2px 0;
+  border-radius: var(--artifact-group-radius, 12px);
+  background: var(--surface-soft, var(--bg-secondary));
+  box-shadow: var(--artifact-group-shadow, none);
+  overflow: hidden;
+}
+.delivery-card-images {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  height: calc(var(--artifact-row-height, 52px) * 2);
+  min-height: calc(var(--artifact-row-height, 52px) * 2);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.delivery-card-images::-webkit-scrollbar { display: none; }
+.delivery-card-files + .delivery-card-images { margin-top: 8px; }
+.delivery-image-preview {
+  position: relative;
+  flex: 0 0 min(176px, 42vw);
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--surface-soft, var(--bg-secondary));
+  box-shadow: var(--shadow-soft, 0 8px 24px rgba(16, 21, 39, 0.07));
+}
+.delivery-image-preview img {
+  display: block;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  /* Scale from the fixed vertical gallery height and preserve the full frame.
+     Delivery thumbnails must never crop a portrait image or zoom a landscape
+     image past its visible bounds. */
+  object-fit: contain;
+  object-position: center;
+  background: color-mix(in srgb, var(--bg-secondary) 82%, var(--surface-soft, var(--bg-secondary)));
+  cursor: pointer;
+}
+.delivery-image-download {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  padding: 0 !important;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface-soft, var(--bg-secondary)));
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(16, 21, 39, 0.1);
+  transition:
+    background var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
+}
+.delivery-image-download:hover {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-hover));
+  box-shadow: 0 3px 10px rgba(16, 21, 39, 0.14);
+}
+.delivery-image-download:focus-visible {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--border-strong) 74%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--focus-border) 16%, transparent);
+}
+.delivery-image-download:active { transform: scale(0.92); }
+.delivery-image-download .rl-icon { width: 18px; height: 18px; }
+.message-image-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgba(0, 0, 0, 0.74);
+  opacity: 1;
+  overscroll-behavior: contain;
+}
+.message-image-viewer__toolbar {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: max(16px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.message-image-viewer__toolbar > * { pointer-events: auto; }
+.message-image-viewer__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, #fff 18%, transparent);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.24);
+  text-decoration: none;
+}
+.message-image-viewer__action:hover {
+  background: rgba(255, 255, 255, 0.26);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+.message-image-viewer__action:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, #fff 38%, transparent);
+}
+.message-image-viewer__action:active { transform: scale(0.92); }
+.message-image-viewer__action .rl-icon { width: 18px; height: 18px; }
+.message-image-viewer__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+.message-image-viewer__image {
+  display: block;
+  max-width: min(92vw, 1280px);
+  max-height: min(88dvh, 900px);
+  object-fit: contain;
+  border-radius: 10px;
+  user-select: none;
+}
+body.message-image-viewer-open { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  .msg-delivery { animation: none; }
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .delivery-image-download,
+  .message-image-viewer__action {
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur, 18px) * 0.72)) saturate(1.08);
+    backdrop-filter: blur(calc(var(--glass-blur, 18px) * 0.72)) saturate(1.08);
+  }
+}
+.delivery-card .attachment-card {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  min-height: var(--artifact-row-height, 52px);
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.delivery-card .attachment-card + .attachment-card {
+  border-top: 1px solid var(--artifact-row-divider, var(--divider-subtle));
+}
+.delivery-card .attachment-card:hover {
+  background: var(--surface-hover);
+}
+.delivery-card .attachment-file {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+.delivery-card .attachment-file-name {
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.delivery-card .attachment-file-type {
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: none;
+}
+.delivery-card .attachment-download-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  padding: 0;
+}
+@media (max-width: 720px) {
+  .msg-delivery {
+    max-width: 100%;
+  }
+  .delivery-card {
+    width: 100%;
+    padding: 0;
+    border-radius: 0;
+  }
+  .delivery-card-files { border-radius: var(--mx-r-row, 18px); }
+  .delivery-card-images {
+    height: calc(var(--artifact-row-height, 52px) * 2);
+    min-height: calc(var(--artifact-row-height, 52px) * 2);
+  }
+  .delivery-image-preview {
+    flex-basis: min(184px, 48vw);
+    border-radius: 12px;
+  }
+  .delivery-image-download {
+    top: 8px;
+    right: 8px;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+  }
+  .delivery-card .attachment-card {
+    gap: 8px;
+    padding: 8px 10px;
+  }
+  .delivery-card .attachment-download-btn {
+    width: 44px;
+    min-width: 44px;
+    padding: 0;
+  }
+}
+
+/* Pending user turns keep ordinary bubble styling; the inline status row carries transport state. */
+.msg-user-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  opacity: 0.95;
+}
+.msg-user-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.msg-user-status-text {
+  min-width: 0;
+}
+
+/* Optimistic sends use a quiet status rail outside the bubble so the message
+   remains readable while transport is still being acknowledged. */
+.msg-user-send-status {
+  align-self: flex-end;
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.25;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+/* ---- ChatGPT-style message polish ---- */
+.messages {
+  padding-top: 18px;
+}
+
+.msg-user-bubble {
+  border-radius: 18px;
+  border-bottom-right-radius: 7px;
+  padding: 10px 15px;
+}
+
+.msg-images .attachment-card {
+  border-radius: 14px;
+  background: var(--surface-soft, var(--bg));
+}
+
+.attachment-file-icon {
+  border-radius: 11px;
+}
+
+.attachment-download-btn {
+  min-height: 30px;
+}
+.msg-user-status-uploading .msg-user-status-dot,
+.msg-user-status-sending .msg-user-status-dot {
+  background: var(--text-secondary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--text-secondary) 14%, transparent);
+}
+.msg-user-status-checking .msg-user-status-dot {
+  background: var(--app-warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-warning) 14%, transparent);
+}
+.msg-user-status-processing .msg-user-status-dot,
+.msg-user-status-queued .msg-user-status-dot {
+  background: var(--accent);
+}
+.msg-user-status-running .msg-user-status-dot {
+  background: var(--success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 18%, transparent);
+}
+.msg-user-status-compacting .msg-user-status-dot {
+  background: var(--notice);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--notice) 18%, transparent);
+}
+.msg-user-status-waiting_user .msg-user-status-dot {
+  background: var(--warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 18%, transparent);
+}
+
+/* Failed/unconfirmed message — recovery UI. Keep the sent content ordinary;
+   the recovery state lives in a quieter status/action rail below it. */
+.msg-user.msg-user--failed {
+  flex-direction: column;
+  align-items: flex-end;
+}
+.msg-user-bubble.msg-failed {
+  border: 1px solid var(--failed-message-border);
+}
+.msg-user.msg-user--failed .msg-user-bubble.msg-failed {
+  border-color: transparent;
+}
+.msg-failed-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 80%;
+  max-width: 80%;
+  min-height: 20px;
+  margin-top: 6px;
+  color: var(--status-failed, var(--text-secondary));
+  font-size: 12px;
+  line-height: 1.35;
+}
+.msg-failed-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--status-failed, var(--text-secondary));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-failed) 14%, transparent);
+}
+.msg-failed-status-text {
+  min-width: 0;
+  white-space: nowrap;
+}
+.msg-failed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  width: 80%;
+  max-width: 80%;
+  align-self: flex-end;
+  justify-content: flex-end;
+}
+.msg-failed-actions button {
+  border: none;
+  border-radius: 9999px;
+  padding: 8px 18px;
+  font-size: 13.5px;
+  font-weight: 600;
+  /* Recovery happens at a high-frustration moment: keep the full row at the
+     DESIGN.md primary touch-target floor (44px), not the auxiliary 32-36px
+     inline-action scale. */
+  min-height: 44px;
+  cursor: pointer;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform 120ms ease, filter 120ms ease, background 120ms ease, color 120ms ease;
+  /* Never wrap inside a label (e.g. "重试" -> "重/试" on 320px columns):
+     when the row cannot fit, the actions strip wraps whole buttons onto a
+     new right-aligned line instead. */
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.msg-failed-actions button:hover,
+.msg-failed-actions button:focus-visible {
+  filter: brightness(1.08);
+}
+.msg-failed-actions button:active {
+  transform: scale(0.96);
+  filter: brightness(0.92);
+}
+.msg-failed-actions button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--focus-border) 55%, transparent);
+  outline-offset: 2px;
+}
+.msg-retry-btn {
+  background: var(--accent);
+  color: var(--bg);
+}
+/* Specificity beats the shared button rule (.msg-failed-actions button
+   sets border: none) — without it the hairline never renders. */
+.msg-failed-actions .msg-edit-btn {
+  background: var(--surface-hover);
+  color: var(--text);
+  /* In light themes --surface-hover equals the bubble fill (--user-bubble):
+     without a hairline the button melts into the bubble and reads as plain
+     text, flattening the retry > edit > discard hierarchy. */
+  border: 1px solid color-mix(in srgb, var(--divider-subtle) 85%, transparent);
+}
+.msg-failed-actions .msg-discard-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 0;
+  min-width: 48px;
+  padding-inline: 6px;
+}
+
+@media (max-width: 360px) {
+  .msg-failed-status,
+  .msg-failed-actions {
+    width: 82%;
+    max-width: 82%;
+  }
+  .msg-failed-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .msg-failed-actions button {
+    width: 100%;
+  }
+  .msg-failed-actions .msg-discard-btn {
+    width: auto;
+    align-self: flex-end;
+  }
+}
+
+/* Assistant message — no bubble, plain text */
+.msg-assistant {
+  position: relative;
+  margin-bottom: 22px;
+  animation: fadeIn 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+  font-size: var(--font-size-body, 16px);
+  line-height: 1.7;
+  color: var(--text);
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+.msg-assistant.stream-settling {
+  transition:
+    opacity var(--motion-base) ease-out,
+    transform var(--motion-base) var(--motion-ease-standard);
+}
+.msg-assistant.run-terminal-settle {
+  animation: run-message-terminal-settle 360ms var(--motion-ease-standard, ease-out) both;
+}
+@keyframes run-message-terminal-settle {
+  from { opacity: 0.72; transform: translateY(3px); }
+  62% { opacity: 1; transform: translateY(0); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-assistant.stream-settling,
+  .msg-assistant.run-terminal-settle {
+    transition: none;
+    animation: none;
+  }
+  .md-content .code-block-wrap,
+  .code-copy-btn {
+    animation: none !important;
+  }
+}
+.msg-assistant-time {
+  margin-top: 0;
+}
+/* Zero-height flash guard: a streaming node is appended with an empty body
+   and filled a frame later by the typewriter pump. Without a reserved line
+   height the first token visually pops the row in from zero. */
+.streaming > .msg-assistant-body {
+  min-height: 1.55em;
+}
+.msg-assistant-body + .msg-assistant-body {
+  margin-top: 10px;
+}
+.streaming-block-segment + .streaming-block-segment {
+  margin-top: 0.75em;
+}
+
+/* ============ CJK prose typography (P2) ============
+   Chinese-facing reading polish for message body text only. No layout,
+   bubble, spacing-token, or touch values are touched here.
+   - Inter-script spacing: CJK <-> Latin/digit boundaries get a small optical
+     gap via text-autospace (Chrome 140+, Safari 18.4+, Firefox 143+).
+     Older engines fall back to a light global letter-spacing; monospace
+     blocks reset it so code keeps its alignment.
+   - Hanging punctuation: allow-end is progressive enhancement (Safari 10.1+;
+     Chromium has only an Intent to Prototype — inert elsewhere). Line-start
+     closing punctuation is already prevented by native CJK kinsoku line
+     breaking in every engine; asserted by tests/test-chat-cjk-typography.mjs.
+   - Chinese line-height: assistant body already inherits 1.7 from
+     .msg-assistant (kept); user bubble prose tuned 1.55 -> 1.65 for CJK. */
+@supports (text-autospace: normal) {
+  .msg-assistant-body,
+  .msg-user-bubble > span {
+    text-autospace: normal;
+  }
+  .msg-assistant-body :is(pre, code) {
+    text-autospace: no-autospace;
+  }
+}
+@supports not (text-autospace: normal) {
+  .msg-assistant-body,
+  .msg-user-bubble > span {
+    letter-spacing: 0.02em;
+  }
+  .msg-assistant-body :is(pre, code) {
+    letter-spacing: normal;
+  }
+}
+.msg-assistant-body,
+.msg-user-bubble > span {
+  hanging-punctuation: allow-end;
+}
+.msg-user-bubble > span {
+  line-height: 1.65;
+}
+
+.plan-card {
+  margin: 8px 0 12px;
+  /* De-bordered glass — the Decision Sheet recipe (chat-decision-sheet.css):
+     sheen + strong-base frost, token blur, inset top highlight instead of a
+     visible outline, tight float shadow. --shadow-sheet-tight is the sheet's
+     own stack (not the modal-tier --sheet-shadow), so message-stream cards
+     keep their in-stream position and never out-float the decision panel. */
+  border: 0;
+  border-radius: 13px;
+  background:
+    var(--glass-sheen),
+    color-mix(in srgb, var(--surface-glass-strong-base) 68%, transparent);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.77)) saturate(1.08);
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.77)) saturate(1.08);
+  box-shadow: var(--shadow-sheet-tight);
+  overflow: hidden;
+  white-space: normal;
+  position: relative;
+}
+.plan-card__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 10px;
+  background: transparent;
+}
+.plan-card:not(.codex-plan-card) .plan-card__header,
+.plan-approval-card .plan-card__header {
+  padding-right: 58px;
+}
+/* The header carries no state orb by design: the kind label alone is the
+   headline, and state stays readable through the body markers + action row. */
+.plan-card__title-block {
+  min-width: 0;
+}
+/* Kind label takes the sheet's quiet meta voice (11px muted); accent color
+   stays reserved for state (markers) and decision actions. */
+.plan-card__label {
+  margin-bottom: 3px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-transform: none;
+}
+.plan-card__title {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  text-wrap: balance; /* even out wrapped titles (long zh/en) */
+}
+.plan-card__body {
+  padding: 13px 14px 4px;
+  color: var(--text);
+}
+.plan-card__copy {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface-hover) 72%, transparent);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.plan-card__copy:hover { background: var(--surface-hover); color: var(--text); }
+.plan-card__copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.plan-card__copy .rl-icon { width: 16px; height: 16px; }
+.codex-plan-card:not(.plan-approval-card) .plan-card__copy { right: 46px; }
+.plan-card__body > :first-child {
+  margin-top: 0;
+}
+/* Action rail mirrors the sheet's centered decision rail: capped width so a
+   wide desktop card does not stretch buttons past usefulness, flex keeps the
+   row equal-height. */
+.plan-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px auto 0;
+  padding: 0 14px 14px;
+  max-width: 640px;
+}
+.plan-card__action {
+  flex: 1 1 0;
+  min-height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--surface-hover, rgba(0, 0, 0, 0.06));
+  color: var(--text-primary, inherit);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--motion-fast, 120ms) ease;
+}
+.plan-card__action:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-hover) 84%, var(--bg-secondary));
+}
+.plan-card__action:focus-visible {
+  outline: 2px solid var(--color-action);
+  outline-offset: 1px;
+}
+/* Semantic decision tinting — the Decision Sheet's recipe: execute is
+   notice-accent; approve/deny live in the approval block below. */
+.plan-card__action[data-plan-action="execute"] {
+  flex: 1.4 1 0;
+  background: color-mix(in srgb, var(--sys-secondary) 16%, transparent);
+  color: var(--sys-secondary);
+}
+.plan-card__action[data-plan-action="execute"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--sys-secondary) 24%, transparent);
+}
+/* Disabled = truly unready: the tinted fill drops so a disabled execute can
+   never be mistaken for an enabled one (sheet's disabled recipe). */
+.plan-card__action:disabled:not([aria-busy="true"]) {
+  background: var(--surface-hover, rgba(0, 0, 0, 0.06));
+  color: var(--color-text-muted);
+  opacity: 0.8;
+  cursor: default;
+}
+/* Submitted: inline spinner next to the swapped status label ("Executing…",
+   swapped by submitPlanArtifactAction) — the sheet's in-flight state. */
+.plan-card__action[aria-busy="true"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: default;
+  opacity: 0.85;
+}
+.plan-card__action[aria-busy="true"]::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: plan-card-spin 700ms linear infinite;
+}
+@keyframes plan-card-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .plan-card__action[aria-busy="true"]::before {
+    animation: none;
+    border-top-color: currentColor;
+  }
+}
+/* In-stream plan approval card (Claude Code ExitPlanMode): approve takes the
+   notice accent like the codex execute action; deny is risk-colored; the
+   status line pins the outcome with a state orb after approval_response. */
+.plan-approval-card .plan-card__action[data-approval-decision="approve"] {
+  flex: 1.4 1 0;
+  background: color-mix(in srgb, var(--sys-secondary) 16%, transparent);
+  color: var(--sys-secondary);
+}
+.plan-approval-card .plan-card__action[data-approval-decision="deny"] {
+  background: color-mix(in srgb, var(--status-failed) 16%, transparent);
+  color: var(--status-failed);
+}
+.plan-approval-card .plan-card__action[data-approval-decision="approve"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--sys-secondary) 24%, transparent);
+}
+.plan-approval-card .plan-card__action[data-approval-decision="deny"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--status-failed) 24%, transparent);
+}
+.plan-approval-card .plan-card__status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 12px;
+  padding: 0 14px 14px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+.plan-approval-card .plan-card__status::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--status-done);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--status-done) 22%, transparent);
+}
+.plan-approval-card[data-state="denied"] .plan-card__status::before {
+  background: var(--status-failed);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--status-failed) 22%, transparent);
+}
+.plan-approval-card[data-state="cancelled"] .plan-card__status::before,
+.plan-approval-card[data-state="resolved"] .plan-card__status::before {
+  background: var(--text-muted);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--text-muted) 22%, transparent);
+}
+.codex-plan-card__header {
+  width: 100%;
+  appearance: none;
+  border: 0;
+  /* Follow the card corners so the hover fill and the focus ring are never
+     clipped by the card's overflow rounding. */
+  border-radius: var(--mx-r-row, 28px) var(--mx-r-row, 28px) 0 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.codex-plan-card__header:hover {
+  background: color-mix(in srgb, var(--surface-hover) 45%, transparent);
+}
+.codex-plan-card__header:active {
+  background: color-mix(in srgb, var(--surface-hover) 62%, transparent);
+}
+.codex-plan-card__header:focus-visible {
+  outline: 2px solid var(--color-action);
+  outline-offset: 1px;
+}
+.codex-plan-card.collapsed .codex-plan-card__header {
+  border-radius: var(--mx-r-row, 28px);
+}
+.codex-plan-card__summary {
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.codex-plan-card__chevron {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  margin-left: auto; /* header: label + summary left, chevron right */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: transform var(--motion-fast) var(--motion-ease-standard);
+}
+.codex-plan-card.collapsed .codex-plan-card__chevron {
+  transform: rotate(-90deg);
+}
+.codex-plan-card__body {
+  padding-bottom: 11px;
+}
+.codex-plan-card__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.codex-plan-card__item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 6px 0;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.codex-plan-card__marker {
+  width: 12px;
+  height: 12px;
+  margin-top: 4px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--bg);
+}
+.codex-plan-card__item--in_progress .codex-plan-card__marker {
+  border-color: var(--notice);
+  background: color-mix(in srgb, var(--notice) 24%, var(--bg));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--notice) 12%, transparent);
+}
+.codex-plan-card__item--completed {
+  color: var(--text-secondary);
+}
+.codex-plan-card__item--completed .codex-plan-card__marker {
+  border-color: var(--notice);
+  background: var(--notice);
+}
+.codex-plan-card__item--completed .codex-plan-card__marker::after {
+  content: "";
+  display: block;
+  width: 5px;
+  height: 3px;
+  margin: 2px 0 0 2px;
+  border-left: 1.5px solid var(--bg);
+  border-bottom: 1.5px solid var(--bg);
+  transform: rotate(-45deg);
+}
+.codex-plan-card__item-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.codex-plan-card__empty {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.codex-plan-progress {
+  margin: 6px 0 10px;
+  /* Progress is observable run state, not a proposal or approval surface.
+     Keep the timeline readable without giving it a card shell, elevation, or
+     another competing decision container. */
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.codex-plan-progress .codex-plan-card__header {
+  min-height: 44px;
+  padding: 8px 0;
+  background: transparent;
+  border-radius: 0;
+}
+.codex-plan-progress__line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.codex-plan-progress .plan-card__title {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 700;
+}
+.codex-plan-progress .codex-plan-card__summary {
+  min-width: 0;
+  margin-top: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.codex-plan-progress .codex-plan-card__chevron {
+  width: 20px;
+  height: 20px;
+}
+.codex-plan-progress .codex-plan-card__body {
+  padding: 6px 0 11px;
+}
+.plan-card-context + .plan-card,
+.plan-card + .plan-card-context {
+  margin-top: 12px;
+}
+
+/* In-stream approval card removed 2026-08-04 — the Decision Sheet is the
+   single approval surface on every viewport. The shared parts below
+   (detail rows, question prompt/options, code) are reused by the sheet. */
+.runtime-approval-card__detail {
+  display: grid;
+  gap: 4px;
+}
+.runtime-approval-card__detail-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-transform: none;
+}
+.runtime-approval-card__detail-value {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.runtime-approval-card__prompt {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--surface-soft, var(--bg-secondary));
+}
+.runtime-approval-card__prompt-header {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.runtime-approval-card__question {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.runtime-approval-card__option-list {
+  display: grid;
+  gap: 6px;
+}
+.runtime-approval-card__option {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--surface-raised, var(--bg));
+  box-shadow: inset 0 0 0 1px var(--divider-subtle, transparent);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.runtime-approval-card__option:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+.runtime-approval-card__option:focus-visible {
+  outline: 2px solid var(--accent, var(--border-strong));
+  outline-offset: 2px;
+}
+/* Selected state must be unmistakable: without it a click produces no visible
+   change and the card reads as inert even though selection did register. */
+.runtime-approval-card__option.is-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.runtime-approval-card__option-label {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.runtime-approval-card__option-description {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.runtime-approval-card__code {
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.runtime-approval-summary {
+  margin: 3px 0 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+/* Markdown rendered content */
+/* Long unbreakable runs (URLs, tokens, base64, identifiers) must soft-wrap and
+   never widen the column — the page must never pan horizontally on any width. */
+.md-content {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.md-content p { margin-bottom: 0.75em; }
+.md-content p:last-child { margin-bottom: 0; }
+.md-content h1, .md-content h2, .md-content h3,
+.md-content h4, .md-content h5, .md-content h6 {
+  font-weight: 600; line-height: 1.3; margin: 1.1em 0 0.4em;
+  letter-spacing: normal;
+}
+.md-content h1 { font-size: 1.3em; font-weight: 700; letter-spacing: normal; }
+.md-content h2 { font-size: 1.18em; }
+.md-content h3 { font-size: 1.06em; }
+.md-content h4, .md-content h5, .md-content h6 { font-size: 1em; }
+.md-content h1:first-child, .md-content h2:first-child,
+.md-content h3:first-child { margin-top: 0; }
+.md-content ul, .md-content ol {
+  padding-left: 1.4em; margin-bottom: 0.75em;
+}
+.md-content li { margin-bottom: 0.2em; }
+.md-content li > ul, .md-content li > ol { margin-bottom: 0; }
+.md-content code {
+  background: var(--bg-tertiary); border-radius: 5px;
+  padding: 2px 6px; font-size: 0.87em;
+  font-family: ui-monospace, 'SF Mono', Monaco, Consolas, monospace;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.md-content pre {
+  background: var(--bg-tertiary); border-radius: 10px;
+  padding: 14px 16px; margin-bottom: 0.75em;
+  max-width: 100%;
+  overflow-x: auto; line-height: 1.55;
+  border: 1px solid transparent;
+  /* Keep code readable: the block owns horizontal scrolling while prose keeps
+     the page itself within the message column. */
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.md-content .code-block-wrap {
+  position: relative;
+  /* Code blocks form once at settle (enhance runs deferred), so the wrap is
+     created fresh in the final render — this one-shot reveal only fires on
+     settled blocks, never per streaming frame. Compositor-only: opacity. */
+  animation: code-block-form var(--motion-base) var(--motion-ease-out);
+}
+@keyframes code-block-form {
+  from { opacity: 0.55; }
+  to { opacity: 1; }
+}
+.md-content .code-block-wrap pre {
+  padding: 12px 14px 14px;
+}
+.md-content .code-block-header {
+  min-height: 36px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 8px 4px 14px;
+  background: color-mix(in srgb, var(--bg-tertiary) 74%, var(--bg-secondary));
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1;
+}
+.code-block-language {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-family: ui-monospace, 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.code-block-language-icon {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.08em;
+  user-select: none;
+}
+.code-block-language-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.code-copy-btn {
+  position: static;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  /* The button appears a beat after the block starts forming, so it reads as
+     mounted with the block instead of popping ahead of it. Backwards fill
+     keeps it invisible during the delay. */
+  animation: code-copy-in var(--motion-base) var(--motion-ease-out) 60ms backwards;
+}
+@keyframes code-copy-in {
+  from { opacity: 0; transform: translateY(2px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.code-copy-btn:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--divider-subtle) 82%, transparent);
+}
+.code-copy-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--focus-border) 40%, transparent);
+  outline-offset: 2px;
+}
+.code-copy-btn:active {
+  transform: scale(0.96);
+}
+.code-copy-btn.copied {
+  background: var(--sys-success-container);
+  color: var(--sys-on-success-container);
+  border-color: var(--copy-btn-success-border);
+  animation: code-copy-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes code-copy-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.code-copy-btn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+.md-content pre code {
+  background: none; padding: 0; font-size: 0.85em; border-radius: 0;
+  white-space: inherit; overflow-wrap: inherit; word-break: inherit;
+  color: var(--code-token-plain);
+}
+/* Nord syntax palette: keep the code surface owned by the app, while the
+   token colors carry Nord's cool, quiet contrast. Light mode uses darker
+   Nord-derived values so the palette remains readable on the light code
+   surface; dark mode uses the canonical Frost/Aurora colors. */
+.md-content {
+  --code-token-plain: #2e3440;
+  --code-token-comment: #5f6b80;
+  --code-token-keyword: #4f6f9f;
+  --code-token-builtin: #805f85;
+  --code-token-string: #5f7f4d;
+  --code-token-number: #a7613e;
+}
+.md-content .code-token--comment { color: var(--code-token-comment); }
+.md-content .code-token--keyword { color: var(--code-token-keyword); font-weight: 600; }
+.md-content .code-token--builtin { color: var(--code-token-builtin); }
+.md-content .code-token--string { color: var(--code-token-string); }
+.md-content .code-token--number { color: var(--code-token-number); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="amber"]) .md-content {
+    --code-token-plain: #e5e9f0;
+    --code-token-comment: #8fbcbb;
+    --code-token-keyword: #88c0d0;
+    --code-token-builtin: #b48ead;
+    --code-token-string: #a3be8c;
+    --code-token-number: #ebcb8b;
+  }
+}
+:root[data-theme="dark"] .md-content {
+  --code-token-plain: #e5e9f0;
+  --code-token-comment: #8fbcbb;
+  --code-token-keyword: #88c0d0;
+  --code-token-builtin: #b48ead;
+  --code-token-string: #a3be8c;
+  --code-token-number: #ebcb8b;
+}
+.md-content .code-block-wrap--diagram pre { display: none; }
+/* Mermaid diagrams use the Monochrome Editorial theme: neutral grays only,
+   hierarchy from fill contrast and line weight, no decorative color.
+   --mermaid-accent stays reserved for stateful diagrams (running step,
+   error, current path) until the renderer carries workflow state. */
+.md-content .mermaid-diagram {
+  --mermaid-accent: color-mix(in srgb, var(--notice) 34%, var(--text-secondary));
+  max-width: 100%;
+  overflow-x: auto;
+  margin-bottom: 0.75em;
+  padding: 14px 12px 16px;
+  background: color-mix(in srgb, var(--bg-tertiary) 88%, transparent);
+  border-radius: var(--radius-block, 10px);
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+.md-content .mermaid-diagram svg {
+  display: block;
+  width: 100%;
+  min-width: 360px;
+  height: auto;
+  max-height: 620px;
+  font-family: var(--font-ui);
+}
+.md-content .mermaid-edge,
+.md-content .mermaid-message {
+  stroke: color-mix(in srgb, var(--text-secondary) 78%, transparent);
+  stroke-width: 1.6;
+  fill: none;
+}
+.md-content .mermaid-edge--dashed,
+.md-content .mermaid-message--dashed,
+.md-content .mermaid-lifeline { stroke-dasharray: 5 5; }
+.md-content .mermaid-arrowhead { fill: color-mix(in srgb, var(--text-secondary) 78%, transparent); }
+.md-content .mermaid-edge-label,
+.md-content .mermaid-message-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+.md-content .mermaid-edge-label { fill: var(--text-secondary); }
+.md-content .mermaid-message-label { fill: var(--text); }
+.md-content .mermaid-node rect,
+.md-content .mermaid-node polygon,
+.md-content .mermaid-sequence-participant,
+.md-content .mermaid-note {
+  fill: var(--bg-secondary);
+  stroke: color-mix(in srgb, var(--text-muted) 72%, transparent);
+  stroke-width: 1.2;
+}
+.md-content .mermaid-node--diamond polygon {
+  fill: color-mix(in srgb, var(--text-muted) 8%, var(--bg-secondary));
+  stroke: color-mix(in srgb, var(--text-muted) 84%, transparent);
+}
+/* Dark surfaces are stepped down (bg-secondary is darker than the diagram
+   surface), so nodes step up with the hover elevation to keep the card
+   hierarchy readable. */
+:root[data-theme="dark"] .md-content .mermaid-node rect,
+:root[data-theme="dark"] .md-content .mermaid-node polygon,
+:root[data-theme="dark"] .md-content .mermaid-sequence-participant,
+:root[data-theme="dark"] .md-content .mermaid-note {
+  fill: var(--surface-hover);
+}
+:root[data-theme="dark"] .md-content .mermaid-node--diamond polygon {
+  fill: color-mix(in srgb, var(--text-muted) 12%, var(--surface-hover));
+}
+.md-content .mermaid-node-label,
+.md-content .mermaid-sequence-label,
+.md-content .mermaid-note-label {
+  fill: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.md-content .mermaid-lifeline { stroke: color-mix(in srgb, var(--text-muted) 45%, transparent); stroke-width: 1.2; }
+.md-content blockquote {
+  border: 1px solid var(--sys-outline-variant, var(--border));
+  border-radius: var(--m3-shape-small, 8px);
+  margin: 0 0 0.75em;
+  padding: 10px 12px;
+  background: var(--sys-surface-container-low, var(--surface-soft));
+  color: var(--text-secondary);
+}
+.md-content a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--border-strong); overflow-wrap: anywhere; }
+.md-content a:hover { text-decoration-color: var(--text); }
+.md-content hr {
+  border: none; border-top: 1px solid var(--border);
+  margin: 1em 0;
+}
+.md-content table {
+  border-collapse: collapse; width: 100%; margin-bottom: 0;
+  font-size: 0.9em;
+}
+.md-content th, .md-content td {
+  border: 1px solid var(--border); padding: 6px 10px; text-align: left;
+  overflow-wrap: anywhere;
+}
+/* Wide / many-column tables scroll inside their own box instead of widening
+   the message column or panning the page. enhanceTables() wraps each table. */
+.md-content .md-table-wrap {
+  display: block;
+  max-width: 100%;
+  margin-bottom: 0.75em;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.md-content .md-table-wrap table {
+  margin-bottom: 0;
+}
+.md-content th { background: var(--bg-secondary); font-weight: 600; }
+.md-content strong { font-weight: 600; }
+.md-content em { font-style: italic; }
+.md-content del { text-decoration: line-through; text-decoration-thickness: 1px; }
+.md-content img {
+  display: block;
+  max-width: min(100%, 560px);
+  width: auto;
+  height: auto;
+  margin: 0.8em 0;
+  border-radius: 14px;
+  background: var(--bg-secondary);
+}
+
+/* Foreign content the model may emit verbatim (raw HTML is allowed through
+   the renderer): cap every replaced/embedded element so nothing can widen
+   the message column. Sizing inside each element stays untouched. Divs can
+   carry inline widths from the model, so they get the same upper bound;
+   plain block divs are unaffected (they already fill their container). */
+.md-content div {
+  max-width: 100%;
+}
+.md-content iframe,
+.md-content embed,
+.md-content object,
+.md-content video,
+.md-content svg,
+.md-content canvas {
+  max-width: 100%;
+}
+.md-content p > img:first-child:last-child {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.md-content .markdown-math {
+  color: var(--text);
+  font-family: "STIX Two Math", "Cambria Math", "Times New Roman", serif;
+}
+.md-content .markdown-math--inline {
+  display: inline-flex;
+  max-width: 100%;
+  vertical-align: -0.12em;
+}
+.md-content .markdown-math--display {
+  display: block;
+  max-width: 100%;
+  margin: 1.1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25em 0;
+  text-align: center;
+}
+.md-content .markdown-math--display math {
+  max-width: 100%;
+}
+.md-content .markdown-math math {
+  max-width: 100%;
+  font-size: 1.08em;
+}
+
+/* System status */
+.msg-system {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 8px 0;
+  animation: fadeIn 0.1s ease;
+}
+
+.context-barrier {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 16px auto 10px;
+  padding: 10px 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
+  max-width: min(92%, 720px);
+}
+
+.context-operation {
+  margin: 12px auto 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--sys-outline-variant, var(--border));
+  border-radius: 12px;
+  background: var(--surface-soft, color-mix(in srgb, var(--bg-secondary) 88%, transparent));
+  box-shadow: var(--shadow-soft, 0 8px 20px rgba(16, 21, 39, 0.06));
+  max-width: min(94%, 760px);
+}
+
+.context-operation[data-phase="applied"] {
+  background: var(--sys-success-container, var(--surface-soft));
+  color: var(--sys-on-success-container, var(--text));
+}
+
+.context-operation[data-phase="failed"] {
+  background: var(--sys-error-container, var(--surface-soft));
+  color: var(--sys-on-error-container, var(--text));
+}
+
+.context-operation-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.context-operation-summary,
+.context-operation-reason,
+.context-operation-meta {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.context-operation-summary,
+.context-operation-reason {
+  color: var(--text-secondary);
+}
+
+.context-operation-meta {
+  color: var(--text-muted);
+}
+
+/* Usage tokens */
+.usage-info {
+  font-size: 11px; color: var(--text-muted); text-align: center;
+  padding: 4px; margin: 2px 0 12px;
+}
+
+/* ---- Thinking block ---- */
+.thinking-block {
+  margin-bottom: 16px;
+  animation: fadeIn 0.15s ease;
+}
+.thinking-header {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; padding: 6px 0; user-select: none;
+  color: var(--text-secondary); font-size: 13px;
+}
+.thinking-header:hover { color: var(--text); }
+.thinking-icon {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: currentColor;
+  color: var(--text-muted);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--text-muted) 24%, transparent);
+}
+.thinking-icon .rl-icon {
+  display: none;
+}
+.thinking-label {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thinking-block.running .thinking-icon {
+  /* share the Live Bar running orb's blue so the thinking dot and the Live
+     Bar read as one running state across the message area and the sidebar */
+  color: var(--status-running, var(--notice));
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-running, var(--notice)) 24%, transparent);
+  animation: thinking-breathe 1.8s ease-in-out infinite;
+}
+.thinking-block.running:not(.editing) .thinking-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--text-muted);
+  -webkit-text-fill-color: currentColor;
+}
+.thinking-block.running.editing .thinking-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-muted);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  animation: none;
+}
+.thinking-edit-action {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+.thinking-block.running.editing .thinking-edit-action {
+  color: var(--text-muted);
+}
+.thinking-edit-file {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--notice);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thinking-block.running.editing .thinking-edit-file {
+  color: var(--notice);
+}
+.thinking-edit-stats {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+  font-family: ui-monospace, 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.thinking-edit-status {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  margin: 2px 0 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.thinking-edit-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  background: var(--text-muted);
+  transform: translateY(-1px);
+}
+@keyframes thinking-breathe {
+  0%, 100% {
+    opacity: 0.42;
+    transform: scale(0.88);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--text-muted) 18%, transparent);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--text-muted) 0%, transparent);
+  }
+}
+.thinking-chevron {
+  font-size: 9px;
+  transition: transform var(--motion-fast) var(--motion-ease-spring, cubic-bezier(0.175, 0.885, 0.32, 1.1));
+  color: var(--text-muted);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.thinking-block.collapsed .thinking-chevron { transform: rotate(-90deg); }
+.thinking-body {
+  border-left: 2px solid var(--border);
+  margin-left: 5px;
+  padding-left: 14px;
+  padding-top: 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  opacity: 1;
+  transform: translateY(0);
+  max-height: min(900px, 72dvh);
+  transition:
+    max-height var(--motion-panel) var(--motion-ease-spring-soft, cubic-bezier(0.22, 1, 0.36, 1)),
+    padding-top var(--motion-base) var(--motion-ease-standard),
+    opacity var(--motion-fast) ease,
+    transform var(--motion-base) var(--motion-ease-standard);
+}
+.thinking-block.collapsed .thinking-body {
+  max-height: 0;
+  padding-top: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-4px);
+}
+@supports (interpolate-size: allow-keywords) {
+  .thinking-body {
+    height: auto;
+    max-height: none;
+    transition:
+      height var(--motion-panel) var(--motion-ease-spring-soft, cubic-bezier(0.22, 1, 0.36, 1)),
+      padding-top var(--motion-base) var(--motion-ease-standard),
+      opacity var(--motion-fast) ease,
+      transform var(--motion-base) var(--motion-ease-standard);
+  }
+  .thinking-block.collapsed .thinking-body {
+    height: 0;
+    max-height: none;
+    padding-top: 0;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.turn-collapse-drawer {
+  margin: 8px 0 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+.turn-collapse-summary {
+  cursor: pointer;
+  padding: 9px 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  user-select: none;
+  list-style: none;
+}
+.turn-collapse-summary::-webkit-details-marker { display: none; }
+.turn-collapse-summary::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-right: 1.6px solid var(--text-muted);
+  border-bottom: 1.6px solid var(--text-muted);
+  transform: translateY(-1px) rotate(-45deg);
+  transition: transform 0.18s ease;
+}
+.turn-collapse-drawer[open] .turn-collapse-summary::before {
+  transform: translateY(-3px) rotate(45deg);
+}
+.turn-collapse-drawer[open] .turn-collapse-summary {
+  border-bottom: 1px solid var(--border);
+}
+.turn-collapse-body {
+  padding: 10px 12px 4px;
+}
+.turn-collapse-drawer[open] .turn-collapse-body {
+  transform-origin: top center;
+  animation: disclosure-in var(--motion-base) var(--motion-ease-out);
+}
+
+.reply-self-check-drawer {
+  margin: 6px auto 12px;
+  background: color-mix(in srgb, var(--bg-secondary) 78%, transparent);
+}
+
+.reply-self-check-drawer .turn-collapse-summary {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.reply-self-check-drawer .turn-collapse-body {
+  padding-top: 8px;
+}
+
+.reply-self-check-drawer .msg-system {
+  margin: 0 0 8px;
+  text-align: left;
+}
+
+.reply-self-check-drawer .context-operation {
+  margin: 8px 0 0;
+  max-width: 100%;
+}
+
+.reply-self-check-drawer .context-operation:first-child {
+  margin-top: 0;
+}
+
+/* Reasoning text inside thinking block */
+.reasoning {
+  font-size: 12px; color: var(--text-secondary);
+  line-height: 1.55; margin-bottom: 8px;
+}
+
+/* Tool cards inside thinking block */
+.tool-card {
+  background: var(--surface-soft, var(--tool-bg)); border: 1px solid transparent; border-radius: 10px;
+  box-shadow:
+    var(--shadow-soft, 0 8px 20px rgba(16, 21, 39, 0.06)),
+    inset 0 0 0 1px color-mix(in srgb, var(--divider-subtle) 56%, transparent);
+  margin-bottom: 8px; overflow: hidden;
+}
+.tool-header {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  cursor: pointer; font-size: 12px; color: var(--text-secondary);
+  transition: background 0.15s ease;
+}
+.tool-header:hover { background: var(--surface-hover); }
+.tool-header .tool-name { font-weight: 500; color: var(--text); font-family: ui-monospace, 'SF Mono', Monaco, Consolas, monospace; font-size: 12px; }
+.tool-header .tool-toggle {
+  margin-left: auto;
+  font-size: 9px;
+  transition: transform var(--motion-fast) var(--motion-ease-spring, cubic-bezier(0.175, 0.885, 0.32, 1.1));
+  color: var(--text-muted);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.tool-header.expanded .tool-toggle { transform: rotate(90deg); }
+.tool-body {
+  display: block;
+  max-height: 0;
+  padding: 0 10px;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    max-height var(--motion-panel) var(--motion-ease-spring-soft, cubic-bezier(0.22, 1, 0.36, 1)),
+    padding-bottom var(--motion-base) var(--motion-ease-standard),
+    opacity var(--motion-fast) ease;
+}
+.tool-body.expanded {
+  max-height: min(340px, 55dvh);
+  padding-bottom: 8px;
+  opacity: 1;
+}
+@supports (interpolate-size: allow-keywords) {
+  .tool-body {
+    height: 0;
+    max-height: none;
+    transition:
+      height var(--motion-panel) var(--motion-ease-spring-soft, cubic-bezier(0.22, 1, 0.36, 1)),
+      padding-bottom var(--motion-base) var(--motion-ease-standard),
+      opacity var(--motion-fast) ease;
+  }
+  .tool-body.expanded {
+    height: auto;
+    max-height: none;
+    padding-bottom: 8px;
+    opacity: 1;
+  }
+}
+.tool-body pre {
+  background: var(--bg-tertiary); padding: 10px; border-radius: 8px; font-size: 11px;
+  max-width: 100%; overflow-x: auto; white-space: pre; color: var(--text-secondary);
+  max-height: 180px; overflow-y: auto; font-family: ui-monospace, 'SF Mono', Monaco, Consolas, monospace;
+  overflow-wrap: normal; word-break: normal;
+}
+.tool-result-label { font-size: 11px; color: var(--text-muted); margin: 5px 0 3px; display: flex; align-items: center; gap: 6px; }
+.exit-code { font-size: 10px; padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+.exit-code.ok { background: var(--success-bg); color: var(--success); }
+.exit-code.fail { background: var(--error-bg); color: var(--error); }
+.tool-card .tool-result {
+  margin: 0;
+  padding: 12px 14px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-hover) 46%, transparent);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* File change cards inside thinking block */
+.file-card {
+  background: transparent; border: 0; border-radius: 0;
+  box-shadow: none;
+  padding: 8px 0; margin-bottom: 0; font-size: 12px;
+  border-bottom: 1px solid var(--artifact-row-divider, var(--divider-subtle));
+  display: flex; align-items: center; gap: 8px;
+}
+.file-card:last-child { border-bottom: 0; }
+.file-path { font-family: ui-monospace, 'SF Mono', Monaco, Consolas, monospace; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.change-type { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 500; flex-shrink: 0; }
+.change-type.add { background: var(--success-bg); color: var(--success); }
+.change-type.edit, .change-type.update { background: var(--bg-tertiary); color: var(--text-secondary); }
+.change-type.delete { background: var(--error-bg); color: var(--error); }
+
+/* Diff card for file edit tools */
+.diff-card {
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  margin-bottom: 0;
+  background: transparent;
+  box-shadow: none;
+  border-bottom: 1px solid var(--artifact-row-divider, var(--divider-subtle));
+}
+.diff-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  background: transparent;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease;
+}
+.diff-header:hover { background: var(--surface-hover, rgba(0,0,0,0.03)); }
+.diff-header.expanded { border-bottom-color: var(--border); }
+.editing-card {
+  background: color-mix(in srgb, var(--bg-secondary) 78%, transparent);
+}
+.editing-header {
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 10px;
+  color: var(--text-muted);
+}
+.editing-status-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+.editing-status-icon .rl-icon {
+  width: 14px;
+  height: 14px;
+}
+.editing-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.editing-file-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--notice);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editing-stats {
+  margin-left: auto;
+  align-items: center;
+}
+.editing-stat {
+  display: inline-flex;
+  min-width: 24px;
+  justify-content: flex-end;
+  font-variant-numeric: tabular-nums;
+  animation: editing-stat-pop 0.72s cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+.editing-stat-unknown {
+  min-width: 18px;
+  color: var(--text-muted);
+  justify-content: center;
+}
+@keyframes editing-stat-pop {
+  0% { opacity: 0.45; transform: translateY(2px) scale(0.96); }
+  34% { opacity: 1; transform: translateY(-1px) scale(1.08); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.diff-header .tool-toggle {
+  transition: transform var(--motion-fast) var(--motion-ease-spring, cubic-bezier(0.175, 0.885, 0.32, 1.1));
+  flex-shrink: 0;
+  font-size: 9px;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.diff-header.expanded .tool-toggle { transform: rotate(90deg); }
+.diff-file-path {
+  font-family: ui-monospace, 'SF Mono', Monaco, Consolas, monospace;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.diff-dir { color: var(--text-secondary); }
+.diff-file-name { font-weight: 600; }
+.diff-stats {
+  display: flex;
+  gap: 6px;
+  font-family: ui-monospace, 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.diff-stat-add { color: var(--success); font-weight: 600; }
+.diff-stat-del { color: var(--error); font-weight: 600; }
+.diff-result-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.diff-result-badge.success { color: var(--success); }
+.diff-result-badge.fail { color: var(--error); }
+.diff-body {
+  display: block;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  font-family: ui-monospace, 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 0 !important;
+  transition:
+    max-height var(--motion-panel) var(--motion-ease-standard),
+    opacity var(--motion-fast) ease;
+}
+.diff-body.expanded {
+  max-height: 420px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  opacity: 1;
+}
+.diff-line {
+  display: flex;
+  min-height: 20px;
+  line-height: 1.6;
+}
+.diff-line-equal { background: transparent; }
+.diff-line-add { background: var(--success-bg); }
+.diff-line-remove { background: var(--error-bg); }
+.diff-num {
+  width: 42px;
+  min-width: 42px;
+  padding: 0 8px;
+  text-align: right;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  user-select: none;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.diff-prefix {
+  width: 16px;
+  min-width: 16px;
+  text-align: center;
+  user-select: none;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.diff-line-add .diff-prefix { color: var(--success); }
+.diff-line-remove .diff-prefix { color: var(--error); }
+.diff-text {
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 12px;
+  line-height: 1.6;
+  padding-right: 12px;
+  min-width: 0;
+}
+.diff-line-add .diff-text { color: var(--success); }
+.diff-line-remove .diff-text { color: var(--error); }
+.diff-line-equal .diff-text { color: var(--text-secondary); }
+
+/* Per-message system prompt notes: server-injected before an agent's
+   assistant replies when its app config has perMessageSystemPrompt
+   (e.g. skill-usage reminders). Compact muted line, not a chat bubble. */
+.msg-system-note {
+  margin: 2px 0 6px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-soft) 70%, transparent);
+  border: 1px solid var(--divider-subtle);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+/* ---- A1 regenerate: version rail + regenerate action ----
+   The rail is a flat, non-card affordance: a quiet text toggle collapses the
+   previous attempt(s) of the same request; the expanded body uses a hairline
+   left rule only (no nested card, per DESIGN.md). */
+.msg-action-btn--regenerate {
+  display: none;
+}
+.msg-assistant.is-regenerable .msg-action-btn--regenerate {
+  display: inline-flex;
+}
+.msg-version-rail {
+  margin: 2px 0 10px;
+}
+.msg-version-rail__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-secondary, inherit);
+  font-size: 14px;
+  line-height: 1.4;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.msg-version-rail__toggle:hover {
+  background: var(--surface-soft, var(--bg-tertiary));
+  color: var(--text);
+}
+.msg-version-rail__toggle:focus {
+  outline: none;
+}
+.msg-version-rail__toggle:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-border) 16%, transparent);
+}
+.msg-version-rail__icon {
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+}
+.msg-version-rail__body {
+  display: none;
+}
+.msg-version-rail.is-expanded .msg-version-rail__body {
+  display: block;
+  margin-top: 4px;
+  /* 2px border + 8px padding = 10px, aligning the folded text with the
+     toggle icon's content start (toggle carries 0 10px padding). */
+  padding-left: 8px;
+  border-left: 2px solid var(--divider-subtle, transparent);
+}
+.msg-version-rail.is-expanded .msg-version-rail__toggle {
+  color: var(--text);
+}
+/* User decision (2026-08-05): no long-press menu on assistant output — the
+   regenerate action is a permanent meta-row neighbor of copy on every
+   breakpoint, so the former touch-menu hide rule is gone entirely. */
+
+/* Committed user bubbles rendered into a live transcript without the send
+   launch (e.g. regenerated/refreshed nodes that must not replay the entrance):
+   skip the fade-in slide so the swap reads as a stationary opacity change, not
+   a 4px position jump. The send path itself upgrades the echo element in place
+   (adoptCommittedUserMessageIntoEcho) and needs no suppression. */
+.msg-user--no-fade {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-touch-menu,
+  .msg-touch-menu .msg-action-btn,
+  .msg-assistant .msg-action-btn {
+    transition: none;
+    transform: none;
+  }
+  .msg-action-btn.is-forking .rl-icon,
+  .code-copy-btn.copied {
+    animation: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .msg-user-bubble {
+    /* Keep vertical transcript scrolling, but reserve long-press for the
+       product menu instead of the browser's selection/callout UI. */
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    transition: transform 180ms cubic-bezier(0.2, 0, 0, 1), opacity 180ms ease;
+  }
+  .msg-user-bubble pre,
+  .msg-user-bubble code {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .msg-user-bubble.is-touch-pressing {
+    transform: scale(0.975);
+    opacity: 0.92;
+  }
+  .msg-assistant {
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    transition: opacity 180ms ease;
+  }
+  .msg-assistant pre,
+  .msg-assistant code {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .msg-assistant.is-touch-pressing {
+    opacity: 0.88;
+  }
+}
+
+@media (pointer: coarse) {
+  .msg-user-bubble {
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    transition: transform 180ms cubic-bezier(0.2, 0, 0, 1), opacity 180ms ease;
+  }
+  .msg-user-bubble pre,
+  .msg-user-bubble code {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .msg-user-bubble.is-touch-pressing {
+    transform: scale(0.975);
+    opacity: 0.92;
+  }
+  .msg-assistant {
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    transition: opacity 180ms ease;
+  }
+  .msg-assistant pre,
+  .msg-assistant code {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .msg-assistant.is-touch-pressing {
+    opacity: 0.88;
+  }
+}

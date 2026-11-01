@@ -1,0 +1,12 @@
+<resources>
+    <string name="navigation_choose_computer">Choose the source computer</string>
+    <string name="navigation_cannot_open">Cannot open this session</string>
+    <string name="navigation_legacy_source">This older notification does not identify its computer. Choose the computer that sent it.</string>
+    <string name="navigation_no_computers">No paired computers are available. Pair the source computer, then open the notification again.</string>
+    <string name="navigation_target_missing">The source computer is no longer paired. This link cannot open a different computer.</string>
+    <string name="navigation_session_missing">This session was not found on the source computer.</string>
+    <string name="navigation_not_authorized">Reconnect to the source computer with valid access, then open this link again.</string>
+    <string name="navigation_invalid">This navigation request is invalid or uses an unsupported version.</string>
+    <string name="navigation_unavailable">The source computer could not be reached, or its selection changed. Open the link again to retry.</string>
+    <string name="navigation_close">Close</string>
+</resources>

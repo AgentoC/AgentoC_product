@@ -1,0 +1,7 @@
+<resources>
+    <string name="api_confirm">Confirmer</string>
+    <string name="api_access_clear_confirm">Supprimer cet enregistrement révoqué de cet appareil ? L’accès a déjà été révoqué.</string>
+    <string name="api_assistant_revoke_confirm">Révoquer cette délégation de l’assistant ? Cela bloque les accès futurs, mais n’arrête pas le travail déjà accepté par un ordinateur et ne récupère pas les données reçues.</string>
+    <string name="api_capture_delete_confirm">Supprimer ce brouillon enregistré de cet appareil ? Cette action est irréversible.</string>
+    <string name="api_outputs_delete_confirm">Supprimer cette copie privée du téléphone ? Le fichier sur l’ordinateur d’origine ne sera pas supprimé.</string>
+</resources>

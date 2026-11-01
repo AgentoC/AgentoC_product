@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "risk-v3",
+  "generatedAt": "2026-08-07",
+  "datasets": [
+    {
+      "id": "agentoc-boundaries",
+      "path": "agentoc-boundaries.jsonl",
+      "label": "policy-gold",
+      "source": "AgentoC risk-v3 maintained fixture",
+      "revision": "local-2026-08-07",
+      "license": "Apache-2.0 (AgentoC)",
+      "sha256": "503611632e174905767563a4eef127fe09941f767baa594027599a2dc7f141e7",
+      "records": 26
+    }
+  ],
+  "upstreamCatalog": [
+    {
+      "id": "bash-datasets-consolidated",
+      "url": "https://github.com/rivoluzione-informatica/bash-datasets",
+      "revision": "fcac513317e1487c75f5d3fd0f50f3ddb2ba325a",
+      "path": "data/consolidated_bash_commands.json",
+      "license": "NOASSERTION",
+      "status": "catalog-only",
+      "note": "Large supplement; import only with an explicit output path and SHA-256 verification."
+    },
+    {
+      "id": "gtfobins",
+      "url": "https://github.com/GTFOBins/GTFOBins.github.io",
+      "revision": "acd524623f9c406acedd2754ebd9c2431f3675ad",
+      "license": "GPL-3.0",
+      "status": "catalog-only",
+      "note": "Technique corpus, not a flat command-label dataset; normalize per binary/technique before use."
+    },
+    {
+      "id": "atomic-red-team",
+      "url": "https://github.com/redcanaryco/atomic-red-team",
+      "revision": "1ba1dd8d9ce6f74700f7aec2e60de5632f667f03",
+      "license": "MIT",
+      "status": "catalog-only",
+      "note": "ATT&CK technique tests; commands are execution-oriented and must remain static fixtures."
+    },
+    {
+      "id": "tldr",
+      "url": "https://github.com/tldr-pages/tldr",
+      "revision": "2381d653123d042064cec4f20bfeb02613e92f6f",
+      "license": "NOASSERTION",
+      "status": "catalog-only",
+      "note": "Benign command templates; placeholders must not be treated as executable samples without instantiation."
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="navigation_projects">Projets</string>
+    <string name="navigation_chat">Discussions</string>
+    <string name="navigation_home">Accueil</string>
+    <string name="navigation_settings">Réglages</string>
+    <string name="navigation_new_session">Nouvelle conversation</string>
+    <string name="navigation_new_project">Nouveau projet</string>
+</resources>

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentoC PWA 诊断</title>
+<link rel="manifest" href="manifest.json?v=pwa-check" crossorigin="use-credentials">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<style>
+  body { background:#0a0a0a; color:#e8e8e8; font-family: -apple-system,system-ui,sans-serif; margin:0; padding:16px; font-size:14px; line-height:1.5; }
+  h1 { font-size:16px; margin:0 0 12px; }
+  pre { white-space:pre-wrap; word-break:break-all; background:#161616; padding:12px; border-radius:8px; margin:0; font-size:12.5px; }
+  .ok { color:#5fd07a; } .bad { color:#ff6b6b; } .warn { color:#ffcc66; } .dim { color:#888; }
+  button { margin-top:12px; padding:10px 14px; font-size:14px; background:#2a6cff; color:#fff; border:0; border-radius:8px; width:100%; }
+</style>
+</head>
+<body>
+<h1>AgentoC PWA 安装诊断</h1>
+<pre id="out">正在运行检查…</pre>
+<button id="copy" onclick="copyAll()">复制结果</button>
+<script>
+const out = document.getElementById('out');
+const lines = [];
+function log(label, value, cls) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  const line = `${label}: ${text}`;
+  lines.push({ label, text, cls });
+  render();
+}
+function render() {
+  out.innerHTML = lines.map(l => {
+    const cls = l.cls ? ` class="${l.cls}"` : '';
+    return `<span${cls}><b>${l.label}</b>: ${escapeHtml(l.text)}</span>`;
+  }).join('\n');
+}
+function escapeHtml(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function copyAll(){
+  const txt = lines.map(l=>`${l.label}: ${l.text}`).join('\n');
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(()=>alert('已复制，粘贴给 Agent'));}
+  else{alert('复制失败，请直接截图');}
+}
+
+const ua = navigator.userAgent || '';
+log('UA', ua);
+log('language', navigator.language || '');
+const dm = (typeof matchMedia==='function'&&matchMedia('(display-mode: standalone)').matches);
+log('display-mode standalone', dm, dm?'warn':'');
+log('navigator.standalone', !!navigator.standalone);
+log('SW 支持', 'serviceWorker' in navigator ? 'YES' : 'NO', 'serviceWorker' in navigator?'ok':'bad');
+
+try {
+  const sk = localStorage.getItem('agentoc.mobileInstall.skipUntil');
+  log('install skipUntil', sk ? `${sk} (剩余 ${Math.max(0,Math.round((Number(sk)-Date.now())/3600000))} 小时)` : '无（未被跳过）', sk?'warn':'ok');
+} catch(e){ log('install skipUntil', '读取失败'); }
+
+(async () => {
+  // 1) existing controller
+  if ('serviceWorker' in navigator) {
+    log('当前 SW controller', navigator.serviceWorker.controller ? navigator.serviceWorker.controller.scriptURL : '无（页面未被 SW 接管）', navigator.serviceWorker.controller?'ok':'warn');
+  }
+
+  // 2) register SW fresh
+  if ('serviceWorker' in navigator) {
+    try {
+      const reg = await navigator.serviceWorker.register('/sw.js?v=pwa-check', { updateViaCache:'none' });
+      log('SW 注册', '成功 ' + (reg.active?'(active)':reg.waiting?'(waiting)':reg.installing?'(installing)':'(?)'), 'ok');
+      await navigator.serviceWorker.ready.catch(()=>{});
+      log('SW ready 后 controller', navigator.serviceWorker.controller ? '已接管' : '仍未接管', navigator.serviceWorker.controller?'ok':'bad');
+    } catch(e) {
+      log('SW 注册', '失败: ' + (e&&e.message||e), 'bad');
+    }
+  }
+
+  // 3) manifest fetch — with cookies (like a normal same-origin fetch)
+  await probeFetch('manifest.json', 'include');
+  // 4) manifest fetch — WITHOUT cookies (mimics Chrome installability validation that may omit credentials)
+  await probeFetch('manifest.json', 'omit');
+  // 5) install manifest route
+  await probeFetch('manifest.install.json?h=ih_000000000000000000000000000000000000000000000000', 'include');
+  // 6) sw.js fetch
+  await probeFetch('sw.js', 'include');
+
+  log('安装提醒', '不监听或拦截，由 Chrome 原生机制完全接管', 'ok');
+  log('提示', '把以上全部内容复制或截图发给 Agent');
+})();
+
+async function probeFetch(path, credentials) {
+  try {
+    const res = await fetch(path, { credentials, cache:'no-store' });
+    const ct = res.headers.get('content-type') || '';
+    const text = await res.text();
+    const head = text.slice(0,80).replace(/\s+/g,' ');
+    let detail = `HTTP ${res.status}, type=${ct||'(空)'}, len=${text.length}`;
+    let cls = '';
+    const looksLikeLogin = /Cloudflare Access|Sign in|<html/i.test(text) && /json|javascript|png/.test(ct)===false && (ct.includes('text/html'));
+    if (looksLikeLogin) { detail += '  ⚠️ 返回的是登录页 HTML 而非真实资源'; cls='bad'; }
+    else if (path.endsWith('.json') && !ct.includes('json')) { detail += '  ⚠️ content-type 不是 JSON'; cls='bad'; }
+    else if (path==='sw.js' && !ct.includes('javascript')) { detail += '  ⚠️ content-type 不是 JS'; cls='bad'; }
+    else { cls='ok'; }
+    if (path.endsWith('.json') && ct.includes('json')) {
+      try { const j = JSON.parse(text); detail += ` | name=${j.name||'?'}, display=${j.display||'?'}, start_url=${j.start_url||'?'}, icons=${(j.icons||[]).length}`; } catch(e){ detail += ' | ⚠️ 不是合法 JSON'; cls='bad'; }
+    }
+    log(`fetch ${path} [cred=${credentials}]`, detail, cls);
+    log(`  ↳ body开头`, head, 'dim');
+  } catch(e) {
+    log(`fetch ${path} [cred=${credentials}]`, '失败: ' + (e&&e.message||e), 'bad');
+  }
+}
+</script>
+</body>
+</html>

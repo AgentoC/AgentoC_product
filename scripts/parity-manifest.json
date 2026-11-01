@@ -1,0 +1,36 @@
+{
+  "format": 1,
+  "recordedAt": "2026-09-11T05:12:57.106Z",
+  "gitHead": "3523ed738fa80f282bf0216815abcc209164de2e",
+  "packageVersion": "0.3.12",
+  "groups": {
+    "package": {
+      "files": {
+        "package.json": "1049d59f54cb1041f353e46f03f0d2d44c6fb4fc907f9966fad854bb611e2da2"
+      }
+    },
+    "backend": {
+      "files": {
+        "chat-server.mjs": "c22f4c84407dd1e111f8a2e51f5a66df31f5c07e281d611e6d5e72e76b6d1e1f",
+        "chat/session-manager.mjs": "a476dddc246a06fffbeca920dae8c2dc69eab799e812838f4075e59d9e3f9fed",
+        "lib/config.mjs": "c74b58a2e40f549bce46fa07b80ae8c1a855f3b13ac57caff602115041649390"
+      }
+    },
+    "static": {
+      "files": {
+        "static/chat/chat.css": "b67771af76ea62214e76d3bc44fc59bbd060792334f24151b8e1ca076bdb18c1",
+        "static/chat/compose.js": "5dd0ea4a5e5ab3eb1b7760de774fd634d6d683c36c14629fe87ab2b545d2b14c",
+        "static/chat/ui.js": "bd2fdc83aebfda05747f42b5102a3840b5e1279a33c15dc5f6b01aa504d6af8a",
+        "static/marked.min.js": "3e7e7d7feb3e5d58cb6c804f68ab5c24cc7e5eb6270fd6e5cbb9124739217d0c",
+        "static/sw.js": "cf17c99a22837a153b4b4a6100df586aaa899d2932d24bd58084bd4c46a2bbd6",
+        "static/manifest.json": "5531e67aa16ba58184b0102931e16f7e897897138f5f75c0a2bc71a3f5d5c9d5"
+      }
+    },
+    "templates": {
+      "files": {
+        "templates/chat.html": "174422ad6c1308ba9acf3b88368d5841312fec7f81733b688827d1d3ff6de1d9",
+        "templates/login.html": "2c3ccb0d1816cc2d7ec8d693cf921cc6fd0eb9fc81d28c7b858b941b83ee2b06"
+      }
+    }
+  }
+}

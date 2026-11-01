@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+  <group android:name="symbol" android:translateX="21.039473684211" android:translateY="24.000000000000" android:scaleX="0.394736842105" android:scaleY="0.394736842105">
+    <clip-path android:name="dot_clearance" android:fillType="evenOdd" android:pathData="M0,0 H167 V152 H0 Z M100.6,94.3 A17.4,17.4 0 1 1 65.8,94.3 A17.4,17.4 0 1 1 100.6,94.3 Z M96.4,94.3 A13.2,13.2 0 1 1 70,94.3 A13.2,13.2 0 1 1 96.4,94.3 Z" />
+    <path android:name="cloud_outline" android:fillColor="@android:color/transparent" android:strokeColor="#000000" android:strokeWidth="15" android:strokeLineCap="butt" android:strokeLineJoin="round" android:pathData="M34.6,107.4 C21.6,101.9 15,91.4 15,78.5 c0,-17.4 13.7,-31.5 30.8,-31.5 h2.4 C50.6,28.3 65,16.5 83.4,16.5 c18.5,0 32.9,11.8 35.4,30.5 h2.4 c17.1,0 30.8,14.1 30.8,31.5 0,13.1 -7.8,23.6 -19.6,28.9" />
+    <path android:name="letter_a" android:fillColor="#000000" android:pathData="M27.4,142 62.3,59.4 C66.7,48.7 72.6,39.6 83.1,39.6 c10.5,0 16.4,9.1 20.8,19.8 l36,82.6 h-21.4 L99.6,98.1 c0,-8.3 -3.9,-15.2 -10.3,-19.1 -1.3,-3.2 -3.5,-5.2 -6.2,-5.2 s-4.9,2 -6.2,5.2 c-6.4,3.9 -10.3,10.8 -10.3,19.1 L48.8,142 H27.4 Z" />
+    <path android:name="diagonal_bar" android:fillColor="@android:color/transparent" android:strokeColor="#000000" android:strokeWidth="18" android:strokeLineCap="round" android:pathData="M65.35,133 106.25,106.1" />
+    <path android:name="a_dot" android:fillColor="#000000" android:pathData="M96.4,94.3 A13.2,13.2 0 1 1 70,94.3 A13.2,13.2 0 1 1 96.4,94.3 Z" />
+  </group>
+</vector>

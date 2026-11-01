@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="AgentoC">
+  <meta name="application-name" content="AgentoC">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f8f8fa" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+  <meta name="agentoc-build" content="{{BUILD_TITLE}}">
+  <base href="{{PRODUCT_BASE_HREF}}">
+  <link rel="manifest" href="manifest.json?v={{ASSET_VERSION}}" crossorigin="use-credentials">
+  <link rel="icon" href="favicon.ico?v={{ASSET_VERSION}}" sizes="any">
+  <link rel="icon" href="icon.svg?v={{ASSET_VERSION}}" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v={{ASSET_VERSION}}">
+  <title>AgentoC — Sign In</title>
+  <link rel="stylesheet" href="m3-pages.css?v={{ASSET_VERSION}}">
+  <style nonce="{{NONCE}}">
+    :root {
+      color-scheme: light;
+      --bg: #f8f8fa;
+      --card: #ffffff;
+      --border: transparent;
+      --text: #1c1c1e;
+      --text-secondary: #636366;
+      --text-muted: #8e8e93;
+      --error: #dc2626;
+      --error-bg: #fef2f2;
+      --button-bg: #1c1c1e;
+      --button-text: #ffffff;
+      --focus-border: #1c1c1e;
+      --shadow: 0 16px 40px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --bg: #121214;
+        --card: #18181b;
+        --border: transparent;
+        --text: #e5e5ea;
+        --text-secondary: #a1a1a8;
+        --text-muted: #6e6e76;
+        --error: #f87171;
+        --error-bg: #2a1215;
+        --button-bg: #e5e5ea;
+        --button-text: #161618;
+        --focus-border: #60a5fa;
+        --shadow: 0 20px 48px rgba(0,0,0,0.42), 0 4px 10px rgba(0,0,0,0.22);
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, system-ui, 'Segoe UI', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100dvh;
+      padding: max(24px, env(safe-area-inset-top))
+               max(24px, env(safe-area-inset-right))
+               max(24px, env(safe-area-inset-bottom))
+               max(24px, env(safe-area-inset-left));
+    }
+
+    .card {
+      background: var(--card);
+      border: 0;
+      border-radius: 20px;
+      padding: 40px 32px 32px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: var(--shadow);
+    }
+
+    .logo {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+      letter-spacing: -0.02em;
+    }
+
+    .tagline {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+    }
+
+    .error {
+      background: var(--error-bg);
+      color: var(--error);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
+    .hidden { display: none !important; }
+
+    label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 5px;
+    }
+
+    input[type=text],
+    input[type=password] {
+      display: block;
+      width: 100%;
+      border: 0;
+      border-radius: 9999px;
+      padding: 12px 18px;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text);
+      background: color-mix(in srgb, var(--text) 5%, var(--card));
+      outline: none;
+      -webkit-appearance: none;
+      transition: background 0.15s ease, box-shadow 0.15s ease;
+      margin-bottom: 12px;
+    }
+
+    input[type=text]:focus,
+    input[type=password]:focus {
+      background: color-mix(in srgb, var(--text) 8%, var(--card));
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-border) 40%, transparent);
+    }
+
+    .mono {
+      font-family: ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
+      font-size: 13px;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      background: var(--button-bg);
+      color: var(--button-text);
+      border: none;
+      border-radius: 9999px;
+      padding: 13px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      margin-top: 10px;
+      -webkit-appearance: none;
+      transition: opacity 0.15s ease, transform 0.1s ease, filter 0.15s ease;
+    }
+
+    .btn:hover { filter: brightness(1.06); }
+    .btn:active { transform: scale(0.97); filter: brightness(0.94); }
+
+    .switch {
+      text-align: center;
+      margin-top: 18px;
+    }
+
+    .switch a {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-decoration: none;
+    }
+
+    .switch a:hover { color: var(--text); }
+
+    .build-stamp {
+      margin-top: 14px;
+      text-align: center;
+      font-size: 10px;
+      color: var(--text-muted);
+      user-select: text;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">AgentoC</div>
+    <div class="tagline" data-i18n="login.tagline">Sign in to continue</div>
+
+    <div class="error {{ERROR_CLASS}}" data-i18n="login.error">Invalid credentials. Please try again.</div>
+    <div class="error hidden" id="join-error" data-i18n="login.joinInvalid">This device switch link has expired. Start the switch again.</div>
+    <div class="error hidden" id="google-error">Google sign-in failed, or this Google account is not bound to this instance.</div>
+
+    <!-- Password form -->
+    <form id="pw-form" method="POST" action="login">
+      <input type="hidden" name="type" value="password">
+      <label for="username-input" data-i18n="login.username">Username</label>
+      <input type="text" id="username-input" name="username"
+             placeholder="Enter username" data-i18n-placeholder="login.usernamePlaceholder"
+             autocomplete="username" autocorrect="off" autocapitalize="none">
+      <label for="password-input" data-i18n="login.password">Password</label>
+      <input type="password" id="password-input" name="password"
+             placeholder="Enter password" data-i18n-placeholder="login.passwordPlaceholder"
+             autocomplete="current-password">
+      <button type="submit" class="btn" data-i18n="login.signIn">Sign In</button>
+    </form>
+
+    <!-- Token form -->
+    <form id="token-form" class="hidden" method="POST" action="login">
+      <input type="hidden" name="type" value="token">
+      <label for="token-input" data-i18n="login.accessToken">Access Token</label>
+      <input type="text" id="token-input" name="token" class="mono"
+             placeholder="Paste your token" data-i18n-placeholder="login.tokenPlaceholder"
+             autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+      <button type="submit" class="btn" data-i18n="login.signIn">Sign In</button>
+    </form>
+
+    <div class="switch">
+      <a href="#" id="toggle-link" data-i18n="login.switch.useToken">Use access token instead</a>
+    </div>
+
+    <!-- Google owner login (cross-device owner credential); shown when configured and bound -->
+    <div id="google-auth" class="hidden" style="margin-top:18px;border-top:1px solid var(--border);padding-top:18px;">
+      <button type="button" class="btn" id="google-login-btn" style="width:100%;">Sign in with Google</button>
+      <div id="google-login-status" class="hidden" role="status" aria-live="polite" style="margin-top:10px;color:var(--text-secondary);font-size:13px;"></div>
+    </div>
+
+    <div class="build-stamp" title="{{BUILD_TITLE}}">{{BUILD_LABEL}}</div>
+  </div>
+
+  <script src="chat/i18n.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+  <script nonce="{{NONCE}}">
+    var tokenForm = document.getElementById('token-form');
+    var pwForm = document.getElementById('pw-form');
+    var toggleLink = document.getElementById('toggle-link');
+    var usePw = '{{MODE}}' === 'pw';
+    var t = window.agentocT || function(key) { return key; };
+
+    var joinError = document.getElementById('join-error');
+    try {
+      if (joinError && new URLSearchParams(window.location.search).get('error') === 'join_invalid') {
+        joinError.textContent = t('login.joinInvalid');
+        joinError.classList.remove('hidden');
+      }
+    } catch (e) {}
+
+    function applyMode() {
+      if (usePw) {
+        tokenForm.classList.add('hidden');
+        pwForm.classList.remove('hidden');
+        toggleLink.textContent = t('login.switch.useToken');
+      } else {
+        pwForm.classList.add('hidden');
+        tokenForm.classList.remove('hidden');
+        toggleLink.textContent = t('login.switch.usePassword');
+      }
+    }
+
+    applyMode();
+
+    toggleLink.addEventListener('click', function(e) {
+      e.preventDefault();
+      usePw = !usePw;
+      applyMode();
+    });
+
+    // Google owner login: shown only when this instance is configured and a
+    // Google account is bound as the cross-device owner credential.
+    var googleAuth = document.getElementById('google-auth');
+    var googleBtn = document.getElementById('google-login-btn');
+    var googleStatus = document.getElementById('google-login-status');
+    if (googleAuth && googleBtn) {
+      fetch('/api/auth/google/status', { method: 'GET' })
+        .then(function (r) { return r.json(); })
+        .then(function (s) {
+          if (s && s.enabled && s.bound) {
+            googleAuth.classList.remove('hidden');
+          }
+        })
+        .catch(function () {});
+      googleBtn.addEventListener('click', function () {
+        googleBtn.disabled = true;
+        // Open the Accounts page inside the user gesture. The current tab
+        // stays on the local login page so it can receive the session cookie
+        // from the safe instance status endpoint.
+        var authWindow = window.open('about:blank', '_blank', 'noopener,noreferrer');
+        fetch('/api/auth/google/login', { method: 'POST' })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (d && d.authUrl && d.deliveryMode === 'instance_poll' && d.transactionId) {
+              if (!authWindow || authWindow.closed) {
+                if (googleStatus) {
+                  googleStatus.textContent = '浏览器阻止了新窗口，请允许弹出窗口后重试。';
+                  googleStatus.classList.remove('hidden');
+                }
+                googleBtn.disabled = false;
+                return;
+              }
+              authWindow.location.replace(d.authUrl);
+              if (googleStatus) {
+                googleStatus.textContent = '请在新窗口用手机完成 Google 登录；本页会自动继续。';
+                googleStatus.classList.remove('hidden');
+              }
+              var endpoint = '/api/auth/google/transactions/' + encodeURIComponent(d.transactionId);
+              var poll = function () {
+                fetch(endpoint, { credentials: 'same-origin', cache: 'no-store' })
+                  .then(function (r) {
+                    return r.json().then(function (body) {
+                      if (!r.ok) throw new Error(body && body.error ? body.error : '登录链接已失效，请重试。');
+                      return body;
+                    });
+                  })
+                  .then(function (state) {
+                    if (state.status === 'completed') {
+                      if (authWindow && !authWindow.closed) authWindow.close();
+                      location.replace('/');
+                      return;
+                    }
+                    if (state.status === 'failed' || state.status === 'expired') {
+                      throw new Error('Google 登录已失效，请重新开始。');
+                    }
+                    window.setTimeout(poll, 1800);
+                  })
+                  .catch(function (error) {
+                    if (googleStatus) {
+                      googleStatus.textContent = error && error.message ? error.message : '登录状态暂不可用，请重试。';
+                      googleStatus.classList.remove('hidden');
+                    }
+                    if (authWindow && !authWindow.closed) authWindow.close();
+                    googleBtn.disabled = false;
+                  });
+              };
+              poll();
+              return;
+            }
+            if (authWindow && !authWindow.closed) authWindow.close();
+            if (d && d.authUrl) { location.href = d.authUrl; return; }
+            googleBtn.disabled = false;
+          })
+          .catch(function () {
+            if (authWindow && !authWindow.closed) authWindow.close();
+            googleBtn.disabled = false;
+          });
+      });
+    }
+    if (location.search.indexOf('mode=google') >= 0) {
+      var googleError = document.getElementById('google-error');
+      if (googleError) googleError.classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>

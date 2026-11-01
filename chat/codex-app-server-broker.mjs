@@ -1,0 +1,528 @@
+#!/usr/bin/env node
+
+// One Codex app-server process per machine-local provider home.
+//
+// Codex OAuth refresh tokens rotate on use. Starting one app-server per Run
+// gives every process a copy of the same refresh token and eventually causes
+// "refresh token was already used". This broker owns the provider home and
+// multiplexes independent Codex threads over that one authenticated process.
+// The Run sidecar still owns its own stdin/stdout and approval state; only the
+// provider protocol transport is shared. The broker is scoped to one prepared
+// provider home on one machine; it is never part of peer synchronization.
+
+import { createHash } from 'node:crypto';
+import { buildWorkbenchCodexEnvironment, constrainCodexBrokerRequest } from '../lib/workbench-execution-policy.mjs';
+import { spawn } from 'node:child_process';
+import { createInterface } from 'node:readline';
+import { connect, createServer } from 'node:net';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { mkdir, unlink, chmod } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+
+import { acquireNativeOAuthLock, nativeOAuthLockPath } from '../lib/provider-runtime/oauth-lock.mjs';
+import { spawnManagedProviderProcess } from '../lib/windows-managed-spawn.mjs';
+
+const BROKER_PING = 'agentoc-codex-broker-ping';
+const BROKER_PONG = 'agentoc-codex-broker-pong';
+const BROKER_READY_TIMEOUT_MS = 30_000;
+const BROKER_LOCK_WAIT_MS = 15_000;
+const BROKER_INTERNAL_INITIALIZE_ID = -1;
+
+export const CODEX_APP_SERVER_BROKER_SCRIPT = fileURLToPath(import.meta.url);
+
+function trimString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeSocketPath(value) {
+  const path = trimString(value);
+  return path && !path.includes('\0') && !/[\r\n]/.test(path) ? path : '';
+}
+
+function isWindowsNamedPipePath(value) {
+  return /^\\\\\.\\pipe\\/i.test(String(value || '').trim());
+}
+
+export function buildCodexAppServerBrokerSocketPath(codexHomeDir, {
+  platform = process.platform,
+} = {}) {
+  const home = trimString(codexHomeDir);
+  if (!home) return '';
+  const digest = createHash('sha256').update(platform === 'win32' ? home.toLowerCase() : home).digest('hex').slice(0, 32);
+  if (platform === 'win32') {
+    return `\\\\.\\pipe\\agentoc-codex-${digest}`;
+  }
+  const providerLocalPath = join(home, '.agentoc-codex-app-server.sock');
+  // Linux sockaddr_un paths are capped at 108 bytes (macOS is lower). Native
+  // provider homes include a hashed by-provider segment and can exceed that
+  // limit under long config/test roots. Only shorten paths that cannot have a
+  // working legacy broker, so live short-path brokers keep their identity.
+  if (Buffer.byteLength(providerLocalPath, 'utf8') <= 100) return providerLocalPath;
+  const userId = typeof process.getuid === 'function' ? process.getuid() : 'user';
+  const temporaryPath = join(tmpdir(), `agentoc-codex-${userId}-${digest}.sock`);
+  return Buffer.byteLength(temporaryPath, 'utf8') <= 100
+    ? temporaryPath
+    : join('/tmp', `agentoc-codex-${userId}-${digest}.sock`);
+}
+
+export function codexAppServerBrokerSocketPath(codexHomeDir) {
+  return buildCodexAppServerBrokerSocketPath(codexHomeDir);
+}
+
+export function codexAppServerBrokerLockPath(codexHomeDir) {
+  const home = trimString(codexHomeDir);
+  return home ? join(home, '.agentoc-codex-app-server.lock') : '';
+}
+
+function brokerLockPath(socketPath, explicitLockPath = '') {
+  const explicit = normalizeSocketPath(explicitLockPath);
+  if (explicit) return explicit;
+  if (isWindowsNamedPipePath(socketPath)) {
+    const digest = createHash('sha256').update(socketPath).digest('hex').slice(0, 32);
+    return join(tmpdir(), `agentoc-codex-broker-${digest}.lock`);
+  }
+  return `${socketPath}.lock`;
+}
+
+function toSpawnEnvironment(environment = {}) {
+  return Object.fromEntries(
+    Object.entries(environment).filter(([, value]) => value !== undefined && value !== null),
+  );
+}
+
+function readArg(name, fallback = '') {
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? trimString(process.argv[index + 1]) || fallback : fallback;
+}
+
+function writeLine(socket, value) {
+  if (!socket || socket.destroyed) return false;
+  try {
+    socket.write(`${JSON.stringify(value)}\n`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function probeBroker(socketPath, timeoutMs = 1_500) {
+  const normalized = normalizeSocketPath(socketPath);
+  if (!normalized) return false;
+  return new Promise((resolve) => {
+    let settled = false;
+    let buffer = '';
+    const socket = connect(normalized);
+    const finish = (ready) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      socket.destroy();
+      resolve(ready === true);
+    };
+    const timer = setTimeout(() => finish(false), Math.max(100, timeoutMs));
+    timer.unref?.();
+    socket.on('error', () => finish(false));
+    socket.on('data', (chunk) => {
+      buffer += chunk.toString('utf8');
+      let newline;
+      while ((newline = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, newline);
+        buffer = buffer.slice(newline + 1);
+        try {
+          const message = JSON.parse(line);
+          if (message?.type === BROKER_PONG && message.ready === true) finish(true);
+        } catch {}
+      }
+    });
+    socket.once('connect', () => writeLine(socket, { type: BROKER_PING }));
+  });
+}
+
+export async function isCodexAppServerBrokerReady(socketPath, timeoutMs = 1_500) {
+  return probeBroker(socketPath, timeoutMs);
+}
+
+/**
+ * Launch the broker-owned Codex process through the same explicit spawn
+ * contract as a Run provider.  On Windows this creates the provider inside a
+ * Job Object; the broker remains the long-lived owner so Control Plane
+ * restarts do not terminate the authenticated app-server.
+ */
+export async function spawnCodexAppServerProcess({
+  file,
+  args = [],
+  cwd = process.cwd(),
+  env = process.env,
+  windowsVerbatimArguments = false,
+  spawnManagedImpl = spawnManagedProviderProcess,
+} = {}) {
+  return spawnManagedImpl({
+    file,
+    args,
+    cwd,
+    env,
+    shell: false,
+    windowsVerbatimArguments: windowsVerbatimArguments === true,
+  }, {
+    stdio: ['pipe', 'pipe', 'ignore'],
+  });
+}
+
+async function waitForBroker(socketPath, timeoutMs = BROKER_READY_TIMEOUT_MS) {
+  const deadline = Date.now() + Math.max(1_000, timeoutMs);
+  while (Date.now() < deadline) {
+    if (await probeBroker(socketPath, 1_500)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return false;
+}
+
+/**
+ * Start the machine-local broker once and wait until its upstream Codex
+ * process has completed initialize. The lock protects only broker creation;
+ * it is released before the Run starts and therefore does not serialize Runs.
+ */
+export async function ensureCodexAppServerBroker({
+  socketPath,
+  upstreamFile,
+  upstreamArgs = [],
+  upstreamWindowsVerbatimArguments = false,
+  cwd = process.cwd(),
+  env = process.env,
+  lockPath = '',
+  scriptPath = CODEX_APP_SERVER_BROKER_SCRIPT,
+  waitMs = BROKER_READY_TIMEOUT_MS,
+  spawnImpl = spawn,
+  acquireLockImpl = acquireNativeOAuthLock,
+  assertLaunchBoundary = null,
+} = {}) {
+  const normalizedSocket = normalizeSocketPath(socketPath);
+  const file = trimString(upstreamFile);
+  if (!normalizedSocket || !file || !Array.isArray(upstreamArgs)) {
+    const error = new Error('Codex app-server broker launch specification is incomplete');
+    error.code = 'CODEX_APP_SERVER_BROKER_INVALID';
+    throw error;
+  }
+  if (await probeBroker(normalizedSocket)) return { ok: true, socketPath: normalizedSocket, reused: true, pid: null };
+
+  if (!isWindowsNamedPipePath(normalizedSocket)) {
+    await mkdir(dirname(normalizedSocket), { recursive: true, mode: 0o770 });
+  }
+  let lock = null;
+  let brokerPid = null;
+  let brokerChild = null;
+  try {
+    lock = await acquireLockImpl(brokerLockPath(normalizedSocket, lockPath), {
+      waitMs: BROKER_LOCK_WAIT_MS,
+      pollMs: 50,
+    });
+    if (await probeBroker(normalizedSocket)) {
+      return { ok: true, socketPath: normalizedSocket, reused: true, pid: null };
+    }
+    // A refused connection means the previous broker is gone. Only remove the
+    // exact provider-scoped socket path; never use a broad glob or directory.
+    await unlink(normalizedSocket).catch(() => {});
+    const childEnv = {
+      ...toSpawnEnvironment(env),
+      AGENTOC_CODEX_BROKER_SOCKET: normalizedSocket,
+      AGENTOC_CODEX_BROKER_UPSTREAM_FILE: file,
+      AGENTOC_CODEX_BROKER_UPSTREAM_ARGS: JSON.stringify(upstreamArgs),
+      AGENTOC_CODEX_BROKER_UPSTREAM_WINDOWS_VERBATIM: upstreamWindowsVerbatimArguments === true ? '1' : '0',
+      AGENTOC_CODEX_BROKER_UPSTREAM_CWD: trimString(cwd) || process.cwd(),
+    };
+    if (assertLaunchBoundary) await assertLaunchBoundary();
+    brokerChild = spawnImpl(process.execPath, [scriptPath, '--broker'], {
+      cwd: trimString(cwd) || process.cwd(),
+      env: childEnv,
+      stdio: 'ignore',
+      detached: true,
+    });
+    brokerChild.unref?.();
+    brokerPid = brokerChild.pid ?? null;
+    // Keep creation serialized through initialize. A second caller otherwise
+    // sees an unready socket, unlinks it, and starts a second refresh owner.
+    if (!(await waitForBroker(normalizedSocket, waitMs))) {
+      try { brokerChild?.kill?.('SIGTERM'); } catch {}
+      const error = new Error('Codex app-server broker did not become ready');
+      error.code = 'CODEX_APP_SERVER_BROKER_UNAVAILABLE';
+      throw error;
+    }
+    return { ok: true, socketPath: normalizedSocket, reused: false, pid: brokerPid ?? null };
+  } finally {
+    await lock?.release?.();
+  }
+}
+
+function initializeMessage() {
+  return {
+    method: 'initialize',
+    id: BROKER_INTERNAL_INITIALIZE_ID,
+    params: {
+      clientInfo: { name: 'agentoc-codex-broker', title: 'AgentoC Codex broker', version: '1' },
+      capabilities: { experimentalApi: true },
+    },
+  };
+}
+
+function readThreadId(message) {
+  const params = message?.params && typeof message.params === 'object' ? message.params : {};
+  return trimString(
+    params.threadId
+      || params.thread?.id
+      || params.turn?.threadId
+      || params.item?.threadId
+      || message?.threadId,
+  );
+}
+
+function readResultThreadId(message) {
+  return trimString(message?.result?.thread?.id || message?.result?.threadId);
+}
+
+function isRequest(message) {
+  return typeof message?.id === 'string' || typeof message?.id === 'number';
+}
+
+function runBroker() {
+  const socketPath = normalizeSocketPath(process.env.AGENTOC_CODEX_BROKER_SOCKET || readArg('--socket'));
+  const upstreamFile = trimString(process.env.AGENTOC_CODEX_BROKER_UPSTREAM_FILE);
+  const upstreamCwd = trimString(process.env.AGENTOC_CODEX_BROKER_UPSTREAM_CWD) || process.cwd();
+  const upstreamWindowsVerbatimArguments = process.env.AGENTOC_CODEX_BROKER_UPSTREAM_WINDOWS_VERBATIM === '1';
+  let upstreamArgs = [];
+  try {
+    upstreamArgs = JSON.parse(process.env.AGENTOC_CODEX_BROKER_UPSTREAM_ARGS || '[]');
+  } catch {}
+  if (!socketPath || !upstreamFile || !Array.isArray(upstreamArgs)) {
+    console.error('[codex-broker] invalid broker environment');
+    process.exitCode = 1;
+    return;
+  }
+
+  const clients = new Set();
+  const threadOwners = new Map();
+  const pending = new Map();
+  const pendingThreadClients = [];
+  let nextRequestId = 10_000;
+  let upstreamReady = false;
+  let upstream = null;
+  let server = null;
+  let oauthLock = null;
+  let stopping = false;
+
+  const sendClient = (client, message) => {
+    if (!client || client.destroyed) return false;
+    try {
+      client.write(`${JSON.stringify(message)}\n`);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const routeNotification = (message) => {
+    const threadId = readThreadId(message);
+    if (threadId && threadOwners.has(threadId)) {
+      sendClient(threadOwners.get(threadId), message);
+      return;
+    }
+    if (message?.method === 'thread/started' && pendingThreadClients.length > 0) {
+      const client = pendingThreadClients.shift();
+      const startedId = readThreadId(message);
+      if (startedId) threadOwners.set(startedId, client);
+      sendClient(client, message);
+      return;
+    }
+    // Account rate-limit updates are global provider state. They contain no
+    // credential material and are useful to every active Run.
+    if (message?.method === 'account/rateLimits/updated') {
+      for (const client of clients) sendClient(client, message);
+    }
+  };
+
+  const removePendingThreadClient = (client) => {
+    const index = pendingThreadClients.lastIndexOf(client);
+    if (index >= 0) pendingThreadClients.splice(index, 1);
+  };
+
+  const handleUpstreamMessage = (message) => {
+    if (!message || typeof message !== 'object') return;
+    if (message.id === BROKER_INTERNAL_INITIALIZE_ID) {
+      upstreamReady = !message.error;
+      return;
+    }
+    if (isRequest(message) && pending.has(message.id)) {
+      const request = pending.get(message.id);
+      pending.delete(message.id);
+      const threadId = readResultThreadId(message);
+      if (threadId) {
+        threadOwners.set(threadId, request.client);
+        removePendingThreadClient(request.client);
+      }
+      sendClient(request.client, { ...message, id: request.clientId });
+      return;
+    }
+    routeNotification(message);
+  };
+
+  const startUpstream = async () => {
+    // Share the exact lifecycle lock used by exclusive MCP/sandbox Runs.
+    // A ready broker keeps it until its real upstream exits; IPC callers
+    // multiplex threads without acquiring it again.
+    const home = trimString(process.env.CODEX_HOME);
+    if (!home) throw new Error('Codex broker requires its managed provider home');
+    oauthLock = await acquireNativeOAuthLock(nativeOAuthLockPath(dirname(home)), { waitMs: 15_000 });
+    if (stopping) { await oauthLock.release(); return; }
+    try {
+    upstream = await spawnCodexAppServerProcess({
+      file: upstreamFile,
+      args: upstreamArgs,
+      cwd: upstreamCwd,
+      env: buildWorkbenchCodexEnvironment(process.env),
+      windowsVerbatimArguments: upstreamWindowsVerbatimArguments,
+    });
+    } catch (error) {
+      await oauthLock.release();
+      throw error;
+    }
+    upstream.on('error', (error) => {
+      console.error(`[codex-broker] upstream error: ${error?.message || error}`);
+      upstreamReady = false;
+      for (const client of clients) client.end();
+      // A spawn error has no live authenticated child.
+      if (!upstream.pid) void oauthLock?.release();
+    });
+    const reader = createInterface({ input: upstream.stdout });
+    reader.on('line', (line) => {
+      try { handleUpstreamMessage(JSON.parse(line)); } catch {}
+    });
+    upstream.on('exit', () => {
+      upstreamReady = false;
+      for (const client of clients) client.end();
+      server?.close();
+      void oauthLock?.release();
+    });
+    try { upstream.stdin.write(`${JSON.stringify(initializeMessage())}\n`); } catch {}
+  };
+
+  const waitForUpstreamExit = (timeoutMs = 5_000) => {
+    if (!upstream || upstream.exitCode !== null || upstream.exitEmitted === true) return Promise.resolve();
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(finish, timeoutMs);
+      timer.unref?.();
+      upstream.once('exit', finish);
+    });
+  };
+
+  const handleClientMessage = (client, message) => {
+    if (!message || typeof message !== 'object') return;
+    if (message.type === BROKER_PING) {
+      sendClient(client, { type: BROKER_PONG, ready: upstreamReady });
+      return;
+    }
+    if (message.method === 'initialize') {
+      sendClient(client, {
+        id: message.id,
+        result: { serverInfo: { name: 'codex', version: 'brokered' }, capabilities: {} },
+      });
+      return;
+    }
+    if (message.method === 'initialized') return;
+    if (!upstreamReady || !upstream?.stdin?.writable) {
+      if (isRequest(message)) sendClient(client, { id: message.id, error: { code: -32000, message: 'Codex broker upstream is not ready' } });
+      return;
+    }
+
+    try { message = constrainCodexBrokerRequest(message); } catch {
+      if (isRequest(message)) sendClient(client, { id: message.id, error: { code: -32003, message: 'Workbench model policy denied this request' } });
+      return;
+    }
+    const threadId = readThreadId(message);
+    if (threadId) threadOwners.set(threadId, client);
+    if (message.method === 'thread/start' || message.method === 'thread/resume' || message.method === 'thread/fork') {
+      pendingThreadClients.push(client);
+    }
+    const rewritten = { ...message };
+    if (isRequest(message)) {
+      const upstreamId = nextRequestId;
+      nextRequestId += 1;
+      pending.set(upstreamId, { client, clientId: message.id });
+      rewritten.id = upstreamId;
+    }
+    try { upstream.stdin.write(`${JSON.stringify(rewritten)}\n`); } catch {}
+  };
+
+  const attachClient = (client) => {
+    clients.add(client);
+    let buffer = '';
+    client.on('data', (chunk) => {
+      buffer += chunk.toString('utf8');
+      let newline;
+      while ((newline = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, newline);
+        buffer = buffer.slice(newline + 1);
+        try { handleClientMessage(client, JSON.parse(line)); } catch {}
+      }
+    });
+    client.on('close', () => {
+      clients.delete(client);
+      for (let index = pendingThreadClients.length - 1; index >= 0; index -= 1) {
+        if (pendingThreadClients[index] === client) pendingThreadClients.splice(index, 1);
+      }
+      for (const [threadId, owner] of threadOwners) {
+        if (owner === client) threadOwners.delete(threadId);
+      }
+      for (const [id, request] of pending) {
+        if (request.client === client) pending.delete(id);
+      }
+    });
+  };
+
+  void (async () => {
+    await unlink(socketPath).catch(() => {});
+    server = createServer(attachClient);
+    server.listen(socketPath, async () => {
+      await chmod(socketPath, 0o660).catch(() => {});
+      void startUpstream().catch((error) => {
+        console.error(`[codex-broker] upstream launch failed: ${error?.message || error}`);
+        server?.close();
+      });
+    });
+    server.on('error', (error) => {
+      console.error(`[codex-broker] socket error: ${error?.message || error}`);
+      process.exitCode = 1;
+    });
+  })();
+
+  let shutdownPromise = null;
+  const shutdown = () => {
+    if (shutdownPromise) return shutdownPromise;
+    shutdownPromise = (async () => {
+      stopping = true;
+      for (const client of clients) client.end();
+      try {
+        if (typeof upstream?.__agentocWindowsTerminate === 'function') {
+          await upstream.__agentocWindowsTerminate(0xC0DE);
+        } else {
+          upstream?.kill?.('SIGTERM');
+        }
+      } catch {}
+      await waitForUpstreamExit();
+      try { upstream?.stdin?.end(); } catch {}
+      server?.close();
+      await unlink(socketPath).catch(() => {});
+    })();
+    return shutdownPromise;
+  };
+  process.once('SIGTERM', () => { void shutdown(); });
+  process.once('SIGINT', () => { void shutdown(); });
+}
+
+if (process.argv.includes('--broker')) runBroker();

@@ -1,0 +1,17 @@
+{
+  "instanceId": "rli_fixture",
+  "endpoint": "http://192.168.1.20:7690",
+  "device": {
+    "id": "rdev_fixture",
+    "deviceName": "Pixel",
+    "platform": "android",
+    "devicePublicKey": "MCowBQYDK2VwAyEAfixture",
+    "authVersion": 2,
+    "keyAlgorithm": "ed25519",
+    "status": "provisional",
+    "createdAt": "2026-08-12T00:00:00.000Z",
+    "lastSeenAt": "2026-08-12T00:00:00.000Z",
+    "temporaryExpiresAt": "2026-08-12T00:02:00.000Z"
+  },
+  "credential": { "type": "Bearer", "token": "rdp_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "expiresAt": "2026-08-12T00:02:00.000Z", "scope": "provisional-google" }
+}

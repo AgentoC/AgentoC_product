@@ -1,0 +1,7 @@
+<resources>
+    <string name="api_capture_shortcut_unavailable">The selected shortcut is unavailable. Choose a computer to keep working with this material.</string>
+    <string name="api_capture_pin">Add this computer to the home screen</string>
+    <string name="api_capture_pin_requested">Request sent to the launcher. Confirm there to add the shortcut.</string>
+    <string name="api_capture_pin_unsupported">This launcher does not support adding shortcuts.</string>
+    <string name="api_capture_pin_failed">The launcher did not accept the request. Try again from the app.</string>
+</resources>

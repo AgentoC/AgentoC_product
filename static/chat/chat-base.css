@@ -1,0 +1,942 @@
+:root {
+  color-scheme: light;
+  --bg: #f7f7f8;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f2f2f4;
+  --chat-area-bg: #ffffff;
+  --border: #e3e3e7;
+  --border-strong: #c8c9d1;
+  --text: #1f1f23;
+  --text-secondary: #575a67;
+  --text-muted: #8b8f9e;
+  --accent: #202123;
+  --accent-dim: #f1f1f3;
+  --surface-hover: #ececf1;
+  --user-bubble: #ececf1;
+  --tool-bg: #fbfbfc;
+  --success: #16a34a;
+  --success-bg: #f0fdf4;
+  --notice: #2563eb;
+  --queue: #0d9488;
+  --naming: #7c3aed;
+  --error: #dc2626;
+  --error-bg: #fef2f2;
+  --warning: #d97706;
+  --issue: #ea580c;
+  --failed-message-border: #f59e0b;
+  --copy-btn-bg: rgba(255,255,255,0.92);
+  --copy-btn-success-border: rgba(22, 163, 74, 0.18);
+  --overlay-backdrop: rgba(15,17,23,0.22);
+  --modal-backdrop: rgba(15,17,23,0.42);
+  --image-remove-bg: rgba(0,0,0,0.55);
+  --image-remove-bg-hover: rgba(0,0,0,0.72);
+  --modal-shadow: 0 22px 46px -20px rgba(16, 21, 39, 0.38);
+  --focus-border: #9ba2b5;
+  --app-height: 100dvh;
+  --app-header-height: 44px;
+  --keyboard-inset-height: 0px;
+  --chat-gutter: 16px;
+  --chat-bottom-overlay-height: 0px;
+  --chat-scrollbar-rail-width: 0px;
+  --scrollbar-size: 10px;
+  --scrollbar-thumb: color-mix(in srgb, var(--text-muted) 54%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--text-secondary) 70%, transparent);
+  --scrollbar-track: transparent;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --chat-floating-status-gap: 8px;
+  --chat-floating-status-height: 0px;
+  --chat-floating-status-fab-offset: 0px;
+  --chat-queued-panel-stack-height: 0px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --sidebar-width: 300px;
+  --sidebar-width-expanded: min(80vw, calc(100vw - 240px));
+  --sidebar-mobile-width: 320px;
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-panel: 240ms;
+  /* Motion follows the native pattern: arrivals have a little more time to
+     settle, exits get out of the way quickly. Keep the curves decisive rather
+     than bouncy so repeated operations never feel theatrical. */
+  --motion-enter: 280ms;
+  --motion-exit: 180ms;
+  --motion-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+  --motion-ease-spring-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@supports (interpolate-size: allow-keywords) {
+  :root {
+    interpolate-size: allow-keywords;
+  }
+}
+
+:root {
+
+  /* Typography: the local Inter subset gives Latin UI copy, numbers, and
+     controls a clean neutral voice. Named CJK fallbacks come before generic
+     families so a generic Latin face cannot make Chinese fall back to a serif
+     face on Linux or a mixed-weight face on macOS. */
+  --font-ui: "Inter", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", "WenQuanYi Zen Hei", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", "Noto Sans Mono", ui-monospace, monospace;
+  --font-size-body: 16px;
+  --font-size-control: 14px;
+  --font-size-label: 12px;
+  --font-size-meta: 11px;
+  --font-size-title: 18px;
+  --line-height-body: 1.65;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* One UI semantic foundation - additive spacing/radius/touch/status/sheet tokens. */
+  --chat-edge: var(--chat-gutter);
+  --space-block: 14px;
+  --space-block-gap: 14px;
+  --radius-card: 8px;
+  --radius-block: 10px;
+  --radius-composer: 18px;
+  --radius-sheet-top: 24px;
+  --radius-pill: 999px;
+  --touch-min: 44px;
+  --touch-primary: 52px;
+  --status-running: var(--notice);
+  --status-queued: var(--queue);
+  --status-waiting: var(--warning);
+  --status-done: var(--success);
+  --status-failed: var(--error);
+  --status-running-bg: color-mix(in srgb, var(--status-running) 10%, var(--bg-secondary));
+  --status-queued-bg: color-mix(in srgb, var(--status-queued) 8%, var(--bg-secondary));
+  --status-waiting-bg: color-mix(in srgb, var(--status-waiting) 12%, var(--bg-secondary));
+  --status-done-bg: color-mix(in srgb, var(--status-done) 12%, var(--bg-secondary));
+  --status-failed-bg: color-mix(in srgb, var(--status-failed) 12%, var(--bg-secondary));
+  /* Sidebar attention markers are intentionally separate from the workflow
+     status palette: blue means new activity and amber means action needed,
+     regardless of the selected Material theme. */
+  --indicator-unread: #2563eb;
+  --indicator-needs-action: #d97706;
+  /* Live status surfaces stay mostly neutral; the orb/dot carries the semantic
+     color. Stronger fills remain reserved for approval and danger states. */
+  --status-surface-running: color-mix(in srgb, var(--status-running) 4%, var(--bg-secondary));
+  --status-surface-queued: color-mix(in srgb, var(--status-queued) 3%, var(--bg-secondary));
+  --status-surface-waiting: color-mix(in srgb, var(--status-waiting) 5%, var(--bg-secondary));
+  --status-surface-done: color-mix(in srgb, var(--status-done) 3%, var(--bg-secondary));
+  --status-surface-failed: color-mix(in srgb, var(--status-failed) 7%, var(--bg-secondary));
+  --artifact-row-height: 52px;
+  --artifact-row-divider: color-mix(in srgb, var(--divider-subtle) 72%, transparent);
+  --artifact-group-radius: 12px;
+  --artifact-group-shadow: 0 4px 16px color-mix(in srgb, var(--text) 5%, transparent);
+  --surface-canvas: var(--chat-area-bg);
+  --surface-soft: color-mix(in srgb, var(--bg-secondary) 78%, var(--bg));
+  --surface-raised: color-mix(in srgb, var(--bg-secondary) 94%, var(--bg));
+  --divider-subtle: color-mix(in srgb, var(--border) 42%, transparent);
+  --shadow-soft: 0 8px 24px rgba(16, 21, 39, 0.07);
+  --shadow-floating: 0 18px 46px rgba(16, 21, 39, 0.14);
+  --sheet-dim: var(--modal-backdrop);
+  --sheet-shadow: var(--modal-shadow);
+  /* Tight float for in-stream cards (plan cards): the Decision Sheet's own
+     shadow stack, NOT the modal-tier --sheet-shadow — message-stream cards
+     must stay below the floating sheet in float hierarchy. */
+  --shadow-sheet-tight:
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    0 12px 32px -8px rgba(16, 21, 39, 0.30),
+    0 2px 8px rgba(16, 21, 39, 0.16);
+  /* Quieter sibling for the compact progress strip: same glass, whisper lift. */
+  --shadow-card-quiet:
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    0 2px 8px rgba(16, 21, 39, 0.10);
+  --frost-tint: rgba(255, 255, 255, 0.15);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #202123;
+    --bg-secondary: #2b2d31;
+    --bg-tertiary: #353841;
+    --chat-area-bg: #202123;
+    --border: #3c414d;
+    --border-strong: #4b5161;
+    --text: #ececf1;
+    --text-secondary: #c1c5d0;
+    --text-muted: #9aa0af;
+    --accent: #ececf1;
+    --accent-dim: #353841;
+    --surface-hover: #343741;
+    --user-bubble: #2f3137;
+    --tool-bg: #24262c;
+    --success: #34d399;
+    --success-bg: #0d261a;
+    --notice: #60a5fa;
+    --queue: #2dd4bf;
+    --naming: #a78bfa;
+    --error: #f87171;
+    --error-bg: #2a1215;
+    --warning: #fbbf24;
+    --issue: #fb923c;
+    --failed-message-border: #f59e0b;
+    --copy-btn-bg: rgba(33,35,41,0.95);
+    --copy-btn-success-border: rgba(52, 211, 153, 0.2);
+    --overlay-backdrop: rgba(6,8,14,0.56);
+    --modal-backdrop: rgba(6,8,14,0.64);
+    --image-remove-bg: rgba(10,10,12,0.75);
+    --image-remove-bg-hover: rgba(10,10,12,0.88);
+    --modal-shadow: 0 28px 58px -24px rgba(0,0,0,0.72);
+    --focus-border: #69708a;
+    --frost-tint: rgba(128, 128, 128, 0.15);
+    --indicator-unread: #60a5fa;
+    --indicator-needs-action: #fbbf24;
+    --shadow-sheet-tight:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 20px 48px -12px rgba(0, 0, 0, 0.70),
+      0 8px 20px rgba(0, 0, 0, 0.46);
+    --shadow-card-quiet:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 4px 12px rgba(0, 0, 0, 0.30);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1e1e1e;
+  --bg-secondary: #252526;
+  --bg-tertiary: #2d2d30;
+  --chat-area-bg: #1e1e1e;
+  --border: #3c3c3c;
+  --border-strong: #4f4f4f;
+  --text: #d4d4d4;
+  --text-secondary: #a9a9a9;
+  --text-muted: #7d7d7d;
+  --accent: #d4d4d4;
+  --accent-dim: #2d2d30;
+  --surface-hover: #323233;
+  --user-bubble: #2d2d30;
+  --tool-bg: #252526;
+  --success: #4ec9b0;
+  --success-bg: #153b33;
+  --notice: #569cd6;
+  --queue: #4ec9b0;
+  --naming: #c586c0;
+  --error: #f14c4c;
+  --error-bg: #3a1f1f;
+  --warning: #d7ba7d;
+  --issue: #ce9178;
+  --failed-message-border: #d19a66;
+  --copy-btn-bg: rgba(37,37,38,0.92);
+  --copy-btn-success-border: rgba(78, 201, 176, 0.28);
+  --overlay-backdrop: rgba(0,0,0,0.48);
+  --modal-backdrop: rgba(0,0,0,0.62);
+  --image-remove-bg: rgba(15,23,42,0.72);
+  --image-remove-bg-hover: rgba(15,23,42,0.84);
+  --modal-shadow: 0 24px 60px rgba(0,0,0,0.48);
+  --focus-border: #6b7280;
+  --frost-tint: rgba(128, 128, 128, 0.15);
+  --indicator-unread: #60a5fa;
+  --indicator-needs-action: #fbbf24;
+  --shadow-sheet-tight:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 20px 48px -12px rgba(0, 0, 0, 0.70),
+    0 8px 20px rgba(0, 0, 0, 0.46);
+  --shadow-card-quiet:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 4px 12px rgba(0, 0, 0, 0.30);
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('fonts/InterVariable-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0100-024F, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root[data-theme="amber"] {
+  color-scheme: light;
+  --bg: #f6f8ef;
+  --bg-secondary: #f1f4e8;
+  --bg-tertiary: #e5ebd7;
+  --chat-area-bg: #ffffff;
+  --border: #d4dbc5;
+  --border-strong: #bec8ab;
+  --text: #2f3428;
+  --text-secondary: #57604c;
+  --text-muted: #8d967f;
+  --accent: #7ba862;
+  --accent-dim: #f0f6e8;
+  --surface-hover: #eaf0dc;
+  --user-bubble: #eef5e4;
+  --tool-bg: #f7faf1;
+  --success: #5a8a42;
+  --success-bg: #eaf5df;
+  --notice: #6d8d5a;
+  --queue: #7fbe3d;
+  --naming: #7ba862;
+  --error: #c66a57;
+  --error-bg: #faece8;
+  --warning: #d9b35a;
+  --issue: #c66a57;
+  --failed-message-border: #d9b35a;
+  --copy-btn-bg: rgba(246, 248, 239, 0.88);
+  --copy-btn-success-border: rgba(90, 138, 66, 0.22);
+  --focus-border: #a7b394;
+  --overlay-backdrop: rgba(30,28,20,0.22);
+  --modal-backdrop: rgba(30,28,20,0.38);
+  --image-remove-bg: rgba(30,28,20,0.55);
+  --image-remove-bg-hover: rgba(30,28,20,0.72);
+  --modal-shadow: 0 24px 48px -12px rgba(30,28,20,0.16);
+}
+
+:root[data-theme="amber"] .chat-area {
+  position: relative;
+}
+
+/*
+ * Material role layer
+ *
+ * Keep platform/dynamic colors at this boundary. Components should consume
+ * the existing AgentoC variables below, while Android Monet/WebView callers
+ * can replace the sys-* roles without knowing component selectors.
+ */
+:root,
+:root[data-theme="light"],
+:root[data-theme="dark"],
+:root[data-theme="amber"] {
+  --sys-primary: var(--accent);
+  --sys-on-primary: var(--bg-secondary);
+  --sys-primary-container: var(--accent-dim);
+  --sys-on-primary-container: var(--text);
+  --sys-secondary: var(--notice);
+  --sys-on-secondary: var(--bg-secondary);
+  --sys-tertiary: var(--naming);
+  --sys-on-tertiary: var(--bg-secondary);
+  --sys-error: var(--error);
+  --sys-on-error: var(--bg-secondary);
+  --sys-error-container: var(--error-bg);
+  --sys-on-error-container: var(--error);
+  --sys-success: var(--success);
+  --sys-on-success: var(--bg-secondary);
+  --sys-success-container: var(--success-bg);
+  --sys-on-success-container: var(--success);
+  --sys-warning: var(--warning);
+  --sys-on-warning: var(--bg-secondary);
+  --sys-warning-container: color-mix(in srgb, var(--warning) 14%, var(--bg-secondary));
+  --sys-on-warning-container: var(--warning);
+  --sys-surface: var(--bg);
+  --sys-surface-container-low: var(--bg-tertiary);
+  --sys-surface-container: var(--bg-secondary);
+  --sys-surface-container-high: var(--surface-raised);
+  --sys-surface-container-highest: var(--surface-hover);
+  --sys-on-surface: var(--text);
+  --sys-on-surface-variant: var(--text-secondary);
+  --sys-outline: var(--border-strong);
+  --sys-outline-variant: var(--border);
+  --sys-inverse-surface: var(--text);
+  --sys-inverse-on-surface: var(--bg);
+  --sys-scrim: var(--modal-backdrop);
+
+  /* Product semantic aliases for new component work. */
+  --color-canvas: var(--sys-surface);
+  --color-surface: var(--sys-surface-container);
+  --color-surface-raised: var(--sys-surface-container-high);
+  --color-surface-hover: var(--sys-surface-container-highest);
+  --color-text-primary: var(--sys-on-surface);
+  --color-text-secondary: var(--sys-on-surface-variant);
+  --color-text-muted: color-mix(in srgb, var(--sys-on-surface-variant) 72%, transparent);
+  --text-primary: var(--color-text-primary);
+  --content-primary: var(--color-text-primary);
+  --content-secondary: var(--color-text-secondary);
+  --content-faint: var(--text-muted);
+  --color-action: var(--sys-primary);
+  --color-action-on: var(--sys-on-primary);
+  --color-action-container: var(--sys-primary-container);
+  --color-action-on-container: var(--sys-on-primary-container);
+  --color-divider: var(--sys-outline-variant);
+  --color-focus: var(--sys-secondary);
+
+  /* Status colors stay independent from the dynamic primary color. */
+  --app-success: var(--success);
+  --app-success-container: var(--success-bg);
+  --app-warning: var(--warning);
+  --app-warning-container: color-mix(in srgb, var(--warning) 14%, var(--bg-secondary));
+  --status-running-on: var(--sys-on-primary);
+  --status-running-container: var(--sys-primary-container);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* Overflow safety net (defensive CSS): replaced/embedded content can never
+   widen the viewport on its own. Layout primitives (minmax(0, 1fr),
+   min-width: 0) already handle flex/grid blowout; this caps media and foreign
+   elements that bypass those primitives. Per-surface rules (.msg-images,
+   .md-content img, canvas orb sizing) keep their own geometry — this only
+   sets an upper bound, so small canvases and icons are untouched. */
+img,
+video,
+canvas,
+iframe,
+embed,
+object,
+audio {
+  max-width: 100%;
+}
+
+*::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  min-height: 44px;
+  min-width: 44px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+button,
+[role="button"],
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus:not(:focus-visible),
+[role="button"]:focus:not(:focus-visible),
+input[type="button"]:focus:not(:focus-visible),
+input[type="submit"]:focus:not(:focus-visible),
+input[type="reset"]:focus:not(:focus-visible),
+summary:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.rl-icon {
+  width: 1em;
+  height: 1em;
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: middle;
+  fill: none;
+  stroke: currentColor;
+  pointer-events: none;
+}
+
+/* Icon-only download buttons: text replaced by the download glyph.
+   Square, centered, consistent across delivery card + reader toolbars. */
+.attachment-download-btn.attachment-download-btn--icon,
+.run-sheet__reader-action.run-sheet__reader-download--icon,
+.markdown-reader-action.markdown-reader-download--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+  text-align: center;
+  vertical-align: middle;
+}
+.attachment-download-btn.attachment-download-btn--icon .rl-icon,
+.run-sheet__reader-action.run-sheet__reader-download--icon .rl-icon,
+.markdown-reader-action.markdown-reader-download--icon .rl-icon {
+  display: block;
+  margin: 0;
+}
+
+html {
+  height: 100%;
+  overflow: hidden;
+  /* Viewport-level horizontal clip. clip (modern engines) keeps the clipping
+     semantics of hidden without turning the root into a forced scroll
+     container, so sticky descendants and the internal scroll panes keep
+     working; older engines fall back to hidden, which clips the same way.
+     This is the last-resort fuse — layout fixes live in the components. */
+  overflow-x: clip;
+  overscroll-behavior-y: none;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100%;
+  overflow: visible;
+  position: relative;
+  overflow: hidden;
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-synthesis: none;
+  font-optical-sizing: auto;
+}
+
+.app-shell {
+  background: transparent;
+}
+
+.header-more-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: var(--sidebar-glass-fallback, var(--surface-soft, var(--bg-secondary)));
+  color: var(--text);
+  font-size: 0;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-edge, var(--border)) 72%, transparent);
+  transition: background 0.14s ease, color 0.14s ease, opacity 0.14s ease, transform 0.1s ease;
+}
+.header-more-btn .rl-icon {
+  width: 19px;
+  height: 19px;
+  stroke-width: 2;
+}
+.header-more-btn:focus {
+  outline: none;
+}
+.header-more-btn:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-border) 16%, transparent);
+}
+.header-more-btn[hidden],
+.header-overflow-menu[hidden] {
+  display: none !important;
+}
+.header-more-btn:hover { background: var(--sidebar-glass-hover, var(--bg-tertiary)); color: var(--text); }
+.header-more-btn:active { transform: scale(0.96); }
+.header-overflow-menu {
+  position: fixed;
+  top: calc(var(--app-header-height) + var(--safe-top) + 8px);
+  right: 10px;
+  z-index: 45;
+  width: min(272px, calc(100vw - 20px));
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid transparent;
+  border-radius: 20px;
+  background: var(--sidebar-glass-fallback, var(--bg-secondary));
+  box-shadow:
+    0 18px 42px -24px rgba(16, 21, 39, 0.48),
+    inset 0 0 0 1px color-mix(in srgb, var(--glass-edge, var(--border)) 78%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transform-origin: top right;
+  will-change: opacity, transform;
+}
+.header-overflow-menu.is-open {
+  animation: popover-in var(--motion-enter) var(--motion-ease-emphasized);
+}
+.header-overflow-menu.is-closing {
+  animation: popover-out var(--motion-exit) var(--motion-ease-standard) forwards;
+}
+.header-overflow-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.14s ease, color 0.14s ease, transform 0.1s ease;
+}
+.header-overflow-menu-icon {
+  display: inline-flex;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+.header-overflow-menu-icon .rl-icon {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.8;
+}
+.header-overflow-menu-item:last-child .header-overflow-menu-icon {
+  color: var(--text-muted);
+}
+.header-overflow-menu-item:hover { background: var(--sidebar-glass-hover, var(--bg-tertiary)); color: var(--text); border-color: transparent; }
+.header-overflow-menu-item:active { transform: scale(0.985); }
+.header-overflow-menu-item[hidden] { display: none !important; }
+.app-shell {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: var(--app-height, 100dvh);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  background: transparent;
+}
+
+/* ---- Header ---- */
+.header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  padding-top: var(--safe-top);
+  /* Android's top chrome sits on the same quiet canvas. The functional blur
+     layer remains, but the header itself does not paint a decorative fade. */
+  background: transparent;
+  border-bottom: none;
+  height: calc(var(--app-header-height) + var(--safe-top));
+  flex-shrink: 0;
+  min-width: 0;
+  overflow: hidden;
+  z-index: 30;
+}
+
+/* Blur layer behind header content, masked to fade from full blur at top
+   to no blur at bottom, creating a seamless dissolve into the messages. */
+.header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+}
+
+/* Keep title and buttons above the blur layer. */
+.header > * {
+  position: relative;
+  z-index: 1;
+}
+.header-leading-actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 0 0 auto;
+  min-width: 0;
+  height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+}
+.chat-status-header {
+  position: absolute !important;
+  top: var(--safe-top);
+  left: 50%;
+  z-index: 2 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(420px, calc(100% - 136px));
+  height: var(--app-header-height);
+  min-width: 0;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.chat-status-header .chat-status-control {
+  pointer-events: auto;
+}
+.header h1 {
+  display: none;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: normal;
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.header-btn {
+  background: none; border: none; color: var(--text-secondary);
+  font-size: 16px; cursor: pointer; padding: 5px; border-radius: 8px;
+  line-height: 1; display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.header-btn:hover { background: var(--bg-tertiary); color: var(--text); }
+.header-btn:active { transform: scale(0.96); }
+.header-btn-icon,
+.header-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.header-btn-icon .rl-icon,
+.header-action-icon .rl-icon {
+  width: 14px;
+  height: 14px;
+}
+.header-btn-label,
+.header-action-label {
+  white-space: nowrap;
+}
+.header-btn--sessions {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  gap: 0;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--bg-secondary) 92%, var(--bg));
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(16, 21, 39, 0.05), 0 4px 14px rgba(16, 21, 39, 0.05);
+  flex-shrink: 0;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+}
+.header-btn--sessions:hover {
+  background: var(--bg-secondary);
+  color: var(--text);
+  box-shadow: 0 2px 6px rgba(16, 21, 39, 0.08), 0 8px 22px rgba(16, 21, 39, 0.07);
+}
+.header-btn--sessions:active {
+  transform: scale(0.97);
+}
+.header-btn--home {
+  display: none;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--bg-secondary) 92%, var(--bg));
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(16, 21, 39, 0.05), 0 4px 14px rgba(16, 21, 39, 0.05);
+  flex-shrink: 0;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+}
+.header-btn--home:hover {
+  background: var(--bg-secondary);
+  color: var(--text);
+  box-shadow: 0 2px 6px rgba(16, 21, 39, 0.08), 0 8px 22px rgba(16, 21, 39, 0.07);
+}
+.header-btn--home:active { transform: scale(0.97); }
+.header-btn--home .header-btn-icon .rl-icon { width: 16px; height: 16px; }
+.header-leading-actions .header-btn--sessions,
+.header-leading-actions .header-btn--home {
+  background: transparent;
+  box-shadow: none;
+  border-color: transparent;
+}
+.header-leading-actions .header-btn--sessions:hover,
+.header-leading-actions .header-btn--home:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  box-shadow: none;
+}
+.header-review-btn,
+.header-sidebar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  gap: 0;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: var(--surface-soft, var(--bg-secondary));
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+.header-review-btn .header-action-label,
+.header-sidebar-btn .header-action-label {
+  display: none;
+}
+.header-review-btn:hover,
+.header-review-btn[aria-expanded="true"],
+.header-sidebar-btn:hover,
+.header-sidebar-btn[aria-expanded="true"] {
+  background: var(--bg-tertiary);
+  color: var(--text);
+}
+.header-review-btn:active,
+.header-sidebar-btn:active {
+  transform: scale(0.96);
+}
+.header-review-btn[hidden],
+.header-sidebar-btn[hidden] {
+  display: none !important;
+}
+.header-share-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease, opacity 0.14s ease;
+}
+.header-share-btn:hover { background: var(--bg-secondary); color: var(--text); border-color: var(--border-strong); }
+.header-share-btn:disabled { opacity: 0.7; cursor: wait; }
+.header-refresh-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0; border-radius: 999px;
+  border: 1px solid transparent; background: var(--surface-soft, var(--bg-secondary));
+  color: var(--text-muted);
+  cursor: pointer; flex-shrink: 0;
+  transition: background 0.14s ease, color 0.14s ease, opacity 0.14s ease;
+}
+.header-refresh-btn .rl-icon { width: 14px; height: 14px; }
+.header-refresh-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text);
+}
+.header-refresh-btn.ready {
+  color: var(--notice);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--notice) 32%, transparent);
+}
+.header-refresh-btn[hidden] { display: none !important; }
+
+/* ---- App container ---- */
+.app-container {
+  position: relative;
+  grid-row: 1 / -1;
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes popover-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.985);
+  }
+}
+
+@keyframes sheet-slide-up {
+  from {
+    opacity: 0.85;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheet-slide-down {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
+@keyframes panel-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes disclosure-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scaleY(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0s !important;
+  }
+}
+
+.header-title-block { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 1px; line-height: 1.2; }

@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="AgentoC">
+<meta name="application-name" content="AgentoC">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+<meta name="agentoc-build" content="{{BUILD_TITLE}}">
+{{PAGE_HEAD_TAGS}}
+<base href="{{PRODUCT_BASE_HREF}}">
+<link rel="manifest" href="manifest.json?v={{ASSET_VERSION}}" crossorigin="use-credentials">
+<link rel="icon" href="favicon.ico?v={{ASSET_VERSION}}" sizes="any">
+<link rel="icon" href="icon.svg?v={{ASSET_VERSION}}" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v={{ASSET_VERSION}}">
+<title>{{PAGE_TITLE}}</title>
+<link rel="preload" href="chat/fonts/InterVariable-latin.woff2?v={{ASSET_VERSION}}" as="font" type="font/woff2" crossorigin>
+<!-- Load the editor's defaults before AgentoC's composer layer so the product
+     shell can deliberately reset Vditor's border, padding, and min-height. -->
+<link rel="stylesheet" href="chat/vendor/vditor/dist/index.css?v={{ASSET_VERSION}}">
+<link rel="stylesheet" href="chat/chat.css?v={{ASSET_VERSION}}">
+<link rel="stylesheet" href="chat/chat-home.css?v={{ASSET_VERSION}}">
+<link rel="stylesheet" href="chat/chat-live-status.css?v={{ASSET_VERSION}}">
+<link rel="stylesheet" href="chat/chat-live-action.css?v={{ASSET_VERSION}}">
+<link rel="stylesheet" href="chat/chat-decision-sheet.css?v={{ASSET_VERSION}}">
+<link rel="stylesheet" href="chat/chat-attention-popup.css?v={{ASSET_VERSION}}">
+<link rel="stylesheet" href="chat/chat-goal-ui.css?v={{ASSET_VERSION}}">
+<link rel="stylesheet" href="chat/chat-m3-tokens.css?v={{ASSET_VERSION}}">
+<link rel="stylesheet" href="chat/chat-m3-components.css?v={{ASSET_VERSION}}">
+<link rel="stylesheet" href="chat/account-policy.css?v={{ASSET_VERSION}}">
+<link rel="stylesheet" href="chat/cross-device-panel.css?v={{ASSET_VERSION}}">
+<link rel="stylesheet" href="chat/chat-operational-surfaces.css?v={{ASSET_VERSION}}">
+<link rel="stylesheet" href="chat/chat-material-finish.css?v={{ASSET_VERSION}}">
+<link rel="stylesheet" href="chat/chat-organization.css?v={{ASSET_VERSION}}">
+<link rel="stylesheet" href="chat/desktop-manager.css?v={{ASSET_VERSION}}">
+</head>
+<body class="{{BODY_CLASS}}">
+<!--
+  THESIS: the home surface turns agent work into one calm, actionable status view instead of a dashboard of competing cards.
+  OWN-WORLD: Material 3 surface roles, a restrained blue action color, semantic state containers, and one consistent list-row language.
+  STORY: the owner sees what needs attention, trusts that routine work is moving, and starts one concrete task when ready.
+  FIRST VIEWPORT: the attention heading and primary start action lead; status counts follow; actionable work fills the reading column above the persistent composer.
+  FORM: Operate, ordered for scanability first; the seed is the home-workspace list and state rail.
+  FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<div class="app-shell">
+
+<!-- Header -->
+<div class="header">
+  <div class="header-leading-actions" aria-label="Navigation">
+    <button class="header-btn header-btn--sessions" id="menuBtn" title="Sessions" aria-label="Sessions" aria-controls="sidebarOverlay" aria-expanded="true" data-i18n-title="nav.sessions" data-i18n-aria-label="nav.sessions">
+      <span class="header-btn-icon" data-icon="menu" aria-hidden="true"></span>
+    </button>
+    <button class="header-btn header-btn--home" id="homeBtn" type="button" title="Home" aria-label="Home" data-i18n-title="nav.home" data-i18n-aria-label="nav.home">
+      <span class="header-btn-icon" data-icon="home" aria-hidden="true"></span>
+    </button>
+  </div>
+  <div class="chat-status-header" id="chatStatusHeader" aria-label="Session status">
+    <div id="liveBar" class="live-bar chat-status-control" role="status" aria-live="polite" hidden></div>
+  </div>
+  <div class="header-title-block">
+    <h1 id="headerTitle" data-i18n="app.chatTitle">AgentoC Chat</h1>
+  </div>
+  <button class="header-review-btn" id="runSheetBtn" type="button" title="Run Sheet" aria-label="Run Sheet" aria-expanded="false" aria-controls="runSheet" data-i18n-title="runSheet.title" data-i18n-aria-label="runSheet.title" hidden>
+    <span class="header-action-icon" data-icon="file" aria-hidden="true"></span>
+    <span class="header-action-label" data-i18n="runSheet.title">Run Sheet</span>
+  </button>
+  <button class="header-radar-btn" id="orgRadarBtn" type="button" title="Organization Radar" aria-label="Organization Radar" aria-expanded="false" aria-controls="organizationRadarSurface" data-i18n-title="organization.radar" data-i18n-aria-label="organization.radar" hidden>
+    <span class="header-action-icon" data-icon="radar" aria-hidden="true"></span>
+    <span class="header-action-label" data-i18n="organization.radar">Radar</span>
+  </button>
+  <button class="header-sidebar-btn" id="workbenchSidebarBtn" type="button" title="Sidebar" aria-label="Sidebar" aria-expanded="false" aria-controls="rightSidebar" data-i18n-title="action.sidebar" data-i18n-aria-label="action.sidebar" hidden>
+    <span class="header-action-icon" data-icon="sidebar" aria-hidden="true"></span>
+    <span class="header-action-label" data-i18n="action.sidebar">Sidebar</span>
+  </button>
+  <button class="header-refresh-btn" id="refreshFrontendBtn" type="button" title="Reload latest frontend" aria-label="Reload latest frontend" data-i18n-title="action.reloadFrontend" data-i18n-aria-label="action.reloadFrontend" data-icon="refresh" hidden></button>
+  <button class="header-more-btn" id="headerMoreBtn" type="button" aria-controls="headerOverflowMenu" aria-expanded="false" title="More" aria-label="More" data-i18n-title="action.more" data-i18n-aria-label="action.more" data-icon="more"></button>
+  <div class="header-overflow-menu" id="headerOverflowMenu" hidden>
+    <button class="header-overflow-menu-item" id="headerOverflowRunSheetBtn" type="button"><span class="header-overflow-menu-icon" data-icon="file" aria-hidden="true"></span><span data-i18n="runSheet.title">Run Sheet</span></button>
+    <button class="header-overflow-menu-item" id="headerOverflowOrgRadarBtn" type="button" hidden><span class="header-overflow-menu-icon" data-icon="radar" aria-hidden="true"></span><span data-i18n="organization.radar">Radar</span></button>
+    <button class="header-overflow-menu-item" id="headerOverflowRenameBtn" type="button"><span class="header-overflow-menu-icon" data-icon="edit" aria-hidden="true"></span><span data-i18n="action.rename">Rename</span></button>
+    <button class="header-overflow-menu-item" id="headerOverflowCopySessionIdBtn" type="button"><span class="header-overflow-menu-icon" data-icon="copy" aria-hidden="true"></span><span data-i18n="header.copySessionId">Copy session ID</span></button>
+    <button class="header-overflow-menu-item" id="headerOverflowCompactBtn" type="button"><span class="header-overflow-menu-icon" data-icon="refresh" aria-hidden="true"></span><span data-i18n="action.compact">Compact</span></button>
+    <button class="header-overflow-menu-item" id="headerOverflowDropToolsBtn" type="button"><span class="header-overflow-menu-icon" data-icon="terminal" aria-hidden="true"></span><span data-i18n="action.dropTools">Drop tools</span></button>
+    <button class="header-overflow-menu-item" id="headerOverflowDeleteBtn" type="button"><span class="header-overflow-menu-icon" data-icon="trash" aria-hidden="true"></span><span data-i18n="action.delete">Delete</span></button>
+    <button class="header-overflow-menu-item" id="headerOverflowSidebarBtn" type="button"><span class="header-overflow-menu-icon" data-icon="sidebar" aria-hidden="true"></span><span data-i18n="action.sidebar">Sidebar</span></button>
+    <button class="header-overflow-menu-item" id="headerOverflowRefreshBtn" type="button"><span class="header-overflow-menu-icon" data-icon="refresh" aria-hidden="true"></span><span data-i18n="action.reloadFrontend">Reload latest frontend</span></button>
+  </div>
+</div>
+
+<div class="app-container">
+  <!-- Sidebar overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay">
+    <aside class="sidebar" id="sidebar">
+      <header class="desktop-manager-header" id="desktopManagerHeader" hidden>
+        <img src="desktop/agentoc-android-logo.png?v={{ASSET_VERSION}}" alt="" width="40" height="40">
+        <div class="desktop-manager-brand-copy">
+          <strong>AgentoC</strong>
+          <span data-i18n="desktopManager.subtitle">Desktop manager</span>
+        </div>
+      </header>
+      <nav class="desktop-manager-nav" id="desktopManagerNav" aria-label="AgentoC management" hidden>
+        <button type="button" data-desktop-manager-tab="account" aria-current="page">
+          <span data-icon="gear" aria-hidden="true"></span><span data-i18n="desktopManager.account">Account &amp; permissions</span>
+        </button>
+        <button type="button" data-desktop-manager-tab="harnesses">
+          <span data-icon="terminal" aria-hidden="true"></span><span data-i18n="desktopManager.harnesses">Harnesses</span>
+        </button>
+        <button type="button" data-desktop-manager-tab="providers">
+          <span data-icon="sparkle-solid" aria-hidden="true"></span><span data-i18n="desktopManager.providers">Providers</span>
+        </button>
+        <button type="button" data-desktop-manager-tab="pairing">
+          <span data-icon="monitor" aria-hidden="true"></span><span data-i18n="desktopManager.pairing">Phone pairing</span>
+        </button>
+      </nav>
+      <header class="desktop-manager-page-heading" id="desktopManagerPageHeading" hidden>
+        <div>
+          <span class="desktop-manager-page-eyebrow" data-i18n="desktopManager.pageEyebrow">This computer</span>
+          <h1 id="desktopManagerPageTitle"></h1>
+          <p id="desktopManagerPageDescription"></p>
+        </div>
+      </header>
+      <div class="desktop-manager-external-status" id="desktopManagerExternalStatus" role="status" aria-live="polite" hidden data-i18n="desktopManager.externalOpenFailed">Could not open the sign-in page in your browser.</div>
+      <div class="sidebar-app-bar" id="sidebarAppBar">
+        <div class="sidebar-brand">AgentoC</div>
+        <div class="sidebar-app-bar-actions">
+          <button class="sidebar-icon-btn" id="sidebarSearchBtn" type="button" title="Search" aria-label="Search sessions and agents" data-i18n-title="sidebar.search.action" data-i18n-aria-label="sidebar.search.action" data-icon="search"></button>
+          <button class="sidebar-icon-btn" id="closeSidebar" type="button" title="Close" aria-label="Close" aria-controls="sidebarOverlay" aria-expanded="true" data-i18n-title="action.close" data-i18n-aria-label="action.close" data-icon="close"></button>
+        </div>
+      </div>
+      <div class="sidebar-device-bar" id="sidebarDeviceBar" hidden>
+        <button class="sidebar-device-name-btn" id="sidebarDeviceNameBtn" type="button" title="Switch device" aria-label="Switch device" data-i18n-title="sidebar.device.switch" data-i18n-aria-label="sidebar.device.switch">
+          <span class="sidebar-device-name-icon" data-icon="monitor" aria-hidden="true"></span>
+          <span class="sidebar-device-name-text" id="sidebarDeviceNameText"></span>
+          <span class="sidebar-device-name-chevron" data-icon="chevron-down" aria-hidden="true"></span>
+        </button>
+        <button class="sidebar-device-add-btn" id="sidebarDeviceAddBtn" type="button" title="Add device" aria-label="Add device" data-i18n-title="sidebar.device.add" data-i18n-aria-label="sidebar.device.add" data-icon="monitor-plus"></button>
+      </div>
+      <div class="sidebar-search-mode-header" id="sidebarSearchModeHeader" hidden>
+        <label class="sidebar-search-shell" for="sessionSearchInput">
+          <span class="sidebar-search-shell-icon" data-icon="search" aria-hidden="true"></span>
+          <input class="sidebar-search-input" id="sessionSearchInput" type="search" placeholder="Search sessions and agents…" autocomplete="off" data-i18n-placeholder="sidebar.search.allPlaceholder" />
+        </label>
+        <button class="sidebar-icon-btn" id="sidebarSearchCloseBtn" type="button" title="Close search" aria-label="Close search" data-i18n-title="sidebar.search.close" data-i18n-aria-label="sidebar.search.close" data-icon="close"></button>
+      </div>
+      <div class="sidebar-subpage-header" id="sidebarSubpageHeader" hidden>
+        <button class="sidebar-icon-btn" id="sidebarSubpageCloseBtn" type="button" title="Back to sessions" aria-label="Back to sessions" data-i18n-title="sidebar.subpage.close" data-i18n-aria-label="sidebar.subpage.close" data-icon="chevron-left"></button>
+        <span class="sidebar-subpage-icon" id="sidebarSubpageIcon" data-icon="sparkle-solid" aria-hidden="true"></span>
+        <div class="sidebar-subpage-title" id="sidebarSubpageTitle"></div>
+      </div>
+      <div class="sidebar-project-header" id="sidebarProjectHeader" hidden>
+        <button class="sidebar-icon-btn" id="sidebarProjectBackBtn" type="button" title="Back to projects" aria-label="Back to projects" data-i18n-title="sidebar.projects.back" data-i18n-aria-label="sidebar.projects.back" data-icon="chevron-left"></button>
+        <span class="sidebar-project-header-icon" data-icon="folder-solid" aria-hidden="true"></span>
+        <span class="sidebar-project-header-title" id="sidebarProjectTitle"></span>
+        <button class="sidebar-icon-btn sidebar-project-settings-btn" id="sidebarProjectSettingsBtn" type="button" title="Project settings" aria-label="Project settings" data-i18n-title="sidebar.project.settings" data-i18n-aria-label="sidebar.project.settings" data-icon="settings"></button>
+      </div>
+      <nav class="sidebar-primary-nav" id="sidebarPrimaryNav" aria-label="Sidebar navigation" data-i18n-aria-label="sidebar.navigation">
+        <div class="sidebar-workspace" id="workspacePicker">
+          <button class="sidebar-workspace-summary sidebar-primary-action" id="workspaceSummaryButton" type="button" aria-expanded="false" aria-haspopup="dialog" aria-controls="workspacePopover">
+            <span class="sidebar-workspace-summary-icon" data-icon="folder-solid" aria-hidden="true"></span>
+            <span class="sidebar-workspace-summary-text" id="workspaceSummaryText">Workspace: Default workspace</span>
+            <span class="sidebar-primary-action-chevron" data-icon="chevron-down" aria-hidden="true"></span>
+          </button>
+          <button class="sidebar-project-create-btn" id="projectCreateButton" type="button" title="Create project" aria-label="Create project" data-i18n-title="sidebar.project.create" data-i18n-aria-label="sidebar.project.create" data-icon="folder-plus"></button>
+          <div class="sidebar-workspace-popover" id="workspacePopover" role="dialog" aria-labelledby="workspacePopoverTitle" hidden>
+            <div class="sidebar-section-title" id="workspacePopoverTitle" data-i18n="sidebar.project.switchTitle">Switch project</div>
+            <div class="sidebar-project-list" id="projectList"></div>
+            <div class="sidebar-section-note" id="workspaceNote" data-i18n="sidebar.project.note">New sessions use the selected project folder.</div>
+          </div>
+        </div>
+        <button class="sidebar-tab active" id="tabSessions" type="button" hidden data-i18n="nav.sessions">Sessions</button>
+      </nav>
+      <div class="sidebar-session-surface" id="sidebarSessionSurface">
+        <div class="sidebar-search-results-heading sidebar-session-search-heading" id="sidebarSessionSearchHeading" hidden data-i18n="sidebar.search.sessions">Sessions</div>
+        <div class="sidebar-projects-view" id="projectsView" hidden></div>
+        <div class="sidebar-list" id="sessionList"></div>
+        <div class="sidebar-agent-search-results" id="sidebarAgentSearchResults" hidden></div>
+      </div>
+      <div class="settings-panel" id="agentsPanel">
+        <div class="settings-section">
+          <div class="settings-app-header">
+            <button class="settings-app-btn settings-app-btn-primary" id="createAgentBtn" type="button">
+              <span class="settings-app-btn-icon" data-icon="plus" aria-hidden="true"></span>
+              <span data-i18n="settings.apps.create">Create Agent</span>
+            </button>
+          </div>
+          <div class="settings-apps-list" id="settingsAgentsList">
+            <div class="settings-app-empty" data-i18n="settings.apps.loading">Loading agents…</div>
+          </div>
+        </div>
+      </div>
+      <div class="settings-panel" id="settingsPanel" data-settings-surface>
+        <section class="settings-group" id="settingsAppearanceGroup" aria-labelledby="settingsAppearanceTitle">
+          <div class="settings-group-heading">
+            <span class="settings-group-icon" data-icon="gear" aria-hidden="true"></span>
+            <h2 class="settings-group-title" id="settingsAppearanceTitle" data-i18n="settings.group.appearance">Appearance &amp; display</h2>
+          </div>
+          <div class="settings-group-card">
+            <div class="settings-row">
+              <span class="settings-row-copy">
+                <span class="settings-row-title" data-i18n="settings.language.title">Language</span>
+              </span>
+              <span class="settings-row-control">
+                <select class="settings-row-select" id="uiLanguageSelect" aria-label="Choose interface language" data-i18n-aria-label="settings.language.ownerAriaLabel"></select>
+              </span>
+            </div>
+            <div class="settings-row">
+              <span class="settings-row-copy">
+                <span class="settings-row-title" data-i18n="settings.theme.title">Theme</span>
+              </span>
+              <span class="settings-row-control">
+                <select class="settings-row-select" id="uiThemeSelect" aria-label="Choose chat theme" data-i18n-aria-label="settings.theme.ariaLabel"></select>
+              </span>
+            </div>
+          </div>
+        </section>
+        <section class="settings-group" id="settingsDeviceSessionGroup" aria-labelledby="settingsDeviceSessionTitle">
+          <div class="settings-group-heading">
+            <span class="settings-group-icon" data-icon="monitor" aria-hidden="true"></span>
+            <h2 class="settings-group-title" id="settingsDeviceSessionTitle" data-i18n="settings.group.deviceSession">App &amp; account</h2>
+          </div>
+          <div class="settings-group-card">
+            <div class="settings-row settings-row-action">
+              <div class="settings-row-copy">
+                <div class="settings-row-title" data-i18n="settings.install.title">Install App</div>
+              </div>
+              <button class="settings-row-button" id="settingsInstallAppBtn" type="button" data-i18n="settings.install.open">Install AgentoC</button>
+            </div>
+            <div class="settings-row settings-row-action">
+              <div class="settings-row-copy">
+                <div class="settings-row-title" data-i18n="settings.password.title">Password</div>
+              </div>
+              <button class="settings-row-button" id="settingsChangePasswordBtn" type="button" data-i18n="settings.password.change">Change password</button>
+            </div>
+            <div id="settingsSessionPresentationList">
+            </div>
+          </div>
+        </section>
+        <section class="settings-group desktop-manager-account-group" id="desktopManagerGoogleAccountGroup" aria-label="Google account" data-i18n-aria-label="crossDevice.account.title" hidden>
+          <div class="cross-device-status desktop-manager-account-status" id="desktopManagerAccountStatus" role="status" aria-live="polite" hidden></div>
+          <div id="desktopManagerGoogleAccountContent"></div>
+        </section>
+        <section class="settings-group desktop-manager-account-policy-group" id="accountPolicySettingsSection" aria-labelledby="settingsAccountPolicyTitle" hidden>
+          <div class="settings-group-heading">
+            <span class="settings-group-icon" data-icon="gear" aria-hidden="true"></span>
+            <h2 class="settings-group-title" id="settingsAccountPolicyTitle" data-i18n="desktopManager.permissionsTitle">Permissions</h2>
+          </div>
+          <div class="settings-group-card">
+            <button class="settings-row settings-row-navigation" id="accountPolicyOpenBtn" type="button">
+              <span class="settings-row-copy">
+                <span class="settings-row-title" id="accountPolicyEntryTitle">Permission mode</span>
+                <span class="settings-row-note" id="accountPolicyEntryNote">Loading account-wide setting</span>
+              </span>
+              <span class="settings-row-navigation-value" id="accountPolicyEntryValue"></span>
+              <span class="settings-row-navigation-icon" data-icon="chevron-right" aria-hidden="true"></span>
+            </button>
+          </div>
+        </section>
+        <section class="settings-group desktop-manager-devices-group" id="desktopManagerDevicesGroup" aria-label="Trusted devices" data-i18n-aria-label="crossDevice.devices.title" hidden>
+          <div id="desktopManagerDevicesContent"></div>
+        </section>
+        <section class="settings-group" id="modelProvidersSettingsSection" aria-labelledby="settingsRuntimeTitle" hidden>
+          <div class="settings-group-heading">
+            <span class="settings-group-icon" data-icon="terminal" aria-hidden="true"></span>
+            <h2 class="settings-group-title" id="settingsRuntimeTitle" data-i18n="settings.group.runtime">Runtime</h2>
+          </div>
+          <div class="settings-group-card">
+            <div class="settings-row settings-row-action">
+              <div class="settings-row-copy">
+                <div class="settings-row-title" data-i18n="settings.modelProviders.title">Model providers</div>
+                <div class="settings-row-note" data-i18n="settings.modelProviders.note">Manage the globally synced provider registry.</div>
+              </div>
+              <button class="settings-row-button settings-row-button-primary" id="modelProvidersOpenBtn" type="button" data-i18n="settings.modelProviders.open">Open model providers</button>
+            </div>
+            <div class="settings-row settings-row-action">
+              <div class="settings-row-copy">
+                <div class="settings-row-title" data-i18n="settings.harnesses.title">Harnesses</div>
+                <div class="settings-row-note" data-i18n="settings.harnesses.note">Install and update Harnesses on this computer.</div>
+              </div>
+              <button class="settings-row-button settings-row-button-primary" id="harnessesOpenBtn" type="button" data-i18n="settings.harnesses.open">Manage Harnesses</button>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="settings-panel desktop-manager-pairing-panel" id="desktopManagerPairingPanel" hidden>
+        <article class="cross-device-card desktop-manager-pairing-card">
+          <div class="cross-device-card-header">
+            <div>
+              <h2 class="cross-device-card-title" data-i18n="desktopManager.pairingCardTitle">Connect your Android phone</h2>
+              <p class="cross-device-card-note" data-i18n="desktopManager.pairingCardNote">Use the AgentoC app to scan a one-time code and securely pair it with this computer.</p>
+            </div>
+          </div>
+          <div class="cross-device-card-body">
+            <div class="cross-device-actions">
+              <button class="cross-device-action" id="desktopManagerStartPairingBtn" type="button" data-tone="primary" data-i18n="desktopManager.startPairing">Start phone pairing</button>
+            </div>
+            <p class="cross-device-helper" data-i18n="desktopManager.pairingCardFootnote">Pairing codes expire automatically and can only be used once.</p>
+          </div>
+        </article>
+      </div>
+      <div class="settings-panel model-providers-panel" id="modelProvidersPanel" hidden>
+        <section class="settings-group" aria-labelledby="modelProvidersPageTitle">
+          <div class="settings-group-heading">
+            <span class="settings-group-icon" data-icon="terminal" aria-hidden="true"></span>
+            <h2 class="settings-group-title" id="modelProvidersPageTitle" data-i18n="modelProviders.title">Model providers</h2>
+          </div>
+          <div class="settings-group-card">
+            <div class="model-providers-toolbar">
+              <div class="settings-row-copy">
+                <div class="settings-row-title" data-i18n="modelProviders.subtitle">Accounts and API gateways</div>
+                <div class="settings-row-note" data-i18n="modelProviders.note">The provider registry is global and synced across your devices. Credentials are managed by the native provider vault.</div>
+              </div>
+              <button class="settings-row-button settings-row-button-primary" id="modelProvidersAddBtn" type="button" data-i18n="modelProviders.add">Add provider</button>
+            </div>
+            <div class="settings-row settings-row-action model-providers-harness-link">
+              <div class="settings-row-copy">
+                <div class="settings-row-title" data-i18n="modelProviders.harnessesTitle">Harness availability</div>
+                <div class="settings-row-note" data-i18n="modelProviders.harnessesNote">Harness installation is local to this computer; provider data remains global.</div>
+              </div>
+              <button class="settings-row-button" id="modelProvidersHarnessesBtn" type="button" data-i18n="modelProviders.manageHarnesses">Manage Harnesses</button>
+            </div>
+            <div class="settings-row-status model-providers-status" id="modelProvidersStatus" role="status" aria-live="polite" hidden></div>
+            <div class="model-providers-list" id="modelProvidersList"></div>
+          </div>
+        </section>
+      </div>
+      <div class="settings-panel harnesses-panel" id="harnessesPanel" hidden>
+        <section class="settings-group" aria-labelledby="harnessesPageTitle">
+          <div class="settings-group-heading">
+            <span class="settings-group-icon" data-icon="terminal" aria-hidden="true"></span>
+            <h2 class="settings-group-title" id="harnessesPageTitle" data-i18n="harnesses.title">Harnesses</h2>
+          </div>
+          <div class="settings-group-card">
+            <div class="model-providers-toolbar">
+              <div class="settings-row-copy">
+                <div class="settings-row-title" data-i18n="harnesses.subtitle">This computer</div>
+                <div class="settings-row-note" data-i18n="harnesses.note">Install, upgrade, or uninstall the local Harness runtime. Uninstalling never deletes its global providers.</div>
+              </div>
+              <button class="settings-row-button" id="harnessesRefreshBtn" type="button" data-i18n="harnesses.refresh">Refresh</button>
+            </div>
+            <div class="settings-row-status model-providers-status" id="harnessesStatus" role="status" aria-live="polite" hidden></div>
+            <div class="harnesses-list" id="harnessesList"></div>
+          </div>
+        </section>
+      </div>
+      <div class="settings-panel account-policy-panel" id="accountPolicyPanel" hidden>
+        <section class="settings-group" aria-labelledby="accountPolicyPageTitle">
+          <div class="settings-group-heading">
+            <span class="settings-group-icon" data-icon="gear" aria-hidden="true"></span>
+            <h2 class="settings-group-title" id="accountPolicyPageTitle">Permission mode</h2>
+          </div>
+          <div class="settings-group-card" id="accountPolicyOptions" role="radiogroup" aria-labelledby="accountPolicyPageTitle"></div>
+          <p class="settings-page-note" id="accountPolicyScopeNote"></p>
+          <p class="settings-row-status settings-page-status" id="accountPolicyStatus" role="status" aria-live="polite" hidden></p>
+        </section>
+      </div>
+      <div class="sidebar-bottom-frost" aria-hidden="true"></div>
+      <div class="sidebar-bottom-actions" id="sidebarBottomActions">
+        <button class="new-session-btn sidebar-new-chat-btn" id="newSessionBtn" type="button">
+          <span class="sidebar-new-chat-icon" data-icon="new-chat" aria-hidden="true"></span>
+          <span data-i18n="sidebar.projects.newProject">New project</span>
+        </button>
+        <button class="sidebar-agent-btn" id="sidebarAgentBtn" type="button" title="Agents" aria-label="Agents" data-i18n-title="nav.agents" data-i18n-aria-label="nav.agents">
+          <span class="sidebar-agent-icon" data-icon="sparkle-solid" aria-hidden="true"></span>
+        </button>
+        <button class="sidebar-filter-btn" id="sidebarFilterBtn" type="button" title="Settings" aria-label="Settings" data-i18n-title="nav.settings" data-i18n-aria-label="nav.settings" data-icon="gear-solid"></button>
+        <button class="sidebar-account-btn" id="sidebarAccountBtn" type="button" title="Account &amp; cross-device sign-in" aria-label="Account &amp; cross-device sign-in" aria-expanded="false" aria-controls="sidebarAccountPopover" data-i18n-title="sidebar.account.action" data-i18n-aria-label="sidebar.account.action">
+          <span class="sidebar-account-avatar" id="sidebarAccountAvatar">A</span>
+          <span class="sidebar-account-indicator" aria-hidden="true"></span>
+        </button>
+      </div>
+      <div class="sidebar-account-popover" id="sidebarAccountPopover" role="dialog" aria-labelledby="sidebarAccountTitle" hidden>
+        <div class="sidebar-account-title" id="sidebarAccountTitle" data-i18n="sidebar.account.title">Account &amp; cross-device sign-in</div>
+        <div class="sidebar-account-status" id="sidebarAccountStatus" role="status" aria-live="polite"></div>
+        <div class="sidebar-account-detail" id="sidebarAccountDetail"></div>
+        <div class="sidebar-account-actions">
+          <button class="sidebar-account-action" id="sidebarAccountAction" type="button" hidden></button>
+          <button class="sidebar-account-action sidebar-account-action--secondary" id="sidebarAccountRetry" type="button" hidden data-i18n="sidebar.account.retry">Retry</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Chat area -->
+  <main class="chat-area">
+    <div class="messages" id="messages">
+      <div class="messages-inner" id="messagesInner">
+        <div class="empty-state" id="emptyState" hidden>
+          <h2 data-i18n="emptyState.title">AgentoC Chat</h2>
+          <p data-i18n="emptyState.body">Select or create a session from the sidebar, then start chatting with your AI coding tool.</p>
+          <div class="empty-state-actions" id="emptyStateActions" hidden>
+            <button type="button" class="empty-state-action primary" id="emptyOpenSessionBtn" data-i18n="emptyState.openSession">Open Session</button>
+            <button type="button" class="empty-state-action" id="emptyCreateAgentBtn" data-i18n="emptyState.createAgent">Create Agent</button>
+          </div>
+        </div>
+        <section class="home-workspace" id="homeWorkspace" aria-labelledby="homeWorkspaceTitle" hidden></section>
+      </div>
+    </div>
+    <!-- Organization Radar Surface -->
+    <div class="organization-radar-surface" id="organizationRadarSurface" hidden></div>
+    <!-- Input area -->
+    <div class="input-area" id="inputArea">
+      <div class="composer-config-backdrop" id="composerConfigBackdrop" hidden></div>
+      <div class="input-stack">
+        <!-- Anchored to the input-stack (position: relative), not the input-area:
+             the stack is the column that matches the message column width on
+             desktop, so the FAB stays aligned with the transcript content. -->
+        <button type="button" class="scroll-to-bottom-fab" id="scrollToBottomFab" aria-label="Scroll to latest message" data-i18n-aria-label="messages.scrollToLatest"><svg class="rl-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+        <div class="queued-panel" id="queuedPanel"></div>
+        <div class="input-config-row" id="inputConfigRow">
+          <div class="input-config-group left">
+            <select class="tool-select composer-hidden-agent-control" id="inlineAgentSelect" disabled title="Choose agent for the next session" aria-label="Choose agent for the next session" data-i18n-title="compose.agent.title" data-i18n-aria-label="compose.agent.ariaLabel" style="display:none"></select>
+          </div>
+          <div class="input-config-group right">
+            <span id="contextTokens" style="display:none"></span>
+            <button class="compact-btn" id="compactBtn" style="display:none" title="Ask model to summarize conversation, then reset context" data-i18n="action.compact">Compact</button>
+            <button class="compact-btn" id="dropToolsBtn" style="display:none" title="Remove past tool results from context (no model call)" data-i18n="action.dropTools">Drop tools</button>
+          </div>
+        </div>
+        <div class="input-wrapper">
+          <!-- Attachment preview inside wrapper -->
+          <div class="img-preview-strip" id="imgPreviewStrip"></div>
+          <div class="session-mode-banner" id="sessionModeBanner">
+            <div class="session-mode-banner-title" data-i18n="shareSnapshot.bannerTitle">Shared snapshot</div>
+            <div class="session-mode-banner-body" data-i18n="shareSnapshot.bannerBody">This page is read-only. You can open and download shared files here, but you can't send messages from this link.</div>
+          </div>
+          <div class="input-row">
+            <input type="file" id="imgFileInput" accept="*/*" multiple hidden>
+            <div class="composer-markdown-editor" id="composerEditor" contenteditable="false" role="textbox" aria-multiline="true" aria-label="{{INPUT_PLACEHOLDER_TEXT}}" data-placeholder="{{INPUT_PLACEHOLDER_TEXT}}"></div>
+            <textarea id="msgInput" placeholder="{{INPUT_PLACEHOLDER_TEXT}}" data-i18n-placeholder="{{INPUT_PLACEHOLDER_I18N_KEY}}" aria-hidden="true" tabindex="-1" disabled></textarea>
+            <button class="composer-expand-btn" id="composerExpandBtn" type="button" hidden title="Expand full-screen input" aria-label="Expand full-screen input" data-i18n-title="compose.expand.label" data-i18n-aria-label="compose.expand.label">
+              <span class="composer-expand-btn-icon" data-icon="maximize" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="input-actions-row">
+            <div class="input-actions-group input-actions-group--add">
+              <button class="composer-action-btn composer-action-btn--upload" id="imgBtn" type="button" disabled aria-haspopup="menu" aria-expanded="false" aria-controls="composerAddMenu" title="Add" aria-label="Add" data-i18n-title="action.add" data-i18n-aria-label="action.add">
+                <span class="img-btn-icon" data-icon="plus" aria-hidden="true"></span>
+                <span class="img-btn-label sr-only" data-i18n="action.add">Add</span>
+              </button>
+              <div class="composer-add-menu" id="composerAddMenu" role="menu" hidden>
+                <div class="composer-add-menu-title" data-i18n="compose.add.title">Add</div>
+                <button class="composer-add-menu-item" id="composerAttachFilesBtn" type="button" role="menuitem">
+                  <span class="composer-add-menu-main" data-i18n="compose.add.files">Files and folders</span>
+                </button>
+                <button class="composer-add-menu-item" id="composerPlanMenuItem" type="button" role="menuitemcheckbox" aria-checked="false">
+                  <span class="composer-add-menu-main" data-i18n="compose.add.plan">Plan mode</span>
+                  <span class="composer-add-menu-note" id="composerPlanMenuNote" data-i18n="compose.add.planOn">Turn plan mode on</span>
+                  <span class="composer-add-menu-check" data-icon="check" aria-hidden="true"></span>
+                </button>
+                <button class="composer-add-menu-item" id="composerGoalMenuItem" type="button" role="menuitemcheckbox" aria-checked="false">
+                  <span class="composer-add-menu-icon" data-icon="target-arrow" aria-hidden="true"></span>
+                  <span class="composer-add-menu-main" data-i18n="compose.add.goal">Session goal</span>
+                  <span class="composer-add-menu-note" id="composerGoalMenuNote" data-i18n="compose.add.goalOn">Set a tracked objective + optional token budget</span>
+                  <span class="composer-add-menu-check" data-icon="check" aria-hidden="true"></span>
+                </button>
+                <button class="composer-add-menu-item" id="composerAgentsMenuItem" type="button" role="menuitem">
+                  <span class="composer-add-menu-main" data-i18n="compose.add.agents">Agents and apps</span>
+                  <span class="composer-add-menu-note" data-i18n="compose.add.agentsNote">Open configured workflows</span>
+                </button>
+                <button class="composer-add-menu-item" id="composerConnectorsMenuItem" type="button" role="menuitem" aria-haspopup="dialog">
+                  <span class="composer-add-menu-main" data-i18n="compose.add.connectors">Connectors</span>
+                  <span class="composer-add-menu-note" data-i18n="compose.add.connectorsNote">Calendar, mail, and integrations</span>
+                </button>
+              </div>
+              <div class="composer-add-panel" id="composerAgentPanel" role="dialog" aria-modal="false" aria-labelledby="composerAgentPanelTitle" tabindex="-1" hidden>
+                <div class="composer-add-panel-title" id="composerAgentPanelTitle" data-i18n="compose.agent.title">Agents &amp; apps</div>
+                <div class="composer-add-panel-list" id="composerAgentList" role="radiogroup" aria-labelledby="composerAgentPanelTitle" aria-live="polite"></div>
+                <button class="composer-add-panel-footer" id="composerAgentPanelManage" type="button" data-i18n="compose.agent.manage">Manage agents…</button>
+              </div>
+              <div class="composer-add-panel" id="composerConnectorPanel" role="dialog" aria-modal="false" aria-labelledby="composerConnectorPanelTitle" tabindex="-1" hidden>
+                <div class="composer-add-panel-title" id="composerConnectorPanelTitle" data-i18n="compose.connectorPanel.title">Connectors</div>
+                <div class="composer-add-panel-list" id="composerConnectorList" aria-live="polite"></div>
+                <div class="composer-add-panel-status" id="composerConnectorPanelStatus" role="status" aria-live="polite" aria-atomic="true"></div>
+                <button class="composer-add-panel-footer" id="composerConnectorPanelManage" type="button" data-i18n="compose.connectorPanel.manage">Manage connectors…</button>
+              </div>
+              <div class="composer-expanded-left-controls" id="composerExpandedLeftControls" hidden aria-hidden="true" inert>
+                <button class="composer-plan-chip" id="composerPlanChip" type="button" title="Turn off Plan mode" aria-label="Turn off Plan mode" data-i18n-title="compose.planChip.cancel" data-i18n-aria-label="compose.planChip.cancel" hidden>
+                  <span class="composer-plan-chip-close" data-icon="close" aria-hidden="true"></span>
+                  <span data-i18n="compose.planChip">Plan</span>
+                </button>
+                <button class="composer-goal-pill" id="composerGoalPill" type="button" title="Session goal" aria-label="Session goal" hidden>
+                  <span class="composer-goal-pill-icon" data-icon="target-arrow" aria-hidden="true"></span>
+                  <span class="composer-goal-pill-text" id="composerGoalPillText"></span>
+                </button>
+              </div>
+            </div>
+            <div class="input-actions-group right">
+              <div class="composer-runtime-controls" id="composerRuntimeControls" aria-label="Runtime controls" data-i18n-aria-label="compose.runtime.ariaLabel">
+                <div class="composer-runtime-speed-anchor">
+                  <button class="composer-runtime-speed-btn" id="composerRuntimeSpeedBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="composerRuntimeSpeedPanel" title="Thinking speed" aria-label="Choose thinking speed" data-i18n-title="tooling.serviceTierTitle" data-i18n-aria-label="tooling.serviceTierAriaLabel" hidden>
+                    <span class="composer-runtime-speed-icon" id="composerRuntimeSpeedIcon" data-icon="gauge" aria-hidden="true"></span>
+                  </button>
+                  <div class="composer-runtime-speed-panel" id="composerRuntimeSpeedPanel" role="dialog" aria-label="Thinking speed" data-i18n-aria-label="tooling.serviceTierTitle" hidden>
+                    <div class="composer-runtime-speed-select-wrap">
+                      <button class="composer-runtime-speed-toggle" id="composerRuntimeSpeedToggle" type="button" aria-pressed="false" aria-label="Switch to fast mode" title="Switch to fast mode">
+                        <span class="composer-runtime-speed-toggle-icon" aria-hidden="true">
+                          <span class="composer-runtime-speed-bolt-outline" data-icon="bolt"></span>
+                          <span class="composer-runtime-speed-bolt-solid" data-icon="bolt-solid"></span>
+                        </span>
+                      </button>
+                      <select class="composer-runtime-speed-select" id="composerRuntimeSpeedSelect" aria-label="Thinking speed" data-i18n-aria-label="tooling.serviceTierAriaLabel" tabindex="-1" aria-hidden="true"></select>
+                    </div>
+                    <div class="composer-runtime-effort-slider">
+                      <div class="composer-runtime-effort-track">
+                        <input class="composer-runtime-effort-range" id="composerRuntimeEffortRange" type="range" min="0" max="0" step="any" value="0" aria-label="Thinking effort" data-i18n-aria-label="tooling.thinking" />
+                      </div>
+                      <div class="composer-runtime-effort-value" id="composerRuntimeEffortValue">Medium</div>
+                    </div>
+                  </div>
+                </div>
+                <button class="composer-runtime-btn" id="composerRuntimeBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="composerRuntimeMenu">
+                  <span id="composerRuntimeLabel">default</span>
+                  <span class="composer-runtime-caret" aria-hidden="true"></span>
+                </button>
+                <div class="composer-runtime-menu" id="composerRuntimeMenu" role="menu" hidden>
+                  <div class="composer-runtime-view active" id="composerRuntimeToolView">
+                    <div class="composer-runtime-view-header">
+                      <div class="composer-runtime-menu-title" data-i18n="compose.runtime.chooseTool">Choose tool</div>
+                    </div>
+                    <div class="composer-runtime-options" id="composerRuntimeToolOptions"></div>
+                  </div>
+                  <div class="composer-runtime-view" id="composerRuntimeProviderView">
+                    <div class="composer-runtime-view-header">
+                      <button class="composer-runtime-back composer-runtime-back--icon" id="composerRuntimeProviderBackBtn" type="button" title="Back" aria-label="Back" data-i18n-title="compose.runtime.back" data-i18n-aria-label="compose.runtime.back">
+                        <span class="composer-runtime-back-chevron" aria-hidden="true"></span>
+                      </button>
+                      <div class="composer-runtime-menu-title" id="composerRuntimeProviderTitle" data-i18n="compose.provider.title">Provider</div>
+                    </div>
+                    <div class="composer-runtime-options" id="composerRuntimeProviderOptions" role="menu" aria-live="polite"></div>
+                    <div class="composer-runtime-status" id="composerRuntimeProviderStatus" role="status" aria-live="polite" aria-atomic="true"></div>
+                  </div>
+                  <div class="composer-runtime-view" id="composerRuntimeModelView">
+                    <div class="composer-runtime-view-header">
+                      <button class="composer-runtime-back composer-runtime-back--icon" id="composerRuntimeModelBackBtn" type="button" title="Back" aria-label="Back" data-i18n-title="compose.runtime.back" data-i18n-aria-label="compose.runtime.back">
+                        <span class="composer-runtime-back-chevron" aria-hidden="true"></span>
+                      </button>
+                      <div class="composer-runtime-menu-title" data-i18n="compose.runtime.model">Model</div>
+                    </div>
+                    <div class="composer-runtime-options composer-runtime-model-options" id="composerRuntimeModelOptions" hidden></div>
+                    <div class="composer-runtime-status" id="composerRuntimeModelStatus" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+                  </div>
+                  <div class="composer-runtime-view" id="composerRuntimePermissionView">
+                    <div class="composer-runtime-view-header">
+                      <button class="composer-runtime-back composer-runtime-back--icon" id="composerRuntimePermissionBackBtn" type="button" title="Back" aria-label="Back" data-i18n-title="compose.runtime.back" data-i18n-aria-label="compose.runtime.back">
+                        <span class="composer-runtime-back-chevron" aria-hidden="true"></span>
+                      </button>
+                      <div class="composer-runtime-menu-title" data-i18n="compose.permission.title">Permissions</div>
+                    </div>
+                    <div class="composer-runtime-options composer-runtime-permission-options" id="composerRuntimePermissionOptions" hidden></div>
+                  </div>
+                </div>
+                <button class="composer-permission-btn" id="composerPermissionBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="composerPermissionMenu" title="Permissions" aria-label="Permissions" data-i18n-title="compose.permission.ariaLabel" data-i18n-aria-label="compose.permission.ariaLabel" hidden>
+                  <span id="composerPermissionLabel">Permissions</span>
+                  <span class="composer-runtime-caret" aria-hidden="true"></span>
+                </button>
+                <div class="composer-permission-menu" id="composerPermissionMenu" role="menu" hidden>
+                  <div class="composer-runtime-menu-title" data-i18n="compose.permission.title">Permissions</div>
+                  <div class="composer-runtime-options" id="composerPermissionOptions"></div>
+                </div>
+                <select class="tool-select" id="inlineToolSelect" disabled></select>
+                <select class="model-select" id="inlineModelSelect" disabled></select>
+                <button class="thinking-toggle" id="thinkingToggle" disabled data-i18n="tooling.thinking">Thinking</button>
+                <select class="effort-select" id="effortSelect" disabled style="display:none"></select>
+                <select class="service-tier-select" id="serviceTierSelect" disabled style="display:none"></select>
+              </div>
+              <button class="composer-action-btn composer-controls-btn" id="composerControlsBtn" type="button" aria-controls="inputConfigRow" aria-expanded="false" title="Switch mode" aria-label="Switch mode" data-i18n-title="action.switchMode" data-i18n-aria-label="action.switchMode" data-i18n="action.switchMode" hidden>Switch mode</button>
+              <button class="composer-edit-cancel-btn" id="composerEditCancelBtn" type="button" title="Cancel editing and send as a new message instead" aria-label="Cancel editing and send as a new message instead" aria-hidden="true" tabindex="-1" data-i18n-title="message.editResend.cancelAria" data-i18n-aria-label="message.editResend.cancelAria" data-icon="close"></button>
+              <div class="send-stop-slot">
+                <button class="send-btn" id="sendBtn" disabled title="Send" aria-label="Send" aria-hidden="true" tabindex="-1" data-i18n-title="action.send" data-i18n-aria-label="action.send" data-icon="send"></button>
+                <button class="cancel-btn" id="cancelBtn" title="Stop" aria-label="Stop" aria-hidden="true" tabindex="-1" data-i18n-title="action.stop" data-i18n-aria-label="action.stop" data-icon="debug-stop"></button>
+              </div>
+            </div>
+          </div>
+          <div class="quick-entry-focus-prompt" id="quickEntryFocusPrompt" hidden>
+            <button class="quick-entry-focus-btn" id="quickEntryFocusBtn" type="button">
+              <span class="quick-entry-focus-title" data-i18n="quickEntry.focusPrompt.title">Tap to start typing</span>
+              <span class="quick-entry-focus-body" data-i18n="quickEntry.focusPrompt.body">Some phones do not open the keyboard automatically from a PWA shortcut.</span>
+            </button>
+          </div>
+          <div class="composer-pending-state" id="composerPendingState" aria-live="polite"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <aside class="right-sidebar" id="rightSidebar" aria-label="Sidebar" hidden>
+    <div class="right-sidebar-resize-handle" id="rightSidebarResizeHandle" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0"></div>
+    <header class="right-sidebar-header">
+      <button class="right-sidebar-back" id="rightSidebarBackBtn" type="button" title="Back" aria-label="Back" data-i18n-title="action.back" data-i18n-aria-label="action.back" data-icon="chevron-left" hidden></button>
+      <div class="right-sidebar-title-block">
+        <div class="right-sidebar-eyebrow" data-i18n="action.sidebar">Sidebar</div>
+        <h2 id="rightSidebarTitle" data-i18n="action.sidebar">Sidebar</h2>
+      </div>
+      <button class="right-sidebar-close" id="rightSidebarCloseBtn" type="button" title="Close" aria-label="Close" data-i18n-title="action.close" data-i18n-aria-label="action.close" data-icon="close"></button>
+    </header>
+    <div class="right-sidebar-body">
+      <section class="right-sidebar-home" id="rightSidebarHome">
+        <button class="right-sidebar-big-button" id="rightSidebarFilesBtn" type="button">
+          <span class="right-sidebar-big-button-icon" data-icon="file" aria-hidden="true"></span>
+          <span class="right-sidebar-big-button-main">
+            <span class="right-sidebar-big-button-title" data-i18n="nav.files">Files</span>
+            <span class="right-sidebar-big-button-subtitle" data-i18n="fileReader.emptyBody">Choose a readable Markdown or PDF file from the workspace tree.</span>
+          </span>
+          <span class="right-sidebar-big-button-chevron" data-icon="chevron-right" aria-hidden="true"></span>
+        </button>
+        <button class="right-sidebar-big-button right-sidebar-organization-entry" id="rightSidebarOrganizationBtn" type="button" hidden>
+          <span class="right-sidebar-big-button-icon" data-icon="fork" aria-hidden="true"></span>
+          <span class="right-sidebar-big-button-main">
+            <span class="right-sidebar-big-button-title" data-i18n="organization.title">Organization</span>
+            <span class="right-sidebar-big-button-subtitle" data-i18n="organization.subtitle">Inspect the managed team, phase gates, reviews, and blockers.</span>
+          </span>
+          <span class="right-sidebar-big-button-chevron" data-icon="chevron-right" aria-hidden="true"></span>
+        </button>
+      </section>
+      <section class="right-sidebar-view" id="rightSidebarFilesView" hidden>
+        <section class="workspace-file-reader workspace-file-reader--embedded" id="workspaceFileReader" aria-label="Workspace files" hidden>
+          <header class="workspace-file-reader-header">
+            <button class="workspace-file-reader-back" id="workspaceFileReaderBackBtn" type="button" title="Back" aria-label="Back" data-i18n-title="action.back" data-i18n-aria-label="action.back" data-icon="chevron-left" hidden></button>
+            <div class="workspace-file-reader-title-block">
+              <div class="workspace-file-reader-eyebrow" data-i18n="fileReader.eyebrow">Files</div>
+              <h2 id="workspaceFileReaderTitle" data-i18n="fileReader.title">Workspace files</h2>
+              <div class="workspace-file-reader-path" id="workspaceFileReaderRoot"></div>
+            </div>
+            <button class="workspace-file-reader-refresh" id="workspaceFileReaderRefreshBtn" type="button" title="Refresh files" aria-label="Refresh files" data-i18n-title="fileReader.refresh" data-i18n-aria-label="fileReader.refresh" data-icon="refresh"></button>
+          </header>
+          <div class="workspace-file-reader-layout">
+            <section class="workspace-file-reader-preview" id="workspaceFileReaderPreview">
+              <div class="workspace-file-reader-empty">
+                <div class="workspace-file-reader-empty-icon" data-icon="file"></div>
+                <div class="workspace-file-reader-empty-title" data-i18n="fileReader.emptyTitle">Open a file</div>
+                <div class="workspace-file-reader-empty-body" data-i18n="fileReader.emptyBody">Choose a readable Markdown or PDF file from the workspace tree.</div>
+              </div>
+            </section>
+            <aside class="workspace-file-reader-list-panel">
+              <div class="workspace-file-reader-list-resize-handle" id="workspaceFileReaderListResizeHandle" role="separator" aria-orientation="vertical" aria-label="Resize file list" tabindex="0"></div>
+              <div class="workspace-file-reader-search">
+                <input class="workspace-file-reader-search-input" id="workspaceFileReaderSearchInput" type="search" placeholder="Filter files..." data-i18n-placeholder="fileReader.searchPlaceholder" autocomplete="off">
+              </div>
+              <div class="workspace-file-reader-tree" id="workspaceFileReaderTree"></div>
+            </aside>
+          </div>
+        </section>
+      </section>
+      <section class="right-sidebar-view right-sidebar-organization-view" id="rightSidebarOrganizationView" hidden>
+        <section class="organization-inspector" aria-labelledby="organizationInspectorTitle">
+          <header class="organization-inspector-header">
+            <div class="organization-inspector-title-block">
+              <div class="organization-inspector-eyebrow" data-i18n="organization.eyebrow">Root leadership</div>
+              <h3 id="organizationInspectorTitle" data-i18n="organization.title">Organization</h3>
+              <p id="organizationInspectorMeta"></p>
+            </div>
+            <button class="organization-inspector-refresh" id="organizationRefreshBtn" type="button" title="Refresh organization" aria-label="Refresh organization" data-i18n-title="organization.refresh" data-i18n-aria-label="organization.refresh" data-icon="refresh"></button>
+          </header>
+          <div class="organization-inspector-status" id="organizationStatus" aria-live="polite"></div>
+          <div class="organization-inspector-summary" id="organizationSummary"></div>
+          <div class="organization-inspector-section" id="organizationPhases"></div>
+          <div class="organization-inspector-section" id="organizationNodes"></div>
+          <div class="organization-inspector-section" id="organizationBlockers"></div>
+        </section>
+      </section>
+    </div>
+  </aside>
+</div>
+</div>
+
+
+<!-- Full-screen composer: WeChat-style expanded input on mobile -->
+<div class="composer-fullscreen" id="composerFullscreen" role="dialog" aria-modal="true" aria-label="Full-screen input" data-i18n-aria-label="compose.expand.label" hidden>
+  <div class="composer-fullscreen-topbar">
+    <button class="composer-fullscreen-close" id="composerFullscreenCloseBtn" type="button" title="Collapse" aria-label="Collapse" data-i18n-title="compose.expand.collapse" data-i18n-aria-label="compose.expand.collapse">
+      <span class="composer-fullscreen-close-icon" data-icon="chevron-down" aria-hidden="true"></span>
+    </button>
+  </div>
+  <div class="composer-fullscreen-body">
+    <div class="composer-fullscreen-markdown-editor" id="composerFullscreenEditor" contenteditable="false" role="textbox" aria-multiline="true" aria-label="Full-screen input" data-i18n-aria-label="compose.expand.label" data-placeholder="{{INPUT_PLACEHOLDER_TEXT}}"></div>
+    <textarea class="composer-fullscreen-textarea" id="composerFullscreenInput" placeholder="{{INPUT_PLACEHOLDER_TEXT}}" data-i18n-placeholder="{{INPUT_PLACEHOLDER_I18N_KEY}}" aria-hidden="true" tabindex="-1"></textarea>
+  </div>
+  <div class="composer-fullscreen-actions">
+    <div class="composer-fullscreen-actions-left" id="composerFullscreenActionsLeft"></div>
+    <div class="composer-fullscreen-submit-actions">
+      <button class="composer-edit-cancel-btn composer-fullscreen-edit-cancel" id="composerFullscreenEditCancelBtn" type="button" title="Cancel editing and send as a new message instead" aria-label="Cancel editing and send as a new message instead" aria-hidden="true" tabindex="-1" data-i18n-title="message.editResend.cancelAria" data-i18n-aria-label="message.editResend.cancelAria" data-icon="close"></button>
+      <button class="send-btn composer-fullscreen-send is-visible" id="composerFullscreenSendBtn" type="button" title="Send" aria-label="Send" data-i18n-title="action.send" data-i18n-aria-label="action.send" data-icon="send"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Run Sheet: mobile bottom sheet expanding from Live Bar -->
+<div class="run-sheet-backdrop" id="runSheetBackdrop"></div>
+<div class="run-sheet" id="runSheet" role="dialog" aria-modal="true" aria-labelledby="runSheetTitle" aria-hidden="true" inert>
+  <div class="run-sheet__handle-zone" id="runSheetHandleZone">
+    <div class="run-sheet__handle"></div>
+  </div>
+  <div class="run-sheet__header">
+    <h2 class="run-sheet__title" id="runSheetTitle" data-i18n="runSheet.title">Run Sheet</h2>
+    <button class="run-sheet__close" id="runSheetClose" type="button" aria-label="Close" data-i18n-aria-label="action.close" data-icon="close"></button>
+  </div>
+  <div class="run-sheet__content" id="runSheetContent"></div>
+</div>
+
+<div class="modal-backdrop" id="goalSheet" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="goalSheetTitle" aria-hidden="true">
+    <div class="goal-sheet-handle" aria-hidden="true"></div>
+    <div class="modal-header">
+      <div class="goal-header-title-group">
+        <div class="goal-header-icon-badge" aria-hidden="true">
+          <span data-icon="target-arrow"></span>
+        </div>
+        <h2 class="modal-title" id="goalSheetTitle" data-i18n="goal.sheetTitle">Session goal</h2>
+      </div>
+      <button class="modal-close" id="goalSheetClose" type="button" data-i18n-aria-label="action.close" aria-label="Close" data-icon="close"></button>
+    </div>
+    <div class="modal-body">
+      <p class="goal-form-error" id="goalFormError" role="alert" hidden></p>
+      <div class="goal-input-action-row">
+        <div class="goal-objective-field">
+          <textarea id="goalObjectiveInput" name="objective" rows="2" data-i18n-placeholder="goal.objectivePlaceholder" placeholder="Enter session goal…" maxlength="480" autocomplete="off"></textarea>
+        </div>
+        <button class="goal-play-pause-btn is-play" id="goalPlayPauseBtn" type="button" aria-label="Start auto-continue" title="Start auto-continue">
+          <span class="goal-play-pause-icon" id="goalPlayPauseIcon" data-icon="play" aria-hidden="true"></span>
+        </button>
+      </div>
+      <div class="goal-modal-status-row" id="goalModalStatusRow" data-tone="idle">
+        <span class="goal-modal-status-dot" id="goalModalStatusDot" aria-hidden="true"></span>
+        <span class="goal-modal-status-text" id="goalModalStatusText">未设定目标：发送下一条消息将自动作为目标并开启自动继续</span>
+      </div>
+      <!-- Hidden compatibility inputs for runtime and session state -->
+      <input id="goalTokenBudgetInput" name="tokenBudget" type="hidden">
+      <input id="goalEnabledInput" name="enabled" type="checkbox" checked hidden>
+      <div id="goalStatusDisplay" hidden></div>
+    </div>
+    <div class="goal-sheet-footer">
+      <button class="modal-btn goal-sheet-clear-btn" id="goalSheetClear" type="button" data-i18n="goal.turnOff">Turn off goal mode</button>
+      <button class="modal-btn primary goal-sheet-save-btn" id="goalSheetSave" type="button" data-i18n="goal.save">Save goal</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="addToolModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="addToolModalTitle">
+    <div class="modal-header">
+      <div class="modal-title" id="addToolModalTitle" data-i18n="modal.addAgentsTitle">Add more agents</div>
+      <button class="modal-close" id="closeAddToolModal" type="button" aria-label="Close" data-i18n-aria-label="action.close" data-icon="close"></button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-lead" data-i18n="modal.addAgentsLead">
+        AgentoC is not limited to the builtin agents. For simple tools, save a lightweight config here and the picker refreshes immediately.
+        If you need custom parsing or runtime behavior, use the advanced path below.
+      </p>
+
+        <div class="provider-helper-card">
+          <div class="provider-helper-card-header">
+            <div class="provider-helper-card-title" data-i18n="modal.quickAddTitle">Quick add</div>
+            <button class="modal-btn primary" id="saveToolConfigBtn" type="button" data-i18n="modal.saveRefresh">Save &amp; refresh</button>
+          </div>
+        <p data-i18n="modal.quickAddBody">
+          Use this for wrappers or simple command-based agents that speak an existing runtime family and accept that family's core prompt/model/reasoning flags. We save the config for you and refresh the picker without restarting the service.
+        </p>
+        <div class="provider-helper-grid">
+          <div class="provider-helper-field">
+            <label for="addToolNameInput" data-i18n="modal.name">Name</label>
+            <input id="addToolNameInput" type="text" value="My Agent" autocomplete="off">
+          </div>
+          <div class="provider-helper-field">
+            <label for="addToolCommandInput" data-i18n="modal.command">Command</label>
+            <input id="addToolCommandInput" type="text" value="my-agent" autocomplete="off">
+          </div>
+          <div class="provider-helper-field">
+            <label for="addToolRuntimeFamilySelect" data-i18n="modal.runtimeFamily">Runtime family</label>
+            <select id="addToolRuntimeFamilySelect">
+              <option value="claude-stream-json" data-i18n="modal.runtimeFamily.claude">Claude-style stream JSON</option>
+              <option value="codex-json" data-i18n="modal.runtimeFamily.codex">Codex JSON</option>
+            </select>
+          </div>
+        </div>
+        <div class="provider-helper-field">
+          <label for="addToolModelsInput" data-i18n="modal.models">Models</label>
+          <textarea id="addToolModelsInput" placeholder="One model per line. Use `model-id | Label` or just `model-id`.&#10;Example:&#10;gpt-5-codex | GPT-5 Codex&#10;gpt-5-mini" data-i18n-placeholder="modal.modelsPlaceholder"></textarea>
+        </div>
+        <div class="provider-helper-grid">
+          <div class="provider-helper-field">
+            <label for="addToolReasoningKindSelect" data-i18n="modal.thinkingMode">Thinking mode</label>
+            <select id="addToolReasoningKindSelect">
+              <option value="toggle" data-i18n="modal.thinking.toggle">Toggle</option>
+              <option value="enum" data-i18n="modal.thinking.levels">Levels</option>
+              <option value="none" data-i18n="modal.thinking.none">None</option>
+            </select>
+          </div>
+          <div class="provider-helper-field">
+            <label for="addToolReasoningLevelsInput" data-i18n="modal.thinkingLevels">Thinking levels</label>
+            <input id="addToolReasoningLevelsInput" type="text" value="low, medium, high, xhigh" autocomplete="off">
+          </div>
+          <div class="provider-helper-field">
+            <label data-i18n="modal.internalIdentity">Internal identity</label>
+            <div class="provider-helper-note" data-i18n="modal.internalIdentityNote">Derived automatically from the command. No separate ID field in simple mode.</div>
+          </div>
+        </div>
+        <div class="provider-helper-note" data-i18n="modal.thinkingModeNote">Use `none` if the tool has no model-side reasoning control. For Claude-family tools, use `toggle`; for Codex-family tools, use `levels`. If the command needs different CLI flags, use the advanced path below.</div>
+        <div class="provider-helper-status" id="addToolStatus"></div>
+      </div>
+
+      <div class="provider-helper-card">
+        <div class="provider-helper-card-header">
+          <div class="provider-helper-card-title" data-i18n="modal.advancedTitle">Advanced integration</div>
+          <button class="modal-btn primary" id="copyProviderPromptBtn" type="button" data-i18n="modal.copyBasePrompt">Copy setup brief</button>
+        </div>
+        <p data-i18n="modal.advancedBody">
+          If the simple setup is not enough, start a dedicated technical session and paste this setup brief.
+        </p>
+        <ul>
+          <li data-i18n="modal.advancedBullet1">It asks the agent to decide whether simple setup is enough or whether deeper integration is needed.</li>
+          <li data-i18n="modal.advancedBullet2">It points the agent at the relevant technical notes and keeps the changes minimal.</li>
+        </ul>
+        <div class="provider-helper-code"><code id="providerPromptCode"></code></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn" id="closeAddToolModalFooter" type="button" data-i18n="modal.close">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="cross-device-overlay" id="crossDeviceOverlay" hidden>
+  <div class="cross-device-backdrop" data-cross-device-close="true"></div>
+  <section class="cross-device-sheet" id="crossDeviceSheet" role="dialog" aria-modal="true" aria-labelledby="crossDeviceTitle" aria-describedby="crossDeviceDescription" tabindex="-1">
+    <header class="cross-device-header">
+      <div class="cross-device-title-block">
+        <span class="cross-device-eyebrow" data-i18n="crossDevice.eyebrow">Device workspace</span>
+        <h2 id="crossDeviceTitle" data-i18n="crossDevice.title">Connect devices</h2>
+        <p id="crossDeviceDescription" data-i18n="crossDevice.description">Manage sign-in and trusted devices.</p>
+      </div>
+      <button class="cross-device-close" id="crossDeviceClose" type="button" title="Close" aria-label="Close" data-i18n-title="action.close" data-i18n-aria-label="action.close" data-icon="close"></button>
+    </header>
+    <div class="cross-device-status" id="crossDeviceStatus" role="status" aria-live="polite" hidden></div>
+    <nav class="cross-device-tabs" id="crossDeviceTabs" role="tablist" aria-label="Device workspace sections" data-i18n-aria-label="crossDevice.tabs.ariaLabel">
+      <button class="cross-device-tab is-active" id="crossDeviceTabAccount" type="button" role="tab" aria-selected="true" aria-controls="crossDeviceAccountView" data-cross-device-view="account" data-i18n="crossDevice.tabs.account">Account</button>
+      <button class="cross-device-tab" id="crossDeviceTabDevices" type="button" role="tab" aria-selected="false" aria-controls="crossDeviceDevicesView" data-cross-device-view="devices" data-i18n="crossDevice.tabs.devices">Devices</button>
+    </nav>
+    <div class="cross-device-content">
+      <section class="cross-device-view is-active" id="crossDeviceAccountView" role="tabpanel" aria-labelledby="crossDeviceTabAccount" data-cross-device-panel="account">
+        <div id="crossDeviceAccountContent"></div>
+      </section>
+      <section class="cross-device-view" id="crossDeviceDevicesView" role="tabpanel" aria-labelledby="crossDeviceTabDevices" data-cross-device-panel="devices" hidden>
+        <div id="crossDeviceDevicesContent"></div>
+      </section>
+      <section class="cross-device-view" id="crossDeviceRegisterView" role="tabpanel" aria-label="Pair a device" data-cross-device-panel="register" hidden>
+        <div id="crossDeviceRegisterContent"></div>
+      </section>
+    </div>
+  </section>
+</div>
+
+{{BOOTSTRAP_SCRIPT_TAGS}}
+{{EXTRA_BOOTSTRAP_SCRIPTS}}
+<script src="marked.min.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="qr-creator.min.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/markdown-math.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/markdown-enhancements.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/i18n.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/session-state-model.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/run-activity-ui.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/live-action-transition.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/decisions-store.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/session-store.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/home-workspace.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/composer-store.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/icons.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/product-paths.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/motion.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/focus-scope.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/haptics.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/back-handler.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/custom-select.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/monet-theme-contract.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/bootstrap.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/bootstrap-session-catalog.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/p2p.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/target-store.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/target-runtime-client.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/session-http-scheduler.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/session-http-helpers.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/core/timeline-projector.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/session-http-list-state.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/session-http.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/layout-tooling.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/tooling.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/realtime.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/realtime-render.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/ui.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/timeline-runtime.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/run-sheet.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/approval-notify.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/attention-popup.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/decision-sheet.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/file-tree-view.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/folder-tree-picker.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/workspace-file-reader.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/right-sidebar.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/session-surface-ui.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/session-list-ui.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/harness-management.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/model-providers.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/settings-ui.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/sidebar-ui.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/agent-panel.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/connector-panel.js?v={{ASSET_VERSION}}-mail-state-v2" nonce="{{NONCE}}"></script>
+<script src="chat/project-overview.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/project-view-ui.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/project-migrate-ui.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/cross-device-panel.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/device-bar.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/account-policy.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/vendor/vditor/dist/index.min.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/markdown-composer-editor.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/compose.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/composer-fullscreen.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/gestures.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/live-status-ui.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/goal-ui.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/organization-view.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/init.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+<script src="chat/desktop-manager.js?v={{ASSET_VERSION}}" nonce="{{NONCE}}"></script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "table-cleanup",
+      "inputs": {
+        "input/expenses.csv": "id,date,team,amount\nE-001,2026-09-01,销售,120.10\nE-002,2026-09-02,研发,0.10\nE-002,2026-09-02,研发,0.10\nE-003,2026-09-03,研发,0.20\nE-004,2026-09-04,行政,50.00\nE-005,2026-09-05,销售,-20.00\nE-006,2026-09-31,行政,10.00\nE-007,2026-09-08,行政,abc\nE-008,2026-09-09,,8.00\nE-004,2026-09-04,行政,70.00\n"
+      },
+      "prompt": "整理 input/expenses.csv，保留原文件。完全相同记录只保留一次；同一 id 若记录不同，所有冲突行均不计入结果。无效日历日期、非两位小数金额、缺失部门也排除，负数退款允许。按整数分汇总，禁止浮点误差。输出 output/cleaned.csv，表头与输入相同，按 id 升序、金额固定两位小数。另写 output/summary.json，字段为 inputRows、duplicatesRemoved、acceptedIds、totalCents、teamTotalsCents 和 issues；issues 按原始CSV行号升序（表头第1行），各项为 line、id、reason，reason仅用 conflicting-id/invalid-date/invalid-amount/missing-team。最后告诉我哪些记录需要人工确认、合计多少、文件在哪里。",
+      "outputs": {
+        "output/cleaned.csv": {"text": "id,date,team,amount\nE-001,2026-09-01,销售,120.10\nE-002,2026-09-02,研发,0.10\nE-003,2026-09-03,研发,0.20\nE-005,2026-09-05,销售,-20.00\n"},
+        "output/summary.json": {"json": {"inputRows": 10, "duplicatesRemoved": 1, "acceptedIds": ["E-001", "E-002", "E-003", "E-005"], "totalCents": 10040, "teamTotalsCents": {"研发": 30, "销售": 10010}, "issues": [{"line": 6, "id": "E-004", "reason": "conflicting-id"}, {"line": 8, "id": "E-006", "reason": "invalid-date"}, {"line": 9, "id": "E-007", "reason": "invalid-amount"}, {"line": 10, "id": "E-008", "reason": "missing-team"}, {"line": 11, "id": "E-004", "reason": "conflicting-id"}]}}
+      }
+    },
+    {
+      "id": "file-archive",
+      "inputs": {
+        "input/sales_2026-09.txt": "部门:销售\n日期:2026-09-02\n内容:销售周会记录。\n",
+        "input/rd-old.txt": "部门:研发\n日期:2026-09-02\n内容:研发方案A，必须保留。\n",
+        "input/研发_副本.txt": "部门:研发\n日期:2026-09-02\n内容:研发方案B，与A不同，必须保留。\n",
+        "input/行政会议.txt": "部门:行政\n日期:2026-09-10\n内容:会议室安排。\n",
+        "input/undated.txt": "部门:行政\n内容:日期尚未提供，不要猜测。\n"
+      },
+      "prompt": "把 input 中的记录按文件内的部门和日期复制归档到 output/archive/YYYY-MM/部门-YYYY-MM-DD.txt，保留所有原文件。内容不同却目标重名时，全部加 -01/-02 等编号；编号按原始文件名Unicode码点升序。缺日期文件不复制，不猜日期。写 output/plan.json，copied数组每项source/target（相对于当前工作区），按source升序；needsReview数组每项source/reason，reason用missing-date。不得覆盖文件、删原文件或修改正文。最后说明归档数量、冲突处理、待确认文件和位置。",
+      "outputs": {
+        "output/archive/2026-09/研发-2026-09-02-01.txt": {"copyOf": "input/rd-old.txt"},
+        "output/archive/2026-09/研发-2026-09-02-02.txt": {"copyOf": "input/研发_副本.txt"},
+        "output/archive/2026-09/销售-2026-09-02.txt": {"copyOf": "input/sales_2026-09.txt"},
+        "output/archive/2026-09/行政-2026-09-10.txt": {"copyOf": "input/行政会议.txt"},
+        "output/plan.json": {"json": {"copied": [{"source": "input/rd-old.txt", "target": "output/archive/2026-09/研发-2026-09-02-01.txt"}, {"source": "input/sales_2026-09.txt", "target": "output/archive/2026-09/销售-2026-09-02.txt"}, {"source": "input/研发_副本.txt", "target": "output/archive/2026-09/研发-2026-09-02-02.txt"}, {"source": "input/行政会议.txt", "target": "output/archive/2026-09/行政-2026-09-10.txt"}], "needsReview": [{"source": "input/undated.txt", "reason": "missing-date"}]}}
+      }
+    },
+    {
+      "id": "meeting-brief",
+      "inputs": {
+        "input/minutes-1.md": "# 灯塔项目 2026-10-19\n文件上传联调完成。\n风险：导出偶有空白，待排查。\n赵宁在10月26日前复测导出。\n试点计划11月5日，尚未最终确认。\n",
+        "input/minutes-2.md": "# 灯塔项目 2026-10-22\n上传联调完成的结论保持。\n导出空白已复现，尚未修复。\n试点日期改为待定，11月12日只是候选时间。\n周敏在10月27日前整理操作手册。\n费用预算未讨论。\n"
+      },
+      "prompt": "只用 input 两份会议纪要合成截至2026-10-22的一页中文项目周报 output/brief.md，含进展、风险、行动、待确认四节，并注明两份来源文件名。后续纪要更新旧计划时，以后续纪要为准，候选日期不能写成承诺，不补造预算。附 output/facts.json 便于核对：asOf；completed（上传联调用upload-integration）；risks（id为blank-export，status为open）；actions（owner/due/action，赵宁的action用retest-export，周敏用prepare-guide，按due升序）；pilotDate（未确认用null）、pilotCandidateDate、budget（未讨论用null）。最后说明已生成什么、未确认事项和文件位置。",
+      "outputs": {
+        "output/brief.md": {"headings": ["进展", "风险", "行动", "待确认"], "includes": ["minutes-1.md", "minutes-2.md", "赵宁", "周敏", "待定"]},
+        "output/facts.json": {"json": {"asOf": "2026-10-22", "completed": ["upload-integration"], "risks": [{"id": "blank-export", "status": "open"}], "actions": [{"owner": "赵宁", "due": "2026-10-26", "action": "retest-export"}, {"owner": "周敏", "due": "2026-10-27", "action": "prepare-guide"}], "pilotDate": null, "pilotCandidateDate": "2026-11-12", "budget": null}}
+      },
+      "humanReview": ["周报正文是否忠实于原文且没有与facts.json矛盾", "试点是否明确待定、11月12日是否仅候选", "是否可读且没有编造预算、负责人或完成状态"]
+    }
+  ]
+}

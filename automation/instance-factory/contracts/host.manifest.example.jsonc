@@ -1,0 +1,39 @@
+{
+  // Public or semi-public machine shape only.
+  "schemaVersion": 1,
+  "host": {
+    "provider": "digitalocean",
+    "hostname": "agentoc-sfo3-01",
+    "region": "sfo3",
+    "size": "s-2vcpu-4gb",
+    "image": "ubuntu-24-04-x64",
+    "tags": ["agentoc", "owner"],
+    "sshKeys": ["replace-with-digitalocean-ssh-key-fingerprint-or-id"],
+    "repoGitUrl": "https://github.com/AgentoC/AgentoC_product.git",
+    "repoCheckoutPath": "/opt/agentoc",
+    "sshUser": "root"
+  },
+  "network": {
+    "listenPort": 7690,
+    "ownerDomain": "thelab.example.test",
+    "ingress": {
+      "provider": "cloudflare",
+      "tunnelId": "replace-with-cloudflare-tunnel-id",
+      "tunnelName": "thelab",
+      "serviceName": "cloudflared-thelab",
+      "credentialsFile": "/etc/cloudflared/replace-with-cloudflare-tunnel-id.json",
+      "localCredentialsFile": "/root/.cloudflared/replace-with-cloudflare-tunnel-id.json",
+      "ownerHostname": "thelab.example.test"
+    }
+  },
+  "systemd": {
+    "ownerUnit": "agentoc",
+    "logDir": "/var/log/agentoc"
+  },
+  "connectors": {
+    "calendar": {
+      "googleCredentialsFile": "/etc/agentoc/google-calendar-credentials.json",
+      "googleTokenFile": "/etc/agentoc/google-calendar-token.json"
+    }
+  }
+}

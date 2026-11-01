@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="timeline_details_show">Mostrar detalles</string>
+    <string name="timeline_thinking">Razonamiento</string>
+    <string name="timeline_details_hide">Ocultar detalles</string>
+    <string name="timeline_input">Entrada</string>
+    <string name="timeline_output">Salida</string>
+    <string name="timeline_exit_code">Código de salida: %1$d</string>
+    <string name="timeline_done">Completado</string>
+    <string name="timeline_failed">Error</string>
+    <string name="timeline_running">En curso</string>
+    <string name="timeline_pending">Pendiente</string>
+    <string name="timeline_send_failed">No se pudo enviar</string>
+    <string name="timeline_retry">Reintentar</string>
+</resources>

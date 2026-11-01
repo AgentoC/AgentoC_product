@@ -1,0 +1,35 @@
+<resources>
+    <string name="content_report_title">Report AI content</string>
+    <string name="content_report_settings">Content report and receipt</string>
+    <string name="content_report_disclosure">Send a report to the AgentoC developer. We send the reason, optional note, app version and report ID. The reply excerpt is sent only if you select it below. No workbench or sign-in credentials are attached. This phone keeps a private copy until you clear it.</string>
+    <string name="content_report_reason">Choose a reason</string>
+    <string name="content_report_reason_unsafe">Dangerous or unsafe content</string>
+    <string name="content_report_reason_harassment">Hate or harassment</string>
+    <string name="content_report_reason_sexual">Sexual content</string>
+    <string name="content_report_reason_privacy">Privacy or personal data</string>
+    <string name="content_report_reason_deceptive">Misleading or deceptive content</string>
+    <string name="content_report_reason_other">Other concern</string>
+    <string name="content_report_details">Note (optional)</string>
+    <string name="content_report_include">Include an editable excerpt of this reply</string>
+    <string name="content_report_excerpt">Reply excerpt (up to 4000 characters)</string>
+    <string name="content_report_send">Send report</string>
+    <string name="content_report_close">Close</string>
+    <string name="content_report_check">Check receipt</string>
+    <string name="content_report_retry">Check, then retry this report</string>
+    <string name="content_report_choose_reply">To report specific content, open a conversation and choose Report under the AI reply. Your last submitted report will also appear here.</string>
+    <string name="content_report_saved_notice">This is your saved report. Its contents are frozen; opening this page does not send it again.</string>
+    <string name="content_report_request_id">Report ID: %1$s</string>
+    <string name="content_report_received_at">Received: %1$s</string>
+    <string name="content_report_received">Received by the developer service. Human review is pending.</string>
+    <string name="content_report_in_review">In review</string>
+    <string name="content_report_closed">Processing closed</string>
+    <string name="content_report_unconfirmed">Receipt not confirmed. Check the original report before retrying.</string>
+    <string name="content_report_clear_local">Clear phone copy</string>
+    <string name="content_report_clear_warning">This only clears the copy and receipt on this phone. It does not withdraw or delete a report already received by the developer. If receipt is unconfirmed, clearing also removes your ability to check or retry that report here.</string>
+    <string name="content_report_error_storage">The private report record could not be read or saved. A report may already have been received. Keep this record and check again; do not assume it was withdrawn.</string>
+    <string name="content_report_error_unavailable">The report service is unavailable. Receipt has not been confirmed for this attempt. Keep this report and check again later.</string>
+    <string name="content_report_error_rate">The report service is busy. Keep this report and try again later.</string>
+    <string name="content_report_error_rejected">The report was rejected. Shorten the note or excerpt in a new report after clearing this phone copy.</string>
+    <string name="content_report_error_conflict">A report with this ID already exists or its contents differ. Check the original receipt; do not assume a new report was received.</string>
+    <string name="content_report_error_unconfirmed">The result could not be confirmed. Your saved request is retained. Check its receipt; opening this page will not retry automatically.</string>
+</resources>

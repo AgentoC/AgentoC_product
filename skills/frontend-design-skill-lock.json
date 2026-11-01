@@ -1,0 +1,23 @@
+{
+  "updatedAt": "2026-08-03",
+  "runtime": "codex",
+  "skills": [
+    {
+      "name": "impeccable",
+      "repository": "pbakaus/impeccable",
+      "commit": "33b9a3752b8852c7adb7f4935a3f6c160bf3fefc",
+      "path": ".agents/skills/impeccable"
+    },
+    {
+      "name": "web-design-guidelines",
+      "repository": "vercel-labs/agent-skills",
+      "commit": "7c180d9044c9ae2b442b567aad4e42a28dd5ed62",
+      "path": "skills/web-design-guidelines"
+    },
+    {
+      "name": "agentoc-visual-ui-review",
+      "repository": "local",
+      "path": "skills/agentoc-visual-ui-review"
+    }
+  ]
+}

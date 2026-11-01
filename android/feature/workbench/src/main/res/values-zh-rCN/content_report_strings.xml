@@ -1,0 +1,35 @@
+<resources>
+    <string name="content_report_title">举报 AI 内容</string>
+    <string name="content_report_settings">内容举报与回执</string>
+    <string name="content_report_disclosure">举报将发送给 AgentoC 开发者，包含举报原因、可选说明、应用版本和举报编号。只有勾选后才会发送下方回复片段，不附带工作台或登录凭据。本机会保留私有副本，直到你主动清除。</string>
+    <string name="content_report_reason">选择举报原因</string>
+    <string name="content_report_reason_unsafe">危险或不安全内容</string>
+    <string name="content_report_reason_harassment">仇恨或骚扰</string>
+    <string name="content_report_reason_sexual">色情内容</string>
+    <string name="content_report_reason_privacy">隐私或个人数据</string>
+    <string name="content_report_reason_deceptive">误导或欺骗性内容</string>
+    <string name="content_report_reason_other">其他问题</string>
+    <string name="content_report_details">补充说明（可选）</string>
+    <string name="content_report_include">附带可编辑的回复片段</string>
+    <string name="content_report_excerpt">回复片段（最多 4000 字符）</string>
+    <string name="content_report_send">发送举报</string>
+    <string name="content_report_close">关闭</string>
+    <string name="content_report_check">查询回执</string>
+    <string name="content_report_retry">先查回执，再重试本次举报</string>
+    <string name="content_report_choose_reply">请在对话中的具体 AI 回复下选择“举报”。最近一次提交的举报也可在此查看。</string>
+    <string name="content_report_saved_notice">这是本机保存的举报，内容已固定。打开页面不会再次发送。</string>
+    <string name="content_report_request_id">举报编号：%1$s</string>
+    <string name="content_report_received_at">接收时间：%1$s</string>
+    <string name="content_report_received">开发者服务已接收，等待人工处理。</string>
+    <string name="content_report_in_review">正在处理</string>
+    <string name="content_report_closed">处理已结束</string>
+    <string name="content_report_unconfirmed">尚未确认接收。请先查询原举报回执，再决定是否重试。</string>
+    <string name="content_report_clear_local">清除本机副本</string>
+    <string name="content_report_clear_warning">这只清除本机的举报副本和回执，不会撤回或删除开发者已接收的举报。如果接收结果尚未确认，清除后也将无法在此查询或重试该举报。</string>
+    <string name="content_report_error_storage">无法读取或保存本机私有举报记录，举报可能已被接收。请保留记录后再查询，不要将此视为已撤回。</string>
+    <string name="content_report_error_unavailable">举报服务暂不可用，尚未确认本次操作的回执。请保留记录，稍后再查询。</string>
+    <string name="content_report_error_rate">举报服务繁忙，请保留记录，稍后再试。</string>
+    <string name="content_report_error_rejected">举报被拒绝。可清除本机副本后，缩短说明或片段并重新填写。</string>
+    <string name="content_report_error_conflict">同一编号已有举报，或内容不一致。请查询原回执，不能据此认定新举报已接收。</string>
+    <string name="content_report_error_unconfirmed">尚无法确认操作结果，已保留原请求。请查询回执，重新打开页面不会自动重试。</string>
+</resources>

@@ -1,0 +1,7 @@
+<resources>
+    <string name="api_confirm">확인</string>
+    <string name="api_access_clear_confirm">이 기기에서 취소된 기록을 지우시겠어요? 액세스 권한은 이미 취소되었습니다.</string>
+    <string name="api_assistant_revoke_confirm">이 어시스턴트 위임을 취소하시겠어요? 이후 액세스는 차단되지만 컴퓨터가 이미 수락한 작업은 중지되지 않으며 수신된 데이터도 회수되지 않습니다.</string>
+    <string name="api_capture_delete_confirm">이 기기에서 저장된 초안을 삭제하시겠어요? 이 작업은 실행 취소할 수 없습니다.</string>
+    <string name="api_outputs_delete_confirm">휴대전화의 비공개 복사본을 삭제하시겠어요? 원래 컴퓨터의 파일은 삭제되지 않습니다.</string>
+</resources>

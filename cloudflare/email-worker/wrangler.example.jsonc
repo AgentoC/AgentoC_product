@@ -1,0 +1,10 @@
+{
+  "name": "agentoc-email-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-03-10",
+  "send_email": [{ "name": "EMAIL" }],
+  "vars": {
+    "MAILBOX_FROM": "agent@example.com",
+    "MAILBOX_BRIDGE_URL": "https://mailhook.example.com/cloudflare-email/webhook"
+  }
+}

@@ -1,0 +1,3 @@
+<resources>
+    <bool name="agentoc_appfunctions_enabled">false</bool>
+</resources>

@@ -1,0 +1,517 @@
+:root {
+  --glass-blur: 22px;
+  --surface-glass-base: color-mix(in srgb, var(--user-bubble) 72%, var(--bg-tertiary) 28%);
+  --surface-glass-strong-base: color-mix(in srgb, var(--surface-hover) 54%, var(--bg-secondary) 46%);
+  --surface-glass-fallback: color-mix(in srgb, var(--surface-hover) 66%, var(--bg-secondary) 34%);
+  --surface-glass: color-mix(in srgb, var(--surface-glass-base) 64%, transparent);
+  --surface-glass-strong: color-mix(in srgb, var(--surface-glass-strong-base) 72%, transparent);
+  /* Composer material mirrors Android: one flat translucent surface, with no
+     directional highlight or gradient. */
+  --composer-flat-fill: color-mix(in srgb, #ffffff 78%, transparent);
+  --sidebar-glass-base: color-mix(in srgb, var(--surface-hover) 78%, var(--bg-secondary) 22%);
+  --sidebar-glass-fallback: color-mix(in srgb, var(--surface-hover) 88%, var(--bg-secondary) 12%);
+  --sidebar-glass-fill: color-mix(in srgb, var(--sidebar-glass-base) 68%, transparent);
+  --sidebar-glass-menu-fill: color-mix(in srgb, var(--sidebar-glass-base) 58%, transparent);
+  --sidebar-glass-hover: color-mix(in srgb, var(--surface-hover) 18%, var(--sidebar-glass-fill));
+  --sidebar-glass-focus: color-mix(in srgb, var(--surface-hover) 18%, color-mix(in srgb, var(--sidebar-glass-base) 74%, transparent));
+  --sidebar-glass-shadow:
+    0 5px 14px color-mix(in srgb, var(--text) 8%, transparent),
+    inset 0 0 0 1px var(--glass-edge);
+  --sidebar-glass-floating-shadow:
+    0 12px 30px color-mix(in srgb, var(--text) 12%, transparent),
+    inset 0 0 0 1px var(--glass-edge);
+  --glass-sheen: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--surface-hover) 34%, transparent) 0%,
+    transparent 44%,
+    color-mix(in srgb, var(--bg-tertiary) 28%, transparent) 100%
+  );
+  --glass-edge: color-mix(in srgb, var(--divider-subtle, var(--border)) 72%, transparent);
+  --glass-separator: color-mix(in srgb, var(--divider-subtle, var(--border)) 54%, transparent);
+  --shadow-glass:
+    var(--shadow-soft, 0 8px 24px rgba(16, 21, 39, 0.07)),
+    inset 0 0 0 1px var(--glass-edge);
+  --sidebar-tab-shell: color-mix(in srgb, var(--bg-tertiary) 66%, var(--border) 34%);
+  --sidebar-tab-selected: color-mix(in srgb, var(--bg-secondary) 92%, var(--bg));
+}
+
+.input-wrapper {
+  background: var(--surface-glass-fallback);
+}
+
+.msg-user-bubble {
+  background: var(--user-bubble);
+}
+
+.sidebar-tabs {
+  background: var(--sidebar-tab-shell);
+  border-color: transparent;
+  box-shadow: var(--sidebar-glass-shadow);
+}
+
+.sidebar-tabs::before {
+  background: var(--sidebar-tab-selected);
+  box-shadow: var(--sidebar-glass-shadow);
+}
+
+.sidebar-search {
+  background: transparent;
+}
+
+.sidebar-workspace,
+.sidebar-search-input,
+.sidebar-workspace-popover,
+.sidebar-workspace-browser,
+.sidebar-workspace-select,
+.sidebar-workspace-browser-select,
+.sidebar-workspace .custom-select-wrap.cs-full-bg .cs-trigger,
+.session-item.active,
+.custom-select-panel[aria-labelledby="workspaceSelect-cs-trigger"],
+.custom-select-panel[aria-labelledby="workspaceCustomFolderSelect-cs-trigger"],
+.custom-select-panel[aria-labelledby="workspaceBrowserSelect-cs-trigger"] {
+  border-color: transparent;
+  background: var(--sidebar-glass-fallback);
+  box-shadow: var(--sidebar-glass-shadow);
+}
+
+.session-item.active {
+  box-shadow: var(--sidebar-glass-shadow);
+}
+
+.sidebar-workspace:hover,
+.sidebar-workspace.is-expanded,
+.sidebar-search-input:hover,
+.sidebar-workspace-select:hover,
+.sidebar-workspace-browser-select:hover,
+.sidebar-workspace .custom-select-wrap.cs-full-bg .cs-trigger:hover,
+.session-item.active:hover {
+  border-color: transparent;
+  background: var(--sidebar-glass-hover);
+}
+
+.sidebar-search-input:focus,
+.sidebar-workspace-select:focus,
+.sidebar-workspace-browser-select:focus,
+.sidebar-workspace .custom-select-wrap.cs-full-bg.open .cs-trigger {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--sidebar-glass-fallback) 88%, var(--focus-border) 12%);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--focus-border) 16%, transparent),
+    var(--sidebar-glass-shadow);
+}
+
+.custom-select-panel[aria-labelledby="workspaceSelect-cs-trigger"] .cs-option:hover,
+.custom-select-panel[aria-labelledby="workspaceCustomFolderSelect-cs-trigger"] .cs-option:hover,
+.custom-select-panel[aria-labelledby="workspaceBrowserSelect-cs-trigger"] .cs-option:hover,
+.custom-select-panel[aria-labelledby="workspaceSelect-cs-trigger"] .cs-option.hover,
+.custom-select-panel[aria-labelledby="workspaceCustomFolderSelect-cs-trigger"] .cs-option.hover,
+.custom-select-panel[aria-labelledby="workspaceBrowserSelect-cs-trigger"] .cs-option.hover {
+  background: color-mix(in srgb, var(--surface-hover) 72%, transparent);
+}
+
+.custom-select-panel[aria-labelledby="workspaceSelect-cs-trigger"] .cs-option.selected,
+.custom-select-panel[aria-labelledby="workspaceCustomFolderSelect-cs-trigger"] .cs-option.selected,
+.custom-select-panel[aria-labelledby="workspaceBrowserSelect-cs-trigger"] .cs-option.selected {
+  background: color-mix(in srgb, var(--accent) 8%, var(--sidebar-glass-fallback));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sidebar-tab-shell: color-mix(in srgb, var(--bg-tertiary) 66%, var(--border) 34%);
+    --sidebar-tab-selected: color-mix(in srgb, var(--bg-secondary) 86%, var(--color-action-container));
+    --composer-flat-fill: color-mix(in srgb, #16161b 85%, transparent);
+  }
+}
+
+:root[data-theme="dark"] {
+  --sidebar-tab-shell: color-mix(in srgb, var(--bg-tertiary) 66%, var(--border) 34%);
+  --sidebar-tab-selected: color-mix(in srgb, var(--bg-secondary) 86%, var(--color-action-container));
+  --composer-flat-fill: color-mix(in srgb, #16161b 85%, transparent);
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .input-area {
+    background: transparent;
+  }
+
+  /* Composer: balanced frost that blurs background text enough to avoid read-through
+     interference while keeping the glass feel. */
+  .input-wrapper {
+    background: var(--composer-flat-fill);
+    /* Android's composer has no perimeter stroke; depth comes from the
+       surface value and ambient shadow instead of a card outline. */
+    border-color: transparent;
+    box-shadow: var(--shadow-glass);
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.77)) saturate(1.08);
+    backdrop-filter: blur(calc(var(--glass-blur) * 0.77)) saturate(1.08);
+  }
+
+  .input-area.is-file-drag-over .input-wrapper {
+    background: color-mix(in srgb, var(--focus-border) 10%, color-mix(in srgb, var(--surface-glass-strong-base) 72%, transparent));
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--focus-border) 16%, transparent),
+      var(--shadow-glass);
+  }
+
+  .delivery-card-files {
+    background:
+      var(--glass-sheen),
+      color-mix(in srgb, var(--surface-glass-strong-base) 68%, transparent);
+    border-color: var(--glass-edge);
+    box-shadow: var(--shadow-glass);
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.77)) saturate(1.08);
+    backdrop-filter: blur(calc(var(--glass-blur) * 0.77)) saturate(1.08);
+  }
+
+  .input-actions-row {
+    background: color-mix(in srgb, var(--bg-secondary) 28%, transparent);
+    box-shadow: inset 0 1px 0 var(--glass-separator);
+  }
+
+  /* Sent bubbles use the composer's frost parameters (~68% base, ~17px blur,
+     saturate 1.08) so both surfaces read as the same material. The tint base stays
+     --surface-glass-base (user-bubble derived) rather than the composer's
+     strong-base: in light mode --user-bubble carries the bubble's only separation
+     from the white chat canvas, and swapping it would erase the bubble outline. */
+  .msg-user-bubble {
+    background:
+      var(--glass-sheen),
+      color-mix(in srgb, var(--surface-glass-base) 68%, transparent);
+    border-color: var(--glass-edge);
+    box-shadow: var(--shadow-glass);
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.77)) saturate(1.08);
+    backdrop-filter: blur(calc(var(--glass-blur) * 0.77)) saturate(1.08);
+  }
+
+  .msg-user-bubble.msg-failed {
+    border-color: var(--failed-message-border);
+  }
+
+  .msg-user.msg-user--failed .msg-user-bubble.msg-failed {
+    border-color: transparent;
+  }
+
+  /* Live Bar is a status surface, not a second composer. Keep the state tint
+     legible and stable while avoiding another blur layer over the transcript. */
+  .live-bar-slot .live-bar[data-state] {
+    background: color-mix(
+      in srgb,
+      var(--live-bar-orb-color, var(--status-running)) 10%,
+      var(--surface-soft, var(--bg-secondary))
+    );
+    box-shadow: var(--shadow-soft, 0 8px 24px rgba(16, 21, 39, 0.08));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  /* Queued steer rows above the composer share the same soft surface language. */
+  .queued-steer-row {
+    background:
+      var(--glass-sheen),
+      var(--surface-glass-strong);
+    box-shadow: var(--shadow-glass);
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.82)) saturate(1.1);
+    backdrop-filter: blur(calc(var(--glass-blur) * 0.82)) saturate(1.1);
+  }
+  .queued-steer-row--waiting {
+    background:
+      var(--glass-sheen),
+      color-mix(in srgb, var(--surface-glass-strong) 88%, var(--bg) 12%);
+  }
+
+  .sidebar-workspace,
+  .sidebar-search-input,
+  .sidebar-workspace-popover,
+  .sidebar-workspace-browser,
+  .sidebar-workspace-select,
+  .sidebar-workspace-browser-select,
+  .sidebar-workspace .custom-select-wrap.cs-full-bg .cs-trigger,
+  .session-item.active,
+  .custom-select-panel[aria-labelledby="workspaceSelect-cs-trigger"],
+  .custom-select-panel[aria-labelledby="workspaceCustomFolderSelect-cs-trigger"],
+  .custom-select-panel[aria-labelledby="workspaceBrowserSelect-cs-trigger"] {
+    background:
+      var(--glass-sheen),
+      var(--sidebar-glass-fill);
+    box-shadow: var(--sidebar-glass-shadow);
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.77)) saturate(1.08);
+    backdrop-filter: blur(calc(var(--glass-blur) * 0.77)) saturate(1.08);
+  }
+
+  .sidebar-workspace-popover,
+  .header-overflow-menu,
+  .custom-select-panel,
+  .composer-add-menu,
+  .composer-runtime-menu,
+  .composer-permission-menu {
+    background:
+      var(--glass-sheen),
+      var(--sidebar-glass-menu-fill);
+    box-shadow: var(--sidebar-glass-floating-shadow);
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.05)) saturate(1.12);
+    backdrop-filter: blur(calc(var(--glass-blur) * 1.05)) saturate(1.12);
+  }
+
+  .header-more-btn:not([hidden]),
+  .right-sidebar-back,
+  .right-sidebar-close,
+  .right-sidebar-big-button {
+    background:
+      var(--glass-sheen),
+      var(--sidebar-glass-fill);
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.77)) saturate(1.08);
+    backdrop-filter: blur(calc(var(--glass-blur) * 0.77)) saturate(1.08);
+  }
+
+  .header-more-btn:hover,
+  .right-sidebar-back:hover,
+  .right-sidebar-close:hover,
+  .right-sidebar-big-button:hover,
+  .header-overflow-menu-item:hover {
+    background:
+      var(--glass-sheen),
+      var(--sidebar-glass-hover);
+  }
+
+  @media (max-width: 767px) {
+    .right-sidebar {
+      background:
+        linear-gradient(to bottom, color-mix(in srgb, var(--frost-tint) 68%, transparent) 0%, transparent 32%),
+        var(--chat-area-bg, var(--bg));
+    }
+
+    .right-sidebar-header {
+      -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.64)) saturate(1.06);
+      backdrop-filter: blur(calc(var(--glass-blur) * 0.64)) saturate(1.06);
+    }
+  }
+
+  .session-item.active {
+    box-shadow: var(--sidebar-glass-shadow);
+  }
+
+  .sidebar-workspace:hover,
+  .sidebar-workspace.is-expanded,
+  .sidebar-search-input:hover,
+  .sidebar-workspace-select:hover,
+  .sidebar-workspace-browser-select:hover,
+  .sidebar-workspace .custom-select-wrap.cs-full-bg .cs-trigger:hover,
+  .session-item.active:hover {
+    background:
+      var(--glass-sheen),
+      var(--sidebar-glass-hover);
+  }
+
+  .sidebar-search-input:focus,
+  .sidebar-workspace-select:focus,
+  .sidebar-workspace-browser-select:focus,
+  .sidebar-workspace .custom-select-wrap.cs-full-bg.open .cs-trigger {
+    background:
+      var(--glass-sheen),
+      var(--sidebar-glass-focus);
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--focus-border) 16%, transparent),
+      inset 0 0 0 1px var(--glass-edge);
+  }
+}
+
+.sidebar,
+.sidebar *,
+.custom-select-panel[aria-labelledby="workspaceSelect-cs-trigger"],
+.custom-select-panel[aria-labelledby="workspaceSelect-cs-trigger"] *,
+.custom-select-panel[aria-labelledby="workspaceCustomFolderSelect-cs-trigger"],
+.custom-select-panel[aria-labelledby="workspaceCustomFolderSelect-cs-trigger"] *,
+.custom-select-panel[aria-labelledby="workspaceBrowserSelect-cs-trigger"],
+.custom-select-panel[aria-labelledby="workspaceBrowserSelect-cs-trigger"] * {
+  box-shadow: none !important;
+}
+
+.sidebar .sidebar-tabs,
+.sidebar .sidebar-tabs::before,
+.sidebar .sidebar-workspace,
+.sidebar .sidebar-search-input,
+.sidebar .sidebar-workspace-popover,
+.sidebar .sidebar-workspace-browser,
+.sidebar .sidebar-workspace-select,
+.sidebar .sidebar-workspace-browser-select,
+.sidebar .sidebar-workspace .custom-select-wrap.cs-full-bg .cs-trigger,
+.sidebar .session-item.active {
+  box-shadow: var(--sidebar-glass-shadow) !important;
+}
+
+.custom-select-panel[aria-labelledby="workspaceSelect-cs-trigger"],
+.custom-select-panel[aria-labelledby="workspaceCustomFolderSelect-cs-trigger"],
+.custom-select-panel[aria-labelledby="workspaceBrowserSelect-cs-trigger"] {
+  box-shadow: var(--sidebar-glass-floating-shadow) !important;
+}
+
+.sidebar-search-input:focus,
+.sidebar-workspace-select:focus,
+.sidebar-workspace-browser-select:focus,
+.sidebar-workspace .custom-select-wrap.cs-full-bg.open .cs-trigger {
+  outline: 2px solid color-mix(in srgb, var(--focus-border) 42%, transparent);
+  outline-offset: 1px;
+}
+
+.sidebar .sidebar-search-shell .sidebar-search-input,
+.sidebar .sidebar-search-shell .sidebar-search-input:hover,
+.sidebar .sidebar-search-shell .sidebar-search-input:focus {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none !important;
+}
+
+/* Navigation shell keeps glass functional and removes legacy framed surfaces. */
+.sidebar .sidebar-primary-nav .sidebar-workspace,
+.sidebar .sidebar-primary-nav .sidebar-workspace-summary,
+.sidebar .sidebar-primary-nav .sidebar-workspace:not(.is-expanded),
+.sidebar .sidebar-primary-nav .sidebar-workspace:not(.is-expanded) .sidebar-workspace-summary,
+.sidebar .sidebar-icon-btn,
+.sidebar .sidebar-filter-btn,
+.sidebar .sidebar-account-btn,
+.sidebar .sidebar-agent-btn,
+.sidebar .sidebar-new-chat-btn {
+  box-shadow: none !important;
+}
+
+.sidebar .sidebar-primary-nav .sidebar-workspace,
+.sidebar .sidebar-primary-nav .sidebar-workspace:not(.is-expanded) {
+  background: transparent !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.sidebar .sidebar-icon-btn,
+.sidebar .sidebar-filter-btn,
+.sidebar .sidebar-account-btn,
+.sidebar .sidebar-agent-btn,
+.sidebar .sidebar-search-shell {
+  background: var(--sidebar-control-fill);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.62)) saturate(1.05);
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.62)) saturate(1.05);
+}
+
+.sidebar .sidebar-workspace-popover,
+.sidebar .sidebar-account-popover {
+  background: var(--sidebar-glass-menu-fill);
+  box-shadow: var(--sidebar-glass-floating-shadow) !important;
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.76)) saturate(1.08);
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.76)) saturate(1.08);
+}
+
+.sidebar .sidebar-bottom-frost {
+  box-shadow: none !important;
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  backdrop-filter: blur(10px) saturate(1.02);
+}
+
+.sidebar .session-item.active {
+  background: color-mix(in srgb, var(--accent) 8%, var(--sidebar-glass-fill));
+  box-shadow: none !important;
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.54)) saturate(1.04);
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.54)) saturate(1.04);
+}
+
+@media (max-width: 767px) {
+  .sidebar .sidebar-workspace-popover {
+    background: color-mix(in srgb, var(--sidebar-glass-base) 72%, var(--bg) 28%);
+    box-shadow: 0 -18px 44px color-mix(in srgb, var(--text) 13%, transparent) !important;
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.82)) saturate(1.08);
+    backdrop-filter: blur(calc(var(--glass-blur) * 0.82)) saturate(1.08);
+  }
+
+  .sidebar .sidebar-workspace-popover .cs-trigger,
+  .sidebar .sidebar-workspace-browser-actions .btn {
+    border: 0;
+    background: color-mix(in srgb, var(--bg-secondary) 66%, transparent);
+    box-shadow: none !important;
+  }
+
+  .sidebar .sidebar-workspace-confirm {
+    border: 0;
+    background: var(--accent);
+    color: var(--bg-secondary);
+    box-shadow: none !important;
+  }
+
+  .sidebar .sidebar-workspace-popover .cs-trigger:hover,
+  .sidebar .sidebar-workspace-browser-actions .btn:hover {
+    background: color-mix(in srgb, var(--surface-hover) 74%, transparent);
+  }
+
+  .sidebar .sidebar-workspace-confirm:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 92%, var(--bg-secondary));
+  }
+}
+
+/* Mobile visual reset: one deliberate glass object, not a collection of
+   individually elevated controls. The composer gets the material language;
+   transcript and navigation stay quiet so work remains the focal point. */
+@media (max-width: 767px) {
+  :root {
+    --composer-glass-fill: color-mix(in srgb, var(--sys-surface-container-low, var(--bg-tertiary)) 82%, var(--sys-surface, var(--bg)) 18%);
+    --composer-glass-shadow:
+      0 14px 32px color-mix(in srgb, var(--text) 11%, transparent);
+  }
+
+  .input-area { background: transparent; }
+  .input-area::before {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .input-wrapper {
+    isolation: isolate;
+    overflow: hidden;
+    border: 1px solid transparent;
+    border-radius: 20px !important;
+    background: var(--composer-glass-fill);
+    box-shadow: var(--composer-glass-shadow);
+    -webkit-backdrop-filter: blur(22px) saturate(1.16);
+    backdrop-filter: blur(22px) saturate(1.16);
+  }
+  .input-wrapper::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    /* Keep the frost uniform in both compact and expanded states. The
+       material comes from the translucent fill + backdrop blur; a directional
+       sheen makes the compact pill read like a different component. */
+    background: transparent;
+  }
+  .input-row { padding: 17px 18px 5px; }
+  .input-actions-row { padding: 3px 8px 7px; background: transparent; box-shadow: none; }
+  .composer-action-btn:not(.message-image-viewer__action),
+  .composer-runtime-btn,
+  .composer-permission-btn { background: transparent; box-shadow: none; }
+  .composer-action-btn:not(.message-image-viewer__action):hover,
+  .composer-runtime-btn:hover,
+  .composer-runtime-btn[aria-expanded="true"],
+  .composer-permission-btn:hover,
+  .composer-permission-btn[aria-expanded="true"] { background: color-mix(in srgb, var(--text) 7%, transparent); box-shadow: none; }
+  .composer-runtime-btn,
+  .composer-permission-btn { min-height: 38px; padding: 0 8px; color: var(--text-secondary); font-size: 13px; }
+  .msg-user-bubble {
+    background: color-mix(in srgb, var(--user-bubble) 90%, var(--bg-secondary));
+    border-color: color-mix(in srgb, var(--border) 72%, transparent);
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (max-width: 767px) {
+  .input-wrapper {
+    background: var(--composer-flat-fill);
+  }
+}
+
+/* The edit-resend state keeps the normal composer material. Only the Update
+   icon and the nearby close affordance communicate the transient mode. */
+.input-wrapper.is-edit-resend {
+  overflow: visible;
+}

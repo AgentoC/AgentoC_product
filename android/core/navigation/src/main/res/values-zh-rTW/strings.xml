@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="navigation_projects">專案</string>
+    <string name="navigation_chat">對話</string>
+    <string name="navigation_home">首頁</string>
+    <string name="navigation_settings">設定</string>
+    <string name="navigation_new_session">新增對話</string>
+    <string name="navigation_new_project">新增專案</string>
+</resources>

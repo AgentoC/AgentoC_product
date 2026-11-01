@@ -1,0 +1,62 @@
+#!/bin/sh
+set -eu
+
+SERVICE_USER_FILE=/etc/agentoc/service-user
+
+trim_service_user() {
+  printf '%s' "${1:-}" | tr -d '[:space:]'
+}
+
+resolve_service_user() {
+  user="$(trim_service_user "${AGENTOC_SERVICE_USER:-}")"
+  if [ -z "$user" ] && [ -r "$SERVICE_USER_FILE" ]; then
+    user="$(sed -n '1p' "$SERVICE_USER_FILE" | tr -d '[:space:]')"
+  fi
+  [ -n "$user" ] || user=agentoc
+  case "$user" in
+    root|''|*[!A-Za-z0-9_.@-]*)
+      echo "Invalid AgentoC service user: $user" >&2
+      exit 1
+      ;;
+  esac
+  getent passwd "$user" >/dev/null 2>&1 || {
+    echo "AgentoC service user does not exist: $user" >&2
+    exit 1
+  }
+  printf '%s\n' "$user"
+}
+
+service_user="$(resolve_service_user)"
+service_home="$(getent passwd "$service_user" | awk -F: '{ print $6 }' || true)"
+[ -n "$service_home" ] || service_home=/var/lib/agentoc
+
+export HOME="$service_home"
+export AGENTOC_CONFIG_DIR=/var/lib/agentoc/config
+export AGENTOC_WORK_ROOT_DIR=/var/lib/agentoc/workspace
+export AGENTOC_CHAT_BASE_URL=http://127.0.0.1:7690
+export PATH=/opt/agentoc/runtime:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+if [ -r /etc/agentoc/connectivity.env ]; then
+  set -a
+  . /etc/agentoc/connectivity.env
+  set +a
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Administrator authorization is required." >&2
+  exit 1
+fi
+
+exec runuser -u "$service_user" -- env \
+  HOME="$HOME" \
+  AGENTOC_SESSION_ID="${AGENTOC_SESSION_ID:-}" \
+  AGENTOC_RUN_ID="${AGENTOC_RUN_ID:-}" \
+  AGENTOC_PROJECT_ROOT="${AGENTOC_PROJECT_ROOT:-}" \
+  AGENTOC_SESSION_CONTROL_TOKEN="${AGENTOC_SESSION_CONTROL_TOKEN:-}" \
+  AGENTOC_SESSION_CONTROL_RENEWAL_TOKEN="${AGENTOC_SESSION_CONTROL_RENEWAL_TOKEN:-}" \
+  AGENTOC_SESSION_CONTROL_RENEWAL_TOKEN_FILE="${AGENTOC_SESSION_CONTROL_RENEWAL_TOKEN_FILE:-}" \
+  AGENTOC_SESSION_CONTROL_RUN_ID="${AGENTOC_SESSION_CONTROL_RUN_ID:-}" \
+  AGENTOC_SESSION_CONTROL_SESSION_ID="${AGENTOC_SESSION_CONTROL_SESSION_ID:-}" \
+  AGENTOC_SESSION_CONTROL_TURN_ID="${AGENTOC_SESSION_CONTROL_TURN_ID:-}" \
+  AGENTOC_P2P_SIGNALING_URL="${AGENTOC_P2P_SIGNALING_URL:-}" \
+  /opt/agentoc/runtime/node /opt/agentoc/app/cli.js "$@"

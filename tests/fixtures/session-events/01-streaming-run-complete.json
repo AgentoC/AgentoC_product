@@ -1,0 +1,93 @@
+{
+  "id": "streaming-run-complete",
+  "description": "A full HTTP persistent timeline for one run: user message, a thinking block, an operation that starts running then completes (same operationId — whole-replace), and the final assistant message. Pins monotonic seq, boundary-seq cursor advance, and renderKey uniqueness.",
+  "sessionId": "sess-demo-001",
+  "note": "Contract-shaped fixture, not a byte-exact server capture. seq/type/cursor/renderKey mechanics authoritative; payloads illustrative. text_delta is intentionally absent — it is transient and never appears in the persistent HTTP set (see fixture 03).",
+  "initialRenderedLatestSeq": 0,
+  "events": [
+    {
+      "seq": 1,
+      "id": "evt_000001",
+      "type": "message",
+      "role": "user",
+      "timestamp": 1700000000000,
+      "runId": "run_abc",
+      "content": "Summarize the Q3 report."
+    },
+    {
+      "seq": 2,
+      "id": "evt_000002",
+      "type": "thinking_block",
+      "role": "assistant",
+      "timestamp": 1700000001000,
+      "runId": "run_abc",
+      "seq": 2,
+      "blockStartSeq": 2,
+      "blockEndSeq": 2,
+      "state": "completed",
+      "label": "Analyzing",
+      "hiddenEventCount": 3,
+      "toolNames": ["read_file"]
+    },
+    {
+      "seq": 3,
+      "id": "evt_000003",
+      "type": "operation",
+      "role": "assistant",
+      "timestamp": 1700000002000,
+      "runId": "run_abc",
+      "operationId": "operation:run:abc",
+      "startSeq": 3,
+      "endSeq": 3,
+      "state": "running",
+      "kind": "working",
+      "detail": "Reading report-q3.pdf",
+      "provider": "claude",
+      "runtimeFamily": "claude"
+    },
+    {
+      "seq": 4,
+      "id": "evt_000004",
+      "type": "operation",
+      "role": "assistant",
+      "timestamp": 1700000003000,
+      "runId": "run_abc",
+      "operationId": "operation:run:abc",
+      "startSeq": 3,
+      "endSeq": 4,
+      "state": "completed",
+      "kind": "working",
+      "detail": "Reading report-q3.pdf",
+      "provider": "claude",
+      "runtimeFamily": "claude",
+      "exitCode": 0
+    },
+    {
+      "seq": 5,
+      "id": "evt_000005",
+      "type": "message",
+      "role": "assistant",
+      "timestamp": 1700000004000,
+      "runId": "run_abc",
+      "content": "Here is the Q3 summary: revenue grew 12%…"
+    }
+  ],
+  "expected": {
+    "nextRenderedLatestSeq": 5,
+    "renderKeys": [
+      "1:message",
+      "2:thinking_block:completed",
+      "3:operation:operation:run:abc",
+      "4:operation:operation:run:abc",
+      "5:message"
+    ],
+    "operationReplaceNote": "seq 3 and seq 4 share operationId 'operation:run:abc' — the view treats the later event as a whole-replace of the same operation (span startSeq..endSeq widens, state running→completed), not an append.",
+    "deltaAfterSeq": {
+      "afterSeq": 5,
+      "events": [],
+      "operationUpdates": [],
+      "resetRequired": false,
+      "latestSeq": 5
+    }
+  }
+}

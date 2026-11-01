@@ -1,0 +1,87 @@
+{
+  "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEACvozuPqWqiAyHlBOA9b72EeF3iHIS0S5tfsm9f2nErs=\n-----END PUBLIC KEY-----\n",
+  "contract": {
+    "contractVersion": 2,
+    "instanceId": "rli_fixture_001",
+    "deviceId": "rdev_fixture_001",
+    "enrollmentKind": "account-join",
+    "connectionMode": "turn-first",
+    "issuedAt": "2026-09-02T00:00:00.000Z",
+    "expiresAt": "2099-01-01T00:00:00.000Z",
+    "candidates": [
+      {
+        "id": "cand_fixture_turn",
+        "kind": "turn",
+        "provider": "cloudflare-realtime",
+        "endpoint": "turn:turn.example.com:3478",
+        "priority": 120,
+        "expiresAt": "2099-01-01T00:00:00.000Z",
+        "requiresUserConsent": false,
+        "metadata": {
+          "appTrafficOnly": true,
+          "carrier": "cloudflare-realtime-turn",
+          "iceServers": [
+            {
+              "urls": "turn:turn.example.com:3478",
+              "username": "fixture-user",
+              "password": "fixture-pass"
+            }
+          ]
+        }
+      }
+    ],
+    "turn": {
+      "provider": "cloudflare-realtime",
+      "endpoint": "turn:turn.example.com:3478",
+      "iceServers": [
+        {
+          "urls": "turn:turn.example.com:3478",
+          "username": "fixture-user",
+          "password": "fixture-pass"
+        }
+      ],
+      "expiresAt": "2099-01-01T00:00:00.000Z",
+      "transport": "turn",
+      "appTrafficOnly": true,
+      "credentialScope": "device-access",
+      "source": "turn-broker",
+      "connectionId": "turn_fixture",
+      "authorization": {
+        "policyVersion": "turn-account-quota-v1",
+        "authorized": true,
+        "status": "authorized",
+        "reasonCode": "turn_authorized",
+        "plan": "free",
+        "maxDevices": 1,
+        "activeDeviceCount": 1
+      }
+    },
+    "turnAuthorization": {
+      "policyVersion": "turn-account-quota-v1",
+      "authorized": true,
+      "status": "authorized",
+      "reasonCode": "turn_authorized",
+      "plan": "free",
+      "maxDevices": 1,
+      "activeDeviceCount": 1
+    },
+    "initialCarrier": {
+      "candidateId": "cand_fixture_turn",
+      "kind": "turn",
+      "provider": "cloudflare-realtime",
+      "endpoint": "turn:turn.example.com:3478"
+    },
+    "upgrade": {
+      "strategy": "probe-after-bootstrap",
+      "targets": ["webrtc"],
+      "retainCurrentWhenNoP2PPath": true
+    },
+    "fallback": null,
+    "signature": {
+      "algorithm": "ed25519",
+      "keyId": "fixture-key",
+      "signedAt": "2026-09-02T00:00:01.000Z",
+      "value": "0MoHaUXGjSqgaUMHRfXiwR8tPgnDFJbdw_YFGE7ND3Ok0TxvbdmN9Rq6WSQUymtIpsEGydWnjjrdA8MAGemgAQ"
+    }
+  }
+}

@@ -1,0 +1,1076 @@
+import { createHash, randomBytes } from 'crypto';
+
+import { CHAT_TRIGGERS_FILE } from '../lib/config.mjs';
+import { appendEvent } from './history.mjs';
+import { statusEvent } from './normalizer.mjs';
+import { createSerialTaskQueue, readJson, statOrNull, writeJsonAtomic } from './fs-utils.mjs';
+import { getSession, submitHttpMessage } from './session-manager.mjs';
+
+const DEFAULT_TRIGGER_POLL_MS = 15000;
+const MAX_TRIGGER_IDLE_DELAY_MS = 15 * 60 * 1000;
+const MIN_TRIGGER_POLL_MS = 250;
+const DELIVERY_CLAIM_TIMEOUT_MS = 2 * 60 * 1000;
+const MAX_DELIVERY_ATTEMPTS = 3;
+const RETRY_DELAYS_MS = [30 * 1000, 2 * 60 * 1000, 10 * 60 * 1000];
+const TRIGGER_STATUS_PENDING = 'pending';
+const TRIGGER_STATUS_DELIVERING = 'delivering';
+const TRIGGER_STATUS_DELIVERED = 'delivered';
+const TRIGGER_STATUS_FAILED = 'failed';
+const TRIGGER_STATUS_CANCELLED = 'cancelled';
+const TRIGGER_TYPE_AT_TIME = 'at_time';
+const TRIGGER_TYPE_EVENT = 'event';
+const TRIGGER_ACTION_SESSION_MESSAGE = 'session_message';
+// `deliveryMode` records the observed delivery result (run/queued/status).
+// Keep the intended input semantics separate so a control-plane event can
+// never accidentally become a user transcript message.
+const TRIGGER_INPUT_MODE_USER_MESSAGE = 'user_message';
+const TRIGGER_INPUT_MODE_INTERNAL_CONTINUATION = 'internal_continuation';
+const TRIGGER_INPUT_MODE_STATUS_NOTIFICATION = 'status_notification';
+const TRIGGER_INPUT_MODES = new Set([
+  TRIGGER_INPUT_MODE_USER_MESSAGE,
+  TRIGGER_INPUT_MODE_INTERNAL_CONTINUATION,
+  TRIGGER_INPUT_MODE_STATUS_NOTIFICATION,
+]);
+const TRIGGER_EVENT_TYPES = new Set([
+  'run_terminal',
+  'collaboration_terminal',
+  'process_terminal',
+  'process_output',
+  'session_event',
+]);
+const MIN_RECURRENCE_INTERVAL_MS = 100;
+const MAX_RECURRENCE_INTERVAL_MS = 365 * 24 * 60 * 60 * 1000;
+const MAX_EVENT_PAYLOAD_BYTES = 16 * 1024;
+const MAX_EVENT_KEYS = 64;
+const MAX_DEDUPE_KEY_CHARS = 256;
+
+let triggersCache = null;
+let triggersCacheMtimeMs = 0;
+let triggerSchedulerTimer = null;
+let triggerTickPromise = null;
+let triggerSchedulerOptions = {};
+
+const triggerMutationQueue = createSerialTaskQueue();
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function trimString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeBoolean(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  }
+  return fallback;
+}
+
+function validTriggerId(value) {
+  return /^trg_[a-f0-9]{24}$/.test(trimString(value));
+}
+
+function createTriggerId() {
+  return `trg_${randomBytes(12).toString('hex')}`;
+}
+
+function buildTriggerRequestId(triggerId) {
+  return `trigger:${triggerId}`;
+}
+
+function normalizeTimestamp(value) {
+  const normalized = trimString(value);
+  if (!normalized) return '';
+  const parsed = Date.parse(normalized);
+  if (!Number.isFinite(parsed)) return '';
+  return new Date(parsed).toISOString();
+}
+
+function normalizeEventType(value) {
+  const normalized = trimString(value).toLowerCase();
+  return TRIGGER_EVENT_TYPES.has(normalized) ? normalized : '';
+}
+
+function normalizeInputMode(value) {
+  const normalized = trimString(value).toLowerCase();
+  return TRIGGER_INPUT_MODES.has(normalized)
+    ? normalized
+    : TRIGGER_INPUT_MODE_USER_MESSAGE;
+}
+
+function normalizeRecurrence(value) {
+  const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const type = trimString(raw.type || raw.kind).toLowerCase();
+  if (!type || type === 'once') return null;
+  if (type !== 'interval') return null;
+  const intervalMs = Number(raw.intervalMs ?? raw.everyMs);
+  if (!Number.isInteger(intervalMs)
+      || intervalMs < MIN_RECURRENCE_INTERVAL_MS
+      || intervalMs > MAX_RECURRENCE_INTERVAL_MS) return null;
+  const maxOccurrences = Number(raw.maxOccurrences);
+  return {
+    type: 'interval',
+    intervalMs,
+    ...(Number.isInteger(maxOccurrences) && maxOccurrences > 0 ? { maxOccurrences } : {}),
+  };
+}
+
+function normalizeEventFilter(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const result = {};
+  for (const [key, raw] of Object.entries(value).slice(0, 24)) {
+    if (!/^[A-Za-z][A-Za-z0-9_.-]{0,80}$/.test(key)) continue;
+    if (['string', 'number', 'boolean'].includes(typeof raw)) result[key] = raw;
+  }
+  return result;
+}
+
+function clipEventPayload(value) {
+  let serialized = '{}';
+  try { serialized = JSON.stringify(value && typeof value === 'object' ? value : {}); } catch {}
+  if (Buffer.byteLength(serialized, 'utf8') > MAX_EVENT_PAYLOAD_BYTES) {
+    serialized = `${serialized.slice(0, MAX_EVENT_PAYLOAD_BYTES - 32)}...[truncated]`;
+  }
+  try { return JSON.parse(serialized); } catch { return { truncated: true }; }
+}
+
+function eventKey(eventType, payload = {}) {
+  const explicit = trimString(payload?.eventId || payload?.id || payload?.eventKey);
+  if (explicit) return `${eventType}:${explicit}`;
+  return `${eventType}:${createHash('sha256').update(JSON.stringify(payload || {}), 'utf8').digest('hex').slice(0, 32)}`;
+}
+
+function eventFilterMatches(filter, payload = {}) {
+  return Object.entries(filter || {}).every(([key, expected]) => {
+    const actual = key.split('.').reduce((value, part) => (
+      value && typeof value === 'object' ? value[part] : undefined
+    ), payload);
+    return actual === expected;
+  });
+}
+
+function requireTimestamp(value, fieldName) {
+  const normalized = normalizeTimestamp(value);
+  if (!normalized) {
+    throw new Error(`${fieldName} must be a valid timestamp`);
+  }
+  return normalized;
+}
+
+function normalizeTriggerStatus(value, fallback = TRIGGER_STATUS_PENDING) {
+  const normalized = trimString(value).toLowerCase();
+  if ([
+    TRIGGER_STATUS_PENDING,
+    TRIGGER_STATUS_DELIVERING,
+    TRIGGER_STATUS_DELIVERED,
+    TRIGGER_STATUS_FAILED,
+    TRIGGER_STATUS_CANCELLED,
+  ].includes(normalized)) {
+    return normalized;
+  }
+  return fallback;
+}
+
+function parsePositiveInteger(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function resolveTriggerPollMs(value = process.env.AGENTOC_TRIGGER_POLL_MS) {
+  return Math.max(MIN_TRIGGER_POLL_MS, parsePositiveInteger(value, DEFAULT_TRIGGER_POLL_MS));
+}
+
+function normalizeStoredTrigger(value) {
+  const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const triggerType = trimString(raw.triggerType).toLowerCase() === TRIGGER_TYPE_EVENT
+    ? TRIGGER_TYPE_EVENT
+    : TRIGGER_TYPE_AT_TIME;
+  const scheduledAt = normalizeTimestamp(raw.scheduledAt);
+  const sessionId = trimString(raw.sessionId);
+  const text = trimString(raw.text);
+  if ((!scheduledAt && triggerType !== TRIGGER_TYPE_EVENT) || !sessionId || !text) {
+    return null;
+  }
+
+  const status = normalizeTriggerStatus(raw.status, TRIGGER_STATUS_PENDING);
+  const enabled = normalizeBoolean(
+    raw.enabled,
+    status !== TRIGGER_STATUS_DELIVERED && status !== TRIGGER_STATUS_CANCELLED,
+  );
+  const createdAt = normalizeTimestamp(raw.createdAt) || nowIso();
+  const updatedAt = normalizeTimestamp(raw.updatedAt) || createdAt;
+  const id = validTriggerId(raw.id) ? raw.id : createTriggerId();
+  const requestId = trimString(raw.requestId) || buildTriggerRequestId(id);
+  const dedupeKey = trimString(raw.dedupeKey).slice(0, MAX_DEDUPE_KEY_CHARS);
+
+  return {
+    id,
+    triggerType,
+    actionType: TRIGGER_ACTION_SESSION_MESSAGE,
+    status,
+    enabled,
+    title: trimString(raw.title),
+    sessionId,
+    scheduledAt: scheduledAt || '',
+    text,
+    tool: trimString(raw.tool),
+    model: trimString(raw.model),
+    effort: trimString(raw.effort),
+    thinking: normalizeBoolean(raw.thinking, false),
+    inputMode: normalizeInputMode(raw.inputMode),
+    requestId,
+    dedupeKey,
+    createdAt,
+    updatedAt,
+    claimedAt: normalizeTimestamp(raw.claimedAt),
+    lastAttemptAt: normalizeTimestamp(raw.lastAttemptAt),
+    nextAttemptAt: normalizeTimestamp(raw.nextAttemptAt),
+    deliveredAt: normalizeTimestamp(raw.deliveredAt),
+    lastErrorAt: normalizeTimestamp(raw.lastErrorAt),
+    lastError: trimString(raw.lastError),
+    deliveryAttempts: Math.max(0, parsePositiveInteger(raw.deliveryAttempts, 0)),
+    runId: trimString(raw.runId),
+    deliveryMode: trimString(raw.deliveryMode),
+    eventType: normalizeEventType(raw.eventType),
+    eventFilter: normalizeEventFilter(raw.eventFilter),
+    recurrence: normalizeRecurrence(raw.recurrence || raw.schedule),
+    occurrence: Math.max(0, Number.parseInt(raw.occurrence, 10) || 0),
+    lastDeliveredAt: normalizeTimestamp(raw.lastDeliveredAt),
+    pendingEventKey: trimString(raw.pendingEventKey),
+    pendingEvent: raw.pendingEvent && typeof raw.pendingEvent === 'object'
+      ? clipEventPayload(raw.pendingEvent)
+      : null,
+    deliveredEventKeys: Array.isArray(raw.deliveredEventKeys)
+      ? raw.deliveredEventKeys.map(trimString).filter(Boolean).slice(-MAX_EVENT_KEYS)
+      : [],
+    repeat: raw.repeat === true,
+  };
+}
+
+function normalizeStoredTriggers(entries) {
+  const list = [];
+  let changed = false;
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    const normalized = normalizeStoredTrigger(entry);
+    if (!normalized) {
+      changed = true;
+      continue;
+    }
+    // Versions before semantic trigger delivery created this exact private
+    // trigger for every collaboration.  It was an implementation detail, not
+    // an owner-authored automation, and it reinjected terminal state through
+    // the user message path.  Disable it once during normalization; explicit
+    // owner-created collaboration event triggers remain untouched.
+    const legacyCollaborationWake = normalized.triggerType === TRIGGER_TYPE_EVENT
+      && normalized.eventType === 'collaboration_terminal'
+      && normalized.dedupeKey.startsWith('collaboration-terminal:');
+    if (legacyCollaborationWake && (normalized.enabled || normalized.status === TRIGGER_STATUS_DELIVERING)) {
+      normalized.enabled = false;
+      normalized.status = TRIGGER_STATUS_CANCELLED;
+      normalized.claimedAt = '';
+      normalized.nextAttemptAt = '';
+      normalized.pendingEventKey = '';
+      normalized.pendingEvent = null;
+      normalized.lastError = 'Retired legacy collaboration wake; collaboration status now uses the dedicated control channel.';
+      normalized.lastErrorAt = nowIso();
+      normalized.updatedAt = nowIso();
+      changed = true;
+    }
+    if (JSON.stringify(normalized) !== JSON.stringify(entry)) {
+      changed = true;
+    }
+    list.push(normalized);
+  }
+  return { list, changed };
+}
+
+async function saveTriggersUnlocked(triggers) {
+  triggersCache = Array.isArray(triggers) ? triggers : [];
+  await writeJsonAtomic(CHAT_TRIGGERS_FILE, triggersCache);
+  const stats = await statOrNull(CHAT_TRIGGERS_FILE);
+  triggersCacheMtimeMs = stats?.mtimeMs || Date.now();
+  // A write may introduce an earlier due time or a retry deadline than the
+  // timer currently installed. Replace that timer so persistence also
+  // re-arms the scheduler immediately.
+  rescheduleTriggerWake(0);
+}
+
+async function loadTriggers() {
+  const stats = await statOrNull(CHAT_TRIGGERS_FILE);
+  const mtimeMs = stats?.mtimeMs || 0;
+  if (triggersCache && triggersCacheMtimeMs === mtimeMs) {
+    return triggersCache;
+  }
+
+  const parsed = await readJson(CHAT_TRIGGERS_FILE, []);
+  const normalized = normalizeStoredTriggers(parsed);
+  triggersCache = normalized.list;
+  if (normalized.changed) {
+    await saveTriggersUnlocked(triggersCache);
+  } else {
+    triggersCacheMtimeMs = mtimeMs;
+  }
+  return triggersCache;
+}
+
+async function withTriggerMutation(mutator) {
+  return triggerMutationQueue(async () => {
+    const triggers = await loadTriggers();
+    return mutator(triggers, saveTriggersUnlocked);
+  });
+}
+
+function cloneTrigger(trigger) {
+  return trigger ? JSON.parse(JSON.stringify(trigger)) : null;
+}
+
+function sortTriggers(triggers) {
+  return [...(Array.isArray(triggers) ? triggers : [])].sort((left, right) => {
+    const leftState = left?.status === TRIGGER_STATUS_PENDING ? 0 : 1;
+    const rightState = right?.status === TRIGGER_STATUS_PENDING ? 0 : 1;
+    if (leftState !== rightState) return leftState - rightState;
+    const leftTime = Date.parse(left?.scheduledAt || left?.updatedAt || left?.createdAt || 0) || 0;
+    const rightTime = Date.parse(right?.scheduledAt || right?.updatedAt || right?.createdAt || 0) || 0;
+    if (leftTime !== rightTime) return leftTime - rightTime;
+    return String(left?.id || '').localeCompare(String(right?.id || ''));
+  });
+}
+
+function isClaimStale(trigger, nowMs = Date.now()) {
+  if (trigger?.status !== TRIGGER_STATUS_DELIVERING) return false;
+  const claimedAtMs = Date.parse(trigger?.claimedAt || '');
+  if (!Number.isFinite(claimedAtMs)) return true;
+  return (nowMs - claimedAtMs) >= DELIVERY_CLAIM_TIMEOUT_MS;
+}
+
+function isDueTrigger(trigger, nowMs = Date.now()) {
+  if (!trigger?.enabled) return false;
+  if (trigger?.triggerType !== TRIGGER_TYPE_AT_TIME) return false;
+  if (trigger?.actionType !== TRIGGER_ACTION_SESSION_MESSAGE) return false;
+  if (![TRIGGER_STATUS_PENDING, TRIGGER_STATUS_DELIVERING].includes(trigger?.status)) return false;
+  if (trigger?.status === TRIGGER_STATUS_DELIVERING && !isClaimStale(trigger, nowMs)) return false;
+  const scheduledAtMs = Date.parse(trigger?.scheduledAt || '');
+  if (!Number.isFinite(scheduledAtMs) || scheduledAtMs > nowMs) return false;
+  const nextAttemptAtMs = Date.parse(trigger?.nextAttemptAt || '');
+  if (Number.isFinite(nextAttemptAtMs) && nextAttemptAtMs > nowMs) return false;
+  return true;
+}
+
+function isDueEventRetry(trigger, nowMs = Date.now()) {
+  if (!trigger?.enabled || trigger.triggerType !== TRIGGER_TYPE_EVENT
+      || trigger.actionType !== TRIGGER_ACTION_SESSION_MESSAGE
+      || ![TRIGGER_STATUS_PENDING, TRIGGER_STATUS_DELIVERING].includes(trigger.status)
+      || (trigger.status === TRIGGER_STATUS_DELIVERING && !isClaimStale(trigger, nowMs))
+      || !trigger.pendingEventKey || !trigger.pendingEvent) return false;
+  const nextAttemptAtMs = Date.parse(trigger.nextAttemptAt || '');
+  return !Number.isFinite(nextAttemptAtMs) || nextAttemptAtMs <= nowMs;
+}
+
+function isTriggerTerminal(trigger) {
+  return [TRIGGER_STATUS_DELIVERED, TRIGGER_STATUS_FAILED, TRIGGER_STATUS_CANCELLED].includes(trigger?.status);
+}
+
+function buildTriggerStatusText(trigger, { queued = false } = {}) {
+  const prefix = queued ? 'trigger queued' : trigger?.triggerType === TRIGGER_TYPE_EVENT ? 'event trigger fired' : 'scheduled trigger fired';
+  const title = trimString(trigger?.title);
+  return title ? `${prefix}: ${title}` : `${prefix}: ${trigger?.id || 'unknown trigger'}`;
+}
+
+function resolveRetryDelayMs(attempts) {
+  const index = Math.max(0, Math.min(RETRY_DELAYS_MS.length - 1, attempts - 1));
+  return RETRY_DELAYS_MS[index] || RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];
+}
+
+function isPermanentTriggerError(error) {
+  return error?.code === 'SESSION_NOT_FOUND';
+}
+
+async function assertWritableTargetSession(sessionId) {
+  const normalizedSessionId = trimString(sessionId);
+  if (!normalizedSessionId) {
+    throw new Error('sessionId is required');
+  }
+  const session = await getSession(normalizedSessionId);
+  if (!session) {
+    const error = new Error('Session not found');
+    error.code = 'SESSION_NOT_FOUND';
+    throw error;
+  }
+  return session;
+}
+
+function resetTriggerDeliveryState(trigger) {
+  delete trigger.claimedAt;
+  delete trigger.deliveredAt;
+  delete trigger.lastError;
+  delete trigger.lastErrorAt;
+  delete trigger.nextAttemptAt;
+  delete trigger.runId;
+  delete trigger.deliveryMode;
+  delete trigger.pendingEventKey;
+  delete trigger.pendingEvent;
+  trigger.deliveryAttempts = 0;
+}
+
+export async function listTriggers(options = {}) {
+  const triggers = await loadTriggers();
+  const normalizedSessionId = trimString(options.sessionId);
+  const filtered = normalizedSessionId
+    ? triggers.filter((trigger) => trigger.sessionId === normalizedSessionId)
+    : triggers;
+  return sortTriggers(filtered).map(cloneTrigger);
+}
+
+export async function getTrigger(triggerId) {
+  const normalizedTriggerId = trimString(triggerId);
+  if (!normalizedTriggerId) return null;
+  const triggers = await loadTriggers();
+  return cloneTrigger(triggers.find((trigger) => trigger.id === normalizedTriggerId) || null);
+}
+
+export async function createTrigger(input = {}) {
+  const session = await assertWritableTargetSession(input.sessionId);
+  const eventType = normalizeEventType(input.eventType || input.event?.type);
+  const triggerType = eventType ? TRIGGER_TYPE_EVENT : TRIGGER_TYPE_AT_TIME;
+  const scheduledAt = triggerType === TRIGGER_TYPE_EVENT
+    ? ''
+    : requireTimestamp(input.scheduledAt, 'scheduledAt');
+  const text = trimString(input.text);
+  if (!text) {
+    throw new Error('text is required');
+  }
+  if (triggerType === TRIGGER_TYPE_EVENT && !eventType) {
+    throw new Error('eventType is required');
+  }
+  const recurrence = normalizeRecurrence(input.recurrence || input.schedule);
+  const rawRecurrenceType = trimString(
+    input.recurrence?.type || input.recurrence?.kind || input.schedule?.type || input.schedule?.kind,
+  ).toLowerCase();
+  if (rawRecurrenceType && rawRecurrenceType !== 'once' && !recurrence) {
+    throw new Error('recurrence must be an interval with intervalMs between 100ms and 365d');
+  }
+
+  const id = createTriggerId();
+  const createdAt = nowIso();
+  const enabled = normalizeBoolean(input.enabled, true);
+  const trigger = {
+    id,
+    triggerType,
+    actionType: TRIGGER_ACTION_SESSION_MESSAGE,
+    status: enabled ? TRIGGER_STATUS_PENDING : TRIGGER_STATUS_CANCELLED,
+    enabled,
+    title: trimString(input.title),
+    sessionId: session.id,
+    scheduledAt,
+    text,
+    tool: trimString(input.tool),
+    model: trimString(input.model),
+    effort: trimString(input.effort),
+    thinking: input.thinking === true,
+    inputMode: normalizeInputMode(input.inputMode),
+    requestId: buildTriggerRequestId(id),
+    dedupeKey: trimString(input.dedupeKey).slice(0, MAX_DEDUPE_KEY_CHARS),
+    createdAt,
+    updatedAt: createdAt,
+    deliveryAttempts: 0,
+    eventType,
+    eventFilter: normalizeEventFilter(input.eventFilter),
+    recurrence,
+    occurrence: 0,
+    deliveredEventKeys: [],
+    repeat: input.repeat === true,
+  };
+
+  await withTriggerMutation(async (triggers, saveTriggers) => {
+    if (trigger.dedupeKey) {
+      const existing = triggers.find((candidate) => candidate.dedupeKey === trigger.dedupeKey);
+      if (existing) {
+        trigger.id = existing.id;
+        trigger.requestId = existing.requestId;
+        Object.assign(trigger, cloneTrigger(existing));
+        return;
+      }
+    }
+    triggers.push(trigger);
+    await saveTriggers(triggers);
+  });
+  return cloneTrigger(trigger);
+}
+
+export async function updateTrigger(triggerId, patch = {}) {
+  const normalizedTriggerId = trimString(triggerId);
+  if (!normalizedTriggerId) return null;
+
+  const nextSessionId = Object.prototype.hasOwnProperty.call(patch, 'sessionId')
+    ? trimString(patch.sessionId)
+    : '';
+  if (nextSessionId) {
+    await assertWritableTargetSession(nextSessionId);
+  }
+
+  let updatedTrigger = null;
+  await withTriggerMutation(async (triggers, saveTriggers) => {
+    const index = triggers.findIndex((trigger) => trigger.id === normalizedTriggerId);
+    if (index === -1) {
+      updatedTrigger = null;
+      return;
+    }
+
+    const current = triggers[index];
+    if (current.status === TRIGGER_STATUS_DELIVERING && !isClaimStale(current)) {
+      throw new Error('Trigger is currently delivering');
+    }
+
+    const affectsDelivery = [
+      'scheduledAt',
+      'text',
+      'tool',
+      'model',
+      'effort',
+      'thinking',
+      'sessionId',
+      'enabled',
+      'eventType',
+      'eventFilter',
+      'recurrence',
+      'inputMode',
+    ].some((key) => Object.prototype.hasOwnProperty.call(patch, key));
+
+    if (current.status === TRIGGER_STATUS_DELIVERED && affectsDelivery) {
+      throw new Error('Delivered triggers cannot be modified; create a new trigger instead');
+    }
+
+    const next = { ...current };
+    let changed = false;
+
+    if (Object.prototype.hasOwnProperty.call(patch, 'title')) {
+      const title = trimString(patch.title);
+      if (title !== current.title) {
+        next.title = title;
+        changed = true;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, 'sessionId')) {
+      const sessionId = nextSessionId;
+      if (!sessionId) {
+        throw new Error('sessionId is required');
+      }
+      if (sessionId !== current.sessionId) {
+        next.sessionId = sessionId;
+        changed = true;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, 'scheduledAt')) {
+      if (current.triggerType === TRIGGER_TYPE_EVENT) {
+        throw new Error('Event triggers do not use scheduledAt');
+      }
+      const scheduledAt = requireTimestamp(patch.scheduledAt, 'scheduledAt');
+      if (scheduledAt !== current.scheduledAt) {
+        next.scheduledAt = scheduledAt;
+        changed = true;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, 'eventType')) {
+      const eventType = normalizeEventType(patch.eventType);
+      if (!eventType) throw new Error('eventType is invalid');
+      if (eventType !== current.eventType) {
+        next.eventType = eventType;
+        next.triggerType = TRIGGER_TYPE_EVENT;
+        next.scheduledAt = '';
+        changed = true;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, 'eventFilter')) {
+      const eventFilter = normalizeEventFilter(patch.eventFilter);
+      if (JSON.stringify(eventFilter) !== JSON.stringify(current.eventFilter || {})) {
+        next.eventFilter = eventFilter;
+        changed = true;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, 'recurrence')) {
+      const recurrence = normalizeRecurrence(patch.recurrence);
+      const recurrenceType = trimString(patch.recurrence?.type || patch.recurrence?.kind).toLowerCase();
+      if (recurrenceType && recurrenceType !== 'once' && !recurrence) {
+        throw new Error('recurrence must be an interval with intervalMs between 100ms and 365d');
+      }
+      if (JSON.stringify(recurrence) !== JSON.stringify(current.recurrence || null)) {
+        next.recurrence = recurrence;
+        changed = true;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, 'text')) {
+      const text = trimString(patch.text);
+      if (!text) {
+        throw new Error('text is required');
+      }
+      if (text !== current.text) {
+        next.text = text;
+        changed = true;
+      }
+    }
+
+    for (const field of ['tool', 'model', 'effort']) {
+      if (!Object.prototype.hasOwnProperty.call(patch, field)) continue;
+      const value = trimString(patch[field]);
+      if (value !== current[field]) {
+        next[field] = value;
+        changed = true;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, 'thinking')) {
+      if (typeof patch.thinking !== 'boolean') {
+        throw new Error('thinking must be a boolean');
+      }
+      if (patch.thinking !== current.thinking) {
+        next.thinking = patch.thinking;
+        changed = true;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, 'inputMode')) {
+      const inputMode = normalizeInputMode(patch.inputMode);
+      if (inputMode !== current.inputMode) {
+        next.inputMode = inputMode;
+        changed = true;
+      }
+    }
+
+    let nextEnabled = current.enabled;
+    if (Object.prototype.hasOwnProperty.call(patch, 'enabled')) {
+      if (typeof patch.enabled !== 'boolean') {
+        throw new Error('enabled must be a boolean');
+      }
+      nextEnabled = patch.enabled;
+      if (nextEnabled !== current.enabled) {
+        next.enabled = nextEnabled;
+        changed = true;
+      }
+    }
+
+    if (!changed) {
+      updatedTrigger = cloneTrigger(current);
+      return;
+    }
+
+    if (affectsDelivery) {
+      if (!nextEnabled) {
+        next.status = TRIGGER_STATUS_CANCELLED;
+      } else if (current.status === TRIGGER_STATUS_FAILED || current.status === TRIGGER_STATUS_CANCELLED || current.status === TRIGGER_STATUS_DELIVERING) {
+        next.status = TRIGGER_STATUS_PENDING;
+      }
+      if (!isTriggerTerminal(current) || next.status === TRIGGER_STATUS_PENDING || next.status === TRIGGER_STATUS_CANCELLED) {
+        resetTriggerDeliveryState(next);
+      }
+    }
+
+    next.updatedAt = nowIso();
+    triggers[index] = next;
+    await saveTriggers(triggers);
+    updatedTrigger = cloneTrigger(next);
+  });
+
+  return updatedTrigger;
+}
+
+export async function deleteTrigger(triggerId) {
+  const normalizedTriggerId = trimString(triggerId);
+  if (!normalizedTriggerId) return null;
+
+  let deletedTrigger = null;
+  await withTriggerMutation(async (triggers, saveTriggers) => {
+    const index = triggers.findIndex((trigger) => trigger.id === normalizedTriggerId);
+    if (index === -1) {
+      deletedTrigger = null;
+      return;
+    }
+    deletedTrigger = cloneTrigger(triggers[index]);
+    triggers.splice(index, 1);
+    await saveTriggers(triggers);
+  });
+
+  return deletedTrigger;
+}
+
+async function claimTriggerForDelivery(triggerId) {
+  const normalizedTriggerId = trimString(triggerId);
+  if (!normalizedTriggerId) return null;
+  const claimAt = nowIso();
+  const claimAtMs = Date.parse(claimAt);
+
+  let claimedTrigger = null;
+  await withTriggerMutation(async (triggers, saveTriggers) => {
+    const index = triggers.findIndex((trigger) => trigger.id === normalizedTriggerId);
+    if (index === -1) return;
+    const current = triggers[index];
+    if (!isDueTrigger(current, claimAtMs)) return;
+    const next = {
+      ...current,
+      status: TRIGGER_STATUS_DELIVERING,
+      claimedAt: claimAt,
+      lastAttemptAt: claimAt,
+      nextAttemptAt: '',
+      deliveryAttempts: Math.max(0, Number(current.deliveryAttempts) || 0) + 1,
+      updatedAt: claimAt,
+    };
+    triggers[index] = next;
+    await saveTriggers(triggers);
+    claimedTrigger = cloneTrigger(next);
+  });
+
+  return claimedTrigger;
+}
+
+async function markTriggerDelivered(triggerId, deliveryResult) {
+  const normalizedTriggerId = trimString(triggerId);
+  if (!normalizedTriggerId) return null;
+  const deliveredAt = nowIso();
+
+  let updatedTrigger = null;
+  await withTriggerMutation(async (triggers, saveTriggers) => {
+    const index = triggers.findIndex((trigger) => trigger.id === normalizedTriggerId);
+    if (index === -1) return;
+    const current = triggers[index];
+    const isEvent = current.triggerType === TRIGGER_TYPE_EVENT;
+    const repeatingEvent = isEvent && current.repeat === true;
+    const recurrence = current.recurrence;
+    const nextOccurrence = Math.max(0, Number(current.occurrence) || 0) + 1;
+    const recurrenceComplete = Boolean(recurrence?.maxOccurrences && nextOccurrence >= recurrence.maxOccurrences);
+    const next = {
+      ...current,
+      status: repeatingEvent || (recurrence && !isEvent && !recurrenceComplete) ? TRIGGER_STATUS_PENDING : TRIGGER_STATUS_DELIVERED,
+      enabled: repeatingEvent || (recurrence && !isEvent && !recurrenceComplete) ? true : false,
+      deliveredAt,
+      lastDeliveredAt: deliveredAt,
+      updatedAt: deliveredAt,
+      claimedAt: '',
+      nextAttemptAt: '',
+      lastError: '',
+      lastErrorAt: '',
+      runId: trimString(deliveryResult?.runId),
+      deliveryMode: deliveryResult?.statusNotified === true
+        ? 'status'
+        : deliveryResult?.queued ? 'queued' : 'run',
+      occurrence: nextOccurrence,
+      deliveryAttempts: 0,
+      pendingEventKey: '',
+      pendingEvent: null,
+      ...(isEvent && deliveryResult?.eventKey
+        ? { deliveredEventKeys: [...(current.deliveredEventKeys || []), deliveryResult.eventKey].slice(-MAX_EVENT_KEYS) }
+        : {}),
+    };
+    if (recurrence && !isEvent && !recurrenceComplete) {
+      next.scheduledAt = new Date(Date.parse(deliveredAt) + recurrence.intervalMs).toISOString();
+      next.deliveredAt = '';
+      next.runId = '';
+      next.deliveryMode = '';
+    }
+    triggers[index] = next;
+    await saveTriggers(triggers);
+    updatedTrigger = cloneTrigger(next);
+  });
+
+  return updatedTrigger;
+}
+
+async function markTriggerDeliveryFailure(triggerId, error, attemptCount = 1) {
+  const normalizedTriggerId = trimString(triggerId);
+  if (!normalizedTriggerId) return null;
+  const failedAt = nowIso();
+  const exhausted = isPermanentTriggerError(error) || attemptCount >= MAX_DELIVERY_ATTEMPTS;
+  const retryDelayMs = resolveRetryDelayMs(attemptCount);
+
+  let updatedTrigger = null;
+  await withTriggerMutation(async (triggers, saveTriggers) => {
+    const index = triggers.findIndex((trigger) => trigger.id === normalizedTriggerId);
+    if (index === -1) return;
+    const current = triggers[index];
+    const next = {
+      ...current,
+      status: exhausted ? TRIGGER_STATUS_FAILED : TRIGGER_STATUS_PENDING,
+      enabled: exhausted ? false : current.enabled,
+      claimedAt: '',
+      updatedAt: failedAt,
+      lastError: trimString(error?.message) || 'Trigger delivery failed',
+      lastErrorAt: failedAt,
+      nextAttemptAt: exhausted ? '' : new Date(Date.now() + retryDelayMs).toISOString(),
+    };
+    triggers[index] = next;
+    await saveTriggers(triggers);
+    updatedTrigger = cloneTrigger(next);
+  });
+
+  return updatedTrigger;
+}
+
+async function appendTriggerStatusEvent(trigger, outcome) {
+  try {
+    const event = statusEvent(buildTriggerStatusText(trigger, { queued: outcome?.queued === true }));
+    event.requestId = trigger.requestId;
+    if (trimString(outcome?.runId)) {
+      event.runId = trimString(outcome.runId);
+    }
+    await appendEvent(trigger.sessionId, event);
+  } catch (error) {
+    console.error(`[triggers] failed to append status event for ${trigger.id}: ${error.message}`);
+  }
+}
+
+function renderTriggerText(trigger, eventContext = null) {
+  if (!eventContext) return trigger.text;
+  const payload = eventContext.payload || {};
+  const rendered = trigger.text.replace(/\{\{\s*event\.([A-Za-z0-9_.-]+)\s*\}\}/g, (_, path) => {
+    const value = path.split('.').reduce((current, part) => (
+      current && typeof current === 'object' ? current[part] : undefined
+    ), payload);
+    return value === undefined || value === null ? '' : String(value);
+  });
+  return `${rendered}\n\nAgentoC event: ${eventContext.type}\n${JSON.stringify(payload)}`.slice(0, 64 * 1024);
+}
+
+async function deliverTrigger(trigger, eventContext = null) {
+  const session = await assertWritableTargetSession(trigger.sessionId);
+  const requestId = eventContext?.eventKey ? `${trigger.requestId}:${eventContext.eventKey}` : trigger.requestId;
+  const inputMode = normalizeInputMode(trigger.inputMode);
+  if (inputMode === TRIGGER_INPUT_MODE_STATUS_NOTIFICATION) {
+    const outcome = { duplicate: false, queued: false, run: null, statusNotified: true };
+    await appendTriggerStatusEvent({ ...trigger, requestId }, outcome);
+    if (!eventContext) {
+      await markTriggerDelivered(trigger.id, outcome);
+    }
+    return outcome;
+  }
+
+  const internalContinuation = inputMode === TRIGGER_INPUT_MODE_INTERNAL_CONTINUATION;
+  const outcome = await submitHttpMessage(session.id, renderTriggerText(trigger, eventContext), [], {
+    requestId,
+    tool: trigger.tool || undefined,
+    model: trigger.model || undefined,
+    effort: trigger.effort || undefined,
+    thinking: trigger.thinking === true,
+    internalOperation: internalContinuation ? 'trigger_internal_continuation' : 'trigger_delivery',
+    ...(internalContinuation ? {
+      recordUserMessage: false,
+      queueIfBusy: false,
+      deferIfBusy: true,
+      skipSessionContinuation: true,
+      sourceContext: {
+        kind: 'trigger_internal_continuation',
+        triggerId: trigger.id,
+        ...(eventContext ? { eventType: eventContext.type, eventKey: eventContext.eventKey } : {}),
+      },
+    } : {}),
+  });
+
+  if (outcome?.deferred === true) {
+    const error = new Error('Trigger target session is busy');
+    error.code = 'TRIGGER_TARGET_BUSY';
+    throw error;
+  }
+
+  if (!outcome.duplicate) {
+    await appendTriggerStatusEvent({ ...trigger, requestId }, {
+      queued: outcome.queued === true,
+      runId: trimString(outcome?.run?.id),
+    });
+  }
+
+  if (!eventContext) {
+    await markTriggerDelivered(trigger.id, {
+      queued: outcome.queued === true,
+      runId: trimString(outcome?.run?.id),
+    });
+  }
+  return outcome;
+}
+
+async function attemptTriggerDelivery(triggerId) {
+  const trigger = await claimTriggerForDelivery(triggerId);
+  if (!trigger) return null;
+
+  try {
+    await deliverTrigger(trigger);
+    return await getTrigger(trigger.id);
+  } catch (error) {
+    await markTriggerDeliveryFailure(trigger.id, error, trigger.deliveryAttempts || 1);
+    console.error(`[triggers] failed to deliver ${trigger.id}: ${error.message}`);
+    return await getTrigger(trigger.id);
+  }
+}
+
+async function claimEventTriggerForDelivery(triggerId, eventContext) {
+  const normalizedTriggerId = trimString(triggerId);
+  const key = trimString(eventContext?.eventKey);
+  if (!normalizedTriggerId || !key) return null;
+  let claimedTrigger = null;
+  await withTriggerMutation(async (triggers, saveTriggers) => {
+    const index = triggers.findIndex((trigger) => trigger.id === normalizedTriggerId);
+    if (index === -1) return;
+    const current = triggers[index];
+    const staleDelivery = current.status === TRIGGER_STATUS_DELIVERING && isClaimStale(current);
+    const pendingRetry = current.status === TRIGGER_STATUS_PENDING && Boolean(current.pendingEventKey);
+    const nextAttemptAtMs = Date.parse(current.nextAttemptAt || '');
+    if (!current.enabled || current.triggerType !== TRIGGER_TYPE_EVENT
+        || (current.status !== TRIGGER_STATUS_PENDING && !staleDelivery)
+        || current.eventType !== eventContext.type
+        || !eventFilterMatches(current.eventFilter, eventContext.payload)
+        || (current.deliveredEventKeys || []).includes(key)
+        || (pendingRetry && current.pendingEventKey !== key)
+        || (pendingRetry && Number.isFinite(nextAttemptAtMs) && nextAttemptAtMs > Date.now())) return;
+    const now = nowIso();
+    const next = {
+      ...current,
+      status: TRIGGER_STATUS_DELIVERING,
+      claimedAt: now,
+      lastAttemptAt: now,
+      nextAttemptAt: '',
+      pendingEventKey: key,
+      pendingEvent: clipEventPayload({ type: eventContext.type, payload: eventContext.payload }),
+      deliveryAttempts: Math.max(0, Number(current.deliveryAttempts) || 0) + 1,
+      updatedAt: now,
+    };
+    triggers[index] = next;
+    await saveTriggers(triggers);
+    claimedTrigger = cloneTrigger(next);
+  });
+  return claimedTrigger;
+}
+
+async function attemptEventTriggerDelivery(triggerId, eventContext) {
+  const trigger = await claimEventTriggerForDelivery(triggerId, eventContext);
+  if (!trigger) return null;
+  try {
+    const outcome = await deliverTrigger(trigger, eventContext);
+    return await markTriggerDelivered(trigger.id, {
+      eventKey: eventContext.eventKey,
+      queued: outcome?.queued === true,
+      runId: trimString(outcome?.run?.id),
+    });
+  } catch (error) {
+    await markTriggerDeliveryFailure(trigger.id, error, trigger.deliveryAttempts || 1);
+    console.error(`[triggers] failed to deliver event ${trigger.id}: ${error.message}`);
+    return await getTrigger(trigger.id);
+  }
+}
+
+export async function emitTriggerEvent(type, payload = {}) {
+  const eventType = normalizeEventType(type);
+  if (!eventType) throw new Error(`Unsupported trigger event type: ${type}`);
+  const eventPayload = clipEventPayload(payload);
+  const context = { type: eventType, payload: eventPayload, eventKey: eventKey(eventType, eventPayload) };
+  const triggers = await loadTriggers();
+  let delivered = 0;
+  for (const trigger of sortTriggers(triggers)) {
+    if (trigger.triggerType !== TRIGGER_TYPE_EVENT || trigger.eventType !== eventType
+        || !eventFilterMatches(trigger.eventFilter, eventPayload)) continue;
+    const result = await attemptEventTriggerDelivery(trigger.id, context);
+    if (result?.deliveredEventKeys?.includes(context.eventKey)) delivered += 1;
+  }
+  return { eventType, eventKey: context.eventKey, delivered };
+}
+
+export async function processDueTriggersNow() {
+  if (triggerTickPromise) return triggerTickPromise;
+
+  triggerTickPromise = (async () => {
+    const nowMs = Date.now();
+    const triggers = await loadTriggers();
+    const due = sortTriggers(triggers).filter((trigger) => isDueTrigger(trigger, nowMs));
+    for (const trigger of due) {
+      await attemptTriggerDelivery(trigger.id);
+    }
+    const eventRetries = sortTriggers(triggers).filter((trigger) => isDueEventRetry(trigger, nowMs));
+    for (const trigger of eventRetries) {
+      const pending = trigger.pendingEvent;
+      await attemptEventTriggerDelivery(trigger.id, {
+        type: pending?.type || trigger.eventType,
+        payload: pending?.payload || {},
+        eventKey: trigger.pendingEventKey,
+      });
+    }
+    return due.length + eventRetries.length;
+  })().finally(() => {
+    if (triggerTickPromise) {
+      triggerTickPromise = null;
+    }
+  });
+
+  return triggerTickPromise.finally(() => {
+    scheduleTriggerWake();
+  });
+}
+
+async function resolveNextTriggerDelayMs() {
+  const triggers = await loadTriggers();
+  const nowMs = Date.now();
+  const future = triggers
+    .filter((trigger) => trigger?.enabled
+      && trigger?.status === TRIGGER_STATUS_PENDING
+      && (trigger.triggerType === TRIGGER_TYPE_AT_TIME
+        || (trigger.triggerType === TRIGGER_TYPE_EVENT && trigger.pendingEventKey && trigger.pendingEvent)))
+    .map((trigger) => {
+      const scheduledAt = trigger.triggerType === TRIGGER_TYPE_EVENT
+        ? nowMs
+        : Date.parse(trigger.scheduledAt || '');
+      const nextAttemptAt = Date.parse(trigger.nextAttemptAt || '');
+      return Math.max(nowMs, scheduledAt, Number.isFinite(nextAttemptAt) ? nextAttemptAt : nowMs) - nowMs;
+    })
+    .filter((delay) => Number.isFinite(delay) && delay >= 0);
+  const pollMs = Number.isInteger(triggerSchedulerOptions.pollMs) && triggerSchedulerOptions.pollMs > 0
+    ? triggerSchedulerOptions.pollMs
+    : MAX_TRIGGER_IDLE_DELAY_MS;
+  if (future.length === 0) return Math.min(MAX_TRIGGER_IDLE_DELAY_MS, pollMs);
+  return Math.max(0, Math.min(...future, MAX_TRIGGER_IDLE_DELAY_MS, pollMs));
+}
+
+function scheduleTriggerWake(delayMs = null) {
+  if (!triggerSchedulerOptions.enabled || triggerSchedulerTimer) return;
+  const wake = async () => {
+    triggerSchedulerTimer = null;
+    await processDueTriggersNow().catch(() => {});
+    if (triggerSchedulerOptions.enabled) scheduleTriggerWake();
+  };
+  if (delayMs == null) {
+    void resolveNextTriggerDelayMs().then((delay) => scheduleTriggerWake(delay)).catch(() => scheduleTriggerWake(MAX_TRIGGER_IDLE_DELAY_MS));
+    return;
+  }
+  triggerSchedulerTimer = setTimeout(() => { void wake(); }, Math.max(0, delayMs));
+  triggerSchedulerTimer.unref?.();
+}
+
+function rescheduleTriggerWake(delayMs = 0) {
+  if (triggerSchedulerTimer) {
+    clearTimeout(triggerSchedulerTimer);
+    triggerSchedulerTimer = null;
+  }
+  scheduleTriggerWake(delayMs);
+}
+
+export function startTriggerScheduler(options = {}) {
+  if (triggerSchedulerOptions.enabled) return triggerSchedulerTimer;
+  triggerSchedulerOptions = { enabled: true, pollMs: resolveTriggerPollMs(options.pollMs) };
+  scheduleTriggerWake(0);
+  return triggerSchedulerTimer;
+}
+
+export function stopTriggerScheduler() {
+  const wasRunning = triggerSchedulerOptions.enabled || Boolean(triggerSchedulerTimer);
+  triggerSchedulerOptions = { enabled: false };
+  if (triggerSchedulerTimer) clearTimeout(triggerSchedulerTimer);
+  triggerSchedulerTimer = null;
+  return wasRunning;
+}
+
+export const TRIGGER_TYPES = Object.freeze({ AT_TIME: TRIGGER_TYPE_AT_TIME, EVENT: TRIGGER_TYPE_EVENT });
+export const TRIGGER_EVENT_NAMES = Object.freeze([...TRIGGER_EVENT_TYPES]);

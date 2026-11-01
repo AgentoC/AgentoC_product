@@ -1,0 +1,176 @@
+/* ---- Custom Select ---- */
+.custom-select-wrap {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+.custom-select-wrap .cs-native {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.custom-select-wrap .cs-trigger {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 26px 4px 10px;
+  background: var(--surface-soft, color-mix(in srgb, var(--text) 5%, transparent));
+  border: 0;
+  border-radius: 9999px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.15s ease, background 0.15s ease;
+  position: relative;
+}
+.custom-select-wrap .cs-trigger::after {
+  content: "";
+  position: absolute;
+  right: 10px; top: 50%;
+  width: 7px; height: 7px;
+  border-right: 1.7px solid var(--text-muted);
+  border-bottom: 1.7px solid var(--text-muted);
+  transform: translateY(-62%) rotate(45deg);
+  transition: transform 0.2s ease;
+}
+.custom-select-wrap.open .cs-trigger::after {
+  transform: translateY(-35%) rotate(225deg);
+}
+.custom-select-wrap .cs-trigger:hover {
+  background: var(--surface-hover, color-mix(in srgb, var(--text) 8%, transparent));
+  color: var(--text);
+}
+.custom-select-wrap .cs-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--notice, #3b82f6) 50%, transparent);
+  outline-offset: 1px;
+}
+.custom-select-wrap.open .cs-trigger {
+  color: var(--text);
+  background: var(--surface-hover, color-mix(in srgb, var(--text) 10%, transparent));
+}
+.custom-select-wrap.disabled .cs-trigger {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.custom-select-wrap .cs-trigger-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Dropdown panel — fixed position set via JS to escape overflow clipping */
+.custom-select-wrap .cs-panel {
+  position: fixed;
+  z-index: 10000;
+  max-height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background: var(--surface-glass-strong, var(--bg));
+  border: 0;
+  border-radius: 13px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  padding: 0;
+  overflow: hidden;
+  display: none;
+}
+.custom-select-wrap.open .cs-panel {
+  display: block;
+  animation: cs-fade-in 0.12s ease;
+}
+@keyframes cs-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Option items */
+.custom-select-wrap .cs-option {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 12px;
+  min-height: 32px;
+  border-radius: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+  transition: background 0.1s ease, color 0.1s ease;
+.custom-select-wrap .cs-option:hover {
+  background: var(--bg-tertiary);
+  color: var(--text);
+}
+.custom-select-wrap .cs-option.selected {
+  color: var(--text);
+  font-weight: 500;
+}
+.custom-select-wrap .cs-option.selected::after {
+  content: "";
+  margin-left: auto;
+  width: 12px;
+  height: 7px;
+  border-left: 1.7px solid var(--text-muted);
+  border-bottom: 1.7px solid var(--text-muted);
+  transform: translateY(-1px) rotate(-45deg);
+  flex-shrink: 0;
+}
+.custom-select-wrap .cs-option.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Size variants */
+.custom-select-wrap.cs-compact .cs-trigger {
+  padding: 3px 20px 3px 6px;
+  font-size: 11px;
+}
+.custom-select-wrap.cs-tool { max-width: 100px; }
+.custom-select-wrap.cs-model { max-width: 120px; }
+.custom-select-wrap.cs-effort { max-width: 80px; }
+
+/* Upward panel class — JS sets fixed coords instead */
+
+/* ---- Full-width variants (sidebar, settings, modal) ---- */
+.custom-select-wrap.cs-full {
+  display: flex;
+  width: 100%;
+}
+.custom-select-wrap.cs-full .cs-trigger {
+  width: 100%;
+  padding: 8px 28px 8px 12px;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--surface-soft, var(--bg));
+  color: var(--text);
+}
+.custom-select-wrap.cs-full .cs-trigger:hover {
+  color: var(--text);
+  background: var(--surface-hover, color-mix(in srgb, var(--text) 6%, transparent));
+}
+.custom-select-wrap.cs-full.open .cs-trigger {
+  background: var(--surface-hover, var(--bg-secondary));
+}
+/* Secondary background (sidebar workspace, filter) */
+.custom-select-wrap.cs-full-bg .cs-trigger {
+  border: 0;
+  border-radius: 9999px;
+  background: var(--surface-soft, var(--bg-secondary));
+}
+.custom-select-wrap.cs-full-bg.open .cs-trigger {
+  background: var(--surface-hover, var(--bg-tertiary));
+}
+/* Browser select — capsule radius */
+.custom-select-wrap.cs-browser .cs-trigger {
+  border: 0;
+  border-radius: 9999px;
+  padding: 8px 28px 8px 12px;
+}

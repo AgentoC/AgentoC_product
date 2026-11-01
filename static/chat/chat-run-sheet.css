@@ -1,0 +1,890 @@
+/* Run Sheet — the shared run-detail surface. Mobile uses a bottom sheet;
+   desktop uses a centered modal with the same content and interaction model. */
+
+:root {
+  --run-sheet-compact-height: min(44dvh, 420px);
+  --run-sheet-expanded-height: min(58dvh, 540px);
+}
+
+.run-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: var(--sheet-dim, var(--modal-backdrop));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-enter, 280ms) var(--motion-ease-standard, ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.run-sheet-backdrop.run-sheet-backdrop--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.run-sheet-backdrop:not(.run-sheet-backdrop--visible) {
+  transition-duration: var(--motion-exit, 180ms);
+}
+
+.run-sheet {
+  position: fixed;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  top: calc(var(--app-header-height, 52px) + var(--safe-top, 0px) + 8px);
+  z-index: 151;
+  width: min(calc(100% - 20px), 660px);
+  height: auto;
+  max-height: var(--run-sheet-expanded-height);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-raised, var(--bg-secondary));
+  border-radius: 20px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  box-shadow: var(--shadow-floating, 0 16px 48px rgba(0, 0, 0, 0.28));
+  transform-origin: top center;
+  transform: translate3d(-50%, -18px, 0) scale(0.92);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--motion-panel, 240ms) var(--motion-ease-spring-soft, cubic-bezier(0.16, 1, 0.3, 1)),
+    opacity var(--motion-panel, 240ms) ease,
+    max-height var(--motion-panel, 240ms) var(--motion-ease-spring-soft, cubic-bezier(0.16, 1, 0.3, 1));
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  overflow: hidden;
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .run-sheet {
+    background:
+      var(--glass-sheen, linear-gradient(135deg, color-mix(in srgb, var(--surface-hover) 24%, transparent), transparent)),
+      color-mix(in srgb, var(--surface-glass-strong, var(--surface-raised, var(--bg))) 90%, var(--bg) 10%);
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur, 22px) * 0.78)) saturate(1.08);
+    backdrop-filter: blur(calc(var(--glass-blur, 22px) * 0.78)) saturate(1.08);
+  }
+}
+
+.run-sheet--compact { max-height: var(--run-sheet-compact-height); }
+.run-sheet--expanded { max-height: var(--run-sheet-expanded-height); }
+.run-sheet--open {
+  transform: translate3d(-50%, 0, 0) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+.run-sheet--opening {
+  animation: run-sheet-present var(--motion-panel, 240ms) var(--motion-ease-spring-soft, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+.run-sheet--closing {
+  animation: run-sheet-dismiss var(--motion-exit, 180ms) var(--motion-ease-standard, ease-in) both;
+}
+.run-sheet:not(.run-sheet--open) {
+  transition-duration: var(--motion-exit, 180ms);
+  transition-timing-function: var(--motion-ease-standard, ease);
+}
+.run-sheet.run-sheet--dragging {
+  transition: none;
+}
+
+.run-sheet > .run-sheet__handle-zone {
+  display: none;
+}
+
+.run-sheet__handle-zone {
+  flex-shrink: 0;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px 8px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.run-sheet__handle-zone:active { cursor: grabbing; }
+.run-sheet__handle {
+  width: 42px;
+  height: 5px;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--border-strong, var(--border));
+  transition: background var(--motion-fast, 120ms) ease;
+}
+.run-sheet__handle-zone:hover .run-sheet__handle,
+.run-sheet__handle-zone:active .run-sheet__handle {
+  background: var(--text-muted);
+}
+
+.run-sheet__header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 12px 12px 20px;
+  border-bottom: 1px solid var(--divider-subtle, var(--border));
+}
+.run-sheet__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+.run-sheet__close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-min, 44px);
+  height: var(--touch-min, 44px);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill, 999px);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--motion-fast, 120ms) ease, color var(--motion-fast, 120ms) ease;
+}
+.run-sheet__close:hover { background: var(--surface-hover); color: var(--text); }
+.run-sheet__close:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--focus-border) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.run-sheet__content {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 14px 20px calc(20px + var(--safe-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+@keyframes run-sheet-present {
+  from { opacity: 0; transform: translate3d(-50%, -18px, 0) scale(0.92); }
+  to { opacity: 1; transform: translate3d(-50%, 0, 0) scale(1); }
+}
+
+@keyframes run-sheet-dismiss {
+  from { opacity: 1; transform: translate3d(-50%, 0, 0) scale(1); }
+  to { opacity: 0; transform: translate3d(-50%, -14px, 0) scale(0.94); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .run-sheet,
+  .run-sheet-backdrop,
+  .run-sheet--opening,
+  .run-sheet--closing {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Now header — the live "what's happening" focus, mirroring the Live Bar. */
+.run-sheet__now {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 0;
+}
+.run-sheet__now-dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  margin-top: 6px;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--text-muted);
+}
+.run-sheet__now-dot--running {
+  background: var(--status-running);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-running) 60%, transparent);
+  animation: run-sheet-pulse 1.8s var(--motion-ease-standard, ease) infinite;
+}
+.run-sheet__now-dot--queued { background: var(--status-queued); }
+.run-sheet__now-dot--waiting { background: var(--status-waiting); }
+.run-sheet__now-dot--done { background: var(--status-done); }
+.run-sheet__now-dot--failed { background: var(--status-failed); }
+.run-sheet__now-text { min-width: 0; }
+.run-sheet__now-label {
+  font-size: var(--font-size-body, 16px);
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.3;
+}
+.run-sheet__now-action {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.run-sheet__now-sub { color: var(--text-muted); }
+@keyframes run-sheet-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-running) 55%, transparent); }
+  70% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--status-running) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-running) 0%, transparent); }
+}
+
+/* Sections (plan / files / activity). */
+.run-sheet__section { display: flex; flex-direction: column; gap: 8px; }
+@media (max-width: 767px) {
+  .run-sheet--compact .run-sheet__section--markdown,
+  .run-sheet--compact .run-sheet__section--files {
+    display: none;
+  }
+}
+.run-sheet__section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.run-sheet__section-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--text-muted);
+}
+.run-sheet__section-meta { font-size: 12px; color: var(--text-muted); }
+
+.run-sheet__progress {
+  height: 6px;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--surface-hover, var(--bg-tertiary));
+  overflow: hidden;
+}
+.run-sheet__progress-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  transform: scaleX(var(--run-sheet-progress, 0));
+  transform-origin: left center;
+  background: var(--color-action);
+  transition: transform var(--motion-panel, 240ms) var(--motion-ease-standard, ease);
+}
+.run-sheet__plan-current {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-height: 44px;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  list-style: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.run-sheet__plan-details {
+  margin-top: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.run-sheet__plan-details > .run-sheet__plan-current::-webkit-details-marker {
+  display: none;
+}
+/* Chevron direction: right while collapsed, down while expanded. Two icons
+   swap via the [open] state (class-driven, so the swap never flickers). */
+.run-sheet__plan-chevron {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  color: var(--text-muted);
+}
+.run-sheet__plan-chevron .run-sheet__plan-chevron-icon {
+  width: 16px;
+  height: 16px;
+}
+.run-sheet__plan-chevron-expanded {
+  display: none;
+}
+.run-sheet__plan-details[open] .run-sheet__plan-chevron-collapsed {
+  display: none;
+}
+.run-sheet__plan-details[open] .run-sheet__plan-chevron-expanded {
+  display: inline-flex;
+}
+.run-sheet__plan-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+.run-sheet__plan-item {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid color-mix(in srgb, var(--divider-subtle) 58%, transparent);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.42;
+}
+.run-sheet__plan-marker {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--text-muted);
+}
+.run-sheet__plan-item--completed .run-sheet__plan-marker {
+  background: var(--status-done);
+}
+.run-sheet__plan-item--in_progress {
+  color: var(--text);
+}
+.run-sheet__plan-item--in_progress .run-sheet__plan-marker {
+  background: var(--status-running);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-running) 18%, transparent);
+}
+.run-sheet__plan-item-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Compact lists (files + activity). */
+.run-sheet__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.run-sheet__file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--divider-subtle, transparent);
+}
+.run-sheet__list li:last-child { border-bottom: none; }
+.run-sheet__file-name {
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-sheet__md-list {
+  gap: 6px;
+}
+.run-sheet__md-file {
+  display: block;
+}
+.run-sheet__md-button {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: var(--radius-block, 10px);
+  background: color-mix(in srgb, var(--surface-hover, var(--bg-tertiary)) 74%, transparent);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--divider-subtle) 54%, transparent);
+  transition: background var(--motion-fast, 120ms) ease, box-shadow var(--motion-fast, 120ms) ease;
+}
+.run-sheet__md-button:hover {
+  background: var(--surface-raised, var(--surface-hover));
+  box-shadow:
+    var(--shadow-soft, 0 8px 24px rgba(16, 21, 39, 0.07)),
+    inset 0 0 0 1px color-mix(in srgb, var(--divider-subtle) 60%, transparent);
+}
+.run-sheet__md-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--focus-border) 55%, transparent);
+  outline-offset: 2px;
+}
+.run-sheet__md-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.run-sheet__md-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-sheet__md-meta {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-sheet__md-badge {
+  flex-shrink: 0;
+  padding: 4px 7px;
+  border-radius: var(--radius-pill, 999px);
+  background: color-mix(in srgb, var(--color-action) 12%, transparent);
+  color: var(--color-action);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.run-sheet__stats {
+  flex-shrink: 0;
+  display: inline-flex;
+  gap: 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.run-sheet__add { color: var(--status-done); }
+.run-sheet__del { color: var(--status-failed); }
+
+.run-sheet__hint {
+  padding: 24px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.run-sheet__reader[hidden] {
+  display: none !important;
+}
+.run-sheet__reader {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  z-index: 160;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: min(85dvh, 760px);
+  max-height: 88dvh;
+  overflow: hidden;
+  background: var(--surface-raised, var(--bg-secondary));
+  color: var(--text);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  box-shadow: var(--shadow-floating, 0 -8px 32px rgba(0, 0, 0, 0.32));
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  transform: translate3d(0, 100%, 0);
+  transition: transform var(--motion-panel, 260ms) var(--motion-ease-spring-soft, cubic-bezier(0.16, 1, 0.3, 1));
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .run-sheet__reader {
+    background:
+      var(--glass-sheen, linear-gradient(135deg, color-mix(in srgb, var(--surface-hover) 24%, transparent), transparent)),
+      color-mix(in srgb, var(--surface-glass-strong, var(--surface-raised, var(--bg))) 92%, var(--bg) 8%);
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur, 22px) * 0.78)) saturate(1.08);
+    backdrop-filter: blur(calc(var(--glass-blur, 22px) * 0.78)) saturate(1.08);
+  }
+}
+.run-sheet__reader:not([hidden]) {
+  transform: translate3d(0, 0, 0);
+}
+.run-sheet__reader--opening {
+  animation: run-sheet-reader-present var(--motion-panel, 260ms) var(--motion-ease-spring-soft, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+.run-sheet__reader--closing {
+  animation: run-sheet-reader-dismiss var(--motion-exit, 200ms) var(--motion-ease-standard, ease-in) both;
+}
+
+@keyframes run-sheet-reader-present {
+  from { opacity: 0; transform: translate3d(0, 100%, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes run-sheet-reader-dismiss {
+  from { opacity: 1; transform: translate3d(0, 0, 0); }
+  to { opacity: 0; transform: translate3d(0, 100%, 0); }
+}
+.run-sheet__reader-handle-zone {
+  min-height: 36px;
+  padding-top: 12px;
+}
+.run-sheet__reader-header {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 12px 12px;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--divider-subtle) 72%, transparent);
+}
+.run-sheet__reader-back {
+  width: var(--touch-min, 44px);
+  height: var(--touch-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-pill, 999px);
+  background: color-mix(in srgb, var(--surface-hover, var(--bg-tertiary)) 72%, transparent);
+  color: var(--text);
+  cursor: pointer;
+}
+.run-sheet__reader-back .rl-icon,
+.run-sheet__reader-back-icon {
+  width: 20px;
+  height: 20px;
+}
+.run-sheet__reader-title-block {
+  min-width: 0;
+}
+.run-sheet__reader-eyebrow {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.run-sheet__reader-title {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.24;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-sheet__reader-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.run-sheet__reader-action {
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: var(--radius-pill, 999px);
+  background: color-mix(in srgb, var(--surface-hover, var(--bg-tertiary)) 72%, transparent);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.run-sheet__reader-raw {
+  display: none;
+}
+.run-sheet__reader-back:hover,
+.run-sheet__reader-action:hover {
+  background: var(--surface-raised, var(--surface-hover));
+}
+.run-sheet__reader-back:focus-visible,
+.run-sheet__reader-action:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--focus-border) 55%, transparent);
+  outline-offset: 2px;
+}
+.run-sheet__reader-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.run-sheet__reader-status {
+  margin: 16px 20px;
+  padding: 12px;
+  border-radius: var(--radius-block, 10px);
+  background: color-mix(in srgb, var(--surface-hover, var(--bg-tertiary)) 72%, transparent);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--divider-subtle) 60%, transparent);
+}
+.run-sheet__reader-status[hidden] {
+  display: none;
+}
+.run-sheet__reader-status[data-kind="error"] {
+  color: var(--status-failed);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--status-failed) 38%, transparent);
+}
+.run-sheet__reader-content {
+  width: 100%;
+  max-width: none;
+  padding: 16px 20px calc(28px + var(--safe-bottom, 0px));
+  color: var(--text);
+  font-size: 15.5px;
+  line-height: 1.72;
+}
+.run-sheet__reader-content h1,
+.run-sheet__reader-content h2,
+.run-sheet__reader-content h3 {
+  line-height: 1.24;
+}
+.run-sheet__reader-content h1 {
+  font-size: 25px;
+}
+.run-sheet__reader-content h2 {
+  margin-top: 1.45em;
+  font-size: 21px;
+}
+.run-sheet__reader-content h3 {
+  margin-top: 1.3em;
+  font-size: 18px;
+}
+.run-sheet__reader-content p,
+.run-sheet__reader-content ul,
+.run-sheet__reader-content ol,
+.run-sheet__reader-content blockquote,
+.run-sheet__reader-content pre,
+.run-sheet__reader-content table {
+  margin-top: 0.9em;
+  margin-bottom: 0.9em;
+}
+.run-sheet__reader-content pre {
+  overflow-x: auto;
+  padding: 12px;
+  border-radius: var(--radius-block, 10px);
+  background: color-mix(in srgb, var(--surface-hover, var(--bg-tertiary)) 76%, transparent);
+}
+.run-sheet__reader-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+.run-sheet__reader-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-block, 10px);
+}
+
+@media (min-width: 768px) {
+  .run-sheet {
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    top: calc(var(--app-header-height, 56px) + 10px);
+    width: min(700px, calc(100vw - 48px));
+    height: auto;
+    max-height: min(60dvh, 580px);
+    padding-bottom: 0;
+    border-radius: 24px;
+    opacity: 0;
+    transform: translate3d(-50%, -18px, 0) scale(0.92);
+    transition:
+      transform var(--motion-panel, 240ms) var(--motion-ease-spring-soft, cubic-bezier(0.16, 1, 0.3, 1)),
+      opacity var(--motion-base, 180ms) ease;
+    touch-action: auto;
+  }
+
+  .run-sheet--compact {
+    max-height: min(46dvh, 440px);
+  }
+
+  .run-sheet--expanded {
+    max-height: min(60dvh, 580px);
+  }
+
+  .run-sheet--open {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+
+  .run-sheet__handle-zone,
+  .run-sheet__reader-handle-zone {
+    display: none;
+  }
+
+  .run-sheet__header {
+    min-height: 64px;
+    padding: 10px 14px 10px 24px;
+  }
+
+  .run-sheet__title {
+    font-size: 18px;
+    font-weight: 650;
+  }
+
+  .run-sheet__content {
+    padding: 20px 24px 28px;
+    gap: 22px;
+  }
+
+  .run-sheet__reader {
+    left: 50%;
+    right: auto;
+    width: min(720px, calc(100vw - 48px));
+    transform: translate3d(-50%, calc(100% + 24px), 0);
+    border-radius: 24px;
+    bottom: 24px;
+    height: min(82dvh, 780px);
+    max-height: calc(100dvh - 48px);
+    box-shadow: var(--shadow-floating, 0 16px 48px rgba(0, 0, 0, 0.36));
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  }
+  .run-sheet__reader:not([hidden]) {
+    transform: translate3d(-50%, 0, 0);
+  }
+
+  .run-sheet__reader-header {
+    min-height: 64px;
+    padding: 10px 14px 10px 16px;
+  }
+
+  .run-sheet__reader-content {
+    padding: 22px 28px 34px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .run-sheet,
+  .run-sheet-backdrop { transition-duration: 0.001ms; }
+  .run-sheet__now-dot--running { animation: none; }
+}
+/* Inline live-activity strip. It is intentionally a low-elevation sibling of
+   the composer rather than a card inside the transcript: the main label owns
+   the current action and the stop rail keeps a stable 44px target at every
+   width, including narrow phones. */
+.run-activity-strip {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  width: 100%;
+  border-radius: var(--radius-block, 10px);
+  background: color-mix(in srgb, var(--surface-soft, var(--bg-secondary)) 68%, transparent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--text) 5%, transparent);
+  overflow: hidden;
+}
+.run-activity-strip__main,
+.run-activity-strip__stop {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.run-activity-strip__main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: var(--touch-min, 44px);
+  flex: 1 1 auto;
+  padding: 7px 10px 7px 12px;
+  background: transparent;
+  text-align: left;
+}
+.run-activity-strip__main:hover,
+.run-activity-strip__main:focus-visible,
+.run-activity-strip__stop:hover,
+.run-activity-strip__stop:focus-visible {
+  background: color-mix(in srgb, var(--surface-hover) 72%, transparent);
+}
+.run-activity-strip__main:focus-visible,
+.run-activity-strip__stop:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--focus-border) 45%, transparent);
+  outline-offset: -2px;
+}
+.run-activity-strip__dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--status-running, var(--notice));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--status-running, var(--notice)) 14%, transparent);
+}
+.run-activity-strip__status {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.run-activity-strip__label,
+.run-activity-strip__detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-activity-strip__label {
+  display: none;
+  flex: 0 1 auto;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+}
+.run-activity-strip__detail {
+  flex: 1 1 auto;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.run-activity-strip__elapsed {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.run-activity-strip__stop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-min, 44px);
+  min-width: var(--touch-min, 44px);
+  min-height: var(--touch-min, 44px);
+  padding: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0;
+}
+.run-activity-strip__stop::before {
+  content: "";
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: currentColor;
+}
+@media (max-width: 720px) {
+  .run-activity-strip__main {
+    gap: 7px;
+    padding-left: 10px;
+  }
+  .run-activity-strip__label {
+    display: none;
+  }
+  .run-activity-strip__detail {
+    font-size: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .run-activity-strip,
+  .run-activity-strip__main,
+  .run-activity-strip__stop {
+    transition: none;
+  }
+}
+
+/* Previous package Run Sheet motion/material contract. */
+.run-sheet-backdrop { transition-duration: var(--motion-panel, 240ms); }
+.run-sheet:not(.run-sheet--open) { transition-duration: var(--motion-panel, 240ms); }
+.run-sheet { transition-duration: var(--motion-panel, 240ms); }
+.run-sheet__section-title { letter-spacing: normal; text-transform: none; }

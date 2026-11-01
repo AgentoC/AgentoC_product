@@ -1,0 +1,2212 @@
+/* Material 3 component layer.
+ *
+ * This is intentionally a late-loaded migration layer. It lets the existing
+ * vanilla-JS DOM keep its stable class and event contracts while the visual
+ * vocabulary moves from local glass/black action recipes to M3 roles.
+ */
+
+/* Composer intentionally follows the current online surface contract. Keep
+   only the shared send color entry; menu, input, and runtime controls remain
+   owned by chat-input.css and chat-glass.css. */
+.send-btn {
+  background: var(--color-action, var(--accent));
+  color: var(--color-action-on, #fff);
+}
+
+.send-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-action, var(--accent)) 88%, var(--sys-inverse-surface, #202124));
+}
+
+/* Message and plan surfaces ---------------------------------------------- */
+.plan-card {
+  border: 1px solid var(--sys-outline-variant);
+  border-radius: var(--m3-shape-large);
+  background: var(--sys-surface-container);
+  box-shadow: var(--m3-elevation-1);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.plan-card__copy {
+  border-radius: var(--m3-shape-small);
+  background: var(--sys-surface-container-highest);
+  color: var(--sys-on-surface-variant);
+}
+
+.plan-card__copy:hover {
+  background: var(--sys-primary-container);
+  color: var(--sys-on-primary-container);
+}
+
+.plan-card__action[data-plan-action="execute"],
+.plan-approval-card .plan-card__action[data-approval-decision="approve"] {
+  background: var(--sys-primary);
+  color: var(--sys-on-primary);
+}
+
+.plan-card__action[data-plan-action="execute"]:hover:not(:disabled),
+.plan-approval-card .plan-card__action[data-approval-decision="approve"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--sys-primary) 92%, var(--sys-on-primary));
+}
+
+.plan-approval-card .plan-card__action[data-approval-decision="deny"] {
+  background: var(--sys-error-container);
+  color: var(--sys-on-error-container);
+}
+
+.plan-approval-card .plan-card__action[data-approval-decision="deny"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--sys-error-container) 92%, var(--sys-on-error-container));
+}
+
+.runtime-approval-card__detail,
+.runtime-approval-card__prompt {
+  border-radius: var(--m3-shape-medium);
+  background: var(--sys-surface-container-high);
+}
+
+.runtime-approval-card__option {
+  border: 1px solid var(--sys-outline-variant);
+  border-radius: var(--m3-shape-medium);
+  background: var(--sys-surface-container-lowest);
+  box-shadow: none;
+}
+
+.runtime-approval-card__option:hover,
+.runtime-approval-card__option:focus-visible {
+  border-color: var(--sys-primary);
+  background: var(--sys-primary-container);
+}
+
+.runtime-approval-card__option.is-selected {
+  border-color: var(--sys-primary);
+  background: var(--sys-primary-container);
+  box-shadow: inset 0 0 0 1px var(--sys-primary);
+}
+
+.runtime-approval-card__code {
+  border-radius: var(--m3-shape-small);
+  background: var(--sys-surface-container-highest);
+  color: var(--sys-on-surface);
+}
+
+/* Status surfaces --------------------------------------------------------- */
+.runtime-approval-summary[data-state="approved"],
+.status-success,
+.is-success {
+  color: var(--sys-on-success-container);
+}
+
+.runtime-approval-summary[data-state="denied"],
+.status-error,
+.is-error {
+  color: var(--sys-on-error-container);
+}
+
+/* Navigation and reader surfaces ----------------------------------------- */
+.sidebar {
+  background: var(--sys-surface-container-low);
+  border-right-color: var(--sys-outline-variant);
+}
+
+.sidebar-search-input,
+.sidebar-workspace,
+.sidebar-workspace-popover,
+.sidebar-workspace-select,
+.sidebar-workspace-browser,
+.sidebar-workspace-browser-select,
+.settings-group-card {
+  border-color: var(--sys-outline-variant);
+  background: var(--sys-surface-container);
+  box-shadow: none;
+}
+
+.sidebar-search-input,
+.sidebar-workspace-select,
+.sidebar-workspace-browser-select {
+  border-radius: var(--m3-shape-small);
+}
+
+.sidebar-workspace {
+  border-radius: var(--m3-shape-medium);
+}
+
+.sidebar-search-input:focus,
+.sidebar-workspace-select:focus,
+.sidebar-workspace-browser-select:focus,
+.sidebar-workspace:has(.sidebar-workspace-summary:focus-visible) {
+  border-color: var(--sys-primary);
+  box-shadow: 0 0 0 3px var(--m3-state-focus);
+}
+
+.sidebar-workspace:hover,
+.sidebar-workspace.is-expanded,
+.settings-row:hover {
+  background: var(--sys-primary-container);
+  color: var(--sys-on-primary-container);
+}
+
+.settings-group-card {
+  border-radius: var(--m3-shape-large);
+}
+
+.settings-row + .settings-row {
+  border-top-color: var(--sys-outline-variant);
+}
+
+.settings-row-button,
+.settings-app-btn-primary,
+.sidebar-workspace-confirm {
+  border: 0;
+  border-radius: var(--m3-shape-medium);
+  background: var(--sys-primary);
+  color: var(--sys-on-primary);
+}
+
+.settings-row-button:hover,
+.settings-app-btn-primary:hover,
+.sidebar-workspace-confirm:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--sys-primary) 92%, var(--sys-on-primary));
+}
+
+.workspace-file-reader {
+  border-left-color: var(--sys-outline-variant);
+  background: var(--sys-surface);
+}
+
+.workspace-file-reader-header,
+.workspace-file-reader-list-panel,
+.workspace-file-reader-search {
+  border-color: var(--sys-outline-variant);
+  background: var(--sys-surface-container-low);
+}
+
+.workspace-file-reader-back,
+.workspace-file-reader-refresh,
+.workspace-file-reader-close {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: var(--m3-shape-full);
+  background: var(--sys-surface-container-highest);
+  color: var(--sys-on-surface-variant);
+}
+
+.workspace-file-reader-back:hover,
+.workspace-file-reader-refresh:hover,
+.workspace-file-reader-close:hover {
+  background: var(--sys-primary-container);
+  color: var(--sys-on-primary-container);
+}
+
+.workspace-file-reader-eyebrow,
+.workspace-file-tree-count,
+.workspace-file-tree-kind {
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.workspace-file-reader-preview {
+  background: var(--sys-surface);
+}
+
+.workspace-file-reader-search-input {
+  min-height: 48px;
+  border: 1px solid var(--sys-outline);
+  border-radius: var(--m3-shape-medium);
+  background: var(--sys-surface-container-lowest);
+}
+
+.workspace-file-reader-search-input:focus {
+  border-color: var(--sys-primary);
+  box-shadow: 0 0 0 3px var(--m3-state-focus);
+}
+
+.workspace-file-tree-folder-toggle,
+.workspace-file-tree-file {
+  min-height: 40px;
+  border-radius: var(--m3-shape-small);
+}
+
+.workspace-file-tree-folder-toggle:hover,
+.workspace-file-tree-file:hover,
+.workspace-file-tree-file.active {
+  background: var(--sys-primary-container);
+  color: var(--sys-on-primary-container);
+}
+
+.workspace-file-reader-empty,
+.workspace-file-reader-status {
+  color: var(--sys-on-surface-variant);
+}
+
+.workspace-file-reader-empty-title,
+.workspace-file-reader-status-title {
+  color: var(--sys-on-surface);
+}
+
+/* Message, tool, and code surfaces --------------------------------------- */
+.msg-user-bubble {
+  background: var(--message-bubble-fill, var(--sys-primary-container));
+  color: var(--message-bubble-on, var(--sys-on-primary-container));
+  border-color: transparent;
+  box-shadow: var(--m3-elevation-1);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.msg-touch-menu {
+  border: 0;
+  border-radius: var(--m3-shape-extra-large) !important;
+  background: var(--sys-surface-container-high);
+  box-shadow: var(--m3-elevation-3);
+}
+
+.msg-touch-menu .msg-action-btn {
+  border-radius: var(--m3-shape-medium);
+  color: var(--sys-on-surface);
+}
+
+.msg-touch-menu .msg-action-btn:hover,
+.msg-touch-menu .msg-action-btn:focus-visible,
+.msg-touch-menu .msg-action-btn:active {
+  background: var(--m3-state-hover);
+  color: var(--sys-on-surface);
+}
+
+.msg-touch-menu .msg-action-btn + .msg-action-btn {
+  border-top-color: var(--sys-outline-variant);
+}
+
+.md-content pre,
+.code-block-wrap,
+.mermaid-diagram,
+.tool-card,
+.diff-block {
+  background: var(--sys-surface-container-high) !important;
+  color: var(--sys-on-surface);
+  border-color: var(--sys-outline-variant);
+  border-radius: var(--m3-shape-medium);
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.md-content pre code,
+.code-block-wrap code {
+  color: var(--sys-on-surface);
+}
+
+.tool-header,
+.diff-header {
+  background: var(--sys-surface-container) !important;
+  color: var(--sys-on-surface);
+}
+
+.tool-header:hover,
+.diff-header:hover {
+  background: var(--m3-state-hover) !important;
+}
+
+.change-type.add,
+.diff-line-add {
+  background: var(--sys-success-container);
+  color: var(--sys-on-success-container);
+}
+
+.change-type.delete,
+.diff-line-remove {
+  background: var(--sys-error-container);
+  color: var(--sys-on-error-container);
+}
+
+.change-type.edit,
+.change-type.update {
+  background: var(--sys-secondary-container);
+  color: var(--sys-on-secondary-container);
+}
+
+/* Live Bar remains on the versioned online/deb surface contract. It is
+   intentionally not mapped to the shared M3 color roles here. */
+
+/* Run Sheet --------------------------------------------------------------- */
+.run-sheet {
+  background: var(--sys-surface-container) !important;
+  border-top-left-radius: var(--m3-shape-extra-large);
+  border-top-right-radius: var(--m3-shape-extra-large);
+  box-shadow: var(--m3-elevation-3) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.run-sheet__close,
+.run-sheet__now-action {
+  color: var(--sys-on-surface-variant);
+}
+
+.run-sheet__close:hover,
+.run-sheet__now-action:hover {
+  background: var(--m3-state-hover);
+  color: var(--sys-on-surface);
+}
+
+.run-sheet__now,
+.run-sheet__plan-current,
+.run-sheet__plan-item,
+.run-sheet__file {
+  background: transparent !important;
+  color: var(--sys-on-surface);
+  border-color: var(--sys-outline-variant);
+  box-shadow: none !important;
+}
+
+.run-sheet__md-button {
+  background: var(--sys-surface-container-high) !important;
+  color: var(--sys-on-surface);
+  border-color: var(--sys-outline-variant);
+  box-shadow: none !important;
+}
+
+.run-sheet__md-button:hover {
+  background: var(--m3-state-hover) !important;
+}
+
+.run-sheet__plan-current:hover {
+  color: var(--sys-on-surface);
+}
+
+.run-sheet__plan-current:focus-visible {
+  outline: 2px solid var(--m3-state-focus);
+  outline-offset: 2px;
+}
+
+.run-sheet__progress {
+  background: var(--sys-surface-container-highest);
+}
+
+.run-sheet__progress-fill {
+  background: var(--sys-primary);
+}
+
+/* Workspace reader and right sidebar ------------------------------------ */
+.workspace-file-reader,
+.right-sidebar {
+  background: var(--sys-surface) !important;
+  border-color: var(--sys-outline-variant);
+  box-shadow: none;
+}
+
+.workspace-file-reader-header,
+.workspace-file-reader-list-panel,
+.right-sidebar-header {
+  background: var(--sys-surface-container-low) !important;
+  border-color: var(--sys-outline-variant);
+}
+
+.workspace-file-reader-preview,
+.right-sidebar-body,
+.right-sidebar-home {
+  background: var(--sys-surface) !important;
+}
+
+.workspace-file-reader-search,
+.workspace-readable-toolbar {
+  background: var(--sys-surface-container-low) !important;
+  border-color: var(--sys-outline-variant);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.workspace-file-reader-back,
+.workspace-file-reader-refresh,
+.workspace-file-reader-close,
+.right-sidebar-back,
+.right-sidebar-close,
+.workspace-readable-action {
+  border: 0;
+  border-radius: var(--m3-shape-full);
+  background: var(--sys-surface-container-high);
+  color: var(--sys-on-surface-variant);
+  box-shadow: none;
+}
+
+.workspace-file-reader-back:hover,
+.workspace-file-reader-refresh:hover,
+.workspace-file-reader-close:hover,
+.right-sidebar-back:hover,
+.right-sidebar-close:hover,
+.workspace-readable-action:hover {
+  background: var(--m3-state-hover);
+  color: var(--sys-on-surface);
+}
+
+.workspace-file-reader-search-input {
+  border-color: var(--sys-outline);
+  border-radius: var(--m3-shape-medium) !important;
+  background: var(--sys-surface-container-lowest);
+  color: var(--sys-on-surface);
+}
+
+.workspace-file-reader-search-input:focus {
+  border-color: var(--sys-primary);
+  box-shadow: 0 0 0 3px var(--m3-state-focus);
+}
+
+.workspace-file-tree-folder-toggle,
+.workspace-file-tree-file {
+  border-radius: var(--m3-shape-small) !important;
+  color: var(--sys-on-surface-variant);
+}
+
+.workspace-file-tree-folder-toggle:hover,
+.workspace-file-tree-file:hover,
+.workspace-file-tree-file.active {
+  background: var(--sys-primary-container);
+  color: var(--sys-on-primary-container);
+}
+
+.right-sidebar-big-button {
+  border: 0;
+  border-radius: var(--m3-shape-large);
+  background: var(--sys-surface-container-high) !important;
+  color: var(--sys-on-surface);
+  box-shadow: var(--m3-elevation-1);
+}
+
+.right-sidebar-big-button:hover {
+  background: var(--sys-surface-container-highest) !important;
+}
+
+.right-sidebar-big-button-icon {
+  border-radius: var(--m3-shape-medium);
+  background: var(--sys-secondary-container);
+  color: var(--sys-on-secondary-container);
+}
+
+/* Sidebar navigation ------------------------------------------------------
+   The navigation shell is a persistent surface, not a translucent overlay.
+   Keep the hierarchy legible without depending on blur, gradients, or
+   inset hairlines from the legacy glass cascade. Floating workspace menus
+   and action sheets remain separate elevated surfaces below. */
+.sidebar {
+  background: var(--sys-surface-container-low) !important;
+  border-right: 0 !important;
+  box-shadow: none !important;
+}
+
+.sidebar-app-bar,
+.sidebar-device-bar,
+.sidebar-primary-nav,
+.sidebar-search-mode-header,
+.sidebar-subpage-header {
+  background: var(--sys-surface-container-low);
+}
+
+.sidebar-device-name-btn,
+.sidebar-device-add-btn,
+.sidebar-icon-btn,
+.sidebar-filter-btn,
+.sidebar-account-btn,
+.sidebar-agent-btn,
+.sidebar-search-shell,
+.sidebar-primary-action {
+  background: var(--sys-surface-container);
+  color: var(--sys-on-surface);
+  box-shadow: none !important;
+}
+
+.sidebar-device-name-btn:hover,
+.sidebar-device-add-btn:hover,
+.sidebar-icon-btn:hover,
+.sidebar-filter-btn:hover,
+.sidebar-account-btn:hover,
+.sidebar-agent-btn:hover,
+.sidebar-primary-action:hover {
+  background: var(--sys-surface-container-highest);
+  color: var(--sys-on-surface);
+}
+
+.sidebar-device-name-btn:focus-visible,
+.sidebar-device-add-btn:focus-visible,
+.sidebar-icon-btn:focus-visible,
+.sidebar-filter-btn:focus-visible,
+.sidebar-account-btn:focus-visible,
+.sidebar-agent-btn:focus-visible,
+.sidebar-primary-action:focus-visible,
+.sidebar-tab:focus-visible,
+.session-item:focus-visible,
+.session-item-main:focus-visible {
+  outline: 3px solid var(--m3-state-focus);
+  outline-offset: 2px;
+}
+
+.sidebar-account-popover {
+  background: var(--sys-surface-container-high) !important;
+  color: var(--sys-on-surface);
+  border-radius: var(--m3-shape-extra-large) !important;
+  box-shadow: var(--m3-elevation-3) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.sidebar-account-title,
+.sidebar-account-status {
+  color: var(--sys-on-surface);
+}
+
+.sidebar-account-detail {
+  color: var(--sys-on-surface-variant);
+}
+
+.sidebar-account-action {
+  min-height: 44px;
+  border-radius: var(--mx-r-button-44) !important;
+  background: var(--sys-primary);
+  color: var(--sys-on-primary);
+  box-shadow: none !important;
+}
+
+.sidebar-account-action--secondary,
+.sidebar-account-action[data-tone="secondary"] {
+  background: var(--sys-surface-container-highest);
+  color: var(--sys-on-surface);
+}
+
+.sidebar-account-action:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--sys-primary) 92%, var(--sys-on-primary));
+  filter: none;
+}
+
+.sidebar-account-action--secondary:hover:not(:disabled),
+.sidebar-account-action[data-tone="secondary"]:hover:not(:disabled) {
+  background: var(--m3-state-hover);
+  color: var(--sys-on-surface);
+}
+
+.sidebar-account-action:focus-visible {
+  outline: 3px solid var(--m3-state-focus);
+  outline-offset: 2px;
+}
+
+.sidebar-account-btn[data-account-state="pending"] .sidebar-account-indicator {
+  background: var(--sys-warning);
+  border-color: var(--sys-surface-container);
+}
+
+.sidebar-account-btn[data-account-state="ready"] .sidebar-account-indicator {
+  background: var(--sys-success);
+  border-color: var(--sys-surface-container);
+}
+
+.sidebar-search-shell,
+.sidebar-search-input,
+.sidebar-workspace-select,
+.sidebar-workspace-browser-select {
+  background: var(--sys-surface-container);
+  color: var(--sys-on-surface);
+}
+
+.sidebar-search-shell:focus-within,
+.sidebar-search-input:focus,
+.sidebar-workspace-select:focus,
+.sidebar-workspace-browser-select:focus {
+  background: var(--sys-surface-container-lowest);
+  box-shadow: 0 0 0 3px var(--m3-state-focus) !important;
+}
+
+.sidebar-primary-nav .sidebar-workspace,
+.sidebar-primary-nav .sidebar-workspace:not(.is-expanded) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.sidebar-tabs {
+  background: var(--sys-surface-container) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.sidebar-tabs::before {
+  background: var(--sys-surface-container-highest) !important;
+  box-shadow: var(--m3-elevation-1) !important;
+}
+
+.sidebar-tab {
+  color: var(--sys-on-surface-variant);
+}
+
+.sidebar-tab.active {
+  color: var(--sys-on-surface);
+}
+
+.sidebar-list,
+.sidebar-projects-view {
+  background: var(--sys-surface-container-low);
+}
+
+.session-item {
+  border: 0;
+  background: transparent;
+  color: var(--sys-on-surface);
+}
+
+.session-item:hover {
+  background: var(--m3-state-hover);
+}
+
+.session-item.active {
+  background: color-mix(in srgb, var(--text) 7%, transparent) !important;
+  color: var(--text);
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.session-item.active .session-item-name {
+  color: inherit;
+  font-weight: 600;
+}
+
+.sidebar-project-head:hover,
+.sidebar-project-head.is-open,
+.folder-group-header:hover,
+.archived-section-header:hover {
+  background: var(--m3-state-hover);
+}
+
+.sidebar-project-head:active,
+.sidebar-project-head.is-open {
+  background: var(--m3-state-pressed);
+}
+
+.sidebar-project-head-count,
+.sidebar-project-match-tag,
+.folder-group-header .folder-count {
+  background: var(--sys-surface-container-highest);
+  color: var(--sys-on-surface-variant);
+}
+
+.sidebar-bottom-frost {
+  background: var(--sys-surface-container-low) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.sidebar-bottom-actions {
+  background: var(--sys-surface-container-low);
+}
+
+.sidebar .sidebar-new-chat-btn {
+  background: var(--sys-primary) !important;
+  color: var(--sys-on-primary) !important;
+  box-shadow: var(--m3-elevation-1) !important;
+}
+
+.sidebar .sidebar-new-chat-btn:hover {
+  background: var(--sys-primary-container) !important;
+  color: var(--sys-on-primary-container) !important;
+}
+
+.sidebar .new-session-btn.secondary {
+  background: var(--sys-surface-container) !important;
+  color: var(--sys-on-surface-variant) !important;
+  box-shadow: none !important;
+}
+
+.settings-group-card,
+.settings-connector-frame-wrap {
+  background: var(--sys-surface-container) !important;
+  border-color: var(--sys-outline-variant) !important;
+  box-shadow: none !important;
+}
+
+.settings-row + .settings-row,
+.settings-row-empty {
+  border-top-color: var(--sys-outline-variant) !important;
+}
+
+.settings-row:hover {
+  background: var(--m3-state-hover);
+}
+
+.settings-row-button:not(.settings-row-button-primary),
+.settings-app-btn:not(.settings-app-btn-primary),
+.custom-select-wrap.cs-settings-row .cs-trigger {
+  background: var(--sys-surface-container-high) !important;
+  color: var(--sys-on-surface) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.settings-row-button:not(.settings-row-button-primary):hover:not(:disabled),
+.settings-app-btn:not(.settings-app-btn-primary):hover:not(:disabled),
+.custom-select-wrap.cs-settings-row .cs-trigger:hover,
+.custom-select-wrap.cs-settings-row.open .cs-trigger {
+  background: var(--sys-surface-container-highest) !important;
+}
+
+.settings-row-button-primary,
+.settings-app-btn-primary {
+  background: var(--sys-primary) !important;
+  color: var(--sys-on-primary) !important;
+  box-shadow: none !important;
+}
+
+.settings-row-button-primary:hover:not(:disabled),
+.settings-app-btn-primary:hover:not(:disabled) {
+  background: var(--sys-primary-container) !important;
+  color: var(--sys-on-primary-container) !important;
+}
+
+@media (max-width: 767px) {
+  .sidebar {
+    background: var(--sys-surface) !important;
+  }
+
+  .sidebar-app-bar,
+  .sidebar-device-bar,
+  .sidebar-primary-nav,
+  .sidebar-search-mode-header,
+  .sidebar-subpage-header,
+  .sidebar-list,
+  .sidebar-projects-view,
+  .sidebar-bottom-actions,
+  .sidebar-bottom-frost {
+    background: var(--sys-surface) !important;
+  }
+
+  .sidebar-tabs {
+    background: var(--sys-surface-container) !important;
+  }
+}
+
+/* Final reference pass: L1/L2 owns the chrome contract.  Keep the shared
+   header and overflow actions quiet as well; the focus ring is the only
+   persistent interaction affordance, while hover/selected state supplies the
+   temporary surface.  The composer's outer glass remains the documented
+   exception, including its functional edge on mobile. */
+.header,
+.header-overflow-menu,
+#goalSheet .modal {
+  border: 0 !important;
+}
+
+.header-btn,
+.header-review-btn,
+.header-sidebar-btn,
+.header-refresh-btn,
+.header-more-btn,
+.goal-chip {
+  border: 0 !important;
+}
+
+.header-btn:focus-visible,
+.header-review-btn:focus-visible,
+.header-sidebar-btn:focus-visible,
+.header-refresh-btn:focus-visible,
+.header-more-btn:focus-visible,
+.goal-chip:focus-visible,
+.header-overflow-menu-item:focus-visible {
+  outline: 3px solid var(--m3-state-focus) !important;
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  /* Keep the shared control language without shrinking the established phone
+     touch targets. */
+  .composer-runtime-btn,
+  .composer-runtime-model-btn,
+  .composer-permission-btn,
+  .tool-select,
+  .model-select,
+  .effort-select,
+  .service-tier-select,
+  .thinking-toggle {
+    min-height: 52px;
+  }
+
+  .composer-action-btn {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-add-menu,
+  .composer-add-panel,
+  .plan-card {
+    animation: none;
+    transition-duration: 1ms;
+  }
+}
+
+/* Reference alignment: the L1/L2 session list is the canonical operational
+   surface. Other chat pages use the same flat rows, borderless controls, and
+   state-driven interaction feedback. Composer keeps its glass shell as the
+   intentional exception; its internal controls join this same contract. */
+.sidebar-projects-view {
+  gap: 4px;
+  padding: 8px 8px var(--sidebar-bottom-reserve);
+}
+
+.sidebar-project-group {
+  gap: 0;
+}
+
+.sidebar-project-head,
+.session-item,
+.sidebar-project-preview .session-item {
+  min-height: 42px;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.sidebar-project-preview .session-item {
+  min-height: 38px;
+  margin: 0;
+}
+
+.sidebar-project-head:hover,
+.session-item:hover,
+.folder-group-header:hover,
+.archived-section-header:hover {
+  background: var(--m3-state-hover) !important;
+  color: var(--sys-on-surface);
+}
+
+.sidebar-project-head:active,
+.sidebar-project-head.is-open,
+.session-item.active {
+  background: var(--sys-surface-container-highest) !important;
+  color: var(--sys-on-surface);
+  box-shadow: none !important;
+}
+
+.session-item.active .session-item-name,
+.session-item.active .session-item-time {
+  color: inherit;
+}
+
+.sidebar-project-head:focus-visible,
+.session-item:focus-visible,
+.session-item-main:focus-visible,
+.folder-group-header:focus-visible,
+.archived-section-header:focus-visible {
+  outline: 3px solid var(--m3-state-focus) !important;
+  outline-offset: 2px;
+}
+
+/* Settings is a preference surface: one clear section heading, one tonal
+   list container, and rows that carry their own state. The old cascade made
+   every group transparent, which left headings and controls floating on an
+   empty rail. */
+#settingsPanel {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 12px calc(24px + var(--safe-bottom)) !important;
+  background: var(--sys-surface-container-low) !important;
+  scrollbar-width: thin;
+}
+
+#settingsPanel.visible {
+  display: block;
+}
+
+#settingsPanel .settings-group {
+  margin: 0 0 20px;
+}
+
+#settingsPanel .settings-group:last-of-type {
+  margin-bottom: 16px;
+}
+
+#settingsPanel .settings-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  padding: 0 8px 8px;
+}
+
+#settingsPanel .settings-group-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  color: var(--sys-primary);
+}
+
+#settingsPanel .settings-group-icon .rl-icon {
+  width: 20px;
+  height: 20px;
+}
+
+#settingsPanel .settings-group-title {
+  margin: 0;
+  padding: 0;
+  color: var(--sys-on-surface);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+#settingsPanel .settings-group-note {
+  margin: -2px 10px 10px 38px;
+  color: var(--sys-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#settingsPanel .settings-group-card {
+  display: grid;
+  overflow: hidden !important;
+  border: 0 !important;
+  border-radius: 20px !important;
+  background: var(--sys-surface-container) !important;
+  box-shadow: none !important;
+}
+
+#settingsPanel .settings-row {
+  min-height: 64px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent;
+}
+
+#settingsPanel .settings-row + .settings-row,
+#settingsPanel .settings-row-empty {
+  border-top: 1px solid var(--sys-outline-variant) !important;
+}
+
+#settingsPanel .settings-row:hover {
+  background: var(--sys-surface-container-high) !important;
+  color: var(--sys-on-surface);
+}
+
+#settingsPanel .settings-row-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+
+#settingsPanel .settings-row-title {
+  color: var(--sys-on-surface);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+#settingsPanel .settings-row-note,
+#settingsPanel .settings-row-status {
+  margin-top: 0;
+  color: var(--sys-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+#settingsPanel .settings-row-control {
+  display: flex;
+  min-width: 0;
+  max-width: 168px;
+  align-items: center;
+}
+
+#settingsPanel .settings-row-button,
+#settingsPanel .custom-select-wrap.cs-settings-row .cs-trigger {
+  min-height: 44px;
+  border: 0 !important;
+  border-radius: var(--mx-r-button-44) !important;
+  background: var(--sys-surface-container-highest) !important;
+  color: var(--sys-on-surface) !important;
+  box-shadow: none !important;
+  font-size: 13px;
+  font-weight: 650;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#settingsPanel .settings-row-select {
+  background: var(--sys-surface-container-highest);
+  color: var(--sys-on-surface);
+}
+
+#settingsPanel .settings-row-button {
+  padding: 0 16px;
+}
+
+#settingsPanel .settings-row-button:hover:not(:disabled),
+#settingsPanel .custom-select-wrap.cs-settings-row .cs-trigger:hover,
+#settingsPanel .custom-select-wrap.cs-settings-row.open .cs-trigger {
+  background: var(--sys-surface-container-high) !important;
+}
+
+#settingsPanel .settings-row-button-primary {
+  min-height: 52px;
+  border-radius: var(--mx-r-button-52) !important;
+  background: var(--sys-primary) !important;
+  color: var(--sys-on-primary) !important;
+}
+
+#settingsPanel .settings-row-button-primary:hover:not(:disabled) {
+  background: var(--sys-primary-container) !important;
+  color: var(--sys-on-primary-container) !important;
+}
+
+#settingsPanel .settings-row-button:disabled {
+  background: var(--sys-surface-container-high) !important;
+  color: var(--sys-on-surface-variant) !important;
+  opacity: 0.62;
+}
+
+#settingsPanel .settings-row-button:focus-visible,
+#settingsPanel .settings-app-btn:focus-visible,
+#settingsPanel .custom-select-wrap .cs-trigger:focus-visible {
+  outline: 3px solid var(--m3-state-focus) !important;
+  outline-offset: 2px;
+}
+
+#settingsPanel .settings-row-expanded {
+  gap: 12px;
+}
+
+#settingsPanel .settings-row-expanded .settings-row-editor {
+  gap: 10px;
+}
+
+#settingsPanel .settings-row-connectivity .settings-row-control {
+  width: 100%;
+  max-width: none;
+}
+
+#settingsPanel .settings-row-connectivity .settings-row-button {
+  width: 100%;
+}
+
+#settingsPanel .settings-row-empty {
+  padding: 14px;
+  color: var(--sys-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+@media (max-width: 767px) {
+  #settingsPanel .settings-row-button,
+  #settingsPanel .custom-select-wrap.cs-settings-row .cs-trigger {
+    min-height: 52px !important;
+    border-radius: var(--mx-r-button-52) !important;
+  }
+
+  #settingsPanel .settings-row-button-primary {
+    border-radius: var(--mx-r-button-52) !important;
+  }
+
+  #settingsPanel .settings-group-card {
+    border-radius: 20px !important;
+  }
+}
+
+.custom-select-wrap .cs-panel,
+.custom-select-panel {
+  border: 0 !important;
+  border-radius: var(--m3-shape-large) !important;
+  background: var(--sys-surface-container) !important;
+  box-shadow: var(--m3-elevation-2) !important;
+}
+
+.custom-select-wrap .cs-option,
+.custom-select-panel .cs-option {
+  min-height: 44px;
+  border-radius: var(--m3-shape-medium);
+  color: var(--sys-on-surface-variant);
+}
+
+.custom-select-wrap .cs-option:hover,
+.custom-select-panel .cs-option:hover,
+.custom-select-wrap .cs-option.selected,
+.custom-select-panel .cs-option.selected {
+  background: var(--m3-state-hover);
+  color: var(--sys-on-surface);
+}
+
+.custom-select-wrap .cs-option.selected,
+.custom-select-panel .cs-option.selected {
+  background: var(--sys-primary-container);
+  color: var(--sys-on-primary-container);
+}
+
+/* Other operational surfaces use the same borderless elevation language. */
+.plan-card,
+.runtime-approval-card__option,
+.right-sidebar-big-button,
+.workspace-file-reader,
+.right-sidebar,
+#decisionSheet,
+.run-sheet {
+  border: 0 !important;
+}
+
+.runtime-approval-card__option:hover,
+.runtime-approval-card__option:focus-visible,
+.runtime-approval-card__option.is-selected {
+  border: 0 !important;
+  outline: none;
+  background: var(--sys-primary-container) !important;
+  color: var(--sys-on-primary-container);
+  box-shadow: none !important;
+}
+
+.runtime-approval-card__option:focus-visible {
+  outline: 3px solid var(--m3-state-focus) !important;
+  outline-offset: 2px;
+}
+
+.run-sheet__header,
+.run-sheet__reader-header,
+.run-sheet__reader-toolbar {
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
+.run-sheet__plan-item,
+.run-sheet__file {
+  border-top: 0 !important;
+  border-bottom: 0 !important;
+}
+
+.run-sheet__md-button {
+  background: var(--sys-surface-container-high) !important;
+}
+
+.run-sheet__md-button:hover {
+  background: var(--sys-surface-container-highest) !important;
+}
+
+/* Composer exception: preserve the glass wrapper, but make the plus bar,
+   runtime/model controls, and their menus use the same M3 control language. */
+.input-actions-row {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.composer-action-btn,
+.composer-runtime-btn,
+.composer-runtime-model-btn,
+.composer-runtime-speed-btn,
+.composer-permission-btn,
+.tool-select,
+.model-select,
+.effort-select,
+.service-tier-select,
+.thinking-toggle {
+  min-height: 40px;
+  border: 0 !important;
+  border-radius: var(--m3-shape-medium) !important;
+  background: var(--sys-surface-container-high) !important;
+  color: var(--sys-on-surface) !important;
+  box-shadow: none !important;
+}
+
+/* Permission is a fixed runtime policy, not a composer choice. Keep the
+   legacy nodes in the DOM for compatibility, but remove every selection
+   surface from the runtime model panel and the standalone composer control. */
+.composer-runtime-permission-row-btn,
+.composer-permission-btn,
+.composer-permission-menu,
+#composerRuntimePermissionView {
+  display: none !important;
+}
+
+.composer-action-btn:hover:not(:disabled),
+.composer-runtime-btn:hover:not(:disabled),
+.composer-runtime-btn[aria-expanded="true"],
+.composer-runtime-model-btn:hover:not(:disabled),
+.composer-runtime-model-btn[aria-expanded="true"],
+.composer-runtime-speed-btn:hover:not(:disabled),
+.composer-runtime-speed-btn[aria-expanded="true"],
+.composer-permission-btn:hover:not(:disabled),
+.composer-permission-btn[aria-expanded="true"],
+.tool-select:hover:not(:disabled),
+.model-select:hover:not(:disabled),
+.effort-select:hover:not(:disabled),
+.service-tier-select:hover:not(:disabled),
+.thinking-toggle:hover:not(:disabled),
+.thinking-toggle.active {
+  background: var(--sys-surface-container-highest) !important;
+  color: var(--sys-on-surface);
+  box-shadow: none !important;
+}
+
+.composer-runtime-model-row > .composer-runtime-model-btn,
+.composer-runtime-model-row > .composer-runtime-model-btn:hover:not(:disabled),
+.composer-runtime-model-row > .composer-runtime-model-btn[aria-expanded="true"] {
+  background: var(--m3-state-hover) !important;
+  box-shadow: none !important;
+}
+
+.composer-runtime-menu .composer-runtime-model-btn {
+  border-radius: var(--m3-shape-medium) !important;
+}
+
+/* The speed picker is a borderless capsule.  Its native focus ring otherwise
+   reappears as a blue outline after every touch selection. */
+.composer-runtime-speed-select:focus-visible {
+  outline: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.composer-action-btn:focus-visible,
+.composer-runtime-btn:focus-visible,
+.composer-runtime-model-btn:focus-visible,
+.composer-runtime-speed-btn:focus-visible,
+.composer-runtime-speed-toggle:focus-visible,
+.composer-permission-btn:focus-visible,
+.tool-select:focus-visible,
+.model-select:focus-visible,
+.effort-select:focus-visible,
+.service-tier-select:focus-visible,
+.thinking-toggle:focus-visible {
+  outline: 3px solid var(--m3-state-focus) !important;
+  outline-offset: 2px;
+  box-shadow: none !important;
+}
+
+/* The thinking entry is an icon-only affordance beside the model/runtime
+   controls; it should not introduce a second filled control surface. */
+.composer-runtime-speed-btn,
+.composer-runtime-speed-btn:hover:not(:disabled),
+.composer-runtime-speed-btn[aria-expanded="true"] {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.composer-runtime-speed-icon .gauge-needle,
+.composer-runtime-speed-icon .gauge-hub {
+  stroke: var(--sys-on-surface, #1c1c1e);
+}
+
+.composer-runtime-speed-icon .rl-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.composer-runtime-speed-icon .gauge-hub {
+  fill: var(--sys-on-surface, #1c1c1e);
+}
+
+.composer-runtime-speed-toggle {
+  color: var(--sys-on-surface-variant, #555e6b);
+}
+
+.composer-runtime-speed-toggle:hover:not(:disabled),
+.composer-runtime-speed-toggle:focus-visible {
+  color: var(--sys-primary, #000000);
+}
+
+.composer-add-menu {
+  border: 0 !important;
+  border-radius: 22px !important;
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface-soft, var(--bg-secondary))) !important;
+  box-shadow:
+    0 2px 6px rgba(16, 21, 39, 0.08),
+    0 12px 28px rgba(16, 21, 39, 0.12) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.composer-add-menu-item:hover,
+.composer-add-menu-item.active,
+.composer-add-menu-item[aria-checked="true"],
+.composer-add-panel-row:hover,
+.composer-add-panel-row.active,
+.composer-add-panel-row.is-selected,
+.composer-runtime-option:hover:not(.active) {
+  background: var(--m3-state-hover) !important;
+  color: var(--sys-on-surface);
+  box-shadow: none !important;
+}
+
+/* The add menu keeps each action to one readable title line. */
+.composer-add-menu-item {
+  grid-template-columns: minmax(0, 1fr) 18px !important;
+}
+
+.composer-add-menu-note {
+  display: none !important;
+}
+
+.composer-add-menu-item:focus-visible,
+.composer-add-panel-row:focus-visible,
+.composer-runtime-option:focus-visible,
+.composer-add-panel-footer:focus-visible,
+.composer-runtime-back:focus-visible {
+  outline: 3px solid var(--m3-state-focus) !important;
+  outline-offset: 2px;
+  box-shadow: none !important;
+}
+
+/* Remaining shared chat chrome: stable M3 surfaces take precedence over the
+   older frost cascade used by the base/header and goal sheet styles. */
+.header {
+  background: var(--sys-surface-container-low) !important;
+  border-bottom: 1px solid var(--sys-outline-variant) !important;
+}
+
+.header::before {
+  display: none !important;
+}
+
+.header-btn,
+.header-review-btn,
+.header-sidebar-btn,
+.header-refresh-btn,
+.header-more-btn,
+.goal-chip {
+  border: 1px solid var(--sys-outline-variant) !important;
+  border-radius: var(--m3-shape-full) !important;
+  background: var(--sys-surface-container) !important;
+  color: var(--sys-on-surface) !important;
+  box-shadow: none !important;
+}
+
+.header-btn:hover,
+.header-review-btn:hover,
+.header-review-btn[aria-expanded="true"],
+.header-sidebar-btn:hover,
+.header-sidebar-btn[aria-expanded="true"],
+.header-refresh-btn:hover,
+.header-more-btn:hover,
+.goal-chip:hover {
+  background: var(--sys-surface-container-high) !important;
+  color: var(--sys-on-surface) !important;
+}
+
+.header-overflow-menu {
+  border: 1px solid var(--sys-outline-variant) !important;
+  border-radius: var(--m3-shape-large) !important;
+  background: var(--sys-surface-container) !important;
+  box-shadow: var(--m3-elevation-2) !important;
+  backdrop-filter: none !important;
+}
+
+.header-overflow-menu-item:hover {
+  background: var(--sys-surface-container-high) !important;
+}
+
+#goalSheet .modal {
+  border: 1px solid var(--sys-outline-variant) !important;
+  border-radius: var(--m3-shape-extra-large) var(--m3-shape-extra-large) 0 0 !important;
+  background: var(--sys-surface-container) !important;
+  box-shadow: var(--m3-elevation-3) !important;
+  backdrop-filter: none !important;
+}
+
+#goalSheet .goal-status-display {
+  border-radius: var(--m3-shape-medium) !important;
+  background: var(--sys-surface-container-high) !important;
+}
+
+#goalSheet .goal-status-display[data-tone="working"] {
+  background: var(--sys-primary-container) !important;
+  color: var(--sys-on-primary-container) !important;
+}
+
+#goalSheet .goal-status-display[data-tone="done"] {
+  background: var(--sys-success-container) !important;
+  color: var(--sys-on-success-container) !important;
+}
+
+#goalSheet .goal-status-display[data-tone="blocked"] {
+  background: var(--sys-error-container) !important;
+  color: var(--sys-on-error-container) !important;
+}
+
+@media (max-width: 767px) {
+  .msg-assistant .msg-actions {
+    gap: 8px !important;
+  }
+}
+
+/* Mobile add panels share the current composer's material. Their selected
+   rows keep the shared action-container color, without a persistent outline
+   or inset border; keyboard focus remains visible through :focus-visible. */
+@media (max-width: 767px) {
+  .composer-add-panel--agent,
+  .composer-add-panel--connector {
+    background:
+      linear-gradient(112deg, rgba(255, 255, 255, 0.54) 0%, rgba(255, 255, 255, 0.18) 42%, rgba(255, 255, 255, 0) 74%),
+      var(--composer-glass-fill);
+    border: 1px solid var(--composer-glass-edge) !important;
+    box-shadow: var(--composer-glass-shadow) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.16);
+    backdrop-filter: blur(22px) saturate(1.16);
+  }
+
+  .composer-add-menu-item.active,
+  .composer-add-menu-item[aria-checked="true"],
+  .composer-add-panel--agent .composer-add-panel-row.active,
+  .composer-add-panel--connector .composer-add-panel-row.active,
+  .composer-add-panel--agent .composer-add-panel-row.is-selected,
+  .composer-add-panel--connector .composer-add-panel-row.is-selected {
+    background: var(--color-action-container, var(--accent-dim)) !important;
+    color: var(--color-action-on-container, var(--text)) !important;
+    border: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .composer-add-menu-item.active:focus-visible,
+  .composer-add-menu-item[aria-checked="true"]:focus-visible,
+  .composer-add-panel--agent .composer-add-panel-row.active:focus-visible,
+  .composer-add-panel--connector .composer-add-panel-row.active:focus-visible,
+  .composer-add-panel--agent .composer-add-panel-row.is-selected:focus-visible,
+  .composer-add-panel--connector .composer-add-panel-row.is-selected:focus-visible {
+    outline: 2px solid var(--focus-border) !important;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-border) 18%, transparent) !important;
+  }
+}
+
+/* Last cascade boundary for the reference contract. The historical frost
+   rules above may still describe a border, but the shipped surface remains
+   borderless; focus-visible is the deliberate exception. */
+.header,
+.header-overflow-menu,
+#goalSheet .modal,
+.header-btn,
+.header-review-btn,
+.header-sidebar-btn,
+.header-refresh-btn,
+.header-more-btn,
+.goal-chip {
+  border: 0 !important;
+}
+
+@media (max-width: 767px) {
+  .composer-action-btn {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Final shape contract: the L1/L2 New project / New session action owns the
+   button shape. It is a capsule, so the shared button ratio is half of the
+   control height rather than one copied pixel value. Keep circular icon
+   actions circular, but derive every text-bearing control from this ratio. */
+:root {
+  --mx-button-radius-ratio: 0.5;
+  --mx-r-button-28: calc(28px * var(--mx-button-radius-ratio));
+  --mx-r-button-30: calc(30px * var(--mx-button-radius-ratio));
+  --mx-r-button-32: calc(32px * var(--mx-button-radius-ratio));
+  --mx-r-button-34: calc(34px * var(--mx-button-radius-ratio));
+  --mx-r-button-36: calc(36px * var(--mx-button-radius-ratio));
+  --mx-r-button-40: calc(40px * var(--mx-button-radius-ratio));
+  --mx-r-button-44: calc(44px * var(--mx-button-radius-ratio));
+  --mx-r-button-46: calc(46px * var(--mx-button-radius-ratio));
+  --mx-r-button-48: calc(48px * var(--mx-button-radius-ratio));
+  --mx-r-button-52: calc(52px * var(--mx-button-radius-ratio));
+  --mx-r-button-56: calc(56px * var(--mx-button-radius-ratio));
+  --mx-r-l1-l2: var(--mx-r-button-52);
+}
+
+/* Reuse the online header material: the frost tint and 10px masked blur fade
+   are the established chat surface. The header remains an overlay so this
+   layer cannot block transcript interaction; only its controls receive input. */
+.header {
+  pointer-events: none;
+  overflow: hidden;
+  background: linear-gradient(
+    to bottom,
+    var(--frost-tint) 0%,
+    transparent 100%
+  ) !important;
+  border-bottom: 0 !important;
+}
+
+.header::before {
+  display: block !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%) !important;
+  mask-image: linear-gradient(to bottom, black 0%, transparent 100%) !important;
+}
+
+/* The home workspace has its own calm top composition. Do not carry the chat
+   transcript's blur fade onto that page. */
+.app-shell:has(.home-workspace:not([hidden])) .header {
+  background: transparent !important;
+}
+
+.app-shell:has(.home-workspace:not([hidden])) .header::before {
+  display: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.header > * {
+  pointer-events: auto;
+}
+
+.header-btn,
+.header-review-btn,
+.header-sidebar-btn,
+.header-refresh-btn,
+.header-more-btn,
+.goal-chip {
+  border: 0 !important;
+  border-radius: var(--mx-r-button-34) !important;
+  background: color-mix(in srgb, var(--bg-secondary) 92%, var(--bg)) !important;
+  color: var(--text) !important;
+  box-shadow: 0 1px 2px rgba(16, 21, 39, 0.05), 0 4px 14px rgba(16, 21, 39, 0.05) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.header-btn:hover,
+.header-review-btn:hover,
+.header-review-btn[aria-expanded="true"],
+.header-sidebar-btn:hover,
+.header-sidebar-btn[aria-expanded="true"],
+.header-refresh-btn:hover,
+.header-more-btn:hover,
+.goal-chip:hover {
+  background: var(--bg-secondary) !important;
+  color: var(--text) !important;
+  box-shadow: 0 2px 6px rgba(16, 21, 39, 0.08), 0 8px 22px rgba(16, 21, 39, 0.07) !important;
+}
+
+.header-more-btn {
+  border-radius: var(--mx-r-button-32) !important;
+}
+
+/* L1 project heads and L2 session rows retain their own row tier. The primary
+   New project / New session action below is the capsule reference for buttons. */
+.sidebar-project-head,
+.session-item,
+.sidebar .session-item,
+.sidebar .session-item.active {
+  border-radius: 10px !important;
+}
+
+.sidebar-project-preview .session-item {
+  border-radius: 10px !important;
+}
+
+.sidebar .sidebar-new-chat-btn {
+  border-radius: 9999px !important;
+}
+
+/* Text-bearing controls use their actual touch tier. These declarations are
+   intentionally last so old full-pill rules cannot reintroduce a different
+   relationship on the chat surface. */
+.sidebar-device-name-btn,
+.sidebar-workspace-summary,
+.empty-state-action,
+.home-new-work,
+.home-device-workspace,
+.run-sheet__reader-action,
+.settings-row-button,
+.settings-app-btn,
+.custom-select-wrap .cs-trigger,
+.custom-select-wrap .cs-option,
+.custom-select-panel .cs-option,
+.sidebar-workspace-confirm,
+.run-sheet__md-button,
+.composer-runtime-btn,
+.composer-runtime-model-btn,
+.composer-permission-btn,
+.tool-select,
+.model-select,
+.effort-select,
+.service-tier-select,
+.thinking-toggle,
+.composer-add-menu-item,
+.composer-add-panel-row,
+.composer-add-panel-footer,
+.composer-add-panel-action,
+.composer-add-panel-add,
+.composer-add-panel-disclosure,
+.composer-add-panel-back,
+.composer-add-panel-refresh,
+.composer-runtime-option,
+.header-overflow-menu-item,
+.queued-steer-menu-item,
+.modal-btn,
+.settings-inline-primary {
+  border-radius: var(--mx-r-button-44) !important;
+}
+
+.home-new-work,
+.home-device-workspace,
+.home-unavailable .home-action,
+.sidebar-action-sheet-primary,
+.sidebar-action-sheet-secondary {
+  border-radius: var(--mx-r-button-48) !important;
+}
+
+.sidebar-action-sheet-action {
+  border-radius: var(--mx-r-button-56) !important;
+}
+
+.new-session-btn {
+  border-radius: var(--mx-r-button-36) !important;
+}
+
+.empty-state-action {
+  border-radius: var(--mx-r-button-46) !important;
+}
+
+.compact-btn {
+  border-radius: var(--mx-r-button-28) !important;
+}
+
+.plan-card__action,
+.decision-sheet__action {
+  border-radius: var(--mx-r-button-52) !important;
+}
+
+.composer-action-btn {
+  border-radius: var(--mx-r-button-34) !important;
+}
+
+@media (max-width: 767px) {
+  .header-btn,
+  .header-review-btn,
+  .header-sidebar-btn,
+  .header-refresh-btn,
+  .header-more-btn,
+  .goal-chip {
+    border-radius: var(--mx-r-button-40) !important;
+  }
+
+  .settings-row-button,
+  .settings-app-btn,
+  .custom-select-wrap .cs-trigger,
+  .custom-select-wrap .cs-option,
+  .custom-select-panel .cs-option,
+  .sidebar-workspace-confirm,
+  .run-sheet__md-button,
+  .composer-runtime-btn,
+  .composer-runtime-model-btn,
+  .composer-runtime-speed-btn,
+  .composer-permission-btn,
+  .tool-select,
+  .model-select,
+  .effort-select,
+  .thinking-toggle,
+  .composer-add-menu-item,
+  .composer-add-panel-row,
+  .composer-runtime-option,
+  .header-overflow-menu-item,
+  .queued-steer-menu-item,
+  .modal-btn,
+  .settings-inline-primary,
+  .plan-card__action,
+  .decision-sheet__action {
+    border-radius: var(--mx-r-button-52) !important;
+  }
+
+  .sidebar-device-name-btn,
+  .sidebar-workspace-summary,
+  .composer-add-panel-row,
+  .composer-add-panel-footer,
+  .composer-add-panel-action,
+  .composer-add-panel-add,
+  .composer-add-panel-disclosure,
+  .composer-add-panel-back,
+  .composer-add-panel-refresh {
+    border-radius: var(--mx-r-button-48) !important;
+  }
+
+  .empty-state-action {
+    border-radius: var(--mx-r-button-46) !important;
+  }
+
+  .sidebar-action-sheet-action {
+    border-radius: var(--mx-r-button-56) !important;
+  }
+
+  .sidebar-action-sheet-primary,
+  .sidebar-action-sheet-secondary,
+  .home-new-work,
+  .home-device-workspace {
+    border-radius: var(--mx-r-button-48) !important;
+  }
+
+  .new-session-btn {
+    border-radius: var(--mx-r-button-44) !important;
+  }
+
+  .input-config-group.right .compact-btn {
+    border-radius: var(--mx-r-button-36) !important;
+  }
+
+  .input-config-group.left .compact-btn {
+    border-radius: var(--mx-r-button-52) !important;
+  }
+
+  .composer-action-btn,
+  .run-sheet__reader-action {
+    border-radius: var(--mx-r-button-44) !important;
+  }
+}
+
+/* Final L1/L2 audit -------------------------------------------------------
+   The session list is the operational reference surface: a quiet page, flat
+   rows, and only the selected/actionable unit receives a container surface.
+   Keep this boundary last so the older glass and sidebar rules cannot make
+   secondary controls translucent or turn operational rows into card stacks. */
+.sidebar .sidebar-icon-btn,
+.sidebar .sidebar-filter-btn,
+.sidebar .sidebar-account-btn,
+.sidebar .sidebar-agent-btn {
+  border: 0 !important;
+  border-radius: var(--m3-shape-full) !important;
+  background: var(--sys-surface-container) !important;
+  color: var(--sys-on-surface) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.sidebar .sidebar-icon-btn:hover,
+.sidebar .sidebar-filter-btn:hover,
+.sidebar .sidebar-account-btn:hover,
+.sidebar .sidebar-agent-btn:hover {
+  background: var(--sys-surface-container-highest) !important;
+  color: var(--sys-on-surface) !important;
+}
+
+.sidebar .sidebar-primary-nav .sidebar-workspace-summary {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.sidebar .sidebar-new-chat-btn {
+  box-shadow: none !important;
+}
+
+/* Reusable Agent rows are L2-like navigation entries, not a gallery of
+   nested cards. The create action remains the single prominent capsule. */
+#agentsPanel .settings-app-card {
+  margin: 0;
+  padding: 14px 8px !important;
+  border: 0 !important;
+  border-bottom: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#agentsPanel .settings-app-card + .settings-app-card {
+  margin-top: 8px;
+}
+
+#agentsPanel #createAgentBtn {
+  min-height: 52px;
+  border: 0 !important;
+  border-radius: var(--mx-r-button-52) !important;
+  background: var(--sys-primary) !important;
+  color: var(--sys-on-primary) !important;
+  box-shadow: none !important;
+}
+
+#agentsPanel .settings-app-actions {
+  gap: 8px;
+  margin-top: 12px;
+}
+
+#agentsPanel .settings-app-btn {
+  min-height: 44px;
+  border: 0 !important;
+  border-radius: var(--mx-r-button-44) !important;
+  box-shadow: none !important;
+}
+
+#agentsPanel .settings-app-btn.settings-app-btn-primary {
+  background: var(--sys-primary) !important;
+  color: var(--sys-on-primary) !important;
+}
+
+#agentsPanel .settings-app-btn.settings-app-btn-danger {
+  background: transparent !important;
+  color: var(--sys-on-surface-variant) !important;
+}
+
+#agentsPanel .settings-app-btn.settings-app-btn-danger:hover:not(:disabled) {
+  background: var(--sys-error-container) !important;
+  color: var(--sys-on-error-container) !important;
+}
+
+/* Activity rows carry observable state, so they may use a tonal container;
+   they do not need the legacy shadow + inset accent rail treatment. */
+.live-operation-row,
+.run-activity-strip {
+  border: 0 !important;
+  border-radius: var(--mx-r-row) !important;
+  background: var(--sys-surface-container) !important;
+  box-shadow: none !important;
+}
+
+.live-operation-row.state-completed,
+.live-operation-row.state-failed,
+.live-operation-row.state-declined,
+.live-operation-row.state-interrupted,
+.live-operation-row.state-waiting_approval,
+.live-operation-row.activity-target-focus {
+  box-shadow: none !important;
+}
+
+.live-operation-row__summary {
+  min-height: 52px;
+  padding: 8px 12px;
+}
+
+.live-operation-row__body {
+  margin: 0 12px 12px 30px;
+  border-left: 0;
+}
+
+.live-operation-row__output {
+  padding: 10px 12px;
+  border-radius: var(--m3-shape-medium);
+  background: var(--sys-surface-container-high) !important;
+  color: var(--sys-on-surface-variant);
+}
+
+.run-activity-strip__main {
+  min-height: 52px;
+  padding: 8px 12px;
+}
+
+.run-activity-strip__stop {
+  width: 52px;
+  min-width: 52px;
+  min-height: 52px;
+}
+
+/* Workbench outcome and file surfaces keep functional grouping, while their
+   internal rows follow the same flat list language as L1/L2. */
+.workbench-status-card,
+.workbench-outcome-card,
+.workbench-review-file,
+.markdown-reader-status {
+  border: 0 !important;
+  border-radius: var(--m3-shape-large) !important;
+  background: var(--sys-surface-container) !important;
+  box-shadow: none !important;
+}
+
+.workbench-outcome-metric,
+.workbench-stat,
+.workbench-file-row,
+.workbench-artifact-item,
+.workbench-session-link.workbench-activity-item,
+.workbench-session-ref-card {
+  border: 0 !important;
+  border-radius: var(--m3-shape-medium) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.workbench-artifact-item:hover,
+.workbench-session-link.workbench-activity-item:hover,
+.workbench-session-ref-card:hover {
+  background: var(--m3-state-hover) !important;
+}
+
+.right-sidebar-big-button {
+  box-shadow: none !important;
+}
+
+/* System toasts are brief status feedback, not colored legacy banners. Keep
+   them on the same semantic surface system as attention and approval UI. */
+.system-toast-container {
+  position: fixed;
+  inset-block-start: max(12px, env(safe-area-inset-top, 0px));
+  inset-inline: 50% auto;
+  z-index: 10000;
+  display: grid;
+  gap: 8px;
+  width: min(520px, calc(100vw - 24px));
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.system-toast {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 52px;
+  max-width: 100%;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: var(--m3-shape-full);
+  background: var(--sys-surface-container-high);
+  color: var(--sys-on-surface);
+  box-shadow: var(--m3-elevation-2);
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: start;
+  overflow-wrap: anywhere;
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: pan-y;
+  user-select: none;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 180ms ease, transform 180ms var(--motion-ease-emphasized);
+  will-change: transform, opacity;
+}
+
+.system-toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.system-toast.is-leaving {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.system-toast.is-dragging {
+  transition: none !important;
+  user-select: none;
+}
+
+.system-toast.is-snap-back {
+  transition: transform 260ms var(--motion-ease-emphasized, cubic-bezier(.16, 1, .3, 1)), opacity 220ms ease-out;
+}
+
+.system-toast.is-leaving-right {
+  opacity: 0;
+  transform: translate3d(110%, 0, 0);
+  transition: transform 240ms cubic-bezier(.32, .08, .8, 1), opacity 200ms ease-in;
+}
+
+.system-toast__message {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.system-toast__close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  margin-inline-start: 8px;
+  border-radius: var(--m3-shape-full);
+  color: currentColor;
+  opacity: .72;
+  pointer-events: none;
+}
+
+.system-toast__close-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.system-toast[data-level="warn"] {
+  background: var(--sys-tertiary-container);
+  color: var(--sys-on-tertiary-container);
+}
+
+.system-toast[data-level="error"] {
+  background: var(--sys-error-container);
+  color: var(--sys-on-error-container);
+}
+
+.system-toast:hover,
+.system-toast:focus-visible {
+  background: var(--sys-surface-container-highest);
+}
+
+.system-toast[data-level="warn"]:hover,
+.system-toast[data-level="warn"]:focus-visible {
+  background: color-mix(in srgb, var(--sys-tertiary-container) 92%, var(--sys-on-tertiary-container));
+}
+
+.system-toast[data-level="error"]:hover,
+.system-toast[data-level="error"]:focus-visible {
+  background: color-mix(in srgb, var(--sys-error-container) 92%, var(--sys-on-error-container));
+}
+
+.system-toast:focus-visible {
+  outline: 3px solid var(--m3-state-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  .system-toast-container {
+    width: calc(100vw - 20px);
+  }
+}
+
+@media (min-width: 768px) {
+  .system-toast__close {
+    display: inline-flex;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .system-toast,
+  .system-toast.is-snap-back,
+  .system-toast.is-leaving-right {
+    transition: none;
+  }
+}
+
+/* Goal surface contract ---------------------------------------------------
+   Keep this boundary after the historical chrome cascade. Goal has its own
+   semantic M3 palette: a compact status chip in the header, then a local
+   dialog/bottom-sheet surface for editing. It must not inherit the old frost
+   border, raw-color status dots, or desktop-only top-sheet geometry. */
+.goal-chip {
+  border: 0 !important;
+  border-radius: var(--m3-shape-full) !important;
+  background: var(--goal-chip-bg, var(--sys-surface-container)) !important;
+  color: var(--goal-chip-fg, var(--sys-on-surface)) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.goal-chip:hover {
+  background: color-mix(
+    in srgb,
+    var(--goal-chip-fg, var(--sys-on-surface)) 8%,
+    var(--goal-chip-bg, var(--sys-surface-container))
+  ) !important;
+  color: var(--goal-chip-fg, var(--sys-on-surface)) !important;
+  box-shadow: none !important;
+}
+
+.goal-chip:active { transform: scale(0.98); }
+
+#goalSheet .modal {
+  width: min(440px, calc(100vw - 32px)) !important;
+  border: 0 !important;
+  border-radius: var(--m3-shape-extra-large) !important;
+  background: var(--sys-surface-container) !important;
+  color: var(--sys-on-surface) !important;
+  box-shadow: var(--m3-elevation-3) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+#goalSheet .modal-header,
+#goalSheet .goal-sheet-footer {
+  border: 0 !important;
+}
+
+#goalSheet .modal-header,
+#goalSheet .modal-body,
+#goalSheet .goal-sheet-footer {
+  background: transparent !important;
+}
+
+#goalSheet .goal-status-display,
+#goalSheet .goal-toggle,
+#goalSheet .goal-chase-row {
+  box-shadow: none !important;
+}
+
+#goalSheet .provider-helper-field input,
+#goalSheet .provider-helper-field textarea {
+  border: 0 !important;
+  background: var(--sys-surface-container-high) !important;
+  color: var(--sys-on-surface) !important;
+  box-shadow: none !important;
+}
+
+#goalSheet .modal-close,
+#goalSheet .modal-btn {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+#goalSheet .modal-btn {
+  border-radius: var(--m3-shape-full) !important;
+  background: var(--sys-surface-container-high) !important;
+  color: var(--sys-on-surface) !important;
+}
+
+#goalSheet .modal-btn:hover {
+  background: var(--sys-surface-container-highest) !important;
+}
+
+#goalSheet .modal-btn.primary,
+#goalSheet .goal-sheet-save-btn {
+  background: var(--sys-primary) !important;
+  color: var(--sys-on-primary) !important;
+}
+
+#goalSheet .modal-btn.primary:hover,
+#goalSheet .goal-sheet-save-btn:hover {
+  background: color-mix(in srgb, var(--sys-primary) 92%, var(--sys-on-primary)) !important;
+  color: var(--sys-on-primary) !important;
+}
+
+#goalSheet .modal-btn.goal-sheet-clear-btn {
+  background: transparent !important;
+  color: var(--sys-error) !important;
+}
+
+#goalSheet .modal-btn.goal-sheet-clear-btn:hover {
+  background: color-mix(in srgb, var(--sys-error) 10%, transparent) !important;
+}
+
+#goalSheet .modal-close {
+  width: 30px !important;
+  min-width: 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  color: var(--sys-on-surface-variant) !important;
+}
+
+#goalSheet .modal-close:hover {
+  background: var(--sys-surface-container-highest) !important;
+  color: var(--sys-on-surface) !important;
+}
+
+#goalSheet .modal-btn:focus-visible,
+#goalSheet .modal-close:focus-visible,
+#goalSheet .provider-helper-field input:focus-visible,
+#goalSheet .provider-helper-field textarea:focus-visible,
+#goalSheet .goal-toggle input:focus-visible {
+  outline: 3px solid var(--m3-state-focus) !important;
+  outline-offset: 2px;
+}
+
+#goalSheet .provider-helper-field input:focus:not(:focus-visible),
+#goalSheet .provider-helper-field textarea:focus:not(:focus-visible) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 640px) {
+  #goalSheet .modal {
+    width: 100% !important;
+    border-radius: var(--m3-shape-extra-large) var(--m3-shape-extra-large) 0 0 !important;
+  }
+}

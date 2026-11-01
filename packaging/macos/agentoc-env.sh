@@ -1,0 +1,144 @@
+#!/bin/bash
+# AgentoC macOS app shared environment bootstrap.
+# Sourced by Contents/MacOS/{AgentoC,agentoc-stop,agentoc}. Not executed directly.
+# shellcheck shell=bash
+
+agentoc_app_self_dir() {
+  cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
+}
+
+AGENTOC_APP_SELF_DIR="$(agentoc_app_self_dir)"
+# Contents/MacOS → Contents/Resources
+AGENTOC_RESOURCES_DIR="$(cd "$AGENTOC_APP_SELF_DIR/.." && pwd)/Resources"
+AGENTOC_APP_DIR="$AGENTOC_RESOURCES_DIR/app"
+AGENTOC_NODE_BIN="$AGENTOC_RESOURCES_DIR/runtime/node"
+AGENTOC_CONFIG_DIR_DEFAULT="$HOME/.config/agentoc"
+
+agentoc_log() { printf '[AgentoC] %s\n' "$*"; }
+
+agentoc_config_dir() {
+  if [ -n "${AGENTOC_CONFIG_DIR:-}" ]; then
+    printf '%s' "$AGENTOC_CONFIG_DIR"
+  else
+    printf '%s' "$AGENTOC_CONFIG_DIR_DEFAULT"
+  fi
+}
+
+AGENTOC_PID_FILE="$(agentoc_config_dir)/agentoc.pid"
+AGENTOC_RUN_LOG="$(agentoc_config_dir)/chat-server.log"
+
+agentoc_server_pid() {
+  local pid
+  pid="$(cat "$AGENTOC_PID_FILE" 2>/dev/null || true)"
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+    printf '%s' "$pid"
+    return 0
+  fi
+  return 1
+}
+
+agentoc_server_running() {
+  local port="${CHAT_PORT:-7690}"
+  if agentoc_server_pid >/dev/null; then
+    return 0
+  fi
+  # A server may be running from another launch path (LaunchAgent, manual run).
+  curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:${port}/healthz" 2>/dev/null
+}
+
+# Provision first-run credentials exactly like the Debian postinst:
+# auth.json (scrypt owner credentials) + instance.env (session secret,
+# local-mode cookies, connectivity defaults). Both live in the instance
+# config dir so upgrades never overwrite user edits.
+agentoc_first_run_bootstrap() {
+  local config_dir auth_file env_file password salt hash secret
+  config_dir="$(agentoc_config_dir)"
+  auth_file="$config_dir/auth.json"
+  env_file="$config_dir/instance.env"
+  mkdir -p "$config_dir"
+
+  if [ ! -s "$env_file" ]; then
+    secret="$(openssl rand -hex 32 2>/dev/null || "$AGENTOC_NODE_BIN" -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex")+"\n")')"
+    {
+      printf '# AgentoC macOS instance environment (sourced by the app launcher).\n'
+      printf '# Edits survive app upgrades. Restart the app after changing values.\n'
+      printf 'AGENTOC_AUTH_SESSION_SECRET=%s\n' "$secret"
+      printf '# Local browser access is plain HTTP on 127.0.0.1.\n'
+      printf 'SECURE_COOKIES=0\n'
+      printf '# Central connectivity services (phone pairing: TURN-first + P2P upgrade).\n'
+      printf 'AGENTOC_ACCOUNTS_URL=https://agentoc.andyscodexagent.cyou/accounts\n'
+      printf 'AGENTOC_ACCOUNTS_JWKS_URL=https://agentoc.andyscodexagent.cyou/accounts/.well-known/jwks.json\n'
+      printf 'AGENTOC_ACCOUNTS_ISSUER=https://agentoc.andyscodexagent.cyou\n'
+      printf 'AGENTOC_TURN_BROKER_URL=https://agentoc.andyscodexagent.cyou/turn\n'
+      printf '# Central metadata-only P2P signaling (shared by all instances;\n'
+      printf '# both the Mac and the phone connect outbound). Override only when\n'
+      printf '# running a self-hosted central stack.\n'
+      printf 'AGENTOC_P2P_SIGNALING_URL=https://agentoc.andyscodexagent.cyou/signal\n'
+    } > "$env_file"
+    chmod 600 "$env_file"
+    agentoc_log "created $env_file"
+  fi
+
+  if [ ! -s "$auth_file" ]; then
+    password="$(openssl rand -hex 12 2>/dev/null || "$AGENTOC_NODE_BIN" -e 'process.stdout.write(require("crypto").randomBytes(12).toString("hex")+"\n")')"
+    salt="$(openssl rand -hex 16 2>/dev/null || "$AGENTOC_NODE_BIN" -e 'process.stdout.write(require("crypto").randomBytes(16).toString("hex")+"\n")')"
+    hash="$("$AGENTOC_NODE_BIN" -e '
+      const { scryptSync } = require("crypto");
+      const [password, saltHex] = process.argv.slice(1);
+      const salt = Buffer.from(saltHex, "hex");
+      const hash = scryptSync(password, salt, 32, { N: 16384, r: 8, p: 1 });
+      process.stdout.write(hash.toString("hex"));
+    ' "$password" "$salt")"
+    "$AGENTOC_NODE_BIN" -e '
+      const { writeFileSync, chmodSync } = require("fs");
+      const [file, passwordHash] = process.argv.slice(1);
+      writeFileSync(file, JSON.stringify({ username: "owner", passwordHash }, null, 2) + "\n");
+      chmodSync(file, 0o600);
+    ' "$auth_file" "scrypt\$16384\$8\$1\$${salt}\$${hash}"
+    local creds_file
+    creds_file="$config_dir/owner-credentials.txt"
+    {
+      printf '# AgentoC owner login (generated on first run)\n'
+      printf '# Web: http://127.0.0.1:%s/\n' "${CHAT_PORT:-7690}"
+      printf 'username: owner\n'
+      printf 'password: %s\n' "$password"
+      printf '# Change it in Settings after first login, then delete this file.\n'
+    } > "$creds_file"
+    chmod 600 "$creds_file"
+    agentoc_log "generated owner credentials: $creds_file"
+    open -t "$creds_file" 2>/dev/null || true
+  fi
+}
+
+agentoc_source_instance_env() {
+  local env_file
+  env_file="$(agentoc_config_dir)/instance.env"
+  if [ -s "$env_file" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$env_file"
+    set +a
+  fi
+}
+
+agentoc_ensure_runtime_shims() {
+  local bin_dir="$HOME/.local/bin"
+  mkdir -p "$bin_dir"
+  case ":$PATH:" in
+    *":$bin_dir:"*) ;;
+    *) PATH="$bin_dir:$PATH" ;;
+  esac
+  local codex_shim="$bin_dir/codex"
+  if [ ! -x "$codex_shim" ] && [ -f "$AGENTOC_APP_DIR/vendor/codex/bin/codex.js" ]; then
+    printf '#!/usr/bin/env bash\nexec "%s" "%s" "$@"\n' "$AGENTOC_NODE_BIN" "$AGENTOC_APP_DIR/vendor/codex/bin/codex.js" > "$codex_shim"
+    chmod +x "$codex_shim"
+    agentoc_log "installed codex shim: $codex_shim"
+  fi
+  local claude_bin="$AGENTOC_APP_DIR/bin/claude"
+  local claude_shim="$bin_dir/claude"
+  if [ ! -e "$claude_shim" ] && [ -x "$claude_bin" ]; then
+    printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$claude_bin" > "$claude_shim"
+    chmod +x "$claude_shim"
+    agentoc_log "installed claude shim: $claude_shim"
+  fi
+}

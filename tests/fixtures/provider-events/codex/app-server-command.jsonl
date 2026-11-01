@@ -1,0 +1,4 @@
+{"method":"thread/started","params":{"thread":{"id":"codex-thread-fixture"}}}
+{"method":"item/started","params":{"threadId":"codex-thread-fixture","turnId":"codex-turn-fixture","item":{"id":"codex-command-1","type":"commandExecution","command":["npm","test"],"status":"inProgress","cwd":"/workspace"}}}
+{"method":"item/commandExecution/outputDelta","params":{"threadId":"codex-thread-fixture","turnId":"codex-turn-fixture","itemId":"codex-command-1","delta":"tests passed\n"}}
+{"method":"item/completed","params":{"threadId":"codex-thread-fixture","turnId":"codex-turn-fixture","item":{"id":"codex-command-1","type":"commandExecution","command":["npm","test"],"status":"completed","aggregatedOutput":"tests passed\n","exitCode":0,"cwd":"/workspace"}}}

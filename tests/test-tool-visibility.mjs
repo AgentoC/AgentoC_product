@@ -1,0 +1,85 @@
+#!/usr/bin/env node
+import assert from 'assert/strict';
+import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { delimiter, dirname, join } from 'path';
+import { fileURLToPath, pathToFileURL } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const repoRoot = dirname(__dirname);
+const tempHome = mkdtempSync(join(tmpdir(), 'agentoc-tool-visibility-'));
+const fakeBin = join(tempHome, '.local', 'bin');
+const configDir = join(tempHome, '.config', 'agentoc');
+
+mkdirSync(fakeBin, { recursive: true });
+mkdirSync(configDir, { recursive: true });
+
+for (const command of ['public-helper', 'private-helper']) {
+  const path = join(fakeBin, process.platform === 'win32' ? `${command}.cmd` : command);
+  writeFileSync(path, process.platform === 'win32' ? '@echo off\r\nexit /b 0\r\n' : '#!/bin/sh\nexit 0\n');
+  chmodSync(path, 0o755);
+}
+
+// Built-in Harness availability is intentionally restricted to AgentoC's own
+// installation root. Supply a synthetic internal Claude instead of depending
+// on a developer's PATH or a real installation.
+const harnessRoot = join(tempHome, 'harnesses');
+const claudeBin = join(harnessRoot, 'claude', 'node_modules', '.bin');
+mkdirSync(claudeBin, { recursive: true });
+const fakeClaude = join(claudeBin, process.platform === 'win32' ? 'claude.cmd' : 'claude');
+writeFileSync(fakeClaude, process.platform === 'win32' ? '@echo off\r\necho 2.1.310\r\n' : '#!/bin/sh\necho 2.1.310\n');
+chmodSync(fakeClaude, 0o755);
+
+writeFileSync(
+  join(configDir, 'tools.json'),
+  `${JSON.stringify([
+    {
+      id: 'public-helper',
+      name: 'Public Helper',
+      command: 'public-helper',
+      runtimeFamily: 'claude-stream-json',
+      models: [{ id: 'public-helper-v1', label: 'Public Helper v1' }],
+      reasoning: { kind: 'toggle', label: 'Thinking' },
+    },
+    {
+      id: 'private-helper',
+      name: 'Private Helper',
+      command: 'private-helper',
+      visibility: 'private',
+      runtimeFamily: 'claude-stream-json',
+      models: [{ id: 'private-helper-v1', label: 'Private Helper v1' }],
+      reasoning: { kind: 'toggle', label: 'Thinking' },
+    },
+  ], null, 2)}\n`,
+  'utf8',
+);
+
+process.env.AGENTOC_INSTANCE_ROOT = tempHome;
+process.env.AGENTOC_CONFIG_DIR = configDir;
+process.env.AGENTOC_HARNESS_ROOT = harnessRoot;
+process.env.AGENTOC_ALLOW_EXTERNAL_TEST_INSTANCE_OVERRIDES = '1';
+if (process.platform === 'win32') process.env.USERPROFILE = tempHome;
+process.env.PATH = `${fakeBin}${delimiter}${process.env.PATH || ''}`;
+
+const toolsModule = await import(pathToFileURL(join(repoRoot, 'lib', 'tools.mjs')).href);
+const { getAvailableTools } = toolsModule;
+
+try {
+  const tools = await getAvailableTools();
+  const publicTool = tools.find((tool) => tool.id === 'public-helper');
+  const privateTool = tools.find((tool) => tool.id === 'private-helper');
+  const builtinClaude = tools.find((tool) => tool.id === 'claude');
+
+  assert.ok(publicTool, 'public tool should be returned');
+  assert.ok(privateTool, 'private tool should still be returned to the owner runtime');
+  assert.ok(builtinClaude, 'builtin Claude tool should still be returned to the owner runtime');
+  assert.equal(publicTool?.available, true);
+  assert.equal(privateTool?.available, true);
+  assert.equal(publicTool?.visibility || '', '', 'public tools should not be forced private');
+  assert.equal(privateTool?.visibility, 'private', 'private visibility should survive normalization');
+  assert.equal(builtinClaude?.visibility || '', '', 'builtin Claude should be visible in normal pickers');
+} finally {
+  rmSync(tempHome, { recursive: true, force: true });
+}
+
+console.log('test-tool-visibility: ok');

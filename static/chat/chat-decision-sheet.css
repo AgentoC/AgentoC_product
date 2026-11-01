@@ -1,0 +1,1058 @@
+/* chat-decision-sheet.css — non-modal Decision Sheet.
+   Grows upward from the Live Bar when a runtime approval is pending, so the
+   decision is thumb-reachable (决策下置) on mobile and stays anchored in the
+   composer zone on desktop. Since 2026-08-04 the in-stream approval card is
+   removed on every viewport — the sheet is the single approval surface; the
+   approved/denied summary line (.runtime-approval-summary) remains in the
+   conversation as the auditable record. NON-modal by design: no backdrop, no
+   focus trap on the canvas, no dismiss-on-background — the conversation stays
+   scrollable so the user can review context while deciding. */
+
+/* While the Decision Sheet is open, the Live Bar is redundant and would sit at
+   the same anchor — fade it out
+   instead of cutting it, and fade it back in when the sheet collapses.
+   Class-driven (toggled by decision-sheet.js) rather than :has()-driven:
+   Chromium does not play transitions for :has() match changes, which would
+   cut the bar instead of fading it. The opacity fade itself is driven by the
+   base `.live-bar` transition (which lists `opacity 160ms ease`); we must NOT
+   redeclare a `transition` shorthand on `#liveBar` here — the ID selector
+   (1,0,0) outranks `.live-bar` (0,1,0) and the shorthand replaces the whole
+   list, which would wipe the width/height/border-radius transitions the
+   capsule fold/expand depends on (regression introduced then fixed 2026-08-05). */
+#liveBar.decision-sheet-open {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#decisionSheet {
+  position: absolute;
+  /* Notification-style decision surface: cover the composer itself. Its bottom
+     stays pinned to the composer edge, so every additional line grows upward
+     into the conversation instead of pushing the input downward. */
+  left: var(--chat-gutter, 0px);
+  right: var(--chat-gutter, 0px);
+  bottom: 0;
+  max-height: min(78dvh, 680px);
+  min-height: 100%;
+  overflow: hidden;
+  z-index: 12;
+  background: var(--sys-surface-container);
+  box-shadow: var(--m3-elevation-3);
+  border-radius: var(--m3-shape-extra-large);
+  padding: 0;
+  color: var(--text-primary, inherit);
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  transform-origin: bottom center;
+  animation: decision-sheet-rise var(--motion-enter, 280ms) var(--motion-ease-emphasized, cubic-bezier(0.16, 1, 0.3, 1)) both;
+  /* Tall sheets scroll inside .decision-sheet__content — keep the scrollbar quiet. */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-muted) 35%, transparent) transparent;
+}
+.decision-sheet__content::-webkit-scrollbar {
+  width: 6px;
+}
+.decision-sheet__content::-webkit-scrollbar-thumb {
+  border-radius: var(--m3-shape-extra-small);
+  background: color-mix(in srgb, var(--text-muted) 35%, transparent);
+}
+
+#decisionSheet[hidden] {
+  display: none;
+}
+.decision-sheet__content,
+.decision-sheet__footer {
+  min-width: 0;
+}
+.decision-sheet__content {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 14px 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.decision-sheet__footer {
+  padding: 8px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--sys-surface-container);
+  box-shadow: 0 -1px 0 var(--sys-outline-variant);
+}
+#decisionSheet > * {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 140ms ease,
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+#decisionSheet.is-refreshing > * {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+/* Desktop: align the sheet to the centered message column instead of the
+   full-width input-area, so the decision panel reads as part of the canvas. */
+@media (min-width: 768px) {
+  #decisionSheet {
+    left: 0;
+    right: 0;
+    width: min(100%, var(--chat-column-width, 880px));
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* ---- head ---- */
+/* The brief state is a human action title. Optional risk is the only metadata
+   that survives; provider/type labels and decorative status marks are omitted. */
+.decision-sheet__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* Ask User always has a quiet fallback reply. It is intentionally not styled
+   as another option: the user can choose a preset or explain a different
+   answer without competing controls. */
+.decision-sheet__custom-answer-wrap {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+.decision-sheet__custom-answer-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+.decision-sheet__custom-answer,
+.decision-sheet__plan-editor-input {
+  width: 100%;
+  min-height: 48px;
+  max-height: 220px;
+  resize: none;
+  overflow-y: auto;
+  border: 0;
+  border-radius: var(--m3-shape-medium);
+  padding: 13px 14px;
+  background: color-mix(in srgb, var(--surface-hover) 64%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 52%, transparent);
+  transition: background 140ms ease;
+}
+.decision-sheet__custom-answer:focus-visible,
+.decision-sheet__plan-editor-input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 48%, transparent);
+  outline-offset: 1px;
+  background: var(--surface-raised);
+}
+.decision-sheet__plan-editor {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  animation: decision-sheet-editor-in 220ms var(--motion-ease-emphasized, cubic-bezier(.16,1,.3,1));
+}
+.decision-sheet__plan-editor[hidden] { display: none; }
+.decision-sheet__plan-editor-row {
+  position: relative;
+}
+.decision-sheet__plan-editor-input {
+  padding-right: 92px;
+}
+.decision-sheet__plan-editor-full {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--m3-shape-medium);
+  background: color-mix(in srgb, var(--surface-hover) 84%, transparent);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.decision-sheet__plan-editor-send {
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--mx-r-control, 24px);
+  background: color-mix(in srgb, var(--sys-secondary) 16%, transparent);
+  color: var(--sys-secondary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.decision-sheet__plan-editor-send:disabled { opacity: .45; cursor: default; }
+@keyframes decision-sheet-editor-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.decision-sheet__head-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.decision-sheet__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.decision-sheet__title {
+  margin-top: 3px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+/* ---- risk badge (reserved interface; hidden until backend sends evt.risk) ----
+   Compact pill that sits above the action title. */
+.decision-sheet__risk {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: var(--mx-r-control, 24px);
+  line-height: 1.5;
+}
+.decision-sheet__risk[data-tier="low"] {
+  background: var(--sys-success-container);
+  color: var(--sys-on-success-container);
+}
+.decision-sheet__risk[data-tier="medium"] {
+  background: var(--sys-tertiary-container);
+  color: var(--sys-on-tertiary-container);
+}
+.decision-sheet__risk[data-tier="high"] {
+  background: var(--sys-error-container);
+  color: var(--sys-on-error-container);
+}
+/* High-risk approvals get deliberate visual friction without introducing a
+   second material: the error outline is the semantic state signal. */
+.decision-sheet__risk[data-tier="high"] {
+  font-size: 12px;
+  padding: 3px 10px;
+  background: var(--sys-error-container);
+  color: var(--sys-on-error-container);
+  font-weight: 700;
+}
+#decisionSheet:has(.decision-sheet__risk[data-tier="high"]) {
+  box-shadow:
+    0 0 0 1px var(--sys-error),
+    var(--m3-elevation-3);
+}
+
+/* ---- scope rows (reuse .runtime-approval-card__detail from chat-messages.css,
+       condensed for the compact sheet) ---- */
+.decision-sheet__scope {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.decision-sheet__scope .runtime-approval-card__detail-label {
+  font-size: 11px;
+  opacity: 0.65;
+}
+.decision-sheet__scope .runtime-approval-card__detail-value,
+.decision-sheet__scope .runtime-approval-card__code {
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+/* Code rows are exactly the strings a user may want to reuse (commands,
+   paths, scopes) — a quiet copy knob floats in the row's top-right corner.
+   Keep it at the same 44px minimum as every other auxiliary action; the
+   label keeps its spot via right padding so the knob never covers the text. */
+.decision-sheet__scope .runtime-approval-card__detail {
+  position: relative;
+}
+.decision-sheet__scope .runtime-approval-card__code {
+  padding-right: 54px;
+}
+/* Plan bodies (ExitPlanMode drafts) are markdown — rendered through the
+   shared md-content pipeline (typography from chat-messages.css). Keep the
+   sheet scannable: bounded height with its own scroll, readable base size,
+   tight first/last rhythm. */
+.decision-sheet__scope .decision-sheet__plan-body {
+  margin: 4px 0 2px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary, inherit);
+  max-height: 40vh;
+  overflow-y: auto;
+  padding-right: 54px;
+  overscroll-behavior: contain;
+}
+.decision-sheet__scope .runtime-approval-card__detail:has(.decision-sheet__plan-body) {
+  position: relative;
+}
+.decision-sheet__plan-copy {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--m3-shape-full);
+  background: color-mix(in srgb, var(--surface-hover) 78%, transparent);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.decision-sheet__plan-copy:hover { color: var(--text); background: var(--surface-hover); }
+.decision-sheet__plan-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.decision-sheet__plan-copy-icon { width: 15px; height: 15px; }
+.decision-sheet__scope .decision-sheet__plan-body > :first-child {
+  margin-top: 0;
+}
+.decision-sheet__scope .decision-sheet__plan-body > :last-child {
+  margin-bottom: 0;
+}
+.decision-sheet__code-copy {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: var(--m3-shape-full);
+  background: color-mix(in srgb, var(--surface-hover, rgba(0, 0, 0, 0.06)) 85%, transparent);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.decision-sheet__code-copy-icon {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+.decision-sheet__code-copy:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+}
+.decision-sheet__code-copy:focus-visible {
+  outline: 2px solid var(--color-action);
+  outline-offset: 1px;
+}
+@media (max-width: 767px) {
+  .decision-sheet__code-copy {
+    width: 44px;
+    height: 44px;
+    top: 2px;
+    right: 2px;
+  }
+  .decision-sheet__scope .runtime-approval-card__code {
+    padding-right: 54px;
+  }
+}
+
+/* Notification parity ------------------------------------------------------
+   Approval keeps the cross-session attention popup's single raised surface,
+   brief/detailed hierarchy, and action rail. It differs only in its bottom
+   anchor and full-composer width. */
+#decisionSheet {
+  --decision-ink: var(--color-text-primary);
+  --decision-muted: var(--color-text-secondary);
+  --decision-faint: var(--color-text-muted);
+  --decision-surface: var(--sys-surface-container);
+  --decision-raised: var(--sys-surface-container-high);
+  background: var(--decision-surface);
+  border: 0;
+  border-radius: var(--m3-shape-extra-large);
+  box-shadow: var(--m3-elevation-3);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  color: var(--decision-ink);
+}
+
+#decisionSheet .decision-sheet__meta {
+  gap: 8px;
+}
+
+#decisionSheet .decision-sheet__details {
+  margin-top: 4px;
+  animation: decision-sheet-details-in 180ms var(--motion-ease-emphasized, cubic-bezier(.16, 1, .3, 1));
+}
+
+#decisionSheet .decision-sheet__details .decision-sheet__scope {
+  margin-top: 0;
+}
+
+#decisionSheet .decision-sheet__scope {
+  margin-top: 10px;
+  gap: 8px;
+}
+
+/* Shared notification surface ------------------------------------------------
+   The Decision Sheet is the in-session placement of the attention notification,
+   not a second approval-card design. It uses the exact .oneui-notification DOM
+   classes; the rules below only provide its composer anchor and the few details
+   the popup does not need (plan editing and privileged batch selection). */
+#decisionSheet.oneui-notification {
+  --oneui-ink: var(--sys-on-surface);
+  --oneui-muted: var(--sys-on-surface-variant);
+  --oneui-faint: color-mix(in srgb, var(--sys-on-surface-variant) 78%, transparent);
+  --oneui-surface: var(--sys-surface-container);
+  --oneui-raised: var(--sys-surface-container-high);
+  --oneui-quiet: var(--sys-surface-container-highest);
+  height: auto;
+  width: auto;
+  min-height: 0;
+  max-height: min(80dvh, 720px);
+  grid-template-rows: auto auto;
+  color: var(--oneui-ink);
+  background: var(--oneui-surface);
+  border: 0;
+  border-radius: var(--m3-shape-extra-large);
+  box-shadow: var(--m3-elevation-3);
+}
+
+#decisionSheet.oneui-notification.oneui-notification--detailed {
+  /* A detailed in-session approval can contain commands, paths, options, or a
+     privileged batch. Give the shared notification a definite viewport-bound
+     height so its canonical footer stays visible while only the detail region
+     scrolls. The brief state remains content-sized, exactly like the popup. */
+  height: min(80dvh, 720px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 136px;
+}
+
+@media (min-width: 768px) {
+  #decisionSheet.oneui-notification {
+    width: min(100%, var(--chat-column-width, 880px));
+  }
+}
+
+#decisionSheet.oneui-notification:has(.decision-sheet__risk[data-tier="high"]) {
+  box-shadow: var(--m3-elevation-3);
+}
+
+#decisionSheet .decision-sheet__summary {
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+#decisionSheet .decision-sheet__summary:hover {
+  color: var(--oneui-ink);
+}
+
+#decisionSheet .decision-sheet__summary:focus-visible {
+  outline: 3px solid var(--m3-state-focus);
+  outline-offset: 2px;
+}
+
+#decisionSheet .oneui-notification__header {
+  touch-action: manipulation;
+}
+
+#decisionSheet .oneui-notification__content {
+  min-width: 0;
+}
+
+#decisionSheet .decision-sheet__scope {
+  margin-top: 0;
+}
+
+#decisionSheet .oneui-notification__detail:has(.decision-sheet__code),
+#decisionSheet .decision-sheet__plan-detail {
+  position: relative;
+}
+
+#decisionSheet .decision-sheet__code,
+#decisionSheet .decision-sheet__plan-body {
+  padding-right: 54px;
+}
+
+#decisionSheet .decision-sheet__plan-body {
+  margin: 4px 0 2px;
+  max-height: 40vh;
+  overflow-y: auto;
+  color: var(--oneui-muted);
+}
+
+#decisionSheet .decision-sheet__session-actions {
+  margin-top: 12px;
+}
+
+#decisionSheet .decision-sheet__batch {
+  margin-top: 0;
+  max-height: 48vh;
+}
+
+#decisionSheet .oneui-notification__batch.decision-sheet__batch-section {
+  margin-top: 12px;
+  padding: 11px 0 0;
+  border-radius: 0;
+  border-top: 1px solid color-mix(in srgb, var(--oneui-ink) 14%, transparent);
+  background: transparent;
+}
+
+#decisionSheet .oneui-notification__batch.decision-sheet__batch-section:first-child {
+  margin-top: 0;
+}
+
+#decisionSheet .oneui-notification__batch .decision-sheet__batch-section-head {
+  justify-content: flex-start;
+  margin-bottom: 4px;
+}
+
+#decisionSheet .oneui-notification__batch .decision-sheet__batch-op {
+  padding: 8px 0;
+  border-radius: 0;
+}
+
+#decisionSheet .oneui-notification__batch .decision-sheet__batch-op-command {
+  color: var(--oneui-muted);
+  word-break: normal;
+}
+
+#decisionSheet .oneui-notification__batch .decision-sheet__batch-actions {
+  margin-top: 12px;
+}
+
+#decisionSheet .oneui-notification__action:focus-visible {
+  outline: 3px solid var(--m3-state-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  #decisionSheet.oneui-notification {
+    max-height: min(80dvh, 720px);
+  }
+}
+
+@keyframes decision-sheet-details-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #decisionSheet {
+    --decision-ink: var(--color-text-primary);
+    --decision-muted: var(--color-text-secondary);
+    --decision-faint: var(--color-text-muted);
+    --decision-surface: var(--color-surface-raised);
+    --decision-raised: var(--color-surface-hover);
+  }
+}
+
+:root[data-theme="dark"] #decisionSheet {
+  --decision-ink: var(--color-text-primary);
+  --decision-muted: var(--color-text-secondary);
+  --decision-faint: var(--color-text-muted);
+  --decision-surface: var(--color-surface-raised);
+  --decision-raised: var(--color-surface-hover);
+}
+
+@keyframes decision-sheet-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 100%, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+/* Collapse mirrors the rise: the same bottom-anchored surface exits below the
+   composer, revealing the normal input exactly where it was. */
+@keyframes decision-sheet-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(0, 100%, 0);
+  }
+}
+#decisionSheet.is-closing {
+  animation: decision-sheet-out var(--motion-exit, 180ms) var(--motion-ease-standard, ease) both;
+}
+#decisionSheet.is-collapsing-to-island {
+  animation: decision-sheet-collapse-to-island var(--motion-panel, 240ms) var(--motion-ease-spring-soft, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  pointer-events: none;
+}
+#decisionSheet.is-expanding-from-island {
+  animation: decision-sheet-expand-from-island var(--motion-panel, 260ms) var(--motion-ease-spring-soft, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+@keyframes decision-sheet-collapse-to-island {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    border-radius: var(--m3-shape-extra-large, 24px);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0) scale(0.78);
+    border-radius: 9999px;
+  }
+}
+
+@keyframes decision-sheet-expand-from-island {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0) scale(0.78);
+    border-radius: 9999px;
+  }
+  60% {
+    opacity: 1;
+    transform: translate3d(0, -2px, 0) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    border-radius: var(--m3-shape-extra-large, 24px);
+  }
+}
+
+/* ---- Decision Dynamic Island (灵动岛) -------------------------------------
+   Displays above the queued panel when an approval card is collapsed via
+   Escape or Android back. Morphable, pulsing status indicator. */
+.decision-island {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(100% + var(--chat-queued-panel-stack-height, 0px) + var(--chat-floating-status-gap, 8px));
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity var(--motion-base, 180ms) ease,
+    bottom var(--motion-panel, 240ms) var(--motion-ease-spring-soft, cubic-bezier(0.22, 1, 0.36, 1));
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.decision-island[hidden] {
+  display: none !important;
+}
+
+.decision-island.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.decision-island.is-entering {
+  animation: decision-island-enter var(--motion-panel, 240ms) var(--motion-ease-spring-soft, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+.decision-island.is-exiting {
+  animation: decision-island-exit var(--motion-exit, 180ms) var(--motion-ease-standard, ease) both;
+}
+
+@keyframes decision-island-enter {
+  0% {
+    opacity: 0;
+    transform: translate3d(-50%, 14px, 0) scale(0.75);
+  }
+  65% {
+    opacity: 1;
+    transform: translate3d(-50%, -3px, 0) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+}
+
+@keyframes decision-island-exit {
+  0% {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-50%, 10px, 0) scale(0.8);
+  }
+}
+
+.decision-island__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 14px 0 10px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  border-radius: 9999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    color-mix(in srgb, var(--surface-raised, #1c1c1e) 94%, var(--bg, #000) 6%);
+  backdrop-filter: blur(calc(var(--glass-blur, 20px) * 0.8)) saturate(1.25);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur, 20px) * 0.8)) saturate(1.25);
+  color: var(--text, #f5f5f7);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  cursor: pointer;
+  outline: none;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    transform 140ms cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 140ms ease;
+}
+
+.decision-island__button:hover {
+  background-color: color-mix(in srgb, var(--surface-hover, #2c2c2e) 94%, var(--bg, #000) 6%);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 6px 22px rgba(0, 0, 0, 0.32),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+}
+
+.decision-island__button:active {
+  transform: scale(0.96);
+}
+
+.decision-island__button:focus-visible {
+  outline: 2px solid var(--focus-border, #0a84ff);
+  outline-offset: 2px;
+}
+
+.decision-island__indicator {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.decision-island__indicator--danger {
+  --island-accent: var(--status-failed, #ef4444);
+  background: color-mix(in srgb, var(--status-failed, #ef4444) 22%, transparent);
+  color: var(--status-failed, #ef4444);
+}
+
+.decision-island__indicator--question {
+  --island-accent: var(--status-running, #38bdf8);
+  background: color-mix(in srgb, var(--status-running, #38bdf8) 22%, transparent);
+  color: var(--status-running, #38bdf8);
+}
+
+.decision-island__indicator--approval {
+  --island-accent: var(--color-warning, #f59e0b);
+  background: color-mix(in srgb, var(--color-warning, #f59e0b) 22%, transparent);
+  color: var(--color-warning, #f59e0b);
+}
+
+.decision-island__pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: decision-island-pulse 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+}
+
+@keyframes decision-island-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--island-accent, #ef4444) 65%, transparent);
+  }
+  65% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--island-accent, #ef4444) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--island-accent, #ef4444) 0%, transparent);
+  }
+}
+
+.decision-island__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(260px, 45vw);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.decision-island__action-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  font-weight: 550;
+  color: var(--text-muted, rgba(255, 255, 255, 0.6));
+  padding-left: 2px;
+}
+
+.decision-island__chevron {
+  display: inline-block;
+  transition: transform var(--motion-fast) ease;
+}
+
+.decision-island__button:hover .decision-island__chevron {
+  transform: translateY(-1px);
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #decisionSheet,
+  #decisionSheet.is-closing,
+  #decisionSheet.is-collapsing-to-island,
+  #decisionSheet.is-expanding-from-island,
+  .decision-island.is-entering,
+  .decision-island.is-exiting,
+  .decision-island__pulse {
+    animation: none !important;
+  }
+}
+
+/* ---- privileged batch approval (Phase 5) ----------------------------------
+   One sheet, two independent popup groups (other -> delete), each resolving
+   through its own WebAuthn assertion. Groups are carded like mini scope
+   blocks; op rows carry their own risk badge + signals detail. */
+.decision-sheet__batch {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 44vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.decision-sheet__batch-section {
+  border: 0;
+  border-radius: var(--m3-shape-medium);
+  padding: 10px 12px 12px;
+  background: var(--sys-surface-container-low);
+}
+.decision-sheet__batch-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.decision-sheet__batch-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sys-on-surface);
+}
+.decision-sheet__batch-result {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: var(--mx-r-control, 24px);
+  background: var(--sys-success-container);
+  color: var(--sys-on-success-container);
+}
+.decision-sheet__batch-ops {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.decision-sheet__batch-op {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  padding: 6px 4px;
+  border-radius: var(--m3-shape-control);
+}
+.decision-sheet__batch-op:active {
+  background: var(--m3-state-pressed);
+}
+.decision-sheet__batch-op-check {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 3px 0 0;
+  accent-color: var(--sys-error);
+}
+.decision-sheet__batch-op-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.decision-sheet__batch-op-command {
+  display: block;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--sys-on-surface);
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+.decision-sheet__batch-op-risk {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: var(--mx-r-control, 24px);
+}
+.decision-sheet__batch-op-risk[data-tier="high"] {
+  background: var(--sys-error-container);
+  color: var(--sys-on-error-container);
+}
+.decision-sheet__batch-op-risk[data-tier="medium"] {
+  background: var(--sys-tertiary-container);
+  color: var(--sys-on-tertiary-container);
+}
+.decision-sheet__batch-op-risk[data-tier="low"] {
+  background: var(--sys-success-container);
+  color: var(--sys-on-success-container);
+}
+/* Signals detail rows (target paths / sudo / reversibility / reasons). */
+.decision-sheet__batch-op-signals {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--m3-shape-medium);
+  background: var(--sys-surface-container-high);
+  margin-top: 4px;
+}
+.decision-sheet__batch-op-signal {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.decision-sheet__batch-op-signal-label {
+  flex: 0 0 auto;
+  color: var(--oneui-faint, var(--sys-on-surface-variant));
+  min-width: 68px;
+}
+.decision-sheet__batch-op-signal-value {
+  min-width: 0;
+  color: var(--oneui-muted, var(--sys-on-surface-variant));
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+.decision-sheet__batch-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.decision-sheet__batch-actions .decision-sheet__action {
+  flex: 1;
+}
+.decision-sheet__batch-error {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--sys-on-error-container);
+}
+
+/* The detail region owns scrolling; action controls stay in the shared fixed
+   notification footer so they remain visible even for long high-risk batches. */
+#decisionSheet .decision-sheet__batch {
+  max-height: none;
+  overflow: visible;
+}
+
+#decisionSheet .decision-sheet__batch-footer-actions {
+  display: grid;
+  gap: 8px;
+}
+
+#decisionSheet .decision-sheet__batch-footer-group {
+  display: grid;
+  gap: 5px;
+}
+
+#decisionSheet .decision-sheet__batch-footer-label {
+  color: var(--oneui-faint, var(--sys-on-surface-variant));
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 15px;
+}
+
+#decisionSheet .decision-sheet__batch-footer-group .decision-sheet__batch-actions {
+  margin-top: 0;
+}
+.decision-sheet__batch-op:has(.decision-sheet__batch-op-check:disabled) {
+  opacity: 0.65;
+  cursor: default;
+}
+.decision-sheet__agent-definition {
+  margin: 0 4px 8px 34px;
+  border-top: 1px solid color-mix(in srgb, var(--sys-on-surface) 12%, transparent);
+}
+.decision-sheet__agent-definition-summary {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  color: var(--oneui-muted, var(--sys-on-surface-variant));
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.decision-sheet__agent-definition-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+.decision-sheet__agent-definition-row {
+  min-width: 0;
+}
+.decision-sheet__agent-definition-label {
+  margin-bottom: 3px;
+  color: var(--oneui-faint, var(--sys-on-surface-variant));
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+}
+.decision-sheet__agent-definition-value {
+  max-height: 28vh;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--sys-on-surface);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* Keep decisions firm but calm. The sheet is a short operational interruption,
+   not another hero card above the composer. */
+@media (max-width: 767px) {
+  #decisionSheet {
+    border: 0;
+    border-radius: var(--m3-shape-extra-large);
+    padding: 0;
+    background: var(--decision-surface);
+    box-shadow: var(--m3-elevation-3);
+  }
+  .decision-sheet__actions { margin-top: 12px; }
+  .decision-sheet__action { border-radius: var(--m3-shape-medium); font-size: 14px; }
+  .decision-sheet__prompt .runtime-approval-card__option:not(.is-selected) {
+    background: var(--sys-surface-container-lowest);
+  }
+}

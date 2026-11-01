@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import {createDemoAccountPolicy,createDemoAccountAuth} from '../accounts/demo-credentials.mjs';
+import {createAccountEntitlementResolver} from '../accounts/turn-lease-policy.mjs';
+import {evaluateTurnConnectionAuthorization,publicTurnAuthorization} from '../lib/turn-authorization.mjs';
+const policy=await createDemoAccountPolicy({username:'review-fixture',password:'long-fixture-password',instanceId:'inst_fixture',instanceAccess:'account',unlimitedConnections:true});
+const draft={accounts:[{accountId:policy.accountId,provider:'demo'}]};
+const resolve=createAccountEntitlementResolver(createDemoAccountAuth(policy));
+const entitlement=resolve(draft,policy.accountId,Date.now());
+assert.equal(entitlement.limits.unlimited,true);
+const args={accountId:policy.accountId,instanceId:'inst_fixture',deviceId:'adev_fixture',deviceKind:'phone',
+ activePhones:2147483647,activeComputers:2147483647,limits:entitlement.limits};
+const result=evaluateTurnConnectionAuthorization(args);
+assert.equal(result.authorized,true,'unlimited is a policy, not a larger numeric cap');
+assert.equal(publicTurnAuthorization(result).limits.unlimited,true);
+assert.equal(evaluateTurnConnectionAuthorization({...args,accountMatches:false}).authorized,false);
+assert.equal(evaluateTurnConnectionAuthorization({...args,accountId:''}).authorized,false);
+assert.equal(evaluateTurnConnectionAuthorization({...args,deviceId:''}).authorized,false);
+const ordinary=resolve(draft,'acct_google_fixture',Date.now());
+assert.equal(ordinary.limits.unlimited,undefined);
+assert.equal(evaluateTurnConnectionAuthorization({...args,limits:ordinary.limits}).status,'quota-exceeded');
+const normalDemo=createAccountEntitlementResolver(createDemoAccountAuth({...policy,unlimitedConnections:false}));
+assert.equal(normalDemo(draft,policy.accountId,Date.now()).limits.unlimited,undefined);
+assert.throws(()=>createDemoAccountAuth({...policy,unlimitedConnections:'true'}));
+assert.throws(()=>resolve({...draft,accounts:[{...draft.accounts[0],disabledAt:new Date().toISOString()}]},policy.accountId,Date.now()));
+console.log('PASS operator unlimited policy, beyond numeric cap, unchanged ordinary quotas, signed projection, identity and disabled-account checks');

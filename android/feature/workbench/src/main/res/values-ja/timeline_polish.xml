@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="timeline_details_show">詳細を表示</string>
+    <string name="timeline_thinking">思考</string>
+    <string name="timeline_details_hide">詳細を閉じる</string>
+    <string name="timeline_input">入力</string>
+    <string name="timeline_output">出力</string>
+    <string name="timeline_exit_code">終了コード: %1$d</string>
+    <string name="timeline_done">完了</string>
+    <string name="timeline_failed">失敗</string>
+    <string name="timeline_running">実行中</string>
+    <string name="timeline_pending">待機中</string>
+    <string name="timeline_send_failed">送信できませんでした</string>
+    <string name="timeline_retry">再試行</string>
+</resources>

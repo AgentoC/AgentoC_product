@@ -1,0 +1,46 @@
+#!/usr/bin/expect -f
+# Test: interact with Claude Code TUI to get model list
+# Unset CLAUDECODE to allow nested spawning
+
+set timeout 20
+log_user 1
+
+# Unset the env var that blocks nested sessions
+set env(CLAUDECODE) ""
+unset env(CLAUDECODE)
+
+spawn claude
+
+# Wait for Claude's interactive prompt
+# Claude Code typically shows "> " or "? " as its input prompt
+expect {
+    timeout {
+        puts "\n\[ERROR\] Timed out waiting for prompt"
+        exit 1
+    }
+    eof {
+        puts "\n\[ERROR\] Claude exited at startup"
+        exit 1
+    }
+    -re {[>\?❯]\s*$} {
+        puts "\n\[GOT PROMPT\]"
+    }
+}
+
+after 500
+
+# Send /model command
+puts "\n\[SENDING /model\]"
+send "/model\r"
+
+# Wait and capture
+after 4000
+
+# Send q or Escape to close the model picker if it's interactive
+send "q"
+after 1000
+
+send \x03
+after 500
+
+exit 0

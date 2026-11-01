@@ -1,0 +1,7 @@
+<resources>
+    <string name="api_capture_shortcut_unavailable">所选快捷方式已不可用，请选择电脑继续处理这些材料。</string>
+    <string name="api_capture_pin">将这台电脑添加到主屏幕</string>
+    <string name="api_capture_pin_requested">已向桌面发送请求，请在桌面确认添加快捷方式。</string>
+    <string name="api_capture_pin_unsupported">当前桌面不支持添加快捷方式。</string>
+    <string name="api_capture_pin_failed">桌面未接受添加请求，请从应用内重试。</string>
+</resources>

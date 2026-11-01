@@ -1,0 +1,331 @@
+{
+  "now": 1800000012000,
+  "envelope": {
+    "invitation": {
+      "version": 1,
+      "invitationId": "rti_DY29_jl_RcThycUcx9N-DlBouz12xrUP",
+      "instanceId": "inst_dhWwubFw-NYA2vtKlnL8Fygb3f5gP-R9",
+      "instanceKeyFingerprint": "d6a476880e5d554dc470665eefb3cd8e159fc2d6fb46aef9841279000ea3b4f3",
+      "secretHash": "1a1b19218b111105fb3ed93b29d6bdae3bd1208a00cc70cbf006ee8d916d8efa",
+      "createdAt": 1800000000000,
+      "claimExpiresAt": 1800000120000,
+      "accessExpiresAt": 1800000600000,
+      "capabilities": [
+        "task.create",
+        "task.submit",
+        "task.read",
+        "task.cancel",
+        "file.upload",
+        "file.download"
+      ],
+      "sessionScope": "created-sessions"
+    },
+    "publicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA1lh1xZDWvFaklqrTsPiiY3z9JC392DyEoqi47VCVehU=\n-----END PUBLIC KEY-----\n",
+    "signature": "krQE6J3fLR6wHq3fUalkI9FR7-egwJpZq8e7rQsCaIw74Ny96Lp8pGKmW0hcNBQQf48cLDFy2waii1aRvT7MDg"
+  },
+  "claim": {
+    "instanceId": "inst_dhWwubFw-NYA2vtKlnL8Fygb3f5gP-R9",
+    "invitationId": "rti_DY29_jl_RcThycUcx9N-DlBouz12xrUP",
+    "invitationDigest": "f3f55fab3146153418182cfc9edde7e2af252328b02f137354d6667b56407d34",
+    "requestId": "rtr_78m6qSH1OwyZdxlg5-Z0cq8zWFtgWE1m",
+    "devicePublicKey": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDVyXge85Szw6mY5WUKCSDFtOzKoa\n/5/zfA97GEretJrE91P3y8+jsp50NBx3fBqVNtojm3WepEA2wnxj9jN05A==\n-----END PUBLIC KEY-----\n",
+    "token": "rtt_64kCm71QbezpiDn01hNZAaTYk1h6_Ttg",
+    "signature": "MEQCICLT8gxgzHVmA-a7aMsp2mxI_CRF8dc5e_OYKIP04az4AiBQaCKsVlMtkf6AayuTjfo2Pc0058D2xj0vvarcqR7_zw"
+  },
+  "completion": {
+    "instanceId": "inst_dhWwubFw-NYA2vtKlnL8Fygb3f5gP-R9",
+    "invitationId": "rti_DY29_jl_RcThycUcx9N-DlBouz12xrUP",
+    "requestId": "rtr_DnWs2UPXjHoVxdL2U7m5qKUxgbDJTWsd",
+    "issuedAt": 1800000011000,
+    "nonce": "rtn_Vqctw3T9z_GUxZ0zX98RtI6e48PNIRS8",
+    "payload": {
+      "result": {
+        "grantId": "rtg_rVhOYovpFGjkSC02mE_kL0piN9xXpVuf",
+        "deviceId": "rdev_nSWKGFoSne5JMRfV30hq5jtXivdICS6B",
+        "requestId": "rtr_78m6qSH1OwyZdxlg5-Z0cq8zWFtgWE1m",
+        "deviceKeyFingerprint": "c48831f0b77a427c9150bb3db8707d8a4acab0038d515a8f747a4bb7e6de14be",
+        "grantedAt": 1800000010000,
+        "accessExpiresAt": 1800000600000
+      },
+      "accessCredential": {
+        "token_type": "DPoP",
+        "access_token": "eyJ0eXAiOiJhZ2VudG9jLXRlbXBvcmFyeS1hY2Nlc3Mrand0IiwiYWxnIjoiRWREU0EiLCJraWQiOiJkNmE0NzY4ODBlNWQ1NTRkYzQ3MDY2NWVlZmIzY2Q4ZTE1OWZjMmQ2ZmI0NmFlZjk4NDEyNzkwMDBlYTNiNGYzIn0.eyJpc3MiOiJpbnN0X2RoV3d1YkZ3LU5ZQTJ2dEtsbkw4RnlnYjNmNWdQLVI5IiwiYXVkIjoiYWdlbnRvYy10ZW1wb3JhcnktZGV2aWNlLWFjY2VzcyIsInN1YiI6InJkZXZfblNXS0dGb1NuZTVKTVJmVjMwaHE1anRYaXZkSUNTNkIiLCJqdGkiOiJydGdfclZoT1lvdnBGR2prU0MwMm1FX2tMMHBpTjl4WHBWdWYiLCJpbnZpdGF0aW9uSWQiOiJydGlfRFkyOV9qbF9SY1RoeWNVY3g5Ti1EbEJvdXoxMnhyVVAiLCJyZXF1ZXN0SWQiOiJydHJfNzhtNnFTSDFPd3laZHhsZzUtWjBjcTh6V0Z0Z1dFMW0iLCJkZXZpY2VLZXlGaW5nZXJwcmludCI6ImM0ODgzMWYwYjc3YTQyN2M5MTUwYmIzZGI4NzA3ZDhhNGFjYWIwMDM4ZDUxNWE4Zjc0N2E0YmI3ZTZkZTE0YmUiLCJzY29wZSI6ImZpbGUuZG93bmxvYWQgZmlsZS51cGxvYWQgdGFzay5jYW5jZWwgdGFzay5jcmVhdGUgdGFzay5yZWFkIHRhc2suc3VibWl0Iiwic2Vzc2lvblNjb3BlIjoiY3JlYXRlZC1zZXNzaW9ucyIsImlhdCI6MTgwMDAwMDAxMCwiZXhwIjoxODAwMDAwNjAwLCJjbmYiOnsiamt0IjoiX04wWE9Pd2ZFcGItVng0ZnNyY1pERUhCbFp2aTZzQlhFNWRkSllBbWlCcyJ9fQ.KBN4sRpcm_HrxPI2_3z36cgI0x_MWuCRA31-kA_YM_kWP7I2HW794uQfiS82HW2W7K8ElrhYxTF4msJzyj_cAA",
+        "expires_at": 1800000600000
+      }
+    },
+    "signature": "w3YjOiCGi-b9OlYrm6vBP3IdSw7oeIXJB30J_UW8yfmYL5qH6g7ExgEZ6ik0dOhZ2fYowUwW_MyX4RIZ-VaXBQ"
+  },
+  "testOnlyDevicePrivateKeyPkcs8": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgSSLongeRFkFdXqULEg8Z2OVYymExfw8OQqkFt6khZgmhRANCAAQNXJeB7zlLPDqZjlZQoJIMW07Mqhr/n/N8D3sYSt60msT3U/fLz6OynnQ0HHd8GpU22iObdZ6kQDbCfGP2M3Tk",
+  "resultProofMessage": "[\"agentoc-temporary-broker-v1\",\"result\",\"inst_dhWwubFw-NYA2vtKlnL8Fygb3f5gP-R9\",\"rti_DY29_jl_RcThycUcx9N-DlBouz12xrUP\",\"rtr_78m6qSH1OwyZdxlg5-Z0cq8zWFtgWE1m\",1800000012000,\"rtn_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a\"]",
+  "connectionRequestId": "rtr_ROKQlY_B9Kil00sguyPTSGccAUDh_M_G",
+  "delivery": {
+    "instanceId": "inst_dhWwubFw-NYA2vtKlnL8Fygb3f5gP-R9",
+    "invitationId": "rti_DY29_jl_RcThycUcx9N-DlBouz12xrUP",
+    "requestId": "rtr_QKouBqXL4BnK-EHZE-CTEIPVqwlDLyR0",
+    "issuedAt": 1800000021000,
+    "nonce": "rtn_rWlJMMqhqsGnUahrn1o5hets1H_XM8_E",
+    "payload": {
+      "connectionRequestId": "rtr_ROKQlY_B9Kil00sguyPTSGccAUDh_M_G",
+      "bootstrap": {
+        "contractVersion": 3,
+        "enrollmentKind": "temporary-device",
+        "instanceId": "inst_dhWwubFw-NYA2vtKlnL8Fygb3f5gP-R9",
+        "deviceId": "rdev_nSWKGFoSne5JMRfV30hq5jtXivdICS6B",
+        "connectionMode": "turn-first",
+        "issuedAt": "2027-01-15T08:00:20.000Z",
+        "expiresAt": "2027-01-15T08:05:00.000Z",
+        "temporaryAccess": {
+          "grantId": "rtg_rVhOYovpFGjkSC02mE_kL0piN9xXpVuf",
+          "invitationId": "rti_DY29_jl_RcThycUcx9N-DlBouz12xrUP",
+          "requestId": "rtr_78m6qSH1OwyZdxlg5-Z0cq8zWFtgWE1m",
+          "deviceKeyFingerprint": "c48831f0b77a427c9150bb3db8707d8a4acab0038d515a8f747a4bb7e6de14be",
+          "deviceJwkThumbprint": "_N0XOOwfEpb-Vx4fsrcZDEHBlZvi6sBXE5ddJYAmiBs",
+          "capabilities": [
+            "task.create",
+            "task.submit",
+            "task.read",
+            "task.cancel",
+            "file.upload",
+            "file.download"
+          ],
+          "sessionScope": "created-sessions",
+          "expiresAt": "2027-01-15T08:10:00.000Z"
+        },
+        "candidates": [
+          {
+            "id": "cand_f60e269ba92b9c84909078f6",
+            "kind": "turn",
+            "provider": "cloudflare-realtime",
+            "endpoint": "turn:turn.example.test:3478?transport=udp",
+            "priority": 120,
+            "expiresAt": "2027-01-15T08:05:00.000Z",
+            "requiresUserConsent": false,
+            "metadata": {
+              "appTrafficOnly": true,
+              "carrier": "cloudflare-realtime-turn",
+              "connectionId": "turn_baa5de1e9da82c6cfbf4a3bc9c579ce4",
+              "iceServers": [
+                {
+                  "urls": "turn:turn.example.test:3478?transport=udp",
+                  "username": "fixture",
+                  "password": "fixture-secret"
+                }
+              ]
+            }
+          },
+          {
+            "id": "cand_101950cca4cc0c127de3e35e",
+            "kind": "webrtc",
+            "provider": "core_p2p",
+            "endpoint": "https://signal.example.test/",
+            "priority": 60,
+            "expiresAt": "2027-01-15T08:05:00.000Z",
+            "requiresUserConsent": false,
+            "metadata": {
+              "roomId": "1e0a5aa8d2d0f37439e138c71c7f171dfe47b8d7",
+              "turnAllowed": true
+            }
+          }
+        ],
+        "turn": {
+          "provider": "cloudflare-realtime",
+          "transport": "turn",
+          "appTrafficOnly": true,
+          "credentialScope": "temporary-device-access",
+          "temporaryGrantId": "rtg_rVhOYovpFGjkSC02mE_kL0piN9xXpVuf",
+          "temporaryInvitationId": "rti_DY29_jl_RcThycUcx9N-DlBouz12xrUP",
+          "accessExpiresAt": "2027-01-15T08:10:00.000Z",
+          "expiresAt": "2027-01-15T08:05:00.000Z",
+          "connectionId": "turn_baa5de1e9da82c6cfbf4a3bc9c579ce4",
+          "iceServers": [
+            {
+              "urls": "turn:turn.example.test:3478?transport=udp",
+              "username": "fixture",
+              "password": "fixture-secret"
+            }
+          ]
+        },
+        "turnAuthorization": {
+          "policyVersion": "turn-account-quota-v1",
+          "authorized": true,
+          "status": "authorized",
+          "reasonCode": "turn_authorized",
+          "plan": "free",
+          "maxDevices": 1,
+          "activeDeviceCount": 1,
+          "deviceKind": "phone",
+          "limits": {
+            "phones": 1,
+            "computers": 1
+          },
+          "activePhones": 1,
+          "activeComputers": 1,
+          "connectionId": "turn_baa5de1e9da82c6cfbf4a3bc9c579ce4"
+        },
+        "initialCarrier": {
+          "candidateId": "cand_f60e269ba92b9c84909078f6",
+          "kind": "turn",
+          "provider": "cloudflare-realtime",
+          "endpoint": "turn:turn.example.test:3478?transport=udp"
+        },
+        "upgrade": {
+          "strategy": "probe-after-bootstrap",
+          "targets": [
+            "webrtc"
+          ],
+          "retainCurrentWhenNoP2PPath": true
+        },
+        "fallback": null,
+        "signature": {
+          "algorithm": "ed25519",
+          "keyId": "d6a476880e5d554dc470665eefb3cd8e159fc2d6fb46aef9841279000ea3b4f3",
+          "signedAt": "2027-01-15T08:00:20.000Z",
+          "value": "40icui_6heyjDtHks9WAOnQfYEPqkZhCs63GDoH-YL2va9Mm1eDmMHmWeRBRc5MwkBUGdKjszaPw0mnXf5h2Ag"
+        }
+      },
+      "p2p": {
+        "roomId": "1e0a5aa8d2d0f37439e138c71c7f171dfe47b8d7",
+        "secret": "2ae7d40ba848c62eaf958fd91fd7f57441f189bd8af93def1e1ed328174c85fe",
+        "signalingEndpoint": "https://signal.example.test/"
+      },
+      "carrierReady": true,
+      "businessAccessReady": true
+    },
+    "signature": "bLipsmWc-Rt2XPILTC0-1ZbCdGpeelKjM8fgIQX0sTbub_-qS041Wgr5t1ZfZPgoDHwomLn6XX2p1bD1oyZmBQ"
+  },
+  "unavailableDelivery": {
+    "instanceId": "inst_dhWwubFw-NYA2vtKlnL8Fygb3f5gP-R9",
+    "invitationId": "rti_DY29_jl_RcThycUcx9N-DlBouz12xrUP",
+    "requestId": "rtr_QKouBqXL4BnK-EHZE-CTEIPVqwlDLyR0",
+    "issuedAt": 1800000021000,
+    "nonce": "rtn_rWlJMMqhqsGnUahrn1o5hets1H_XM8_E",
+    "payload": {
+      "connectionRequestId": "rtr_ROKQlY_B9Kil00sguyPTSGccAUDh_M_G",
+      "bootstrap": {
+        "contractVersion": 3,
+        "enrollmentKind": "temporary-device",
+        "instanceId": "inst_dhWwubFw-NYA2vtKlnL8Fygb3f5gP-R9",
+        "deviceId": "rdev_nSWKGFoSne5JMRfV30hq5jtXivdICS6B",
+        "connectionMode": "turn-first",
+        "issuedAt": "2027-01-15T08:00:20.000Z",
+        "expiresAt": "2027-01-15T08:05:00.000Z",
+        "temporaryAccess": {
+          "grantId": "rtg_rVhOYovpFGjkSC02mE_kL0piN9xXpVuf",
+          "invitationId": "rti_DY29_jl_RcThycUcx9N-DlBouz12xrUP",
+          "requestId": "rtr_78m6qSH1OwyZdxlg5-Z0cq8zWFtgWE1m",
+          "deviceKeyFingerprint": "c48831f0b77a427c9150bb3db8707d8a4acab0038d515a8f747a4bb7e6de14be",
+          "deviceJwkThumbprint": "_N0XOOwfEpb-Vx4fsrcZDEHBlZvi6sBXE5ddJYAmiBs",
+          "capabilities": [
+            "task.create",
+            "task.submit",
+            "task.read",
+            "task.cancel",
+            "file.upload",
+            "file.download"
+          ],
+          "sessionScope": "created-sessions",
+          "expiresAt": "2027-01-15T08:10:00.000Z"
+        },
+        "candidates": [
+          {
+            "id": "cand_f60e269ba92b9c84909078f6",
+            "kind": "turn",
+            "provider": "cloudflare-realtime",
+            "endpoint": "turn:turn.example.test:3478?transport=udp",
+            "priority": 120,
+            "expiresAt": "2027-01-15T08:05:00.000Z",
+            "requiresUserConsent": false,
+            "metadata": {
+              "appTrafficOnly": true,
+              "carrier": "cloudflare-realtime-turn",
+              "connectionId": "turn_baa5de1e9da82c6cfbf4a3bc9c579ce4",
+              "iceServers": [
+                {
+                  "urls": "turn:turn.example.test:3478?transport=udp",
+                  "username": "fixture",
+                  "password": "fixture-secret"
+                }
+              ]
+            }
+          },
+          {
+            "id": "cand_101950cca4cc0c127de3e35e",
+            "kind": "webrtc",
+            "provider": "core_p2p",
+            "endpoint": "https://signal.example.test/",
+            "priority": 60,
+            "expiresAt": "2027-01-15T08:05:00.000Z",
+            "requiresUserConsent": false,
+            "metadata": {
+              "roomId": "1e0a5aa8d2d0f37439e138c71c7f171dfe47b8d7",
+              "turnAllowed": true
+            }
+          }
+        ],
+        "turn": {
+          "provider": "cloudflare-realtime",
+          "transport": "turn",
+          "appTrafficOnly": true,
+          "credentialScope": "temporary-device-access",
+          "temporaryGrantId": "rtg_rVhOYovpFGjkSC02mE_kL0piN9xXpVuf",
+          "temporaryInvitationId": "rti_DY29_jl_RcThycUcx9N-DlBouz12xrUP",
+          "accessExpiresAt": "2027-01-15T08:10:00.000Z",
+          "expiresAt": "2027-01-15T08:05:00.000Z",
+          "connectionId": "turn_baa5de1e9da82c6cfbf4a3bc9c579ce4",
+          "iceServers": [
+            {
+              "urls": "turn:turn.example.test:3478?transport=udp",
+              "username": "fixture",
+              "password": "fixture-secret"
+            }
+          ]
+        },
+        "turnAuthorization": {
+          "policyVersion": "turn-account-quota-v1",
+          "authorized": true,
+          "status": "authorized",
+          "reasonCode": "turn_authorized",
+          "plan": "free",
+          "maxDevices": 1,
+          "activeDeviceCount": 1,
+          "deviceKind": "phone",
+          "limits": {
+            "phones": 1,
+            "computers": 1
+          },
+          "activePhones": 1,
+          "activeComputers": 1,
+          "connectionId": "turn_baa5de1e9da82c6cfbf4a3bc9c579ce4"
+        },
+        "initialCarrier": {
+          "candidateId": "cand_f60e269ba92b9c84909078f6",
+          "kind": "turn",
+          "provider": "cloudflare-realtime",
+          "endpoint": "turn:turn.example.test:3478?transport=udp"
+        },
+        "upgrade": {
+          "strategy": "probe-after-bootstrap",
+          "targets": [
+            "webrtc"
+          ],
+          "retainCurrentWhenNoP2PPath": true
+        },
+        "fallback": null,
+        "signature": {
+          "algorithm": "ed25519",
+          "keyId": "d6a476880e5d554dc470665eefb3cd8e159fc2d6fb46aef9841279000ea3b4f3",
+          "signedAt": "2027-01-15T08:00:20.000Z",
+          "value": "40icui_6heyjDtHks9WAOnQfYEPqkZhCs63GDoH-YL2va9Mm1eDmMHmWeRBRc5MwkBUGdKjszaPw0mnXf5h2Ag"
+        }
+      },
+      "p2p": {
+        "roomId": "1e0a5aa8d2d0f37439e138c71c7f171dfe47b8d7",
+        "secret": "2ae7d40ba848c62eaf958fd91fd7f57441f189bd8af93def1e1ed328174c85fe",
+        "signalingEndpoint": "https://signal.example.test/"
+      },
+      "carrierReady": true,
+      "businessAccessReady": false
+    },
+    "signature": "dFYECgM4GuEt_Qy32WoXemfx-vBpIh9OTgAI9inl5L86Zp1Jv9LyaGJxZzm96WBgErw2E972PquadU8mHI5LCg"
+  }
+}

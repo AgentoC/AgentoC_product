@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+if [ "${1:-}" = remove ] || [ "${1:-}" = deconfigure ]; then
+  if [ -d /run/systemd/system ]; then
+    systemctl stop agentoc-storage-gc.timer >/dev/null 2>&1 || true
+    systemctl disable agentoc-storage-gc.timer >/dev/null 2>&1 || true
+    systemctl stop agentoc.service >/dev/null 2>&1 || true
+    systemctl stop agentoc-runner-lifecycle.service >/dev/null 2>&1 || true
+    systemctl stop agentoc-runner-supervisor.service >/dev/null 2>&1 || true
+    systemctl stop agentoc-privileged-executor.service >/dev/null 2>&1 || true
+  fi
+  if [ -x /usr/lib/agentoc/retire-legacy-cc-switch ]; then
+    /usr/lib/agentoc/retire-legacy-cc-switch || true
+  fi
+fi
+
+exit 0

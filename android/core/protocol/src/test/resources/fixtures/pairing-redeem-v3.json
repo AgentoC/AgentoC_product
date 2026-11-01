@@ -1,0 +1,17 @@
+{
+  "instanceId": "rli_fixture_v3",
+  "endpoint": "http://192.168.1.20:7690",
+  "device": {
+    "id": "rdev_fixture_v3",
+    "deviceName": "Pixel v3",
+    "platform": "android",
+    "devicePublicKey": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEFixture\n-----END PUBLIC KEY-----",
+    "authVersion": 3,
+    "keyAlgorithm": "p256",
+    "status": "provisional",
+    "createdAt": "2026-08-12T00:00:00.000Z",
+    "lastSeenAt": "2026-08-12T00:00:00.000Z",
+    "temporaryExpiresAt": "2026-08-12T00:02:00.000Z"
+  },
+  "credential": { "type": "Bearer", "token": "rdp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "expiresAt": "2026-08-12T00:02:00.000Z", "scope": "provisional-google" }
+}

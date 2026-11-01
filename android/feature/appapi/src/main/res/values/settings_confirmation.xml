@@ -1,0 +1,7 @@
+<resources>
+    <string name="api_confirm">Confirm</string>
+    <string name="api_access_clear_confirm">Remove this revoked record from this device? The access is already revoked.</string>
+    <string name="api_assistant_revoke_confirm">Revoke this assistant delegation? This blocks future access through it, but does not stop work already accepted by a computer or recall data already received.</string>
+    <string name="api_capture_delete_confirm">Delete this saved draft from this device? This cannot be undone.</string>
+    <string name="api_outputs_delete_confirm">Delete this private phone copy? The original computer file is not deleted.</string>
+</resources>

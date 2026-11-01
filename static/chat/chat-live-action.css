@@ -1,0 +1,86 @@
+/* Vertical slide-up sentence transition (上下句切换) shared by the top status
+   capsule and the mobile activity line.
+   Outgoing sentence slides up and fades out cleanly;
+   incoming sentence slides up from below and fades in cleanly.
+   No clip-path slicing or horizontal shimmer sweep so the text stays calm,
+   readable, and flicker-free. */
+.live-action-transition {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.live-action-transition__stage {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 1.5em;
+  min-height: 1.25em;
+  line-height: inherit;
+  overflow: hidden;
+}
+
+.live-action-transition__item {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  line-height: inherit;
+}
+
+.live-action-transition__item.is-current {
+  position: relative;
+  transform: none;
+  opacity: 1;
+}
+
+.live-action-transition__item.is-entering {
+  animation: live-action-slide-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.live-action-transition__item.is-exiting {
+  animation: live-action-slide-out 260ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes live-action-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes live-action-slide-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-action-transition__item.is-entering,
+  .live-action-transition__item.is-exiting {
+    animation: none !important;
+    transform: none !important;
+  }
+  .live-action-transition__item.is-entering {
+    opacity: 1;
+  }
+  .live-action-transition__item.is-exiting {
+    display: none;
+  }
+}

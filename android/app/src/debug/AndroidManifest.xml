@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-only overlay: allow cleartext HTTP to the LAN/emulator host so
+     on-device pairing E2E can talk to a local (non-TLS) control plane. Production
+     builds use the main manifest and stay strict. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <queries>
+        <!-- Synthetic result observations in the standalone different-UID QA APK. -->
+        <provider android:authorities="com.agentoncloud.android.sharefixture.result-probe" />
+        <provider android:authorities="com.agentoncloud.android.sharefixture.result-document" />
+    </queries>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <application android:usesCleartextTraffic="true" tools:replace="android:usesCleartextTraffic">
+        <activity android:name=".ProcessTextQaActivity" android:exported="true" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".SavedProcessTextQaActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name=".ComposerPickerQaActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name=".Phase3RActivity"
+            android:exported="true" />
+    </application>
+</manifest>

@@ -1,0 +1,5 @@
+<resources>
+    <string name="capture_shortcut_new">New task</string>
+    <string name="capture_shortcut_target">New task on %1$s</string>
+    <string name="capture_shortcut_removed">This computer is no longer paired.</string>
+</resources>

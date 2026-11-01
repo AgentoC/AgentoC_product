@@ -1,0 +1,7 @@
+<resources>
+    <string name="api_confirm">確認</string>
+    <string name="api_access_clear_confirm">取り消し済みの記録をこの端末から消去しますか？アクセス権はすでに取り消されています。</string>
+    <string name="api_assistant_revoke_confirm">このアシスタントの委任を取り消しますか？今後のアクセスは停止しますが、コンピューターが受け付けた作業は停止せず、受信済みのデータも回収されません。</string>
+    <string name="api_capture_delete_confirm">保存したこの下書きを端末から削除しますか？この操作は元に戻せません。</string>
+    <string name="api_outputs_delete_confirm">端末上の非公開コピーを削除しますか？元のコンピューターのファイルは削除されません。</string>
+</resources>

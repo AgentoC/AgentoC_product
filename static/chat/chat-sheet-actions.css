@@ -1,0 +1,505 @@
+/* Connector and Agent panel action layer.
+   Connector rows intentionally follow one Material 3 list-item contract:
+   readable primary label, supporting text, and one trailing state/action. */
+
+#composerConnectorPanel .composer-add-panel-group-title {
+  margin: 16px 4px 6px;
+  padding: 0;
+  border: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 20px;
+  letter-spacing: normal;
+}
+
+#composerConnectorPanel .composer-add-panel-group-title:first-child {
+  margin-top: 2px;
+}
+
+#composerConnectorPanel .composer-connector-list-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 68px;
+  padding: 10px 16px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: default;
+}
+
+#composerConnectorPanel .composer-connector-list-item:hover,
+#composerConnectorPanel .composer-connector-list-item:focus-visible {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  box-shadow: none;
+  outline: none;
+}
+
+#composerConnectorPanel .composer-connector-row-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+
+#composerConnectorPanel .composer-connector-list-item .composer-add-panel-row-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#composerConnectorPanel .composer-connector-list-item .composer-add-panel-row-detail {
+  display: block !important;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 450;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#composerConnectorPanel .composer-connector-row-trailing {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+#composerConnectorPanel .composer-connector-list-item .composer-add-panel-pill {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--app-warning) 14%, transparent);
+  color: color-mix(in srgb, var(--app-warning) 84%, var(--text));
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+#composerConnectorPanel .composer-connector-list-item .composer-add-panel-pill.is-ready {
+  background: color-mix(in srgb, var(--app-success) 14%, transparent);
+  color: color-mix(in srgb, var(--app-success) 84%, var(--text));
+}
+
+#composerConnectorPanel .composer-connector-list-item .composer-add-panel-action {
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 22px;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+#composerConnectorPanel .composer-connector-list-item .composer-add-panel-action--primary {
+  background: var(--color-action);
+  color: var(--color-action-on);
+}
+
+#composerConnectorPanel .composer-connector-list-item .composer-add-panel-action--primary:hover {
+  background: color-mix(in srgb, var(--color-action) 88%, var(--sys-inverse-surface));
+}
+
+#composerConnectorPanel .composer-connector-list-item .composer-add-panel-action--text {
+  background: color-mix(in srgb, var(--color-action) 10%, transparent);
+  color: var(--color-action);
+}
+
+#composerConnectorPanel .composer-connector-list-item .composer-add-panel-action--text:hover {
+  background: color-mix(in srgb, var(--color-action) 17%, transparent);
+}
+
+#composerConnectorPanel .composer-add-panel-row--google-account {
+  background: color-mix(in srgb, var(--color-action) 8%, var(--color-surface-hover));
+}
+
+#composerConnectorPanel .composer-add-panel-disclosure {
+  display: flex;
+  width: 100%;
+  min-height: 56px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface-hover, var(--surface-raised, var(--bg))) 78%, transparent);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 650;
+  text-align: left;
+}
+
+#composerConnectorPanel .composer-add-panel-disclosure:focus-visible,
+#composerConnectorPanel .composer-add-panel-action:focus-visible,
+#composerConnectorPanel .composer-add-panel-add:focus-visible,
+#composerConnectorPanel .composer-add-panel-refresh:focus-visible,
+#composerConnectorPanel .composer-add-panel-back:focus-visible,
+#composerConnectorPanel .composer-add-panel-form-cancel:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-border) 24%, transparent);
+}
+
+#composerConnectorPanel .composer-add-panel-action,
+#composerConnectorPanel .composer-add-panel-add,
+#composerConnectorPanel .composer-add-panel-refresh,
+#composerConnectorPanel .composer-add-panel-form-cancel,
+#composerConnectorPanel .composer-add-panel-back {
+  box-sizing: border-box;
+  min-height: 48px;
+  border-radius: 22px;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+#composerConnectorPanel .composer-add-panel-list > .composer-add-panel-action,
+#composerConnectorPanel .composer-add-panel-add,
+#composerConnectorPanel .composer-add-panel-refresh {
+  display: inline-flex;
+  width: auto;
+  align-items: center;
+  justify-content: center;
+  margin: 8px 0 0;
+  padding: 0 16px;
+}
+
+#composerConnectorPanel .composer-add-panel-action--primary,
+#composerConnectorPanel .composer-add-panel-form-submit {
+  background: var(--color-action);
+  color: var(--color-action-on);
+}
+
+#composerConnectorPanel .composer-add-panel-action--text,
+#composerConnectorPanel .composer-add-panel-refresh,
+#composerConnectorPanel .composer-add-panel-add,
+#composerConnectorPanel .composer-add-panel-form-cancel,
+#composerConnectorPanel .composer-add-panel-back {
+  background: color-mix(in srgb, var(--color-action) 10%, transparent);
+  color: var(--color-action);
+}
+
+#composerConnectorPanel .composer-add-panel-empty {
+  min-height: 56px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface-hover, var(--surface-raised, var(--bg))) 78%, transparent);
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+#composerConnectorPanel .composer-add-panel-row-remove {
+  min-height: 44px;
+  border-radius: 22px;
+}
+
+@media (max-width: 767px) {
+  #composerConnectorPanel {
+    padding: 12px 16px calc(16px + var(--safe-bottom)) !important;
+  }
+
+  #composerConnectorPanel .composer-add-panel-title {
+    padding: 4px 4px 16px;
+    font-size: clamp(22px, 5.8vw, 26px);
+    font-weight: 700;
+    line-height: 1.16;
+  }
+
+  #composerConnectorPanel .composer-add-panel-list {
+    gap: 8px;
+    padding: 0 0 4px;
+  }
+
+  #composerConnectorPanel .composer-connector-list-item {
+    min-height: 72px;
+    padding: 12px 12px 12px 14px;
+    border-radius: 18px;
+    gap: 10px;
+  }
+
+  #composerConnectorPanel .composer-connector-list-item .composer-add-panel-row-label {
+    font-size: 16px;
+    line-height: 22px;
+  }
+
+  #composerConnectorPanel .composer-connector-list-item .composer-add-panel-row-detail {
+    font-size: 13px;
+    line-height: 18px;
+  }
+
+  #composerConnectorPanel .composer-connector-row-trailing {
+    gap: 6px;
+  }
+
+  #composerConnectorPanel .composer-connector-list-item .composer-add-panel-action {
+    min-height: 44px;
+    padding: 0 13px;
+    font-size: 13px;
+  }
+
+  #composerConnectorPanel .composer-connector-list-item .composer-add-panel-pill {
+    min-height: 28px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  #composerConnectorPanel .composer-add-panel-group-title {
+    margin: 18px 4px 6px;
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  #composerConnectorPanel .composer-add-panel-group-title:first-child {
+    margin-top: 2px;
+  }
+
+  #composerConnectorPanel .composer-add-panel-disclosure {
+    min-height: 56px;
+    margin-top: 18px;
+    border-radius: 18px;
+    font-size: 15px;
+  }
+
+  #composerConnectorPanel .composer-add-panel-list > .composer-add-panel-action,
+  #composerConnectorPanel .composer-add-panel-add,
+  #composerConnectorPanel .composer-add-panel-refresh,
+  #composerConnectorPanel .composer-add-panel-form-cancel,
+  #composerConnectorPanel .composer-add-panel-back {
+    min-height: 48px;
+    margin: 8px 0 0;
+    padding: 0 16px;
+    border-radius: 24px;
+    font-size: 14px;
+  }
+
+  #composerConnectorPanel .composer-add-panel-row-detail {
+    display: block;
+  }
+}
+
+/* Agent rows use the same Material 3 list-item contract as connectors:
+   a readable title, supporting text, and an explicit trailing selection state. */
+#composerAgentPanel .composer-agent-list-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 68px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+#composerAgentPanel .composer-agent-list-item:hover,
+#composerAgentPanel .composer-agent-list-item.is-selected {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+#composerAgentPanel .composer-agent-list-item:focus-visible {
+  background: color-mix(in srgb, var(--surface-hover, var(--surface-raised, var(--bg))) 88%, var(--accent) 12%);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--focus-border, var(--accent)) 72%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--focus-border, var(--accent)) 18%, transparent);
+  outline: none;
+}
+
+#composerAgentPanel .composer-agent-row-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+
+#composerAgentPanel .composer-agent-list-item .composer-add-panel-row-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#composerAgentPanel .composer-agent-list-item .composer-add-panel-row-detail {
+  display: block !important;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 450;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#composerAgentPanel .composer-agent-row-trailing,
+#composerAgentPanel .composer-agent-selection-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+#composerAgentPanel .composer-agent-selection-state {
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 9px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-action) 10%, transparent);
+  color: var(--color-action);
+}
+
+#composerAgentPanel .composer-agent-selection-state:not(.is-selected) {
+  width: 22px;
+  min-height: 22px;
+  padding: 0;
+  border: 2px solid color-mix(in srgb, var(--text-muted) 52%, transparent);
+  border-radius: 50%;
+  background: transparent;
+}
+
+#composerAgentPanel .composer-agent-selection-label {
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+#composerAgentPanel .composer-agent-selection-state .composer-add-panel-check {
+  display: inline-flex;
+  visibility: visible;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  opacity: 1;
+  transform: none;
+  color: currentColor;
+}
+
+#composerAgentPanel .composer-agent-selection-state .composer-add-panel-check .rl-icon {
+  width: 16px;
+  height: 16px;
+}
+
+#composerAgentPanel .composer-add-panel-empty {
+  min-height: 56px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface-hover, var(--surface-raised, var(--bg))) 78%, transparent);
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+#composerAgentPanel .composer-add-panel-title {
+  padding: 4px 6px 14px;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 24px;
+}
+
+@media (max-width: 767px) {
+  #composerAgentPanel {
+    padding: 12px 16px calc(16px + var(--safe-bottom)) !important;
+  }
+
+  #composerAgentPanel .composer-add-panel-title {
+    padding: 4px 4px 16px;
+    font-size: clamp(22px, 5.8vw, 26px);
+    font-weight: 700;
+    line-height: 1.16;
+  }
+
+  #composerAgentPanel .composer-add-panel-list {
+    gap: 8px;
+    padding: 0 0 4px;
+  }
+
+  #composerAgentPanel .composer-agent-list-item {
+    min-height: 72px;
+    padding: 12px 12px 12px 14px;
+    border-radius: 18px;
+    gap: 10px;
+  }
+
+  #composerAgentPanel .composer-agent-list-item .composer-add-panel-row-label {
+    font-size: 16px;
+    line-height: 22px;
+  }
+
+  #composerAgentPanel .composer-agent-list-item .composer-add-panel-row-detail {
+    font-size: 13px;
+    line-height: 18px;
+  }
+
+  #composerAgentPanel .composer-agent-selection-state {
+    min-height: 30px;
+    padding: 0 8px;
+  }
+
+  #composerAgentPanel .composer-agent-selection-state:not(.is-selected) {
+    width: 22px;
+    min-height: 22px;
+    padding: 0;
+  }
+
+  #composerAgentPanel .composer-agent-selection-label {
+    font-size: 12px;
+  }
+}
+
+/* Keep the Agent sheet's existing compact action affordances intact. */
+@media (max-width: 767px) {
+  #composerAgentPanel .composer-add-panel-action,
+  #composerAgentPanel .composer-add-panel-footer {
+    display: inline-flex !important;
+    width: auto !important;
+    min-width: 0;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+    margin: 6px 2px 2px;
+    padding: 0 16px;
+    border-radius: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #composerAgentPanel button,
+  #composerConnectorPanel button {
+    transition: none !important;
+  }
+}

@@ -1,0 +1,31 @@
+[Unit]
+Description=AgentoC per-Run lifecycle broker
+After=local-fs.target
+Before=agentoc-runner-supervisor.service agentoc.service
+
+[Service]
+Type=simple
+# P2-C: the socket unit pre-binds the broker socket (systemd-owned, mode 0660
+# agentoc:agentoc); the daemon inherits the listening fd, so the socket survives
+# broker restarts.  Sockets= implies Requires= + After= on
+# agentoc-runner-lifecycle.socket.
+Sockets=agentoc-runner-lifecycle.socket
+User=root
+Group=root
+WorkingDirectory=/opt/agentoc/app
+EnvironmentFile=/etc/agentoc/agentoc.env
+ExecStart=/opt/agentoc/runtime/node /opt/agentoc/app/scripts/runner-lifecycle-broker.mjs
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectHome=false
+LockPersonality=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+ReadWritePaths=/var/lib/agentoc
+UMask=0007
+
+[Install]
+WantedBy=multi-user.target

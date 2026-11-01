@@ -1,0 +1,853 @@
+/* Material 3 system roles for the chat workbench.
+ *
+ * Keep the existing product aliases for compatibility, but make every new
+ * surface consume role-based values instead of inventing a local palette.
+ * These are intentionally static web-safe palettes; the selector boundary can
+ * later be replaced by generated/dynamic palettes without changing components.
+ */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --m3-primary: #000000;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #e6e9ef;
+  --m3-on-primary-container: #000000;
+  --m3-secondary: #535c6b;
+  --m3-on-secondary: #ffffff;
+  --m3-secondary-container: #e7ebf1;
+  --m3-on-secondary-container: #171c24;
+  --m3-tertiary: #687486;
+  --m3-on-tertiary: #ffffff;
+  --m3-tertiary-container: #e1e6ee;
+  --m3-on-tertiary-container: #171c24;
+  --m3-error: #ba1a1a;
+  --m3-on-error: #ffffff;
+  --m3-error-container: #ffdad6;
+  --m3-on-error-container: #410002;
+  --m3-surface: #ffffff;
+  --m3-surface-dim: #e1e5eb;
+  --m3-surface-bright: #ffffff;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-surface-container-low: #f2f4f8;
+  --m3-surface-container: #edf0f5;
+  --m3-surface-container-high: #e8ebf0;
+  --m3-surface-container-highest: #e2e6ed;
+  --m3-on-surface: #1f232a;
+  --m3-on-surface-variant: #555e6b;
+  --m3-outline: #7d8795;
+  --m3-outline-variant: #c8ced8;
+  --m3-inverse-surface: #1f232a;
+  --m3-inverse-on-surface: #f4f6fa;
+  --m3-inverse-primary: #ffffff;
+  --m3-scrim: rgba(0, 0, 0, 0.32);
+
+  --m3-success: #2f6b3c;
+  --m3-on-success: #ffffff;
+  --m3-success-container: #c9e1cd;
+  --m3-on-success-container: #14361a;
+  --m3-warning: #805600;
+  --m3-on-warning: #ffffff;
+  --m3-warning-container: #ffdea6;
+  --m3-on-warning-container: #291800;
+
+  --m3-shape-extra-small: 4px;
+  --m3-shape-small: 8px;
+  --m3-shape-medium: 12px;
+  --m3-shape-large: 16px;
+  --m3-shape-extra-large: 28px;
+  --m3-shape-full: 999px;
+
+  --m3-elevation-1: 0 1px 3px rgba(25, 28, 36, 0.12), 0 1px 2px rgba(25, 28, 36, 0.08);
+  --m3-elevation-2: 0 3px 6px rgba(25, 28, 36, 0.14), 0 1px 2px rgba(25, 28, 36, 0.10);
+  --m3-elevation-3: 0 8px 16px rgba(25, 28, 36, 0.16), 0 2px 4px rgba(25, 28, 36, 0.10);
+
+  --m3-state-hover: color-mix(in srgb, var(--m3-primary) 8%, transparent);
+  --m3-state-focus: color-mix(in srgb, var(--m3-primary) 12%, transparent);
+  --m3-state-pressed: color-mix(in srgb, var(--m3-primary) 12%, transparent);
+  --m3-state-dragged: color-mix(in srgb, var(--m3-primary) 16%, transparent);
+
+  /* Compatibility aliases consumed by the existing chat styles. */
+  --bg: var(--m3-surface);
+  --bg-secondary: var(--m3-surface-container-lowest);
+  --bg-tertiary: var(--m3-surface-container-low);
+  --chat-area-bg: var(--m3-surface);
+  --border: var(--m3-outline-variant);
+  --border-strong: var(--m3-outline);
+  --text: var(--m3-on-surface);
+  --text-secondary: var(--m3-on-surface-variant);
+  --text-muted: color-mix(in srgb, var(--m3-on-surface-variant) 72%, transparent);
+  --accent: var(--m3-primary);
+  --accent-dim: var(--m3-primary-container);
+  --surface-hover: var(--m3-surface-container-highest);
+  --success: var(--sys-success);
+  --success-bg: var(--sys-success-container);
+  --copy-btn-success-border: color-mix(in srgb, var(--sys-success) 26%, transparent);
+  --notice: var(--m3-secondary);
+  --error: var(--m3-error);
+  --error-bg: var(--m3-error-container);
+  --warning: var(--sys-warning);
+  --modal-backdrop: var(--m3-scrim);
+  --overlay-backdrop: color-mix(in srgb, var(--m3-scrim) 70%, transparent);
+
+  --sys-primary: var(--m3-primary);
+  --sys-on-primary: var(--m3-on-primary);
+  --sys-primary-container: var(--m3-primary-container);
+  --sys-on-primary-container: var(--m3-on-primary-container);
+  --sys-secondary: var(--m3-secondary);
+  --sys-on-secondary: var(--m3-on-secondary);
+  --sys-secondary-container: var(--m3-secondary-container);
+  --sys-on-secondary-container: var(--m3-on-secondary-container);
+  --sys-tertiary: var(--m3-tertiary);
+  --sys-on-tertiary: var(--m3-on-tertiary);
+  --sys-tertiary-container: var(--m3-tertiary-container);
+  --sys-on-tertiary-container: var(--m3-on-tertiary-container);
+  --sys-error: var(--m3-error);
+  --sys-on-error: var(--m3-on-error);
+  --sys-error-container: var(--m3-error-container);
+  --sys-on-error-container: var(--m3-on-error-container);
+  --sys-success: var(--m3-success);
+  --sys-on-success: var(--m3-on-success);
+  --sys-success-container: var(--m3-success-container);
+  --sys-on-success-container: var(--m3-on-success-container);
+  --sys-warning: var(--m3-warning);
+  --sys-on-warning: var(--m3-on-warning);
+  --sys-warning-container: var(--m3-warning-container);
+  --sys-on-warning-container: var(--m3-on-warning-container);
+  --sys-surface: var(--m3-surface);
+  --sys-surface-dim: var(--m3-surface-dim);
+  --sys-surface-bright: var(--m3-surface-bright);
+  --sys-surface-container-lowest: var(--m3-surface-container-lowest);
+  --sys-surface-container-low: var(--m3-surface-container-low);
+  --sys-surface-container: var(--m3-surface-container);
+  --sys-surface-container-high: var(--m3-surface-container-high);
+  --sys-surface-container-highest: var(--m3-surface-container-highest);
+  --sys-on-surface: var(--m3-on-surface);
+  --sys-on-surface-variant: var(--m3-on-surface-variant);
+  --sys-outline: var(--m3-outline);
+  --sys-outline-variant: var(--m3-outline-variant);
+  --sys-inverse-surface: var(--m3-inverse-surface);
+  --sys-inverse-on-surface: var(--m3-inverse-on-surface);
+  --sys-inverse-primary: var(--m3-inverse-primary);
+  --sys-scrim: var(--m3-scrim);
+
+  --color-canvas: var(--m3-surface);
+  --color-surface: var(--m3-surface-container);
+  --color-surface-raised: var(--m3-surface-container-high);
+  --color-surface-hover: var(--m3-surface-container-highest);
+  --color-text-primary: var(--m3-on-surface);
+  --color-text-secondary: var(--m3-on-surface-variant);
+  --color-text-muted: var(--text-muted);
+  --color-action: var(--m3-primary);
+  --color-action-on: var(--m3-on-primary);
+  --color-action-container: var(--m3-primary-container);
+  --color-action-on-container: var(--m3-on-primary-container);
+  --color-divider: var(--m3-outline-variant);
+  --color-focus: var(--m3-primary);
+  --app-success: var(--sys-success);
+  --app-success-container: var(--sys-success-container);
+  --app-warning: var(--sys-warning);
+  --app-warning-container: var(--sys-warning-container);
+
+  /* Workflow state colors are semantic and deliberately independent from the
+     theme's primary/secondary roles. A monochrome or Monet palette must not
+     turn the unread marker gray or recolor the Live Bar's running state. */
+  --status-running: #2563eb;
+  --status-queued: #0d9488;
+  --status-waiting: #d97706;
+  --status-done: #16a34a;
+  --status-failed: #dc2626;
+
+  --mx-r-control: var(--m3-shape-medium);
+  --mx-r-row: var(--m3-shape-large);
+  --mx-r-sheet: var(--m3-shape-extra-large);
+  --radius-card: var(--m3-shape-medium);
+  --radius-block: var(--m3-shape-large);
+  --radius-composer: var(--m3-shape-extra-large);
+  --radius-sheet-top: var(--m3-shape-extra-large);
+  --radius-pill: var(--m3-shape-full);
+  --focus-border: var(--m3-primary);
+}
+
+@media (prefers-color-scheme: dark) {
+  /* Only the system preference uses this generic dark palette. Explicit
+     Material presets below own their dark roles and must not be overridden. */
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --m3-primary: #ffffff;
+    --m3-on-primary: #000000;
+    --m3-primary-container: #dedede;
+    --m3-on-primary-container: #000000;
+    --m3-secondary: #c6c6c6;
+    --m3-on-secondary: #000000;
+    --m3-secondary-container: #303030;
+    --m3-on-secondary-container: #ffffff;
+    --m3-tertiary: #aaaaaa;
+    --m3-on-tertiary: #000000;
+    --m3-tertiary-container: #3a3a3a;
+    --m3-on-tertiary-container: #ffffff;
+    --m3-error: #ffb4ab;
+    --m3-on-error: #690005;
+    --m3-error-container: #93000a;
+    --m3-on-error-container: #ffdad6;
+    --m3-surface: #000000;
+    --m3-surface-dim: #000000;
+    --m3-surface-bright: #2a2a2a;
+    --m3-surface-container-lowest: #000000;
+    --m3-surface-container-low: #0a0a0a;
+    --m3-surface-container: #111111;
+    --m3-surface-container-high: #1b1b1b;
+    --m3-surface-container-highest: #262626;
+    --m3-on-surface: #ffffff;
+    --m3-on-surface-variant: #c5c5c5;
+    --m3-outline: #909090;
+    --m3-outline-variant: #444444;
+    --m3-inverse-surface: #ffffff;
+    --m3-inverse-on-surface: #000000;
+    --m3-inverse-primary: #000000;
+    --m3-scrim: rgba(0, 0, 0, 0.58);
+    --m3-success: #9cd69f;
+    --m3-on-success: #00390c;
+    --m3-success-container: #1b4125;
+    --m3-on-success-container: #c8e9cb;
+    --m3-warning: #f5bd4f;
+    --m3-on-warning: #432c00;
+    --m3-warning-container: #5c4100;
+    --m3-on-warning-container: #ffdea6;
+  }
+
+  :root:not([data-theme]),
+  :root[data-theme="dark"],
+  :root[data-theme="blue"],
+  :root[data-theme="purple"],
+  :root[data-theme="green"],
+  :root[data-theme="rose"],
+  :root[data-theme="teal"],
+  :root[data-theme="monet"] {
+    --status-running: #60a5fa;
+    --status-queued: #2dd4bf;
+    --status-waiting: #fbbf24;
+    --status-done: #34d399;
+    --status-failed: #f87171;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --m3-primary: #ffffff;
+  --m3-on-primary: #000000;
+  --m3-primary-container: #dedede;
+  --m3-on-primary-container: #000000;
+  --m3-secondary: #c6c6c6;
+  --m3-on-secondary: #000000;
+  --m3-secondary-container: #303030;
+  --m3-on-secondary-container: #ffffff;
+  --m3-tertiary: #aaaaaa;
+  --m3-on-tertiary: #000000;
+  --m3-tertiary-container: #3a3a3a;
+  --m3-on-tertiary-container: #ffffff;
+  --m3-error: #ffb4ab;
+  --m3-on-error: #690005;
+  --m3-error-container: #93000a;
+  --m3-on-error-container: #ffdad6;
+  --m3-surface: #000000;
+  --m3-surface-dim: #000000;
+  --m3-surface-bright: #2a2a2a;
+  --m3-surface-container-lowest: #000000;
+  --m3-surface-container-low: #0a0a0a;
+  --m3-surface-container: #111111;
+  --m3-surface-container-high: #1b1b1b;
+  --m3-surface-container-highest: #262626;
+  --m3-on-surface: #ffffff;
+  --m3-on-surface-variant: #c5c5c5;
+  --m3-outline: #909090;
+  --m3-outline-variant: #444444;
+  --m3-inverse-surface: #ffffff;
+  --m3-inverse-on-surface: #000000;
+  --m3-inverse-primary: #000000;
+  --m3-scrim: rgba(0, 0, 0, 0.58);
+  --m3-success: #9cd69f;
+  --m3-on-success: #00390c;
+  --m3-success-container: #1b4125;
+  --m3-on-success-container: #c8e9cb;
+  --m3-warning: #f5bd4f;
+  --m3-on-warning: #432c00;
+  --m3-warning-container: #5c4100;
+  --m3-on-warning-container: #ffdea6;
+  --status-running: #60a5fa;
+  --status-queued: #2dd4bf;
+  --status-waiting: #fbbf24;
+  --status-done: #34d399;
+  --status-failed: #f87171;
+}
+
+:root[data-theme="blue"] {
+  color-scheme: light;
+  --m3-primary: #3f5f90;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #d9e2ff;
+  --m3-on-primary-container: #001a41;
+  --m3-secondary: #575f71;
+  --m3-on-secondary: #ffffff;
+  --m3-secondary-container: #dbe2f9;
+  --m3-on-secondary-container: #141b2c;
+  --m3-tertiary: #715573;
+  --m3-on-tertiary: #ffffff;
+  --m3-tertiary-container: #fbd7f5;
+  --m3-on-tertiary-container: #29132c;
+  --m3-surface: #faf8ff;
+  --m3-surface-dim: #dbd9e0;
+  --m3-surface-bright: #faf8ff;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-surface-container-low: #f4f2fa;
+  --m3-surface-container: #eeedf4;
+  --m3-surface-container-high: #e8e7ef;
+  --m3-surface-container-highest: #e2e2e9;
+  --m3-on-surface: #1a1b20;
+  --m3-on-surface-variant: #44474f;
+  --m3-outline: #74777f;
+  --m3-outline-variant: #c4c6d0;
+  --m3-inverse-surface: #2f3036;
+  --m3-inverse-on-surface: #f1f0f7;
+  --m3-inverse-primary: #b2c5ff;
+  --m3-scrim: rgba(0, 0, 0, 0.32);
+}
+
+:root[data-theme="amber"] {
+  color-scheme: light;
+  --m3-primary: #4f662f;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #d1e9ae;
+  --m3-on-primary-container: #102000;
+  --m3-secondary: #586249;
+  --m3-on-secondary: #ffffff;
+  --m3-secondary-container: #dce6c9;
+  --m3-on-secondary-container: #151e0b;
+  --m3-tertiary: #7b5700;
+  --m3-on-tertiary: #ffffff;
+  --m3-tertiary-container: #ffdea6;
+  --m3-on-tertiary-container: #271900;
+  --m3-error: #ba1a1a;
+  --m3-on-error: #ffffff;
+  --m3-error-container: #ffdad6;
+  --m3-on-error-container: #410002;
+  --m3-surface: #fafbf2;
+  --m3-surface-dim: #dadbd2;
+  --m3-surface-bright: #fafbf2;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-surface-container-low: #f1f3e8;
+  --m3-surface-container: #ebeee2;
+  --m3-surface-container-high: #e5e8dc;
+  --m3-surface-container-highest: #dfe2d6;
+  --m3-on-surface: #1a1c17;
+  --m3-on-surface-variant: #45483f;
+  --m3-outline: #75786d;
+  --m3-outline-variant: #c5c8ba;
+  --m3-inverse-surface: #2f322b;
+  --m3-inverse-on-surface: #f0f1e8;
+  --m3-inverse-primary: #b5cc91;
+  --m3-scrim: rgba(30, 32, 24, 0.32);
+  --m3-success: #356a35;
+  --m3-on-success: #ffffff;
+  --m3-success-container: #c9e1cd;
+  --m3-on-success-container: #14361a;
+  --m3-warning: #7b5700;
+  --m3-on-warning: #ffffff;
+  --m3-warning-container: #ffdea6;
+  --m3-on-warning-container: #271900;
+}
+
+/* Curated Material 3 seed palettes.  These remap semantic roles rather than
+   recoloring individual components, so the whole workbench stays coherent. */
+:root[data-theme="purple"],
+:root[data-theme="monet"] {
+  color-scheme: light;
+  --m3-primary: #6750a4;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #eaddff;
+  --m3-on-primary-container: #21005d;
+  --m3-secondary: #625b71;
+  --m3-on-secondary: #ffffff;
+  --m3-secondary-container: #e8def8;
+  --m3-on-secondary-container: #1d192b;
+  --m3-tertiary: #7d5260;
+  --m3-on-tertiary: #ffffff;
+  --m3-tertiary-container: #ffd8e4;
+  --m3-on-tertiary-container: #31111d;
+  --m3-surface: #fffbfe;
+  --m3-surface-dim: #ded8e1;
+  --m3-surface-bright: #fffbfe;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-surface-container-low: #f7f2fa;
+  --m3-surface-container: #f3edf7;
+  --m3-surface-container-high: #ece6f0;
+  --m3-surface-container-highest: #e6e0e9;
+  --m3-on-surface: #1c1b1f;
+  --m3-on-surface-variant: #49454f;
+  --m3-outline: #79747e;
+  --m3-outline-variant: #cac4d0;
+  --m3-inverse-surface: #322f35;
+  --m3-inverse-on-surface: #f5eff7;
+  --m3-inverse-primary: #d0bcff;
+  --m3-scrim: rgba(0, 0, 0, 0.32);
+}
+
+:root[data-theme="green"] {
+  color-scheme: light;
+  --m3-primary: #386a20;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #b9f397;
+  --m3-on-primary-container: #0b2000;
+  --m3-secondary: #56624b;
+  --m3-on-secondary: #ffffff;
+  --m3-secondary-container: #d9e7cc;
+  --m3-on-secondary-container: #141e10;
+  --m3-tertiary: #386666;
+  --m3-on-tertiary: #ffffff;
+  --m3-tertiary-container: #bcebea;
+  --m3-on-tertiary-container: #002020;
+  --m3-surface: #f9fbee;
+  --m3-surface-dim: #daddd2;
+  --m3-surface-bright: #f9fbee;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-surface-container-low: #f1f4e8;
+  --m3-surface-container: #ebeee2;
+  --m3-surface-container-high: #e5e8dc;
+  --m3-surface-container-highest: #dfe2d6;
+  --m3-on-surface: #191c16;
+  --m3-on-surface-variant: #44483f;
+  --m3-outline: #74786d;
+  --m3-outline-variant: #c4c8ba;
+  --m3-inverse-surface: #2e322b;
+  --m3-inverse-on-surface: #f0f2e9;
+  --m3-inverse-primary: #9dd67f;
+  --m3-scrim: rgba(20, 30, 16, 0.32);
+}
+
+:root[data-theme="rose"] {
+  color-scheme: light;
+  --m3-primary: #8e495d;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #ffd9e2;
+  --m3-on-primary-container: #3b071b;
+  --m3-secondary: #74565f;
+  --m3-on-secondary: #ffffff;
+  --m3-secondary-container: #ffd9e2;
+  --m3-on-secondary-container: #2b161d;
+  --m3-tertiary: #7e5700;
+  --m3-on-tertiary: #ffffff;
+  --m3-tertiary-container: #ffdea7;
+  --m3-on-tertiary-container: #291800;
+  --m3-surface: #fff8f8;
+  --m3-surface-dim: #e5d9da;
+  --m3-surface-bright: #fff8f8;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-surface-container-low: #fff0f1;
+  --m3-surface-container: #fcebed;
+  --m3-surface-container-high: #f6e5e7;
+  --m3-surface-container-highest: #f0dfe1;
+  --m3-on-surface: #201a1b;
+  --m3-on-surface-variant: #514345;
+  --m3-outline: #827375;
+  --m3-outline-variant: #d5c2c4;
+  --m3-inverse-surface: #352f30;
+  --m3-inverse-on-surface: #fbeeee;
+  --m3-inverse-primary: #ffb1c5;
+  --m3-scrim: rgba(40, 20, 24, 0.32);
+}
+
+:root[data-theme="teal"] {
+  color-scheme: light;
+  --m3-primary: #006a6a;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #6ff7f6;
+  --m3-on-primary-container: #002020;
+  --m3-secondary: #4a6363;
+  --m3-on-secondary: #ffffff;
+  --m3-secondary-container: #cce8e7;
+  --m3-on-secondary-container: #051f20;
+  --m3-tertiary: #4f5f7d;
+  --m3-on-tertiary: #ffffff;
+  --m3-tertiary-container: #d7e2ff;
+  --m3-on-tertiary-container: #0a1b35;
+  --m3-surface: #f4fbfa;
+  --m3-surface-dim: #d5dddc;
+  --m3-surface-bright: #f4fbfa;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-surface-container-low: #edf5f4;
+  --m3-surface-container: #e8f0ef;
+  --m3-surface-container-high: #e2eae9;
+  --m3-surface-container-highest: #dce4e3;
+  --m3-on-surface: #161d1d;
+  --m3-on-surface-variant: #3f4948;
+  --m3-outline: #6f7978;
+  --m3-outline-variant: #bfc9c7;
+  --m3-inverse-surface: #2b3231;
+  --m3-inverse-on-surface: #e9f2f1;
+  --m3-inverse-primary: #4cdddd;
+  --m3-scrim: rgba(0, 32, 32, 0.32);
+}
+
+/* All light presets share a quiet, near-white workbench canvas. Theme identity
+   remains available through the selected Material primary and other semantic
+   roles, but it should not tint the page background or make message surfaces
+   feel luminous. */
+:root,
+:root[data-theme="light"],
+:root[data-theme="blue"],
+:root[data-theme="amber"],
+:root[data-theme="purple"],
+:root[data-theme="monet"],
+:root[data-theme="green"],
+:root[data-theme="rose"],
+:root[data-theme="teal"] {
+  --m3-surface: #ffffff;
+  --m3-surface-dim: #f1f3f6;
+  --m3-surface-bright: #ffffff;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-surface-container-low: #fafbfc;
+  --m3-surface-container: #f5f6f8;
+  --m3-surface-container-high: #eef1f4;
+  --m3-surface-container-highest: #e9edf1;
+  /* Re-declare compatibility aliases directly. Custom properties declared
+     earlier can otherwise retain the palette's old resolved surface value. */
+  --bg: #ffffff;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #fafbfc;
+  --chat-area-bg: #fafafa;
+  --surface-hover: #e9edf1;
+  --surface-canvas: #fafafa;
+  --surface-soft: #f6f7f9;
+  --surface-raised: #eef1f4;
+  --sys-surface: #ffffff;
+  --sys-surface-dim: #f1f3f6;
+  --sys-surface-bright: #ffffff;
+  --sys-surface-container-lowest: #ffffff;
+  --sys-surface-container-low: #fafbfc;
+  --sys-surface-container: #f5f6f8;
+  --sys-surface-container-high: #eef1f4;
+  --sys-surface-container-highest: #e9edf1;
+  --color-canvas: #fafafa;
+  --color-surface: #f5f6f8;
+  --color-surface-raised: #eef1f4;
+  --color-surface-hover: #e9edf1;
+  --sys-primary: var(--m3-primary);
+  --sys-on-primary: #ffffff;
+  --color-action: var(--m3-primary);
+  --color-action-on: #ffffff;
+  --message-bubble-fill: #e5e8ed;
+  --message-bubble-on: #1f232a;
+}
+
+@media (prefers-color-scheme: dark) {
+  /* Success and warning are custom semantic roles in Material 3. Keep their
+     dark values together with the dark seed palettes so success feedback
+     never falls back to a luminous light-green container on a dark canvas. */
+  :root:not([data-theme]),
+  :root[data-theme="blue"],
+  :root[data-theme="purple"],
+  :root[data-theme="monet"],
+  :root[data-theme="green"],
+  :root[data-theme="rose"],
+  :root[data-theme="teal"] {
+    --m3-success: #9cd69f;
+    --m3-on-success: #00390c;
+    --m3-success-container: #1b4125;
+    --m3-on-success-container: #c8e9cb;
+    --m3-warning: #f5bd4f;
+    --m3-on-warning: #432c00;
+    --m3-warning-container: #5c4100;
+    --m3-on-warning-container: #ffdea6;
+  }
+
+  :root[data-theme="blue"] {
+    color-scheme: dark;
+    --m3-primary: #b2c5ff;
+    --m3-on-primary: #1d355f;
+    --m3-primary-container: #274777;
+    --m3-on-primary-container: #d9e2ff;
+    --m3-secondary: #bec6dc;
+    --m3-on-secondary: #293042;
+    --m3-secondary-container: #3f475a;
+    --m3-on-secondary-container: #dbe2f9;
+    --m3-tertiary: #e2bbdf;
+    --m3-on-tertiary: #412642;
+    --m3-tertiary-container: #593c5a;
+    --m3-on-tertiary-container: #fbd7f5;
+    --m3-surface: #111318;
+    --m3-surface-dim: #111318;
+    --m3-surface-bright: #38393f;
+    --m3-surface-container-lowest: #0c0e13;
+    --m3-surface-container-low: #191b20;
+    --m3-surface-container: #1e1f25;
+    --m3-surface-container-high: #292a30;
+    --m3-surface-container-highest: #34343b;
+    --m3-on-surface: #e3e2e9;
+    --m3-on-surface-variant: #c4c6d0;
+    --m3-outline: #8e9099;
+    --m3-outline-variant: #44474f;
+    --m3-inverse-surface: #e3e2e9;
+    --m3-inverse-on-surface: #2f3036;
+    --m3-inverse-primary: #3f5f90;
+    --m3-scrim: rgba(0, 0, 0, 0.58);
+  }
+
+  :root[data-theme="purple"],
+  :root[data-theme="monet"] {
+    color-scheme: dark;
+    --m3-primary: #d0bcff;
+    --m3-on-primary: #381e72;
+    --m3-primary-container: #4f378b;
+    --m3-on-primary-container: #eaddff;
+    --m3-secondary: #ccc2dc;
+    --m3-on-secondary: #332d41;
+    --m3-secondary-container: #4a4458;
+    --m3-on-secondary-container: #e8def8;
+    --m3-tertiary: #efb8c8;
+    --m3-on-tertiary: #492532;
+    --m3-tertiary-container: #633b48;
+    --m3-on-tertiary-container: #ffd8e4;
+    --m3-surface: #141218;
+    --m3-surface-dim: #141218;
+    --m3-surface-bright: #3b383e;
+    --m3-surface-container-lowest: #0f0d13;
+    --m3-surface-container-low: #1d1b20;
+    --m3-surface-container: #211f26;
+    --m3-surface-container-high: #2b2930;
+    --m3-surface-container-highest: #36343b;
+    --m3-on-surface: #e6e0e9;
+    --m3-on-surface-variant: #cac4d0;
+    --m3-outline: #938f99;
+    --m3-outline-variant: #49454f;
+    --m3-inverse-surface: #e6e0e9;
+    --m3-inverse-on-surface: #322f35;
+    --m3-inverse-primary: #6750a4;
+    --m3-scrim: rgba(0, 0, 0, 0.58);
+  }
+
+  :root[data-theme="green"] {
+    color-scheme: dark;
+    --m3-primary: #9dd67f;
+    --m3-on-primary: #123807;
+    --m3-primary-container: #1f5110;
+    --m3-on-primary-container: #b9f397;
+    --m3-secondary: #bdcbb0;
+    --m3-on-secondary: #293426;
+    --m3-secondary-container: #3f4a37;
+    --m3-on-secondary-container: #d9e7cc;
+    --m3-tertiary: #a0cfcf;
+    --m3-on-tertiary: #003737;
+    --m3-tertiary-container: #1e4e4e;
+    --m3-on-tertiary-container: #bcebea;
+    --m3-surface: #12140f;
+    --m3-surface-dim: #12140f;
+    --m3-surface-bright: #393d34;
+    --m3-surface-container-lowest: #0d0f0b;
+    --m3-surface-container-low: #1a1d17;
+    --m3-surface-container: #1e211b;
+    --m3-surface-container-high: #292c25;
+    --m3-surface-container-highest: #34372f;
+    --m3-on-surface: #e2e5da;
+    --m3-on-surface-variant: #c4c8ba;
+    --m3-outline: #8e9386;
+    --m3-outline-variant: #44483f;
+    --m3-inverse-surface: #e2e5da;
+    --m3-inverse-on-surface: #2e322b;
+    --m3-inverse-primary: #386a20;
+    --m3-scrim: rgba(0, 0, 0, 0.58);
+  }
+
+  :root[data-theme="rose"] {
+    color-scheme: dark;
+    --m3-primary: #ffb1c5;
+    --m3-on-primary: #561d32;
+    --m3-primary-container: #733348;
+    --m3-on-primary-container: #ffd9e2;
+    --m3-secondary: #e4bdc5;
+    --m3-on-secondary: #432930;
+    --m3-secondary-container: #5b3f46;
+    --m3-on-secondary-container: #ffd9e2;
+    --m3-tertiary: #f0be6f;
+    --m3-on-tertiary: #422c00;
+    --m3-tertiary-container: #604100;
+    --m3-on-tertiary-container: #ffdea7;
+    --m3-surface: #191113;
+    --m3-surface-dim: #191113;
+    --m3-surface-bright: #41393a;
+    --m3-surface-container-lowest: #120c0e;
+    --m3-surface-container-low: #21191b;
+    --m3-surface-container: #251d1f;
+    --m3-surface-container-high: #302729;
+    --m3-surface-container-highest: #3b3234;
+    --m3-on-surface: #f1dfe1;
+    --m3-on-surface-variant: #d5c2c4;
+    --m3-outline: #9e898d;
+    --m3-outline-variant: #514345;
+    --m3-inverse-surface: #f1dfe1;
+    --m3-inverse-on-surface: #352f30;
+    --m3-inverse-primary: #8e495d;
+    --m3-scrim: rgba(40, 20, 24, 0.58);
+  }
+
+  :root[data-theme="teal"] {
+    color-scheme: dark;
+    --m3-primary: #4cdddd;
+    --m3-on-primary: #003737;
+    --m3-primary-container: #005050;
+    --m3-on-primary-container: #6ff7f6;
+    --m3-secondary: #b0cccc;
+    --m3-on-secondary: #1b3535;
+    --m3-secondary-container: #324b4b;
+    --m3-on-secondary-container: #cce8e7;
+    --m3-tertiary: #b6c6ed;
+    --m3-on-tertiary: #20304d;
+    --m3-tertiary-container: #374763;
+    --m3-on-tertiary-container: #d7e2ff;
+    --m3-surface: #0e1414;
+    --m3-surface-dim: #0e1414;
+    --m3-surface-bright: #343a3a;
+    --m3-surface-container-lowest: #090f0f;
+    --m3-surface-container-low: #171d1d;
+    --m3-surface-container: #1b2121;
+    --m3-surface-container-high: #262c2c;
+    --m3-surface-container-highest: #313737;
+    --m3-on-surface: #e0e8e7;
+    --m3-on-surface-variant: #bfc9c7;
+    --m3-outline: #899392;
+    --m3-outline-variant: #3f4948;
+    --m3-inverse-surface: #e0e8e7;
+    --m3-inverse-on-surface: #2b3231;
+    --m3-inverse-primary: #006a6a;
+    --m3-scrim: rgba(0, 32, 32, 0.58);
+  }
+}
+
+/* Compatibility aliases are a bridge, not a second palette. Match every
+   legacy theme selector so older declarations cannot override the MD3
+   semantic source of truth. */
+:root,
+:root[data-theme="light"],
+:root[data-theme="dark"],
+:root[data-theme="blue"],
+:root[data-theme="amber"],
+:root[data-theme="purple"],
+:root[data-theme="monet"],
+:root[data-theme="green"],
+:root[data-theme="rose"],
+:root[data-theme="teal"] {
+  --accent: var(--m3-primary);
+  --accent-dim: var(--m3-primary-container);
+  --border: var(--m3-outline-variant);
+  --border-strong: var(--m3-outline);
+  --text: var(--m3-on-surface);
+  --text-secondary: var(--m3-on-surface-variant);
+  --text-muted: color-mix(in srgb, var(--m3-on-surface-variant) 72%, transparent);
+  --sys-success: var(--m3-success);
+  --sys-on-success: var(--m3-on-success);
+  --sys-success-container: var(--m3-success-container);
+  --sys-on-success-container: var(--m3-on-success-container);
+  --sys-warning: var(--m3-warning);
+  --sys-on-warning: var(--m3-on-warning);
+  --sys-warning-container: var(--m3-warning-container);
+  --sys-on-warning-container: var(--m3-on-warning-container);
+  --success: var(--sys-success);
+  --success-bg: var(--sys-success-container);
+  --copy-btn-success-border: color-mix(in srgb, var(--sys-success) 26%, transparent);
+  --notice: var(--m3-secondary);
+  --error: var(--m3-error);
+  --error-bg: var(--m3-error-container);
+  --warning: var(--sys-warning);
+  --modal-backdrop: var(--m3-scrim);
+  --overlay-backdrop: color-mix(in srgb, var(--m3-scrim) 70%, transparent);
+  --app-success: var(--sys-success);
+  --app-success-container: var(--sys-success-container);
+  --app-warning: var(--sys-warning);
+  --app-warning-container: var(--sys-warning-container);
+}
+
+/* Dark presets keep their existing palette, but message bubbles use a quiet
+   neutral surface instead of the much brighter primary-container role. */
+:root[data-theme="dark"] {
+  --bg: var(--m3-surface);
+  --bg-secondary: var(--m3-surface-container-lowest);
+  --bg-tertiary: var(--m3-surface-container-low);
+  --chat-area-bg: var(--m3-surface);
+  --surface-hover: var(--m3-surface-container-highest);
+  --surface-canvas: var(--m3-surface);
+  --surface-soft: var(--m3-surface-container-low);
+  --surface-raised: var(--m3-surface-container-high);
+  --sys-primary: var(--m3-primary);
+  --sys-on-primary: var(--m3-on-primary);
+  --sys-surface: var(--m3-surface);
+  --sys-surface-dim: var(--m3-surface-dim);
+  --sys-surface-bright: var(--m3-surface-bright);
+  --sys-surface-container-lowest: var(--m3-surface-container-lowest);
+  --sys-surface-container-low: var(--m3-surface-container-low);
+  --sys-surface-container: var(--m3-surface-container);
+  --sys-surface-container-high: var(--m3-surface-container-high);
+  --sys-surface-container-highest: var(--m3-surface-container-highest);
+  --color-canvas: var(--m3-surface);
+  --color-surface: var(--m3-surface-container);
+  --color-surface-raised: var(--m3-surface-container-high);
+  --color-surface-hover: var(--m3-surface-container-highest);
+  --color-action: var(--m3-primary);
+  --color-action-on: var(--m3-on-primary);
+  --message-bubble-fill: #2b2e35;
+  --message-bubble-on: #eef1f5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]),
+  :root[data-theme="blue"],
+  :root[data-theme="purple"],
+  :root[data-theme="monet"],
+  :root[data-theme="green"],
+  :root[data-theme="rose"],
+  :root[data-theme="teal"] {
+    --bg: var(--m3-surface);
+    --bg-secondary: var(--m3-surface-container-lowest);
+    --bg-tertiary: var(--m3-surface-container-low);
+    --chat-area-bg: var(--m3-surface);
+    --surface-hover: var(--m3-surface-container-highest);
+    --surface-canvas: var(--m3-surface);
+    --surface-soft: var(--m3-surface-container-low);
+    --surface-raised: var(--m3-surface-container-high);
+    --sys-primary: var(--m3-primary);
+    --sys-on-primary: var(--m3-on-primary);
+    --sys-surface: var(--m3-surface);
+    --sys-surface-dim: var(--m3-surface-dim);
+    --sys-surface-bright: var(--m3-surface-bright);
+    --sys-surface-container-lowest: var(--m3-surface-container-lowest);
+    --sys-surface-container-low: var(--m3-surface-container-low);
+    --sys-surface-container: var(--m3-surface-container);
+    --sys-surface-container-high: var(--m3-surface-container-high);
+    --sys-surface-container-highest: var(--m3-surface-container-highest);
+    --color-canvas: var(--m3-surface);
+    --color-surface: var(--m3-surface-container);
+    --color-surface-raised: var(--m3-surface-container-high);
+    --color-surface-hover: var(--m3-surface-container-highest);
+    --color-action: var(--m3-primary);
+    --color-action-on: var(--m3-on-primary);
+  }
+
+  :root:not([data-theme]),
+  :root[data-theme="blue"],
+  :root[data-theme="purple"],
+  :root[data-theme="monet"],
+  :root[data-theme="green"],
+  :root[data-theme="rose"],
+  :root[data-theme="teal"] {
+    --message-bubble-fill: #2b2e35;
+    --message-bubble-on: #eef1f5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 1ms;
+    --motion-base: 1ms;
+    --motion-panel: 1ms;
+    --motion-enter: 1ms;
+    --motion-exit: 1ms;
+  }
+}

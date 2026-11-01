@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="agentoc.capture.new" android:enabled="true"
+        android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/capture_shortcut_new">
+        <intent android:action="android.intent.action.VIEW"
+            android:targetPackage="com.agentoncloud.android" android:targetClass="com.andysagent.agentoc.NewCaptureActivity" />
+    </shortcut>
+    <share-target android:targetClass="com.andysagent.agentoc.ShareRouterActivity">
+        <data android:mimeType="*/*" />
+        <category android:name="com.agentoncloud.android.category.CAPTURE_PC" />
+    </share-target>
+</shortcuts>

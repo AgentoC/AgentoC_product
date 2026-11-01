@@ -1,0 +1,58 @@
+#!/usr/bin/python3
+"""Pre-connect the systemd notify socket, then exec the real service command.
+
+sd_notify datagrams are attributed to the SENDING pid. When the Node service
+sent READY/WATCHDOG via the systemd-notify CLI, every keepalive came from a
+short-lived child, which forced NotifyAccess=all — letting ANY process in the
+cgroup forge unit-control messages (STOPPING=1 being the 2026-08-31 silent
+restart-loop root cause). Connecting AF_UNIX SOCK_DGRAM here and keeping the
+descriptor open across exec lets the Node main process write the datagrams
+itself, so the unit can run with NotifyAccess=main.
+
+Usage: notify-exec <command> [args...]
+Exports AGENTOC_NOTIFY_FD=<fd> when the socket was connected; the Node side
+(lib/systemd-notify.mjs) picks it up and falls back to the CLI otherwise.
+"""
+
+import fcntl
+import os
+import socket
+import sys
+
+# Node reuses low descriptors at startup (its own internal fd lands on 3 and
+# writes there fail with EINVAL), so the socket must live far above that.
+NOTIFY_FD_BASE = 100
+
+
+def connect_notify_socket(env):
+    raw = env.get("NOTIFY_SOCKET", "").strip()
+    if not raw:
+        return None
+    address = "\0" + raw[1:] if raw.startswith("@") else raw
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    try:
+        sock.connect(address)
+    except OSError:
+        sock.close()
+        return None
+    fd = fcntl.fcntl(sock.fileno(), fcntl.F_DUPFD, NOTIFY_FD_BASE)
+    sock.close()
+    os.set_inheritable(fd, True)
+    return fd
+
+
+def main(argv):
+    if len(argv) < 2:
+        print("usage: notify-exec <command> [args...]", file=sys.stderr)
+        return 2
+    env = dict(os.environ)
+    fd = connect_notify_socket(env)
+    if fd is None:
+        env.pop("AGENTOC_NOTIFY_FD", None)
+    else:
+        env["AGENTOC_NOTIFY_FD"] = str(fd)
+    os.execvpe(argv[1], argv[1:], env)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

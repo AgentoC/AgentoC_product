@@ -1,0 +1,18 @@
+<resources>
+    <string name="provider_oauth_title">官方账号登录</string>
+    <string name="provider_oauth_remote_vault">请在官方页面授权。凭据仅保存在已连接电脑的 Provider 保险库中，不保存在手机上。</string>
+    <string name="provider_oauth_generating">正在生成设备码…</string>
+    <string name="provider_oauth_waiting">在官方页面输入此设备码。授权后返回 App，App 会检查账号是否已保存。</string>
+    <string name="provider_oauth_saving">正在已连接的电脑上保存账号…</string>
+    <string name="provider_oauth_saved">账号已保存到已连接的电脑。</string>
+    <string name="provider_oauth_failed">登录失败，请先查看错误再重新发起登录。</string>
+    <string name="provider_oauth_cancelled">登录已取消。</string>
+    <string name="provider_oauth_copy">复制设备码</string>
+    <string name="provider_oauth_open">打开官方登录页</string>
+    <string name="provider_oauth_check">检查登录结果</string>
+    <string name="provider_oauth_close">关闭</string>
+    <string name="provider_oauth_cancel">取消登录</string>
+    <string name="provider_oauth_credential">官方页面提供的凭据</string>
+    <string name="provider_oauth_submit">提交凭据</string>
+    <string name="provider_oauth_reauthenticate">重新登录</string>
+</resources>

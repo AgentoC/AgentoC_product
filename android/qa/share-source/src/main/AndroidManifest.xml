@@ -1,0 +1,23 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <queries>
+        <intent><action android:name="android.intent.action.PROCESS_TEXT" /><data android:mimeType="text/plain" /></intent>
+    </queries>
+    <application android:allowBackup="false" android:label="AgentoC Share Source QA" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <provider android:name=".ShareSourceFixtureProvider"
+            android:authorities="${applicationId}.share-fixture" android:exported="false" android:grantUriPermissions="true" />
+        <activity android:name=".ShareSourceFixtureActivity" android:exported="true" />
+        <activity android:name=".ProcessTextSourceActivity" android:exported="true" />
+        <activity android:name=".CallerConsentSourceActivity" android:exported="true" />
+        <activity android:name=".AppApiClientSourceActivity" android:exported="true" />
+        <activity android:name=".ResultReceiverFixtureActivity" android:exported="true" android:launchMode="singleTop" android:label="AgentoC Result Receiver QA">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+        <!-- Standalone QA only: exports synthetic probe metadata, never received bytes. -->
+        <provider android:name=".ResultProbeFixtureProvider" android:authorities="${applicationId}.result-probe" android:exported="true" />
+        <provider android:name=".ResultDocumentFixtureProvider" android:authorities="${applicationId}.result-document" android:exported="false" android:grantUriPermissions="true" />
+    </application>
+</manifest>

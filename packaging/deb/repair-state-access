@@ -1,0 +1,123 @@
+#!/bin/sh
+set -eu
+
+# This helper runs as root from the package lifecycle and the service's
+# ExecStartPre.  It repairs only the main instance roots and known private
+# state files; the separately deployed Accounts tree is intentionally left
+# untouched.
+DATA_ROOT=/var/lib/agentoc
+CONFIG_ROOT="$DATA_ROOT/config"
+SERVICE_USER_FILE=/etc/agentoc/service-user
+
+# A normal service restart must not walk the complete history tree.  Package
+# upgrades invoke --full once after unpacking, while ExecStartPre uses
+# --quick for the cheap root/private-file checks needed before Node starts.
+repair_mode=full
+case "${1:-}" in
+  --quick) repair_mode=quick ;;
+  --full|'') repair_mode=full ;;
+  *)
+    echo "Usage: $0 [--quick|--full]" >&2
+    exit 2
+    ;;
+esac
+
+trim() {
+  printf '%s' "${1:-}" | tr -d '[:space:]'
+}
+
+resolve_service_user() {
+  # ExecStartPre must follow the unit's effective identity.  A package from an
+  # earlier same-user migration can retain a stale service-user file while a
+  # systemd drop-in already runs the service as a different local user. The
+  # package lifecycle may pass the just-resolved user explicitly before the
+  # daemon-reload becomes visible to systemctl.
+  user="$(trim "${AGENTOC_STATE_REPAIR_SERVICE_USER:-}")"
+  if [ -z "$user" ] && command -v systemctl >/dev/null 2>&1; then
+    user="$(systemctl show -p User --value agentoc.service 2>/dev/null | tr -d '[:space:]' || true)"
+  fi
+  if [ -z "$user" ] && [ -r "$SERVICE_USER_FILE" ]; then
+    user="$(sed -n '1p' "$SERVICE_USER_FILE" | tr -d '[:space:]')"
+  fi
+  [ -n "$user" ] || user="$(trim "${AGENTOC_SERVICE_USER:-}")"
+  [ -n "$user" ] || user=agentoc
+  case "$user" in
+    root|''|*[!A-Za-z0-9_.@-]*)
+      echo "Invalid AgentoC service user: $user" >&2
+      exit 1
+      ;;
+  esac
+  getent passwd "$user" >/dev/null 2>&1 || {
+    echo "AgentoC service user does not exist: $user" >&2
+    exit 1
+  }
+  printf '%s\n' "$user"
+}
+
+repair_private_file() {
+  path="$1"
+  [ -f "$path" ] || return 0
+  chown "$service_user:$service_group" "$path"
+  chmod 0600 "$path"
+}
+
+# Session history is durable control-plane state. An upgrade can leave this
+# tree owned by the previous service identity, making existing conversations
+# unreadable while newly-created sessions appear to work from process memory.
+# Keep it private to the service account while repairing every nested shard.
+repair_private_tree() {
+  path="$1"
+  [ -d "$path" ] || return 0
+  chown -R "$service_user:$service_group" "$path"
+  find "$path" -type d -exec chmod 0700 {} +
+  find "$path" -type f -exec chmod 0600 {} +
+}
+
+service_user="$(resolve_service_user)"
+service_group="$(id -gn "$service_user")"
+
+# A directory mode of 000 prevents the service from reading histories and
+# writing session metadata.  Recreate a missing config root too: this helper
+# runs before Node starts, so Node cannot repair an inaccessible parent itself.
+install -d -m 0750 -o "$service_user" -g "$service_group" "$DATA_ROOT" "$CONFIG_ROOT"
+chown "$service_user:$service_group" "$DATA_ROOT" "$CONFIG_ROOT"
+chmod 0750 "$DATA_ROOT" "$CONFIG_ROOT"
+
+verify_directory_access() {
+  path="$1"
+  actual="$(stat -c '%U:%G %a' "$path")"
+  expected="$service_user:$service_group 750"
+  if [ "$actual" != "$expected" ]; then
+    echo "AgentoC state access repair failed for $path: expected $expected, got $actual" >&2
+    exit 1
+  fi
+}
+
+verify_directory_access "$DATA_ROOT"
+verify_directory_access "$CONFIG_ROOT"
+
+for file in \
+  "$CONFIG_ROOT/auth.json" \
+  "$CONFIG_ROOT/chat-sessions.json" \
+  "$CONFIG_ROOT/owner-account-binding.json" \
+  "$CONFIG_ROOT/owner-account-transactions.json" \
+  "$CONFIG_ROOT/owner-account-native-pending.json" \
+  "$CONFIG_ROOT/owner-account-native-journal.json" \
+  "$CONFIG_ROOT/instance-identity.json" \
+  "$CONFIG_ROOT/instance-signing-key.json" \
+  "$CONFIG_ROOT/device-public-keys.json" \
+  "$CONFIG_ROOT/sync-handshake-tokens.json"
+do
+  repair_private_file "$file"
+done
+
+if [ "$repair_mode" = full ]; then
+  repair_private_tree "$CONFIG_ROOT/chat-history"
+fi
+
+provider_runtime_root="$CONFIG_ROOT/native-provider-runtime"
+if [ "$repair_mode" = full ] && [ -d "$provider_runtime_root" ]; then
+  chown -R "$service_user:$service_group" "$provider_runtime_root"
+  find "$provider_runtime_root" -type d -exec chmod 0700 {} +
+  find "$provider_runtime_root" -type f -exec chmod 0600 {} +
+fi

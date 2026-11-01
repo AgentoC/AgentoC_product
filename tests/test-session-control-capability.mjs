@@ -1,0 +1,269 @@
+#!/usr/bin/env node
+import assert from 'node:assert/strict';
+
+import {
+  createRunSessionControlCapability,
+  createSessionControlAuthenticator,
+  sessionControlOperation,
+} from '../chat/session-control-capability.mjs';
+import { createAgentoCHttpClient } from '../lib/agentoc-http-client.mjs';
+import { runSessionSpawnCommand } from '../lib/session-spawn-command.mjs';
+
+const secret = 'session-control-test-secret';
+const root = { id: 'root-session' };
+const child = { id: 'child-session', delegatedFromSessionId: root.id };
+const runs = new Map([
+  ['root-run', { id: 'root-run', sessionId: root.id, state: 'running' }],
+  ['child-run', { id: 'child-run', sessionId: child.id, state: 'running' }],
+]);
+const sessions = new Map([[root.id, root], [child.id, child]]);
+const capability = createRunSessionControlCapability({
+  runId: 'root-run',
+  sessionId: root.id,
+  turnId: 'turn-1',
+  secret,
+  now: Date.parse('2026-01-01T00:00:00.000Z'),
+});
+assert.ok(capability);
+
+const authenticate = createSessionControlAuthenticator({
+  secret,
+  now: () => Date.parse('2026-01-01T00:01:00.000Z'),
+  getRunImpl: async (id) => runs.get(id) || null,
+  getRunManifestImpl: async (id) => id === 'root-run'
+    ? {
+      sessionId: root.id,
+      options: { sessionControlChannel: { turnId: 'turn-1', tokenHash: capability.tokenHash } },
+    }
+    : null,
+  getSessionImpl: async (id) => sessions.get(id) || null,
+});
+
+function headers(overrides = {}) {
+  return {
+    'x-agentoc-session-control-token': capability.token,
+    'x-agentoc-session-control-run-id': capability.runId,
+    'x-agentoc-session-control-session-id': capability.sessionId,
+    'x-agentoc-session-control-turn-id': capability.turnId,
+    ...overrides,
+  };
+}
+
+const delegateAuth = await authenticate({
+  method: 'POST',
+  url: `/api/sessions/${root.id}/delegate`,
+  headers: headers(),
+});
+assert.equal(delegateAuth?.surfaceMode, 'session_control');
+assert.equal(delegateAuth?.capabilityOperation, 'session.delegate');
+assert.equal(delegateAuth?.sessionId, root.id);
+
+const childRunAuth = await authenticate({
+  method: 'GET',
+  url: '/api/runs/child-run',
+  headers: headers(),
+});
+assert.equal(childRunAuth?.sessionId, child.id);
+assert.equal(childRunAuth?.capabilityOperation, 'session.run.read');
+
+const childEventsAuth = await authenticate({
+  method: 'GET',
+  url: `/api/sessions/${child.id}/events/4/body`,
+  headers: headers(),
+});
+assert.equal(childEventsAuth?.sessionId, child.id);
+assert.equal(childEventsAuth?.capabilityOperation, 'session.events.read');
+
+const assetAuth = await authenticate({
+  method: 'POST',
+  url: `/api/sessions/${root.id}/assets`,
+  headers: headers(),
+});
+assert.equal(assetAuth?.sessionId, root.id);
+assert.equal(assetAuth?.capabilityOperation, 'session.asset.publish');
+
+const childAssistantMessageAuth = await authenticate({
+  method: 'POST',
+  url: `/api/sessions/${root.id}/assistant-messages`,
+  headers: headers(),
+});
+assert.equal(childAssistantMessageAuth?.sessionId, root.id);
+assert.equal(childAssistantMessageAuth?.capabilityOperation, 'session.assistant_message.publish');
+
+for (const [method, url, operation] of [
+  ['GET', '/api/auth/me', 'session.auth.read'],
+  ['GET', '/api/triggers', 'session.trigger.read'],
+  ['POST', '/api/triggers', 'session.trigger.create'],
+  ['GET', '/api/triggers/trg_000000000000000000000001', 'session.trigger.read'],
+  ['PATCH', '/api/triggers/trg_000000000000000000000001', 'session.trigger.update'],
+  ['DELETE', '/api/triggers/trg_000000000000000000000001', 'session.trigger.delete'],
+  ['GET', '/api/managed-processes', 'session.process.read'],
+  ['GET', '/api/managed-processes/mp_000000000000000000000001', 'session.process.read'],
+  ['POST', '/api/managed-processes/mp_000000000000000000000001/cancel', 'session.process.cancel'],
+  ['POST', '/api/consultations', 'session.consultation.manage'],
+  ['GET', '/api/consultations/round_000000000000000000000001', 'session.consultation.manage'],
+  ['POST', '/api/consultations/round_000000000000000000000001/dispatch', 'session.consultation.manage'],
+  ['POST', '/api/consultations/round_000000000000000000000001/decide', 'session.consultation.manage'],
+  ['POST', '/api/consultations/round_000000000000000000000001/cancel', 'session.consultation.manage'],
+  ['GET', '/api/consultations/round_000000000000000000000001/decisions', 'session.consultation.manage'],
+]) {
+  assert.equal(sessionControlOperation(url, method), operation, `${method} ${url} should map to ${operation}`);
+  const auth = await authenticate({ method, url, headers: headers() });
+  assert.equal(auth?.sessionId, root.id, `${method} ${url} should remain bound to the root session`);
+  assert.equal(auth?.capabilityOperation, operation);
+}
+
+assert.equal(await authenticate({
+  method: 'POST',
+  url: `/api/sessions/${child.id}/assistant-messages`,
+  headers: headers(),
+}), null, 'the run token must not publish into a child session');
+
+assert.equal(await authenticate({
+  method: 'GET',
+  url: '/api/agents',
+  headers: headers(),
+}), null, 'the run token must not authenticate unrelated API routes');
+assert.equal(await authenticate({
+  method: 'POST',
+  url: '/api/sessions/other-session/assets',
+  headers: headers(),
+}), null, 'the run token must not publish into another session');
+assert.equal(await authenticate({
+  method: 'POST',
+  url: `/api/sessions/${root.id}/delegate`,
+  headers: headers({ 'x-agentoc-session-control-turn-id': 'wrong-turn' }),
+}), null, 'a stale turn must be rejected');
+assert.equal(await authenticate({
+  method: 'GET',
+  url: '/api/runs/unknown-run',
+  headers: headers(),
+}), null, 'a run outside the root tree must be rejected');
+
+const expiredAuthenticate = createSessionControlAuthenticator({
+  secret,
+  now: () => Date.parse('2026-01-01T00:16:00.000Z'),
+  getRunImpl: async (id) => runs.get(id) || null,
+  getRunManifestImpl: async (id) => id === 'root-run'
+    ? {
+      sessionId: root.id,
+      options: { sessionControlChannel: { turnId: 'turn-1', tokenHash: capability.tokenHash } },
+    }
+    : null,
+  getSessionImpl: async (id) => sessions.get(id) || null,
+});
+assert.equal(await expiredAuthenticate({
+  method: 'POST',
+  url: '/api/consultations',
+  headers: headers(),
+}), null, 'an expired run capability must be rejected for consultation control');
+
+const originalFetch = globalThis.fetch;
+const seen = [];
+globalThis.fetch = async (_url, init = {}) => {
+  seen.push({ ...init, headers: { ...(init.headers || {}) } });
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
+};
+try {
+  const client = createAgentoCHttpClient({
+    baseUrl: 'http://127.0.0.1:7690',
+    sessionControlToken: capability.token,
+    sessionControlRunId: capability.runId,
+    sessionControlSessionId: capability.sessionId,
+    sessionControlTurnId: capability.turnId,
+  });
+  const result = await client.request(`/api/sessions/${root.id}/delegate`, {
+    method: 'POST',
+    body: { task: 'test' },
+  });
+  assert.equal(result.response.status, 200);
+  assert.equal(seen.length, 1);
+  const requestHeaders = seen[0].headers;
+  assert.equal(requestHeaders['x-agentoc-session-control-token'], capability.token);
+  assert.equal(requestHeaders['x-agentoc-session-control-run-id'], capability.runId);
+  assert.equal(requestHeaders.Authorization, undefined);
+  assert.equal(requestHeaders.Cookie, undefined);
+
+  const savedEnv = {
+    AGENTOC_SESSION_ID: process.env.AGENTOC_SESSION_ID,
+    AGENTOC_SESSION_CONTROL_TOKEN: process.env.AGENTOC_SESSION_CONTROL_TOKEN,
+    AGENTOC_SESSION_CONTROL_RUN_ID: process.env.AGENTOC_SESSION_CONTROL_RUN_ID,
+    AGENTOC_SESSION_CONTROL_SESSION_ID: process.env.AGENTOC_SESSION_CONTROL_SESSION_ID,
+    AGENTOC_SESSION_CONTROL_TURN_ID: process.env.AGENTOC_SESSION_CONTROL_TURN_ID,
+  };
+  try {
+    process.env.AGENTOC_SESSION_ID = root.id;
+    process.env.AGENTOC_SESSION_CONTROL_TOKEN = capability.token;
+    process.env.AGENTOC_SESSION_CONTROL_RUN_ID = capability.runId;
+    process.env.AGENTOC_SESSION_CONTROL_SESSION_ID = capability.sessionId;
+    process.env.AGENTOC_SESSION_CONTROL_TURN_ID = capability.turnId;
+    globalThis.fetch = async (url, init = {}) => {
+      seen.push({ url, ...init, headers: { ...(init.headers || {}) } });
+      if (String(url).includes('/delegate')) {
+        return new Response(JSON.stringify({
+          session: { id: child.id, name: 'Child' },
+          run: { id: 'child-run' },
+        }), { status: 201, headers: { 'content-type': 'application/json' } });
+      }
+      if (String(url).includes('/api/runs/')) {
+        return new Response(JSON.stringify({ run: { id: 'child-run', sessionId: child.id, state: 'completed' } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ events: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    };
+    const stdout = { value: '', write(value) { this.value += value; } };
+    const stderr = { value: '', write(value) { this.value += value; } };
+    assert.equal(await runSessionSpawnCommand([
+      '--task', 'spawn through capability', '--wait', '--json', '--base-url', 'http://127.0.0.1:7690',
+    ], { stdout, stderr }), 0);
+    const spawnRequests = seen.slice(1);
+    assert.ok(spawnRequests.length >= 3);
+    for (const request of spawnRequests) {
+      assert.equal(request.headers['x-agentoc-session-control-token'], capability.token);
+      assert.equal(request.headers.Authorization, undefined);
+      assert.equal(request.headers.Cookie, undefined);
+    }
+
+    const envClient = createAgentoCHttpClient({ baseUrl: 'http://127.0.0.1:7690' });
+    const envResult = await envClient.request(`/api/sessions/${root.id}/assets`, {
+      method: 'POST',
+      body: { localPath: '/tmp/generated.apk' },
+    });
+    assert.equal(envResult.response.status, 200);
+    const envRequest = seen[seen.length - 1];
+    assert.equal(envRequest.headers['x-agentoc-session-control-token'], capability.token);
+    assert.equal(envRequest.headers['x-agentoc-session-control-run-id'], capability.runId);
+    assert.equal(envRequest.headers['x-agentoc-session-control-session-id'], capability.sessionId);
+    assert.equal(envRequest.headers['x-agentoc-session-control-turn-id'], capability.turnId);
+    assert.equal(envRequest.headers.Authorization, undefined);
+    assert.equal(envRequest.headers.Cookie, undefined);
+
+    const collaborationClient = createAgentoCHttpClient({
+      baseUrl: 'http://127.0.0.1:7690',
+      capabilityToken: 'collaboration-read-token',
+    });
+    const collaborationResult = await collaborationClient.request('/api/collaborations');
+    assert.equal(collaborationResult.response.status, 200);
+    const collaborationRequest = seen[seen.length - 1];
+    assert.equal(collaborationRequest.headers.Authorization, 'Bearer collaboration-read-token');
+    assert.equal(collaborationRequest.headers['x-agentoc-session-control-token'], undefined);
+    assert.equal(collaborationRequest.headers.Cookie, undefined);
+  } finally {
+    for (const [key, value] of Object.entries(savedEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+} finally {
+  globalThis.fetch = originalFetch;
+}
+
+console.log('test-session-control-capability: ok');

@@ -1,0 +1,787 @@
+/* Goal UI — Material 3 status chip + goal editor.
+   The chip is a compact status entry point. The editor is a dialog on wide
+   surfaces and a bottom sheet on compact surfaces. All color comes from the
+   M3 system roles so explicit themes keep the same semantic relationships. */
+
+#goalSheet .modal {
+  width: min(440px, calc(100vw - 32px));
+  max-height: min(88dvh, 760px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background: var(--sys-surface-container);
+  color: var(--sys-on-surface);
+  border: 0;
+  border-radius: var(--m3-shape-extra-large);
+  box-shadow: var(--m3-elevation-3);
+}
+
+.goal-chip {
+  --goal-chip-bg: var(--sys-surface-container);
+  --goal-chip-fg: var(--sys-on-surface);
+  display: none;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 44vw;
+  min-height: 36px;
+  margin-left: 8px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: var(--m3-shape-full);
+  background: var(--goal-chip-bg);
+  color: var(--goal-chip-fg);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: start;
+  cursor: pointer;
+  vertical-align: middle;
+  touch-action: manipulation;
+  transition: background 150ms ease, transform 150ms ease;
+}
+
+.goal-chip:not([hidden]) { display: inline-flex; }
+.goal-chip[data-state="pending"] {
+  --goal-chip-bg: var(--sys-secondary-container);
+  --goal-chip-fg: var(--sys-on-secondary-container);
+}
+.goal-chip:has(.goal-chip-dot[data-tone="working"]) {
+  --goal-chip-bg: var(--sys-primary-container);
+  --goal-chip-fg: var(--sys-on-primary-container);
+}
+.goal-chip:has(.goal-chip-dot[data-tone="done"]) {
+  --goal-chip-bg: var(--sys-success-container);
+  --goal-chip-fg: var(--sys-on-success-container);
+}
+.goal-chip:has(.goal-chip-dot[data-tone="blocked"]) {
+  --goal-chip-bg: var(--sys-error-container);
+  --goal-chip-fg: var(--sys-on-error-container);
+}
+.goal-chip:has(.goal-chip-dot[data-tone="warn"]) {
+  --goal-chip-bg: var(--sys-warning-container);
+  --goal-chip-fg: var(--sys-on-warning-container);
+}
+.goal-chip:hover {
+  background: color-mix(in srgb, var(--goal-chip-fg) 8%, var(--goal-chip-bg));
+}
+.goal-chip:active { transform: scale(0.98); }
+.goal-chip[data-state="pending"] .goal-chip-text { max-width: none; }
+
+.goal-chip-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--sys-on-surface-variant);
+}
+.goal-chip-dot[data-tone="working"] { background: var(--sys-primary); }
+.goal-chip-dot[data-tone="done"] { background: var(--sys-success); }
+.goal-chip-dot[data-tone="blocked"] { background: var(--sys-error); }
+.goal-chip-dot[data-tone="warn"] { background: var(--sys-warning); }
+
+.goal-chip-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 32vw;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.goal-chip-usage {
+  flex: 0 0 auto;
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.76;
+}
+
+/* The chase label remains part of the chip's single action. It is intentionally
+   text-only rather than a nested pill, keeping the compact control legible. */
+.goal-chip-chase {
+  flex: 0 0 auto;
+  padding-inline-start: 2px;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.3;
+  opacity: 0.78;
+}
+.goal-chip-chase:not([hidden]) { display: inline-block; }
+.goal-chip-chase[hidden] { display: none; }
+
+.goal-status-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  color: var(--sys-on-surface);
+  font-size: 13.5px;
+  font-weight: 650;
+}
+.goal-status-display::before {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  content: "";
+  background: var(--sys-on-surface-variant);
+}
+.goal-status-display[data-tone="working"] {
+  background: var(--sys-primary-container);
+  color: var(--sys-on-primary-container);
+}
+.goal-status-display[data-tone="working"]::before { background: var(--sys-primary); }
+.goal-status-display[data-tone="done"] {
+  background: var(--sys-success-container);
+  color: var(--sys-on-success-container);
+}
+.goal-status-display[data-tone="done"]::before { background: var(--sys-success); }
+.goal-status-display[data-tone="blocked"] {
+  background: var(--sys-error-container);
+  color: var(--sys-on-error-container);
+}
+.goal-status-display[data-tone="blocked"]::before { background: var(--sys-error); }
+.goal-status-display[data-tone="warn"] {
+  background: var(--sys-warning-container);
+  color: var(--sys-on-warning-container);
+}
+.goal-status-display[data-tone="warn"]::before { background: var(--sys-warning); }
+
+.goal-toggle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 52px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+  color: var(--sys-on-surface);
+  font-size: 13.5px;
+  line-height: 1.35;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.goal-toggle:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+.goal-toggle input {
+  appearance: none;
+  position: relative;
+  width: 52px;
+  height: 32px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 2px solid var(--sys-outline);
+  border-radius: var(--m3-shape-full);
+  background: var(--sys-surface-container-highest);
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.goal-toggle input::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  content: "";
+  background: var(--sys-outline);
+  box-shadow: var(--m3-elevation-1);
+  transition: transform 150ms ease, background 150ms ease;
+}
+.goal-toggle input:checked {
+  border-color: var(--sys-primary);
+  background: var(--sys-primary);
+}
+.goal-toggle input:checked::after {
+  background: var(--sys-on-primary);
+  transform: translateX(20px);
+}
+.goal-toggle input:focus-visible {
+  outline: 3px solid var(--m3-state-focus);
+  outline-offset: 2px;
+}
+
+/* Auto-continuation is a supporting state row, not a second card stack. */
+.goal-chase-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+.goal-chase-row[hidden] { display: none; }
+.goal-chase-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+}
+.goal-chase-copy strong {
+  color: var(--sys-on-surface);
+  font-size: 14px;
+  font-weight: 650;
+}
+.goal-chase-copy span {
+  color: var(--sys-on-surface-variant);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.goal-chase-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.goal-chase-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--m3-shape-full);
+  background: var(--sys-surface-container-highest);
+  color: var(--sys-on-surface-variant);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.goal-chase-status[data-tone="working"] {
+  background: var(--sys-primary-container);
+  color: var(--sys-on-primary-container);
+}
+
+#goalChaseToggleBtn { flex: 0 0 auto; font-size: 13px; }
+
+/* Composer Add Menu — Goal mode icon & alignment */
+.composer-add-menu-item:has(.composer-add-menu-icon) {
+  grid-template-columns: 20px minmax(0, 1fr) 18px !important;
+  gap: 10px !important;
+  align-items: center !important;
+}
+
+.composer-add-menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--sys-primary);
+  flex-shrink: 0;
+}
+
+.composer-add-menu-icon .rl-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Composer Inline Goal Pill — Android 30dp Capsule / Circle alignment */
+.composer-goal-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  min-height: 30px;
+  min-width: 30px;
+  max-width: 140px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--m3-shape-full);
+  background: var(--sys-surface-container-high);
+  color: var(--sys-on-surface);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: start;
+  cursor: pointer;
+  vertical-align: middle;
+  touch-action: manipulation;
+  overflow: hidden;
+  box-shadow: none;
+  transition: max-width 240ms cubic-bezier(0.16, 1, 0.3, 1),
+              padding 200ms cubic-bezier(0.16, 1, 0.3, 1),
+              background 150ms ease,
+              transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.composer-goal-pill[hidden] {
+  display: none !important;
+}
+
+.composer-goal-pill[data-empty="true"] {
+  width: 30px;
+  min-width: 30px;
+  max-width: 30px;
+  padding: 0;
+  gap: 0;
+  justify-content: center;
+}
+
+.composer-goal-pill[data-empty="true"] .composer-goal-pill-text {
+  display: none !important;
+}
+
+.composer-goal-pill:hover {
+  background: var(--sys-surface-container-highest);
+  transform: scale(1.02);
+}
+
+.composer-goal-pill:active {
+  transform: scale(0.96);
+}
+
+.composer-goal-pill-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: var(--sys-primary);
+}
+
+.composer-goal-pill-icon .rl-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.composer-goal-pill[data-empty="true"] .composer-goal-pill-icon {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.composer-goal-pill[data-empty="true"] .composer-goal-pill-icon .rl-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.composer-goal-pill-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: inherit;
+}
+
+.goal-header-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.goal-header-icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--sys-primary) 15%, transparent);
+  color: var(--sys-primary);
+  flex: 0 0 32px;
+}
+
+.goal-header-icon-badge .rl-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.goal-input-action-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.goal-objective-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.goal-objective-field textarea {
+  width: 100%;
+  min-height: 68px;
+  max-height: 120px;
+  resize: none;
+}
+
+.goal-play-pause-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  margin: 0;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  touch-action: manipulation;
+  flex: 0 0 48px;
+  box-shadow: none;
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
+              background 150ms ease,
+              color 150ms ease;
+}
+
+.goal-play-pause-btn.is-play {
+  background: var(--sys-primary);
+  color: var(--sys-on-primary);
+}
+
+.goal-play-pause-btn.is-play:hover {
+  background: color-mix(in srgb, var(--sys-primary) 90%, var(--sys-on-primary));
+}
+
+.goal-play-pause-btn.is-pause {
+  background: var(--sys-surface-container-high);
+  color: var(--sys-warning);
+  border: 1px solid color-mix(in srgb, var(--sys-outline) 24%, transparent);
+}
+
+.goal-play-pause-btn.is-pause:hover {
+  background: var(--sys-surface-container-highest);
+}
+
+.goal-play-pause-btn:active {
+  transform: scale(0.94);
+}
+
+.goal-play-pause-btn .rl-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.goal-modal-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  padding: 0 2px;
+}
+
+.goal-modal-status-dot {
+  width: 8px;
+  height: 8px;
+  min-width: 8px;
+  border-radius: 50%;
+  background: var(--sys-on-surface-variant);
+  opacity: 0.5;
+  transition: background 150ms ease;
+}
+
+.goal-modal-status-row[data-tone="chasing"] .goal-modal-status-dot {
+  background: var(--sys-primary);
+  opacity: 1;
+}
+
+.goal-modal-status-row[data-tone="ready"] .goal-modal-status-dot {
+  background: var(--sys-success);
+  opacity: 1;
+}
+
+.goal-modal-status-text {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--sys-on-surface-variant);
+}
+
+.goal-modal-status-row[data-tone="chasing"] .goal-modal-status-text {
+  color: var(--sys-primary);
+  font-weight: 600;
+}
+
+#goalSheet .goal-sheet-clear-btn {
+  background: transparent;
+  color: var(--sys-error);
+  padding: 8px 14px;
+  font-weight: 500;
+}
+
+#goalSheet .goal-sheet-clear-btn:hover {
+  background: color-mix(in srgb, var(--sys-error) 10%, transparent);
+}
+
+.goal-sheet-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px 20px 16px;
+}
+.goal-sheet-handle { display: none; }
+
+#goalSheet .modal-title {
+  margin: 0;
+  color: var(--sys-on-surface);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+#goalSheet .modal-lead {
+  display: none;
+}
+#goalSheet .goal-form-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--m3-shape-medium);
+  background: var(--sys-error-container);
+  color: var(--sys-on-error-container);
+  font-size: 12px;
+  line-height: 1.4;
+}
+#goalSheet .goal-form-error[hidden] { display: none; }
+#goalSheet .modal-header,
+#goalSheet .goal-sheet-footer { flex: 0 0 auto; }
+#goalSheet .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 16px 20px 10px;
+  border-bottom: 0;
+}
+#goalSheet .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scrollbar-gutter: stable;
+}
+#goalSheet .provider-helper-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+#goalSheet .provider-helper-field { gap: 8px; }
+#goalSheet .provider-helper-field label {
+  color: var(--sys-on-surface-variant);
+  font-size: 12px;
+  font-weight: 650;
+}
+.provider-helper-field input,
+#goalSheet .provider-helper-field input {
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--sys-outline) 18%, transparent);
+  border-radius: var(--m3-shape-medium);
+  background: var(--sys-surface-container-high);
+  color: var(--sys-on-surface);
+  box-shadow: none;
+  font-size: 14px;
+}
+#goalSheet .goal-objective-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 68px;
+  max-height: 120px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--sys-outline) 18%, transparent);
+  border-radius: 14px;
+  background: var(--sys-surface-container-low);
+  color: var(--sys-on-surface);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  resize: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+#goalSheet .goal-objective-field textarea::placeholder {
+  color: var(--sys-on-surface-variant);
+  opacity: 0.65;
+  font-size: 14px;
+}
+#goalSheet .goal-objective-field textarea:focus {
+  outline: none;
+  border-color: var(--sys-primary);
+  box-shadow: 0 0 0 1px var(--sys-primary);
+  background: var(--sys-surface-container-lowest);
+}
+#goalSheet .provider-helper-field input::placeholder {
+  color: var(--sys-on-surface-variant);
+  opacity: 0.76;
+}
+#goalSheet .provider-helper-field input:focus-visible,
+#goalSheet .provider-helper-field textarea:focus-visible {
+  outline: 3px solid var(--m3-state-focus);
+  outline-offset: 0;
+  box-shadow: none;
+}
+#goalSheet .provider-helper-field input:focus:not(:focus-visible),
+#goalSheet .provider-helper-field textarea:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+#goalSheet .modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, transform 120ms ease;
+}
+#goalSheet .modal-close:hover {
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+  color: var(--text);
+}
+#goalSheet .modal-close:active {
+  transform: scale(0.92);
+}
+#goalSheet .modal-close .rl-icon,
+#goalSheet .modal-close svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+#goalSheet .modal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 8px 18px;
+  border: 0;
+  border-radius: var(--m3-shape-full);
+  background: var(--sys-surface-container-high);
+  color: var(--sys-on-surface);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: none;
+  cursor: pointer;
+  transition: background 150ms ease, transform 150ms ease;
+}
+#goalSheet .modal-btn:hover { background: var(--sys-surface-container-highest); }
+#goalSheet .modal-btn.primary,
+#goalSheet .goal-sheet-save-btn {
+  background: var(--sys-primary);
+  color: var(--sys-on-primary);
+  font-weight: 600;
+  padding: 8px 20px;
+  box-shadow: none;
+}
+#goalSheet .modal-btn.primary:hover,
+#goalSheet .goal-sheet-save-btn:hover {
+  background: color-mix(in srgb, var(--sys-primary) 90%, var(--sys-on-primary));
+  color: var(--sys-on-primary);
+}
+#goalSheet .modal-btn:active { transform: scale(0.96); }
+#goalSheet .modal-close:active { transform: scale(0.92); }
+#goalSheet .modal-btn:focus-visible,
+#goalSheet .modal-close:focus-visible {
+  outline: 3px solid var(--m3-state-focus);
+  outline-offset: 2px;
+}
+#goalSheet .modal-btn,
+#goalSheet .modal-close,
+#goalSheet .goal-toggle { touch-action: manipulation; }
+
+@keyframes goalSheetIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes goalSheetOut {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(16px); }
+}
+
+@media (max-width: 640px) {
+  #goalSheet {
+    align-items: flex-end;
+    padding: 0;
+  }
+  #goalSheet .modal {
+    width: 100%;
+    max-width: none;
+    max-height: min(96dvh, 820px);
+    border-radius: var(--m3-shape-extra-large) var(--m3-shape-extra-large) 0 0;
+    animation: goalSheetIn var(--motion-panel, 240ms) var(--motion-ease-emphasized);
+  }
+  #goalSheet.is-closing .modal {
+    animation: goalSheetOut var(--motion-exit, 180ms) var(--motion-ease-standard) forwards;
+  }
+  #goalSheet .goal-sheet-handle {
+    display: block;
+    width: 36px;
+    height: 4px;
+    margin: 10px auto 4px;
+    border-radius: var(--m3-shape-full);
+    background: var(--sys-on-surface-variant);
+    opacity: 0.35;
+  }
+  #goalSheet .modal-header {
+    min-height: 48px;
+    padding: 4px 20px 8px;
+  }
+  #goalSheet .modal-body { padding: 0 20px 12px; }
+  #goalSheet .modal-lead { display: none; }
+  #goalSheet .provider-helper-grid { display: none; }
+  #goalSheet .goal-chase-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  #goalSheet .goal-chase-actions {
+    justify-content: space-between;
+    width: 100%;
+  }
+  #goalSheet #goalChaseToggleBtn { flex: 1 1 auto; }
+  #goalSheet .goal-sheet-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px max(18px, env(safe-area-inset-bottom, 0px));
+  }
+  #goalSheet .goal-sheet-footer .modal-btn { min-height: 52px; }
+  .goal-chip {
+    min-height: 40px;
+    max-width: 44vw;
+  }
+  /* The compact header chip has room for the objective only. Usage and
+     auto-continuation remain visible in the editor instead of collapsing the
+     objective to zero width on narrow headers. */
+  .goal-chip-usage,
+  .goal-chip-chase { display: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .goal-chip,
+  .goal-toggle input,
+  .goal-toggle input::after { transition: none; }
+  #goalSheet .modal,
+  #goalSheet.is-closing .modal { animation: none; }
+}
+
+@media (min-width: 640px) {
+  .goal-chip { max-width: 340px; }
+  .goal-chip-text { max-width: 240px; }
+}

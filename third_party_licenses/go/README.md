@@ -1,0 +1,26 @@
+# Go runtime dependency licenses
+
+Generated from the module versions used by the P2P build. Review before release.
+
+- `github.com/google/uuid v1.6.0`: [github.com_google_uuid@v1.6.0.txt](github.com_google_uuid@v1.6.0.txt)
+- `github.com/pion/datachannel v1.6.2`: [github.com_pion_datachannel@v1.6.2.txt](github.com_pion_datachannel@v1.6.2.txt)
+- `github.com/pion/dtls/v3 v3.1.5`: [github.com_pion_dtls_v3@v3.1.5.txt](github.com_pion_dtls_v3@v3.1.5.txt)
+- `github.com/pion/ice/v4 v4.3.0`: [github.com_pion_ice_v4@v4.3.0.txt](github.com_pion_ice_v4@v4.3.0.txt)
+- `github.com/pion/interceptor v0.1.45`: [github.com_pion_interceptor@v0.1.45.txt](github.com_pion_interceptor@v0.1.45.txt)
+- `github.com/pion/logging v0.2.4`: [github.com_pion_logging@v0.2.4.txt](github.com_pion_logging@v0.2.4.txt)
+- `github.com/pion/mdns/v2 v2.1.0`: [github.com_pion_mdns_v2@v2.1.0.txt](github.com_pion_mdns_v2@v2.1.0.txt)
+- `github.com/pion/randutil v0.1.0`: [github.com_pion_randutil@v0.1.0.txt](github.com_pion_randutil@v0.1.0.txt)
+- `github.com/pion/rtcp v1.2.17`: [github.com_pion_rtcp@v1.2.17.txt](github.com_pion_rtcp@v1.2.17.txt)
+- `github.com/pion/rtp v1.10.4`: [github.com_pion_rtp@v1.10.4.txt](github.com_pion_rtp@v1.10.4.txt)
+- `github.com/pion/sctp v1.11.0`: [github.com_pion_sctp@v1.11.0.txt](github.com_pion_sctp@v1.11.0.txt)
+- `github.com/pion/sdp/v3 v3.0.19`: [github.com_pion_sdp_v3@v3.0.19.txt](github.com_pion_sdp_v3@v3.0.19.txt)
+- `github.com/pion/srtp/v3 v3.0.12`: [github.com_pion_srtp_v3@v3.0.12.txt](github.com_pion_srtp_v3@v3.0.12.txt)
+- `github.com/pion/stun/v3 v3.1.6`: [github.com_pion_stun_v3@v3.1.6.txt](github.com_pion_stun_v3@v3.1.6.txt)
+- `github.com/pion/transport/v4 v4.0.2`: [github.com_pion_transport_v4@v4.0.2.txt](github.com_pion_transport_v4@v4.0.2.txt)
+- `github.com/pion/turn/v5 v5.0.12`: [github.com_pion_turn_v5@v5.0.12.txt](github.com_pion_turn_v5@v5.0.12.txt)
+- `github.com/pion/webrtc/v4 v4.2.17`: [github.com_pion_webrtc_v4@v4.2.17.txt](github.com_pion_webrtc_v4@v4.2.17.txt)
+- `github.com/wlynxg/anet v0.0.5`: [github.com_wlynxg_anet@v0.0.5.txt](github.com_wlynxg_anet@v0.0.5.txt)
+- `golang.org/x/crypto v0.48.0`: [golang.org_x_crypto@v0.48.0.txt](golang.org_x_crypto@v0.48.0.txt)
+- `golang.org/x/net v0.50.0`: [golang.org_x_net@v0.50.0.txt](golang.org_x_net@v0.50.0.txt)
+- `golang.org/x/sys v0.41.0`: [golang.org_x_sys@v0.41.0.txt](golang.org_x_sys@v0.41.0.txt)
+- `golang.org/x/time v0.14.0`: [golang.org_x_time@v0.14.0.txt](golang.org_x_time@v0.14.0.txt)

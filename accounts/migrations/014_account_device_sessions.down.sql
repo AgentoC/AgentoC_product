@@ -1,0 +1,13 @@
+drop index if exists account_join_grants_pending_idx;
+drop table if exists account_join_grants;
+drop index if exists account_credential_refreshes_retention_idx;
+drop table if exists account_credential_refreshes;
+drop index if exists account_session_challenges_expiry_idx;
+drop table if exists account_session_challenges;
+drop index if exists account_credentials_token_idx;
+drop table if exists account_credentials;
+drop index if exists account_device_keys_device_idx;
+drop table if exists account_device_keys;
+drop index if exists account_devices_account_idx;
+drop table if exists account_devices;
+alter table if exists account_join_intents drop column if exists public_endpoint;

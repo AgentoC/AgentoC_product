@@ -1,0 +1,4 @@
+<resources>
+    <!-- Android's native TextView PROCESS_TEXT integration requires a stable View ID. -->
+    <item name="selected_material" type="id" />
+</resources>

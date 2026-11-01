@@ -1,0 +1,55 @@
+{
+  "id": "merged-assistant-run-reset",
+  "description": "A merged assistant-run message now covers the range the client already rendered. Pins the delta reset contract: displayProjectionSupersedesRenderedEvent fires and the server demands a full reset instead of an incremental delta.",
+  "sessionId": "sess-demo-002",
+  "note": "Contract-shaped fixture, not a byte-exact server capture. The reset trigger condition (mergedStartSeq <= afterSeq && boundarySeq > afterSeq) is authoritative per chat/router-session-main-routes.mjs:144-152.",
+  "initialRenderedLatestSeq": 3,
+  "renderedBeforeMerge": {
+    "comment": "Client previously rendered seq 1-3 as separate assistant message chunks. Server-side compaction/merge collapsed them into one merged message whose boundary is seq 7.",
+    "events": [
+      { "seq": 1, "type": "message", "role": "user", "content": "Refactor the parser." },
+      { "seq": 2, "type": "message", "role": "assistant", "content": "First I'll " },
+      { "seq": 3, "type": "message", "role": "assistant", "content": "scan the entry points." }
+    ]
+  },
+  "serverStateAfterMerge": {
+    "latestSeq": 7,
+    "mergedMessage": {
+      "seq": 7,
+      "type": "message",
+      "role": "assistant",
+      "mergedAssistantRunMessage": true,
+      "mergedStartSeq": 2,
+      "mergedEndSeq": 7,
+      "boundarySeq": 7,
+      "content": "First I'll scan the entry points. …(full merged assistant message)…",
+      "runId": "run_xyz"
+    }
+  },
+  "clientDeltaRequest": {
+    "afterSeq": 3,
+    "comment": "Client asks for events newer than its rendered cursor (3)."
+  },
+  "expectedDeltaResponse": {
+    "sessionId": "sess-demo-002",
+    "filter": "visible",
+    "events": [],
+    "operationUpdates": [],
+    "runActivity": null,
+    "latestSeq": 7,
+    "resetRequired": true,
+    "reason": "merged_assistant_run_message",
+    "triggerEvaluation": {
+      "mergedStartSeq": 2,
+      "afterSeq": 3,
+      "boundarySeq": 7,
+      "mergedStartSeqLteAfterSeq": true,
+      "boundarySeqGtAfterSeq": true,
+      "supersedes": true
+    }
+  },
+  "expectedClientBehavior": {
+    "comment": "Client must NOT apply this delta. It discards it and falls back to a full fetchSessionVisibleEventsPage(direction:'latest', limit:50), then getEventRenderPlan classifies the result as a reset (event-count shrink / seq regression relative to the merged range).",
+    "action": "full-reset"
+  }
+}

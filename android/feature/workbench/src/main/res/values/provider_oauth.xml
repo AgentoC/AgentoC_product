@@ -1,0 +1,18 @@
+<resources>
+    <string name="provider_oauth_title">Official account login</string>
+    <string name="provider_oauth_remote_vault">Sign in using the official page. Credentials are saved only in the connected computer’s Provider vault, not on this phone.</string>
+    <string name="provider_oauth_generating">Generating the device code…</string>
+    <string name="provider_oauth_waiting">Enter this device code on the official page. Return here after authorization; the app checks whether the account was saved.</string>
+    <string name="provider_oauth_saving">Saving the account on the connected computer…</string>
+    <string name="provider_oauth_saved">Account saved on the connected computer.</string>
+    <string name="provider_oauth_failed">Login failed. Review the error before starting another login.</string>
+    <string name="provider_oauth_cancelled">Login cancelled.</string>
+    <string name="provider_oauth_copy">Copy device code</string>
+    <string name="provider_oauth_open">Open login page</string>
+    <string name="provider_oauth_check">Check login status</string>
+    <string name="provider_oauth_close">Close</string>
+    <string name="provider_oauth_cancel">Cancel login</string>
+    <string name="provider_oauth_credential">Credential from official page</string>
+    <string name="provider_oauth_submit">Submit credential</string>
+    <string name="provider_oauth_reauthenticate">Sign in again</string>
+</resources>

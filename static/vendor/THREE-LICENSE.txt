@@ -1,0 +1,8 @@
+Three.js 0.185.1
+Copyright © 2010-2025 Three.js authors
+ SPDX-License-Identifier: MIT
+
+The bundled file three.module.min.js is distributed under the MIT license.
+HDRLoader.js is adapted from Three.js examples and is distributed under the MIT license.
+studio_small_09_1k.hdr is the CC0 Studio Small 09 asset by Sergej Majboroda,
+published by Poly Haven.

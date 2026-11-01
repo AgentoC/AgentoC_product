@@ -1,0 +1,82 @@
+#!/bin/sh
+set -eu
+
+# Retire only the cc-switch runtime that belonged to Agentoc.  An independently
+# installed desktop `/usr/bin/cc-switch` is intentionally outside these exact
+# paths and is never stopped or modified.
+is_agentoc_cc_switch_process() {
+  case "$1" in
+    *"/opt/agentoc/vendor/cc-switch/"*|*"/opt/agentoc/runtime/cc-switch"*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+agentoc_cc_switch_pids() {
+  for proc in /proc/[0-9]*; do
+    [ -r "$proc/cmdline" ] || continue
+    pid=${proc##*/}
+    [ "$pid" = "$$" ] && continue
+    cmdline=$(tr '\0' ' ' < "$proc/cmdline" 2>/dev/null || true)
+    is_agentoc_cc_switch_process "$cmdline" || continue
+    printf '%s\n' "$pid"
+  done
+}
+
+stop_legacy_processes() {
+  for signal in TERM KILL; do
+    pids=$(agentoc_cc_switch_pids || true)
+    [ -n "$pids" ] || return 0
+    for pid in $pids; do
+      kill -"$signal" "$pid" 2>/dev/null || true
+    done
+    [ "$signal" = KILL ] || sleep 1
+  done
+}
+
+retired_root=/var/lib/agentoc/legacy-cc-switch-retired
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+retired_dir="$retired_root/$stamp"
+
+stop_legacy_processes
+
+retire_path() {
+  path=$1
+  [ -e "$path" ] || [ -L "$path" ] || return 0
+  mkdir -p "$retired_dir"
+  target="$retired_dir/$(basename "$path")"
+  suffix=0
+  while [ -e "$target" ] || [ -L "$target" ]; do
+    suffix=$((suffix + 1))
+    target="$retired_dir/$(basename "$path").$suffix"
+  done
+  mv "$path" "$target"
+}
+
+# The native registry and native provider-runtime-homes/by-provider are not
+# touched.  Only the old database, proxy markers and the old bridge home move
+# to an inert, recoverable quarantine outside the active runtime paths.
+retire_path /var/lib/agentoc/config/cc-switch
+retire_path /var/lib/agentoc/config/provider-runtime-homes/claude-cc-switch-home
+retire_path /var/lib/agentoc-run/provider-homes/claude-cc-switch-home
+
+for marker in \
+  /var/lib/agentoc/config/cc-switch-proxy-guard-state.json \
+  /var/lib/agentoc/config/cc-switch-revision.json \
+  /var/lib/agentoc/config/cc-switch-pending.json \
+  /var/lib/agentoc/config/cc-switch-codex-pending.json \
+  /var/lib/agentoc/config/cc-switch-switch.lock \
+  /var/lib/agentoc/config/cc-switch-codex-converge.lock; do
+  if [ -e "$marker" ] || [ -L "$marker" ]; then
+    mkdir -p "$retired_dir"
+    mv "$marker" "$retired_dir/$(basename "$marker")"
+  fi
+done
+
+# These are package-owned legacy paths.  Removing them after the processes are
+# stopped prevents an old wrapper or vendor binary from being rediscovered on
+# the next restart; the state above remains recoverable in the quarantine.
+rm -rf /opt/agentoc/runtime/cc-switch /opt/agentoc/vendor/cc-switch

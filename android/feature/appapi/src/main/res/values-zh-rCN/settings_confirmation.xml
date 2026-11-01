@@ -1,0 +1,7 @@
+<resources>
+    <string name="api_confirm">确认</string>
+    <string name="api_access_clear_confirm">从此设备清除这条已撤销的记录？该访问权限已经撤销。</string>
+    <string name="api_assistant_revoke_confirm">撤销此助手授权？撤销后将阻止后续访问，但不会停止电脑已接受的工作，也不会收回已接收的数据。</string>
+    <string name="api_capture_delete_confirm">从此设备删除这条已保存的草稿？此操作无法撤销。</string>
+    <string name="api_outputs_delete_confirm">删除手机上的私人副本？原电脑上的文件不会被删除。</string>
+</resources>

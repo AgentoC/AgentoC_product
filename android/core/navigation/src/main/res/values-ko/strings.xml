@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="navigation_projects">프로젝트</string>
+    <string name="navigation_chat">채팅</string>
+    <string name="navigation_home">홈</string>
+    <string name="navigation_settings">설정</string>
+    <string name="navigation_new_session">새 대화</string>
+    <string name="navigation_new_project">새 프로젝트</string>
+</resources>

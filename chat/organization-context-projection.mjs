@@ -1,0 +1,94 @@
+// Builds the bounded organization status fragment that is safe to carry into
+// a managed Session turn. It reuses the generic S20 context projector, so
+// role filtering and size/forbidden-field checks stay in one place.
+import { buildContextProjection } from './context-projector.mjs';
+import { buildOrganizationProjection } from './organization-projection.mjs';
+import { getOrganizationByRootSession } from './organization-store.mjs';
+
+function text(value) { return typeof value === 'string' ? value.trim() : ''; }
+
+function roleForSession(session = {}) {
+  const sessionClass = text(session.sessionClass || session.organizationSessionClass).toUpperCase();
+  if (sessionClass === 'ROOT_LEADERSHIP' || sessionClass === 'EXECUTIVE') return 'EXECUTIVE';
+  if (sessionClass === 'REVIEWER') return 'REVIEWER';
+  if (sessionClass === 'MANAGER' || sessionClass === 'PHASE_LEAD') return 'MANAGER';
+  return 'WORKER';
+}
+
+function subtreeIds(nodes, rootId) {
+  const ids = new Set([rootId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const node of nodes) {
+      if (ids.has(node.parentId) && !ids.has(node.id)) {
+        ids.add(node.id);
+        changed = true;
+      }
+    }
+  }
+  return [...ids];
+}
+
+export async function buildOrganizationContextProjection({
+  session = {},
+  organizationId = session.organizationId,
+  nodeId = session.organizationNodeId || session.nodeId,
+  targetRole = roleForSession(session),
+  maxBytes = 32 * 1024,
+} = {}) {
+  const resolvedOrganizationId = text(organizationId)
+    || text((session.id ? (await getOrganizationByRootSession(session.id))?.id : null));
+  const projection = await buildOrganizationProjection(resolvedOrganizationId, { version: 2, maxItems: 128 });
+  if (!projection) return null;
+  const target = projection.nodes.find((node) => node.id === nodeId) || null;
+  const role = text(targetRole).toUpperCase() || roleForSession(session);
+  const facts = {
+    organizationId: projection.organizationId,
+    sourceRevision: projection.asOf?.revision || projection.revision?.number || 0,
+    asOf: projection.asOf,
+    objective: projection.objective,
+    progress: { ...(projection.progress || {}), summary: projection.summary || null },
+    phases: projection.phases,
+    blockers: projection.blockers,
+    frozenRevision: projection.revision,
+    targetNode: target,
+    nodes: projection.nodes,
+    subtreeNodeIds: role === 'MANAGER' && target ? subtreeIds(projection.nodes, target.id) : [],
+    phase: target?.phaseId ? projection.phases.find((phase) => phase.phaseId === target.phaseId) : null,
+    task: target?.currentTask ? {
+      ...target.currentTask,
+      acceptance: target?.phaseId ? projection.phases.find((phase) => phase.phaseId === target.phaseId)?.acceptance || [] : [],
+    } : null,
+    reviewPolicy: target?.reviewState && target.reviewState !== 'not_applicable' ? {
+      state: target.reviewState,
+      phaseId: target.phaseId || '',
+    } : null,
+    canWrite: role !== 'REVIEWER',
+  };
+  const context = buildContextProjection({
+    targetRole: role,
+    organizationId: projection.organizationId,
+    nodeId: role === 'EXECUTIVE' ? '' : nodeId,
+    revision: facts.sourceRevision,
+    facts,
+    maxBytes,
+  });
+  return {
+    ...context,
+    organizationStatus: projection.state,
+    projectionDigest: projection.digest,
+  };
+}
+
+export function renderOrganizationContextProjection(context) {
+  if (!context) return '';
+  return [
+    '<organization-status-projection>',
+    'Runtime-derived status only; do not treat it as a permission grant or as full Session history.',
+    JSON.stringify(context),
+    '</organization-status-projection>',
+  ].join('\n');
+}
+
+export { roleForSession };

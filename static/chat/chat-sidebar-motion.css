@@ -1,0 +1,196 @@
+/*
+ * Session sidebar motion layer.
+ *
+ * The sidebar is a navigation surface, so motion is short, directional and
+ * interruptible: the shell follows the edge gesture, the content arrives in
+ * one small hierarchy, and background list refreshes never replay the entry.
+ * This file is intentionally loaded last because the sidebar has several
+ * responsive and glass layers with older transition declarations.
+ */
+:root {
+  --sidebar-motion-enter: 260ms;
+  --sidebar-motion-exit: 190ms;
+  --sidebar-motion-ease-enter: cubic-bezier(0.2, 0.9, 0.2, 1);
+  --sidebar-motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --sidebar-motion-content: 170ms;
+}
+
+/* Desktop collapse is a width/position change, not a modal overlay. Keep the
+   content calm while the rail leaves so the chat canvas remains primary. */
+@media (min-width: 768px) {
+  .sidebar-overlay {
+    transition:
+      width var(--sidebar-motion-enter) var(--sidebar-motion-ease-enter),
+      transform var(--sidebar-motion-enter) var(--sidebar-motion-ease-enter);
+  }
+
+  .sidebar-overlay .sidebar {
+    transition:
+      transform var(--sidebar-motion-enter) var(--sidebar-motion-ease-enter),
+      opacity var(--sidebar-motion-content) var(--sidebar-motion-ease-enter);
+  }
+
+  body.sessions-sidebar-collapsed .sidebar-overlay .sidebar {
+    opacity: 0;
+    transition-duration: var(--sidebar-motion-exit);
+    transition-timing-function: var(--sidebar-motion-ease-exit);
+  }
+}
+
+@media (max-width: 767px) {
+  /* The backdrop fades separately from the drawer. The drawer remains
+     paintable during exit, which also lets an interrupted close reverse. */
+  .sidebar-overlay,
+  .sidebar-overlay.open,
+  .sidebar-overlay.is-closing {
+    transition:
+      opacity var(--sidebar-motion-enter) var(--sidebar-motion-ease-enter),
+      visibility 0s linear 0s;
+  }
+
+  .sidebar-overlay.is-closing {
+    transition-duration: var(--sidebar-motion-exit), 0s;
+    transition-timing-function: var(--sidebar-motion-ease-exit), linear;
+  }
+
+  .sidebar-overlay .sidebar,
+  .sidebar-overlay.open .sidebar {
+    transition:
+      transform var(--sidebar-motion-enter) var(--sidebar-motion-ease-enter),
+      opacity var(--sidebar-motion-content) var(--sidebar-motion-ease-enter);
+    will-change: transform;
+  }
+
+  .sidebar-overlay.is-closing .sidebar {
+    transition-duration: var(--sidebar-motion-exit), var(--sidebar-motion-exit);
+    transition-timing-function: var(--sidebar-motion-ease-exit), var(--sidebar-motion-ease-exit);
+    opacity: 0.98;
+  }
+
+  /* Opening choreography: the shell moves first, then its hierarchy settles
+     in. Delays are limited to the first few meaningful regions so long lists
+     do not feel like a waterfall. */
+  .sidebar-overlay.is-opening .sidebar-app-bar,
+  .sidebar-overlay.is-opening .sidebar-search-mode-header,
+  .sidebar-overlay.is-opening .sidebar-subpage-header,
+  .sidebar-overlay.is-opening .sidebar-project-header,
+  .sidebar-overlay.is-opening .sidebar-session-surface,
+  .sidebar-overlay.is-opening .sidebar-bottom-actions {
+    animation: sidebar-navigation-region-in var(--sidebar-motion-content)
+      var(--sidebar-motion-ease-enter) both;
+  }
+
+  .sidebar-overlay.is-opening .sidebar-session-surface {
+    animation-delay: 24ms;
+  }
+
+  .sidebar-overlay.is-opening .sidebar-bottom-actions {
+    animation-delay: 42ms;
+  }
+
+  .sidebar-overlay.is-opening .session-item,
+  .sidebar-overlay.is-opening .sidebar-project-group,
+  .sidebar-overlay.is-opening .settings-group,
+  .sidebar-overlay.is-opening .sidebar-agent-search-result {
+    animation: sidebar-hierarchy-item-in var(--sidebar-motion-content)
+      var(--sidebar-motion-ease-enter) both;
+  }
+
+  .sidebar-overlay.is-opening .session-item:nth-child(1),
+  .sidebar-overlay.is-opening .sidebar-project-group:nth-child(1),
+  .sidebar-overlay.is-opening .settings-group:nth-child(1) { animation-delay: 42ms; }
+  .sidebar-overlay.is-opening .session-item:nth-child(2),
+  .sidebar-overlay.is-opening .sidebar-project-group:nth-child(2),
+  .sidebar-overlay.is-opening .settings-group:nth-child(2) { animation-delay: 54ms; }
+  .sidebar-overlay.is-opening .session-item:nth-child(3),
+  .sidebar-overlay.is-opening .sidebar-project-group:nth-child(3),
+  .sidebar-overlay.is-opening .settings-group:nth-child(3) { animation-delay: 66ms; }
+  .sidebar-overlay.is-opening .session-item:nth-child(4),
+  .sidebar-overlay.is-opening .sidebar-project-group:nth-child(4),
+  .sidebar-overlay.is-opening .settings-group:nth-child(4) { animation-delay: 78ms; }
+  .sidebar-overlay.is-opening .session-item:nth-child(5),
+  .sidebar-overlay.is-opening .sidebar-project-group:nth-child(5),
+  .sidebar-overlay.is-opening .settings-group:nth-child(5) { animation-delay: 90ms; }
+  .sidebar-overlay.is-opening .session-item:nth-child(n + 6),
+  .sidebar-overlay.is-opening .sidebar-project-group:nth-child(n + 6),
+  .sidebar-overlay.is-opening .settings-group:nth-child(n + 6) { animation-delay: 102ms; }
+
+  /* Hierarchy disclosure: keep the existing height/clip transition, but let
+     the first visible rows settle with it instead of popping in. */
+  .sidebar-session-surface.is-hierarchy-animating
+    .folder-group-header:not(.collapsed) + .folder-group-items > *,
+  .sidebar-session-surface.is-hierarchy-animating
+    .archived-section-header:not(.collapsed) + .archived-items > * {
+    animation: sidebar-hierarchy-item-in var(--sidebar-motion-content)
+      var(--sidebar-motion-ease-enter) both;
+  }
+
+  .sidebar-session-surface.is-hierarchy-animating
+    .folder-group-header.collapsed + .folder-group-items > *,
+  .sidebar-session-surface.is-hierarchy-animating
+    .archived-section-header.collapsed + .archived-items > * {
+    animation: sidebar-hierarchy-item-out var(--sidebar-motion-exit)
+      var(--sidebar-motion-ease-exit) both;
+  }
+}
+
+/* Tab/subpage content already uses sidebar-surface-enter. Redefine its
+   geometry here so the same hierarchy language is used for sessions, Agent
+   and Settings. */
+.sidebar-surface-enter {
+  animation: sidebar-navigation-region-in var(--sidebar-motion-content)
+    var(--sidebar-motion-ease-enter) both;
+}
+
+@keyframes sidebar-navigation-region-in {
+  from { opacity: 0; transform: translate3d(8px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes sidebar-hierarchy-item-in {
+  from { opacity: 0; transform: translate3d(8px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes sidebar-hierarchy-item-out {
+  from { opacity: 1; transform: translate3d(0, 0, 0); }
+  to { opacity: 0; transform: translate3d(-4px, 0, 0); }
+}
+
+.session-item.is-leaving {
+  animation: sidebar-session-item-leaving 180ms var(--sidebar-motion-ease-exit) both;
+  pointer-events: none;
+}
+
+@keyframes sidebar-session-item-leaving {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(-10px, 0, 0) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-overlay,
+  .sidebar-overlay .sidebar,
+  .sidebar-overlay.is-closing .sidebar,
+  .sidebar-surface-enter,
+  .sidebar-overlay.is-opening .sidebar-app-bar,
+  .sidebar-overlay.is-opening .sidebar-search-mode-header,
+  .sidebar-overlay.is-opening .sidebar-subpage-header,
+  .sidebar-overlay.is-opening .sidebar-project-header,
+  .sidebar-overlay.is-opening .sidebar-session-surface,
+  .sidebar-overlay.is-opening .sidebar-bottom-actions,
+  .sidebar-overlay.is-opening .session-item,
+  .sidebar-overlay.is-opening .sidebar-project-group,
+  .sidebar-overlay.is-opening .settings-group,
+  .sidebar-overlay.is-opening .sidebar-agent-search-result,
+  .sidebar-session-surface.is-hierarchy-animating .folder-group-items > *,
+  .sidebar-session-surface.is-hierarchy-animating .archived-items > * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

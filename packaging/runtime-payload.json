@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "profiles": {
+    "desktop": {
+      "files": [
+        "package.json", "package-lock.json", "chat-server.mjs", "cli.js",
+        "generate-token.mjs", "set-password.mjs", "setup.sh", "start.sh", "restart.sh", "stop.sh",
+        "LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "README.md", "README.zh.md", "DESIGN.md", "PRODUCT.md",
+        "memory/system.md", "memory/auto-system-memory.md"
+      ],
+      "prefixes": [
+        "lib/", "chat/", "static/", "templates/", "automation/", "connectors/", "skills/",
+        "scripts/", "p2p/", "native/", "local-helper/", "policy/", "tunnel/", "docs/", "packaging/", "third_party_licenses/"
+      ],
+      "exclude": ["scripts/accounts-migrate.mjs", "scripts/accounts-rotate-key.mjs"],
+      "required": ["package.json", "package-lock.json", "chat-server.mjs", "cli.js", "static/chat/ui.js", "templates/chat.html"],
+      "rename": {}
+    },
+    "accounts": {
+      "files": [
+        "accounts/package.json", "accounts/package-lock.json", "LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md",
+        "lib/account-sync.mjs", "lib/account-pairing-protocol.mjs", "lib/device-auth-protocol.mjs", "lib/google-id-token.mjs",
+        "lib/instance-proof-protocol.mjs", "lib/temporary-pairing-protocol.mjs",
+        "lib/temporary-pairing-broker-protocol.mjs", "lib/temporary-device-access.mjs",
+        "lib/temporary-control-policy.mjs", "lib/temporary-control-protocol.mjs",
+        "lib/temporary-control-access.mjs", "lib/temporary-control-broker-protocol.mjs",
+        "lib/temporary-connection-contract.mjs", "lib/temporary-connection-delivery.mjs",
+        "lib/p2p-signal-protocol.mjs", "lib/target-runtime-grant.mjs", "lib/target-runtime-policy.mjs",
+        "lib/turn-authorization.mjs", "lib/turn-broker-capability.mjs", "lib/turn-lease-identity.mjs",
+        "lib/harness-version-catalog.mjs", "lib/harness-policy.mjs",
+        "static/m3-pages.css", "static/qr-pages.css", "static/qr-creator.min.js",
+        "scripts/accounts-migrate.mjs", "scripts/accounts-rotate-key.mjs"
+      ],
+      "prefixes": ["accounts/", "third_party_licenses/"],
+      "exclude": ["accounts/node_modules/"],
+      "required": ["accounts/package.json", "accounts/package-lock.json", "accounts/server.mjs", "scripts/accounts-migrate.mjs"],
+      "rename": {"accounts/package.json": "package.json", "accounts/package-lock.json": "package-lock.json"}
+    }
+  }
+}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The Android OAuth client identifies this package/signing certificate
+         in Google Cloud; it is not passed as Credential Manager serverClientId. -->
+    <string name="google_android_client_id" translatable="false">541054013971-evrcrf134qb4qgsr5kkruukj3macisqf.apps.googleusercontent.com</string>
+</resources>

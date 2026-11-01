@@ -1,0 +1,552 @@
+/* Material 3 roles for standalone authentication, install, and admin pages.
+ * These pages keep their existing information architecture; this layer only
+ * unifies the system roles and interaction components with the chat surface.
+ */
+:root {
+  color-scheme: light;
+  --m3-primary: #465d91;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #dae2ff;
+  --m3-on-primary-container: #001945;
+  --m3-secondary-container: #dde2f9;
+  --m3-on-secondary-container: #161b2c;
+  --m3-error: #ba1a1a;
+  --m3-error-container: #ffdad6;
+  --m3-on-error-container: #410002;
+  --m3-surface: #faf8ff;
+  --m3-surface-container-low: #f4f2fa;
+  --m3-surface-container: #eeedf4;
+  --m3-surface-container-high: #e8e7ef;
+  --m3-surface-container-highest: #e2e2e9;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-on-surface: #1a1b20;
+  --m3-on-surface-variant: #44474f;
+  --m3-outline: #74777f;
+  --m3-outline-variant: #c4c6d0;
+  --m3-shape-small: 8px;
+  --m3-shape-medium: 12px;
+  --m3-shape-large: 16px;
+  --m3-shape-extra-large: 28px;
+  --m3-shape-full: 999px;
+  --m3-elevation-1: 0 1px 3px rgba(25, 28, 36, 0.12), 0 1px 2px rgba(25, 28, 36, 0.08);
+  --m3-elevation-2: 0 3px 6px rgba(25, 28, 36, 0.14), 0 1px 2px rgba(25, 28, 36, 0.10);
+  --m3-state-focus: color-mix(in srgb, var(--m3-primary) 12%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --m3-primary: #b2c5ff;
+    --m3-on-primary: #1a2f60;
+    --m3-primary-container: #2f4678;
+    --m3-on-primary-container: #dbe2ff;
+    --m3-secondary-container: #41465a;
+    --m3-on-secondary-container: #dde2f9;
+    --m3-error: #ffb4ab;
+    --m3-error-container: #93000a;
+    --m3-on-error-container: #ffdad6;
+    --m3-surface: #121318;
+    --m3-surface-container-low: #1a1b20;
+    --m3-surface-container: #1e1f25;
+    --m3-surface-container-high: #292a30;
+    --m3-surface-container-highest: #34343b;
+    --m3-surface-container-lowest: #121318;
+    --m3-on-surface: #e3e2e9;
+    --m3-on-surface-variant: #c4c6d0;
+    --m3-outline: #8e9099;
+    --m3-outline-variant: #44474f;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  background: var(--m3-surface) !important;
+  color: var(--m3-on-surface) !important;
+  font-family: Inter, "PingFang SC", "Noto Sans CJK SC", ui-sans-serif, system-ui, sans-serif !important;
+}
+
+body::before,
+body::after {
+  display: none !important;
+}
+
+.card,
+.shell,
+.panel,
+.page-panel,
+.section-panel,
+.detail-card,
+.metric-card {
+  border: 1px solid var(--m3-outline-variant) !important;
+  border-radius: var(--m3-shape-extra-large) !important;
+  background: var(--m3-surface-container) !important;
+  box-shadow: var(--m3-elevation-1) !important;
+  backdrop-filter: none !important;
+}
+
+/* Standalone entry points: the page surface must stay readable without glass. */
+.shell::before,
+.shell::after,
+.panel::before,
+.panel::after {
+  display: none !important;
+}
+
+.cover,
+.hero,
+.auth,
+.qr-wrap,
+.status-row,
+.build-stamp {
+  position: relative;
+}
+
+.cover {
+  background: var(--m3-primary-container) !important;
+  color: var(--m3-on-primary-container) !important;
+}
+
+.cover p,
+.cover .cover-footnote,
+.cover .cover-metric span,
+.auth-copy,
+.auth-footnote,
+.intro,
+.status-note,
+.meta,
+.build-stamp {
+  color: var(--m3-on-surface-variant) !important;
+}
+
+label {
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+.cover-metric,
+.mode-toggle,
+.qr-panel,
+.benefit,
+.status,
+.success {
+  border: 1px solid var(--m3-outline-variant) !important;
+  border-radius: var(--m3-shape-large) !important;
+  background: var(--m3-surface-container-high) !important;
+  box-shadow: none !important;
+}
+
+.mode-toggle {
+  padding: 4px !important;
+  background: var(--m3-surface-container-low) !important;
+}
+
+.mode-btn {
+  border-radius: var(--m3-shape-medium) !important;
+  color: var(--m3-on-surface-variant) !important;
+  transition: background-color 160ms ease, color 160ms ease !important;
+}
+
+.mode-btn:hover,
+.mode-btn.is-active {
+  transform: none !important;
+  background: var(--m3-primary-container) !important;
+  border-color: transparent !important;
+  color: var(--m3-on-primary-container) !important;
+  box-shadow: none !important;
+}
+
+.submit,
+.btn.primary,
+.btn-primary {
+  border-radius: var(--m3-shape-medium) !important;
+  background: var(--m3-primary) !important;
+  color: var(--m3-on-primary) !important;
+  box-shadow: var(--m3-elevation-1) !important;
+}
+
+.submit:hover,
+.btn.primary:hover,
+.btn-primary:hover {
+  transform: none !important;
+  background: color-mix(in srgb, var(--m3-primary) 92%, var(--m3-on-primary)) !important;
+  box-shadow: var(--m3-elevation-1) !important;
+}
+
+.qr-frame {
+  border-radius: var(--m3-shape-large) !important;
+  background: var(--m3-surface-container-lowest, #ffffff) !important;
+}
+
+body.mobile-install-page .shell {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Instance admin: keep the page flow open and give each operational surface one role. */
+.topbar {
+  border-bottom: 1px solid var(--m3-outline-variant) !important;
+  background: var(--m3-surface-container) !important;
+  backdrop-filter: none !important;
+}
+
+.topbar + main.shell {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.topbar .view-link,
+.topbar .topbar-toggle,
+.summary-toggle,
+.topbar .btn,
+.action-btn,
+.link-chip {
+  border-radius: var(--m3-shape-medium) !important;
+}
+
+.topbar .view-link,
+.topbar .topbar-toggle,
+.summary-toggle,
+.topbar .btn:not(.btn-primary),
+.btn-subtle,
+.action-btn:not([data-tone="primary"]),
+.link-chip {
+  border: 1px solid transparent !important;
+  background: var(--m3-surface-container-high) !important;
+  color: var(--m3-on-surface) !important;
+}
+
+.topbar .view-link.is-active,
+.topbar .btn-primary,
+.action-btn[data-tone="primary"],
+.action-btn[data-tone="success"] {
+  border-color: transparent !important;
+  background: var(--m3-primary) !important;
+  color: var(--m3-on-primary) !important;
+}
+
+.cache-pill,
+.nav-count,
+.chip,
+.tag,
+.section-count {
+  border-radius: var(--m3-shape-full) !important;
+  background: var(--m3-secondary-container) !important;
+  color: var(--m3-on-secondary-container) !important;
+}
+
+.metric-card,
+.row-card,
+.detail-card,
+.link-item,
+.analytics-row,
+.empty-state,
+.error-state,
+.toast,
+dialog {
+  border: 1px solid var(--m3-outline-variant) !important;
+  border-radius: var(--m3-shape-large) !important;
+  background: var(--m3-surface-container) !important;
+  box-shadow: var(--m3-elevation-1) !important;
+  background-image: none !important;
+}
+
+.row-card[open],
+.metric-card[data-tone="accent"] {
+  background: var(--m3-primary-container) !important;
+  color: var(--m3-on-primary-container) !important;
+}
+
+.metric-card[data-tone="danger"],
+.error-state,
+.toast-err {
+  background: var(--m3-error-container) !important;
+  color: var(--m3-on-error-container) !important;
+}
+
+.metric-card[data-tone="ok"],
+.toast-ok {
+  background: var(--m3-success-container, #c6f0d7) !important;
+  color: var(--m3-on-success-container, #002110) !important;
+}
+
+.search-field,
+.sort-field,
+.search-field input,
+.sort-field select,
+dialog input {
+  border-radius: var(--m3-shape-medium) !important;
+  border-color: var(--m3-outline) !important;
+  background: var(--m3-surface-container-lowest) !important;
+  color: var(--m3-on-surface) !important;
+}
+
+.search-field,
+.sort-field {
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.analytics-meter,
+.analytics-meter-fill {
+  border-radius: var(--m3-shape-full) !important;
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.32) !important;
+}
+
+.qr-image {
+  border-radius: var(--m3-shape-medium) !important;
+  box-shadow: var(--m3-elevation-1) !important;
+}
+
+.eyebrow,
+.status-pill,
+.status-pill.ready,
+.tag,
+.chip {
+  border-radius: var(--m3-shape-full) !important;
+  background: var(--m3-secondary-container) !important;
+  color: var(--m3-on-secondary-container) !important;
+}
+
+.link,
+.link-btn,
+.secondary-link {
+  color: var(--m3-primary) !important;
+}
+
+@media (max-width: 860px) {
+  .cover,
+  .auth {
+    min-height: 0;
+  }
+}
+
+.panel.cover {
+  border: 0 !important;
+  background: var(--m3-primary-container) !important;
+  color: var(--m3-on-primary-container) !important;
+}
+
+.eyebrow,
+.card-tag,
+.output-kicker,
+.section-title,
+.metric-label,
+.cell-label {
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+button,
+input,
+select,
+textarea,
+.btn,
+.submit,
+.action-btn,
+.btn-primary,
+.btn-subtle,
+.btn.primary,
+.btn.secondary,
+.primary,
+.secondary {
+  font: inherit;
+}
+
+button,
+.btn,
+.submit,
+.action-btn,
+.btn-primary,
+.btn-subtle,
+.btn.primary,
+.btn.secondary,
+.primary,
+.secondary {
+  min-height: 40px;
+  border-radius: var(--m3-shape-medium) !important;
+  cursor: pointer;
+}
+
+.btn,
+.submit,
+.action-btn,
+.btn-primary,
+.btn.primary,
+.primary {
+  border: 0 !important;
+  background: var(--m3-primary) !important;
+  color: var(--m3-on-primary) !important;
+}
+
+.btn:hover,
+.submit:hover,
+.action-btn:hover,
+.btn-primary:hover,
+.btn.primary:hover,
+.primary:hover {
+  background: color-mix(in srgb, var(--m3-primary) 92%, var(--m3-on-primary)) !important;
+}
+
+.btn-subtle,
+.btn.secondary,
+.secondary,
+.mode-btn,
+.link-chip,
+.secondary-link {
+  border: 0 !important;
+  background: var(--m3-secondary-container) !important;
+  color: var(--m3-on-secondary-container) !important;
+}
+
+input,
+select,
+textarea,
+.search-field,
+.sort-field,
+.recover-input {
+  min-height: 56px;
+  border: 1px solid var(--m3-outline) !important;
+  border-radius: var(--m3-shape-small) !important;
+  background: var(--m3-surface-container-lowest, #ffffff) !important;
+  color: var(--m3-on-surface) !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.search-field:focus,
+.sort-field:focus,
+.recover-input:focus,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--m3-primary) !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px var(--m3-state-focus) !important;
+}
+
+.error,
+.error-state,
+.status.error {
+  border-color: transparent !important;
+  border-radius: var(--m3-shape-medium) !important;
+  background: var(--m3-error-container) !important;
+  color: var(--m3-on-error-container) !important;
+}
+
+.status-pill,
+.tag,
+.chip,
+.cache-pill {
+  border-radius: var(--m3-shape-full) !important;
+}
+
+.status-pill,
+.tag,
+.chip.is-active {
+  background: var(--m3-primary-container) !important;
+  color: var(--m3-on-primary-container) !important;
+}
+
+.helper,
+.muted,
+.auth-footnote,
+.cover-footnote,
+.cell-note,
+.metric-note {
+  color: var(--m3-on-surface-variant) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Keep admin field labels as layout wrappers; only the actual control owns the border. */
+.topbar + main.shell .search-field,
+.topbar + main.shell .sort-field {
+  min-height: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+/* Reference alignment: standalone pages use the same quiet, borderless
+   surfaces as the L1/L2 session list.  Functional grouping remains through
+   spacing and semantic fill; focus-visible supplies the interaction cue. */
+.shell {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.card,
+.panel,
+.page-panel,
+.section-panel,
+.detail-card,
+.metric-card,
+.row-card,
+.link-item,
+.analytics-row,
+.empty-state,
+.error-state,
+.toast,
+dialog {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.topbar {
+  border-bottom: 0 !important;
+}
+
+.topbar .view-link,
+.topbar .topbar-toggle,
+.summary-toggle,
+.topbar .btn,
+.action-btn,
+.link-chip,
+.mode-btn,
+.btn,
+.submit,
+.primary,
+.secondary {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+input,
+select,
+textarea,
+.search-field,
+.sort-field,
+.recover-input,
+.search-field input,
+.sort-field select,
+dialog input {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.search-field:focus,
+.sort-field:focus,
+.recover-input:focus,
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--m3-primary) !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px var(--m3-state-focus) !important;
+}

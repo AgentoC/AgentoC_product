@@ -1,0 +1,35 @@
+<resources>
+    <string name="content_report_title">檢舉 AI 內容</string>
+    <string name="content_report_settings">內容檢舉與收據</string>
+    <string name="content_report_disclosure">檢舉將傳送給 AgentoC 開發者，包含原因、選填說明、應用程式版本及檢舉編號。只有勾選後才會傳送下方回覆片段，不附帶工作台或登入憑證。本機會保留私有副本，直到你主動清除。</string>
+    <string name="content_report_reason">選擇檢舉原因</string>
+    <string name="content_report_reason_unsafe">危險或不安全內容</string>
+    <string name="content_report_reason_harassment">仇恨或騷擾</string>
+    <string name="content_report_reason_sexual">色情內容</string>
+    <string name="content_report_reason_privacy">隱私或個人資料</string>
+    <string name="content_report_reason_deceptive">誤導或欺騙性內容</string>
+    <string name="content_report_reason_other">其他問題</string>
+    <string name="content_report_details">補充說明（選填）</string>
+    <string name="content_report_include">附上可編輯的回覆片段</string>
+    <string name="content_report_excerpt">回覆片段（最多 4000 字元）</string>
+    <string name="content_report_send">傳送檢舉</string>
+    <string name="content_report_close">關閉</string>
+    <string name="content_report_check">查詢收據</string>
+    <string name="content_report_retry">先查收據，再重試本次檢舉</string>
+    <string name="content_report_choose_reply">請在對話中的具體 AI 回覆下選擇「檢舉」。最近一次提交的檢舉也可在此查看。</string>
+    <string name="content_report_saved_notice">這是本機保存的檢舉，內容已固定。開啟頁面不會再次傳送。</string>
+    <string name="content_report_request_id">檢舉編號：%1$s</string>
+    <string name="content_report_received_at">接收時間：%1$s</string>
+    <string name="content_report_received">開發者服務已接收，等待人工處理。</string>
+    <string name="content_report_in_review">正在處理</string>
+    <string name="content_report_closed">處理已結束</string>
+    <string name="content_report_unconfirmed">尚未確認接收。請先查詢原檢舉收據，再決定是否重試。</string>
+    <string name="content_report_clear_local">清除本機副本</string>
+    <string name="content_report_clear_warning">這只清除本機的檢舉副本與收據，不會撤回或刪除開發者已接收的檢舉。如果接收結果尚未確認，清除後也將無法在此查詢或重試該檢舉。</string>
+    <string name="content_report_error_storage">無法讀取或保存本機私有檢舉記錄，檢舉可能已被接收。請保留記錄後再查詢，不要將此視為已撤回。</string>
+    <string name="content_report_error_unavailable">檢舉服務暫時無法使用，尚未確認本次操作的收據。請保留記錄，稍後再查詢。</string>
+    <string name="content_report_error_rate">檢舉服務忙碌，請保留記錄，稍後再試。</string>
+    <string name="content_report_error_rejected">檢舉被拒絕。可清除本機副本後，縮短說明或片段並重新填寫。</string>
+    <string name="content_report_error_conflict">同一編號已有檢舉，或內容不一致。請查詢原收據，不能據此認定新檢舉已接收。</string>
+    <string name="content_report_error_unconfirmed">尚無法確認操作結果，已保留原請求。請查詢收據，重新開啟頁面不會自動重試。</string>
+</resources>

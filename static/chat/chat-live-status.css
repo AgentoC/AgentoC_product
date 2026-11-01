@@ -1,0 +1,432 @@
+.live-bar-slot {
+  display: block;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(
+    100%
+    + var(--chat-floating-status-gap, 8px)
+    + var(--chat-queued-panel-stack-height, 0px)
+  );
+  z-index: 7;
+  pointer-events: none;
+}
+.live-bar-slot.is-revealing,
+.live-bar-slot.is-collapsing {
+  overflow: visible;
+}
+.live-bar-slot.is-collapsing {
+  pointer-events: none;
+}
+.live-bar {
+  --live-bar-capsule-size: var(--touch-min, 44px);
+  position: relative;
+  margin: 0 auto;
+  padding: 8px 12px;
+  width: calc(100% - (var(--chat-gutter) * 2));
+  max-width: calc(100% - (var(--chat-gutter) * 2));
+  border-radius: var(--radius-pill, 999px);
+  border: 0;
+  /* The Live Bar is one stable status surface. Workflow meaning lives in the
+     orb and explicit label, so an approval or failure does not recolor the
+     whole persistent shell into a competing alert destination. */
+  background: var(--sys-surface-container-high, color-mix(in srgb, var(--bg-secondary) 92%, var(--bg-tertiary)));
+  box-shadow: var(--m3-elevation-2, var(--shadow-soft, 0 8px 24px rgba(16, 21, 39, 0.08)));
+  color: var(--sys-on-surface-variant, var(--text-secondary));
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--touch-min, 44px);
+  transform-origin: 50% 100%;
+  will-change: transform, opacity;
+  overflow: hidden;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    width 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    max-width 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    height 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    padding 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-radius 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    gap 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow var(--motion-base) var(--motion-ease-out),
+    background var(--motion-base) var(--motion-ease-out),
+    color var(--motion-base) var(--motion-ease-out),
+    opacity 160ms ease;
+}
+.live-bar-slot.is-revealing .live-bar {
+  animation: live-bar-reveal-from-composer 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.live-bar-slot.is-collapsing .live-bar {
+  animation: live-bar-collapse-to-composer 280ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.live-bar-slot.is-capsule-exiting .live-bar {
+  animation: live-bar-capsule-exit-to-composer 280ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.chat-status-header.is-revealing .live-bar {
+  animation: live-bar-reveal-from-composer 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.chat-status-header.is-collapsing .live-bar {
+  animation: live-bar-collapse-to-composer 280ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.chat-status-header.is-capsule-exiting .live-bar {
+  animation: live-bar-capsule-exit-to-composer 280ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.live-bar__label {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: opacity 180ms var(--motion-ease-out);
+}
+.live-bar[data-motion-paused="true"] .live-bar__orb-sphere {
+  animation-play-state: paused;
+}
+.live-bar__elapsed {
+  flex: 0 0 auto;
+  max-width: 64px;
+  overflow: hidden;
+  opacity: 1;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition: opacity 180ms var(--motion-ease-out);
+}
+.live-bar[hidden] { display: none; }
+.live-bar:focus-visible {
+  outline: 3px solid var(--m3-state-focus, color-mix(in srgb, var(--sys-primary, currentColor) 28%, transparent));
+  outline-offset: 3px;
+}
+
+/* --- Live Bar orb + Saturn ring (replaces the legacy status dot) ---
+   A glowing sphere + single thin white ring renders for every state. The sphere
+   adopts each state's status color; only the running sphere gets a very small
+   CSS breath. The ring is rendered once so status updates stay cheap while the
+   user scrolls. */
+.live-bar__orb {
+  position: relative;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+}
+.live-bar__orb-svg {
+  grid-area: 1 / 1;
+  width: 22px;
+  height: 22px;
+  display: block;
+  overflow: visible;
+}
+/* The orb sphere follows dedicated workflow-state colors. These must stay
+   independent from M3 primary/secondary roles so a monochrome or Monet theme
+   cannot flatten the running blue or waiting amber. */
+.live-bar { --live-bar-orb-color: var(--status-running, #2563eb); }
+.live-bar[data-state="queued"] { --live-bar-orb-color: var(--status-queued, #0d9488); }
+.live-bar[data-state="waiting_user"] { --live-bar-orb-color: var(--status-waiting, #d97706); }
+.live-bar[data-state="done"] { --live-bar-orb-color: var(--status-done, #16a34a); }
+.live-bar[data-state="failed"] { --live-bar-orb-color: var(--status-failed, #dc2626); }
+.live-bar[data-state="ready"] { --live-bar-orb-color: color-mix(in srgb, var(--text-muted, #888) 70%, #fff); }
+.live-bar[data-state="plan_pending"] { --live-bar-orb-color: var(--status-running, #2563eb); }
+.live-bar[data-state="danger_pending"] { --live-bar-orb-color: var(--status-failed, #dc2626); }
+.live-bar[data-state="approval_pending"] { --live-bar-orb-color: var(--status-waiting, #d97706); }
+.live-bar[data-state="awaiting_answer"] { --live-bar-orb-color: var(--status-queued, #0d9488); }
+.live-bar__orb-sphere {
+  transform-box: fill-box;
+  transform-origin: center;
+  filter:
+    drop-shadow(0 0 3.5px color-mix(in srgb, var(--live-bar-orb-color) 66%, transparent))
+    drop-shadow(0 0 7.5px color-mix(in srgb, var(--live-bar-orb-color) 34%, transparent));
+}
+.live-bar__orb-sphere-stop-main {
+  stop-color: var(--live-bar-orb-color);
+}
+.live-bar__orb-sphere-stop-edge {
+  stop-color: color-mix(in srgb, var(--live-bar-orb-color) 72%, #0b1f4d 28%);
+}
+.live-bar__orb-sphere {
+  grid-area: 1 / 1;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.live-bar__ring {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter:
+    drop-shadow(0 0 0.85px rgba(8, 23, 56, 0.48))
+    drop-shadow(0 0 2px rgba(8, 23, 56, 0.24));
+}
+.live-bar[data-state="running"] .live-bar__orb-sphere {
+  animation: live-bar-orb-breathe 2.6s var(--motion-ease-standard, ease-in-out) infinite;
+}
+@keyframes live-bar-orb-breathe {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+/* Keep the Bar itself quiet in every state. The state-specific --live-bar-orb-
+   color mappings above, the distinct Orb renderer, and the visible status
+   label carry workflow meaning without turning Live Bar into a color banner. */
+.live-bar[data-collapsed="capsule"] {
+  margin-left: auto;
+  margin-right: auto;
+  padding: calc((var(--live-bar-capsule-size) - 22px) / 2);
+  width: var(--live-bar-capsule-size);
+  min-width: var(--live-bar-capsule-size);
+  max-width: var(--live-bar-capsule-size);
+  height: var(--live-bar-capsule-size);
+  min-height: var(--live-bar-capsule-size);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  gap: 0;
+  cursor: pointer;
+}
+/* Collapse and expand are literally the same base .live-bar transition reversed.
+   The orb stays a normal in-flow flex item: because the bar keeps itself
+   screen-centered (margin:auto) while its width and padding transition, the bar's
+   left edge slides inward as it shrinks and carries the orb from the left slot to
+   the capsule center automatically — no keyframes, no JS measurement, no absolute
+   positioning. Capsule padding is (44 - 22)/2, so with border-box the 22px orb
+   lands dead-center of the circle, and the label always keeps its in-flow space to
+   the orb's right (the old absolute-positioning approach stole the orb from flow,
+   which made the label overlap it during expand). */
+.live-bar[data-capsule-motion="collapsing"] {
+  pointer-events: none;
+}
+.live-bar[data-capsule-motion="collapsing"] .live-bar__label,
+.live-bar[data-capsule-motion="collapsing"] .live-bar__elapsed {
+  opacity: 0;
+}
+.live-bar[data-collapsed="capsule"] .live-bar__label {
+  opacity: 0;
+  flex: 0 0 0;
+  max-width: 0;
+  min-width: 0;
+  margin: 0;
+  pointer-events: none;
+}
+.live-bar__elapsed[hidden] { display: none; }
+.live-bar[data-collapsed="capsule"] .live-bar__label::after {
+  animation: none;
+}
+@keyframes live-bar-reveal-from-composer {
+  from { opacity: 0; transform: translateY(14px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes live-bar-collapse-to-composer {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  55% { opacity: 0.72; transform: translateY(5px) scale(0.985); }
+  to { opacity: 0; transform: translateY(14px) scale(0.96); }
+}
+@keyframes live-bar-capsule-exit-to-composer {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  45% { opacity: 0.82; transform: translateY(6px) scale(0.94); }
+  to { opacity: 0; transform: translateY(16px) scale(0.9); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-bar-slot.is-revealing,
+  .live-bar-slot.is-collapsing,
+  .live-bar-slot.is-capsule-exiting,
+  .live-bar-slot.is-revealing .live-bar,
+  .live-bar-slot.is-collapsing .live-bar,
+  .live-bar-slot.is-capsule-exiting .live-bar,
+  .live-bar[data-capsule-motion="collapsing"],
+  .live-bar[data-capsule-motion] .live-bar__orb,
+  .live-bar[data-state="danger_pending"] { animation: none; }
+  .live-bar,
+  .live-bar .live-bar__label { transition: none; }
+  .live-bar[data-state="running"] .live-bar__orb-sphere { animation: none; }
+  .chat-status-header.is-revealing .live-bar,
+  .chat-status-header.is-collapsing .live-bar,
+  .chat-status-header.is-capsule-exiting .live-bar { animation: none; }
+}
+/* --- Reconnect indicator (P2-8) ---
+   Transient floating pill in the live-status zone signalling WS/P2P transport
+   loss. Lives inside the top status header beside the status control.
+   Shown via .is-visible; dismissal is a restrained fade + 6px rise using the
+   shared motion tokens — never a bounce or overshoot. The dot is deliberately
+   static: a pulsing network-loss marker makes a slow send feel more active
+   and unstable than it is. */
+.reconnect-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 auto;
+  padding: 8px 16px;
+  min-height: var(--touch-min, 44px);
+  width: fit-content;
+  max-width: calc(100% - (var(--chat-gutter) * 2));
+  border-radius: var(--radius-pill, 999px);
+  border: 0;
+  background: color-mix(in srgb, var(--bg-secondary) 92%, var(--bg-tertiary));
+  box-shadow: var(--shadow-soft, 0 8px 24px rgba(16, 21, 39, 0.08));
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 220ms var(--motion-ease-out),
+    transform 220ms var(--motion-ease-out);
+}
+.reconnect-indicator.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+/* Reconnect feedback hangs below the centered header without changing the
+   header's measured height or moving the Home/More controls. */
+.chat-status-header .reconnect-indicator {
+  position: absolute;
+  top: calc(100% + var(--chat-floating-status-gap, 8px));
+  left: 50%;
+  margin: 0;
+  transform: translate(-50%, 6px);
+  z-index: 3;
+}
+.chat-status-header .reconnect-indicator.is-visible {
+  transform: translate(-50%, 0);
+}
+/* Keep the standalone reconnect-indicator fixture and older embedded shells
+   compatible; the shipped chat template no longer contains this slot. */
+.live-bar-slot:has(.live-bar:not([hidden])) .reconnect-indicator {
+  margin-top: var(--chat-floating-status-gap, 8px);
+}
+.reconnect-indicator__dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-waiting);
+}
+.reconnect-indicator[data-variant="offline"] .reconnect-indicator__dot {
+  background: var(--status-failed);
+}
+.reconnect-indicator__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reconnect-indicator { transition: none; }
+}
+
+.live-bar[data-collapsed="capsule"] .live-bar__elapsed {
+  opacity: 0;
+  flex-basis: 0;
+  max-width: 0;
+  pointer-events: none;
+}
+
+/* Android's chat header is a quiet, centered status control between two
+   circular chrome buttons. The Web keeps its own Home button on the left and
+   its existing More menu on the right, but moves the Live Bar status and click
+   target into this top control. Session/project/device identity is omitted;
+   the status is the only dynamic copy. */
+.chat-status-header .live-bar {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 360px;
+  min-height: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--ui-top-control-surface, var(--composer-panel-surface, var(--bg-secondary)));
+  box-shadow: var(--ui-top-control-shadow, 0 8px 24px color-mix(in srgb, var(--text) 5%, transparent));
+  font-size: 13px;
+  font-weight: 600;
+  gap: 8px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.chat-status-header .live-bar__orb {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+}
+.chat-status-header .live-bar__orb-svg {
+  display: none;
+}
+.chat-status-header .live-bar__orb::before {
+  content: "";
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--live-bar-orb-color, var(--text-muted));
+}
+.chat-status-header .live-bar[data-state="running"] .live-bar__orb::before {
+  animation: live-bar-header-dot-breathe 2.6s var(--motion-ease-standard, ease-in-out) infinite;
+}
+.chat-status-header .live-bar__label {
+  opacity: 1;
+  flex: 1 1 auto;
+  max-width: 100%;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.chat-status-header .live-bar__elapsed {
+  display: none;
+}
+.chat-status-header .live-bar[data-collapsed="capsule"] {
+  width: 100%;
+  max-width: 360px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  gap: 8px;
+  cursor: pointer;
+}
+.chat-status-header .live-bar[data-collapsed="capsule"] .live-bar__label {
+  opacity: 1;
+  flex: 1 1 auto;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+@keyframes live-bar-header-dot-breathe {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.18); opacity: 0.78; }
+}
+
+@media (max-width: 767px) {
+  .chat-status-header {
+    /* The status lane is the space between the two chrome controls. Using
+       matching insets makes its left and right breathing room identical even
+       though Web's leading capsule is wider than the More button. */
+    left: calc(8px + 82px + 6px);
+    right: calc(8px + 40px + 6px);
+    width: auto;
+    transform: none;
+  }
+
+  .chat-status-header .live-bar {
+    max-width: 260px;
+    min-height: 40px;
+    height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-status-header .live-bar[data-state="running"] .live-bar__orb::before {
+    animation: none;
+  }
+}

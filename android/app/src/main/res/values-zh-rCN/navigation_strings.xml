@@ -1,0 +1,12 @@
+<resources>
+    <string name="navigation_choose_computer">选择来源电脑</string>
+    <string name="navigation_cannot_open">无法打开此会话</string>
+    <string name="navigation_legacy_source">这条旧通知未标明电脑，请选择发送通知的电脑。</string>
+    <string name="navigation_no_computers">没有已配对电脑。请配对来源电脑后重新打开通知。</string>
+    <string name="navigation_target_missing">来源电脑已解除配对，此链接不能打开另一台电脑。</string>
+    <string name="navigation_session_missing">来源电脑上未找到此会话。</string>
+    <string name="navigation_not_authorized">请使用有效权限重新连接来源电脑，然后再次打开链接。</string>
+    <string name="navigation_invalid">导航请求无效或版本不受支持。</string>
+    <string name="navigation_unavailable">来源电脑暂不可达，或选择已变化。请重新打开链接以重试。</string>
+    <string name="navigation_close">关闭</string>
+</resources>

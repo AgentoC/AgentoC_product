@@ -1,0 +1,7 @@
+<resources>
+    <string name="api_confirm">Confirmar</string>
+    <string name="api_access_clear_confirm">¿Eliminar este registro revocado del dispositivo? El acceso ya se ha revocado.</string>
+    <string name="api_assistant_revoke_confirm">¿Revocar esta delegación del asistente? Se bloquearán los accesos posteriores, pero no se detendrá el trabajo ya aceptado por un ordenador ni se recuperarán los datos recibidos.</string>
+    <string name="api_capture_delete_confirm">¿Eliminar este borrador guardado del dispositivo? Esta acción no se puede deshacer.</string>
+    <string name="api_outputs_delete_confirm">¿Eliminar esta copia privada del teléfono? El archivo del ordenador original no se eliminará.</string>
+</resources>

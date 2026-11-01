@@ -1,0 +1,17 @@
+<resources>
+    <style name="Theme.Agentoc" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_canvas</item>
+    </style>
+
+    <!-- Step 8B: system SplashScreen (AndroidX core-splashscreen), S2 static candidate.
+         Full-color Symbol v1.1 on theme-aware background (light: app canvas; night:
+         #161B22), with platform-owned exit after local UI readiness. Bar-icon appearance is
+         pinned per mode so it is correct from the first splash frame, not only after
+         enableEdgeToEdge. -->
+    <style name="Theme.Agentoc.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_symbol</item>
+        <item name="postSplashScreenTheme">@style/Theme.Agentoc</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

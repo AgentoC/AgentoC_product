@@ -1,0 +1,15 @@
+@import url("chat-base.css");
+@import url("chat-sidebar.css");
+@import url("chat-messages.css");
+@import url("right-sidebar.css");
+@import url("workspace-file-reader.css");
+/* The server copies the page asset version onto bare imports. Keeping this
+   import unversioned prevents a stale fixed query from surviving a UI deploy. */
+@import url("chat-input.css");
+@import url("chat-run-sheet.css");
+@import url("chat-responsive.css");
+@import url("custom-select.css");
+@import url("chat-glass.css");
+@import url("chat-goal-ui.css");
+@import url("chat-sheet-actions.css?v=20260808-sheet-v9");
+@import url("chat-sidebar-motion.css?v=20260808");

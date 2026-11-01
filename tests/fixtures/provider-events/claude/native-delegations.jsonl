@@ -1,0 +1,6 @@
+{"type":"assistant","timestamp":1001,"message":{"content":[{"type":"tool_use","id":"task_parent","name":"Task","input":{"description":"Coordinate child work","child_session_id":"claude-parent-child"}}]}}
+{"type":"assistant","timestamp":1002,"message":{"content":[{"type":"tool_use","id":"task_nested","name":"Task","input":{"description":"Nested child work","child_session_id":"claude-nested-child","parent_delegation_id":"task_parent"}}]}}
+{"type":"assistant","timestamp":1003,"message":{"content":[{"type":"tool_use","id":"task_third","name":"Task","input":{"description":"Independent child work","child_session_id":"claude-third-child"}}]}}
+{"type":"user","timestamp":1004,"message":{"content":[{"type":"tool_result","tool_use_id":"task_nested","content":"child message: completed"}]}}
+{"type":"user","timestamp":1005,"message":{"content":[{"type":"tool_result","tool_use_id":"task_third","is_error":true,"content":"provider failure"}]}}
+{"type":"user","timestamp":1006,"message":{"content":[{"type":"tool_result","tool_use_id":"task_parent","content":"parent result"}]}}

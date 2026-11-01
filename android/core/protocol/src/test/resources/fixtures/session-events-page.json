@@ -1,0 +1,20 @@
+{
+  "sessionId": "ses_fixture",
+  "filter": "all",
+  "events": [
+    { "seq": 41, "type": "user_message", "requestId": "req_1", "text": "hello" },
+    { "seq": 42, "type": "assistant_delta", "requestId": "req_1", "text": "hi" },
+    { "seq": 43, "type": "assistant_completed", "requestId": "req_1", "text": "hi", "endSeq": 43 }
+  ],
+  "pagination": {
+    "limit": 50,
+    "direction": "after",
+    "afterSeq": 40,
+    "hasMoreBefore": false,
+    "hasMoreAfter": false,
+    "oldestSeq": 41,
+    "latestSeq": 43,
+    "totalEvents": 3
+  },
+  "latestSeq": 43
+}

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppFunctionAppMetadata xmlns:appfn="http://schemas.android.com/apk/androidx.appfunctions"
+    appfn:description="Route user-approved tasks to explicitly selected, owner-authorized paired computers. Discover available computers first, prepare a task before submission, and submit only after the user confirms. Use the same operation identifiers to check or recover an existing request; never create a replacement request after a lost response."
+    appfn:displayDescription="@string/app_function_app_display_description" />

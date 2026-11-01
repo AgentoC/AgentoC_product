@@ -1,0 +1,1992 @@
+/* Final surface pass -------------------------------------------------------
+   One UI-inspired, low-contrast glass: translucent where it is useful, with
+   even blur and no decorative sheen. The speed panel is intentionally absent
+   from every selector in this file. */
+
+:root {
+  --ui-glass-surface: color-mix(
+    in srgb,
+    var(--sys-surface-container-high, var(--surface-raised, var(--bg))) 76%,
+    transparent
+  );
+  --ui-glass-fallback: var(--sys-surface-container-high, var(--surface-raised, var(--bg)));
+  --ui-glass-shadow: 0 12px 30px color-mix(in srgb, var(--text) 8%, transparent);
+  --ui-menu-shadow: 0 4px 18px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --ui-top-control-surface: color-mix(in srgb, var(--bg-secondary) 96%, transparent);
+  --ui-top-control-surface-fallback: var(--bg-secondary);
+  --ui-top-control-hover-surface: color-mix(in srgb, var(--bg-secondary) 99%, transparent);
+  --ui-top-control-shadow: 0 8px 24px color-mix(in srgb, var(--text) 5%, transparent);
+  --ui-glass-blur: 22px;
+  --ui-control-radius: var(--m3-shape-medium, 12px);
+  --ui-menu-radius: 13px;
+  --ui-sheet-radius: 16px;
+  --ui-notification-brief-radius: 20px;
+  --ui-notification-detail-radius: var(--ui-sheet-radius, 16px);
+  --ui-notification-shadow: var(--ui-top-control-shadow);
+  --ui-notification-divider: color-mix(in srgb, var(--text) 12%, transparent);
+  --composer-panel-surface: #ffffff;
+}
+
+/* A glass surface should be soft and uniform, not a highlighted plastic card. */
+:root { --glass-sheen: none; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --composer-panel-surface: #151617;
+    --ui-top-control-surface: color-mix(in srgb, #0d0e0f 90%, transparent);
+    --ui-top-control-surface-fallback: #151617;
+    --ui-top-control-hover-surface: #1b1c1e;
+    --ui-top-control-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+    --ui-menu-shadow: 0 4px 20px rgba(0, 0, 0, 0.28), 0 1px 4px rgba(0, 0, 0, 0.16);
+  }
+}
+
+:root[data-theme="dark"] {
+  --composer-panel-surface: #151617;
+  --ui-top-control-surface: color-mix(in srgb, #0d0e0f 90%, transparent);
+  --ui-top-control-surface-fallback: #151617;
+  --ui-top-control-hover-surface: #1b1c1e;
+  --ui-top-control-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+  --ui-menu-shadow: 0 4px 20px rgba(0, 0, 0, 0.28), 0 1px 4px rgba(0, 0, 0, 0.16);
+}
+
+@supports not (background: color-mix(in srgb, white 50%, transparent)) {
+  :root { --ui-glass-surface: var(--ui-glass-fallback); }
+}
+
+/* Shared floating-material contract for menus and panels. */
+.composer-runtime-menu:not(.composer-runtime-speed-panel),
+.composer-permission-menu,
+.composer-add-menu,
+.msg-touch-menu,
+.custom-select-panel,
+.custom-select-wrap .cs-panel,
+.header-overflow-menu,
+.sidebar-workspace-popover,
+.queued-steer-menu,
+#composerAgentPanel,
+#composerConnectorPanel {
+  background: var(--ui-glass-surface) !important;
+  border: 0 !important;
+  border-radius: var(--ui-menu-radius) !important;
+  box-shadow: var(--ui-menu-shadow) !important;
+  -webkit-backdrop-filter: blur(var(--ui-glass-blur)) saturate(1.04) !important;
+  backdrop-filter: blur(var(--ui-glass-blur)) saturate(1.04) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Android's session menu uses a quiet elevated surface: no bevel, highlight,
+   or glossy gradient; blur is retained where the platform supports it. */
+.header-overflow-menu {
+  background: var(--ui-top-control-surface, var(--ui-top-control-surface-fallback)) !important;
+  box-shadow: var(--ui-menu-shadow) !important;
+  border: 0 !important;
+  border-radius: var(--ui-menu-radius) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Match Android's floating chrome: a near-opaque matte control with a very
+   soft ambient shadow. Keep the blur functional instead of painting a glossy
+   highlight or a hard opaque block. */
+.header-btn,
+.header-review-btn,
+.header-sidebar-btn,
+.header-refresh-btn,
+.header-more-btn,
+.goal-chip {
+  background: var(--ui-top-control-surface, var(--ui-top-control-surface-fallback)) !important;
+  box-shadow: var(--ui-top-control-shadow) !important;
+  -webkit-backdrop-filter: blur(var(--ui-glass-blur)) saturate(1.04) !important;
+  backdrop-filter: blur(var(--ui-glass-blur)) saturate(1.04) !important;
+}
+
+.header-btn:hover,
+.header-review-btn:hover,
+.header-sidebar-btn:hover,
+.header-refresh-btn:hover,
+.header-more-btn:hover,
+.goal-chip:hover {
+  background: var(--ui-top-control-hover-surface, var(--ui-top-control-surface-fallback)) !important;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--text) 6%, transparent) !important;
+}
+
+/* The menu and Home controls share one Android-like capsule. The children
+   stay transparent so there is one continuous surface and one soft shadow. */
+.header {
+  /* Let the low, broad control shadows settle into the chat canvas instead of
+     being cut by the 52px mobile header edge. Text and titles still own their
+     own ellipsis/overflow rules. */
+  overflow: visible !important;
+}
+.header-leading-actions {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+.header-leading-actions .header-btn--sessions,
+.header-leading-actions .header-btn--home {
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+.header-leading-actions .header-btn--sessions:hover,
+.header-leading-actions .header-btn--home:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent) !important;
+  box-shadow: none !important;
+}
+@media (min-width: 768px) {
+  body.sessions-sidebar-collapsed .header-leading-actions {
+    background: var(--ui-top-control-surface, var(--ui-top-control-surface-fallback)) !important;
+    box-shadow: var(--ui-top-control-shadow) !important;
+  }
+}
+@media (max-width: 767px) {
+  .header-leading-actions {
+    background: var(--ui-top-control-surface, var(--ui-top-control-surface-fallback)) !important;
+    box-shadow: var(--ui-top-control-shadow) !important;
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px))) {
+  .composer-runtime-menu:not(.composer-runtime-speed-panel),
+  .composer-permission-menu,
+  .composer-add-menu,
+  .msg-touch-menu,
+  .custom-select-panel,
+  .custom-select-wrap .cs-panel,
+  .header-overflow-menu,
+  .sidebar-workspace-popover,
+  #composerAgentPanel,
+  #composerConnectorPanel {
+    background: var(--ui-glass-fallback) !important;
+  }
+}
+
+/* Sheets use the large shape; ordinary menus use one control family. */
+.composer-runtime-menu.composer-menu--sheet,
+.composer-permission-menu.composer-menu--sheet {
+  border-radius: var(--ui-sheet-radius) !important;
+}
+
+.composer-add-menu-item,
+.msg-touch-menu button,
+.custom-select-wrap .cs-option,
+.custom-select-panel .cs-option {
+  border-radius: var(--m3-shape-small, 8px) !important;
+  box-shadow: none !important;
+}
+
+.composer-runtime-menu:not(.composer-runtime-speed-panel) .composer-runtime-option,
+.composer-permission-menu .composer-runtime-option {
+  border-radius: 0 !important;
+  width: 100% !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.composer-runtime-menu:not(.composer-runtime-speed-panel) .composer-runtime-option:hover:not(.active),
+.composer-runtime-menu:not(.composer-runtime-speed-panel) .composer-runtime-option:focus-visible:not(.active),
+.composer-permission-menu .composer-runtime-option:hover:not(.active),
+.composer-permission-menu .composer-runtime-option:focus-visible:not(.active),
+.composer-add-menu-item:hover,
+.composer-add-menu-item:focus-visible,
+.custom-select-wrap .cs-option:hover,
+.custom-select-wrap .cs-option.hover,
+.custom-select-panel .cs-option:hover,
+.custom-select-panel .cs-option.hover {
+  background: var(--m3-state-hover, color-mix(in srgb, var(--text) 7%, transparent)) !important;
+}
+
+/* The add sheet and panel frame retain their flat surface.
+   The runtime menu and permission menu use a unified frosted glass surface
+   with consistent rounded corners, scrollable options, and edge-to-edge items. */
+.composer-add-menu,
+.composer-add-panel,
+#composerAgentPanel,
+#composerConnectorPanel,
+.composer-add-panel-frame-wrap,
+.composer-add-panel-frame {
+  background: var(--composer-panel-surface) !important;
+  border-color: transparent !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.composer-runtime-menu:not(.composer-runtime-speed-panel),
+.composer-permission-menu {
+  border-radius: 16px !important;
+  border: 1px solid color-mix(in srgb, var(--border, rgba(125, 125, 125, 0.2)) 50%, transparent) !important;
+  background: color-mix(in srgb, var(--surface-raised, var(--bg-secondary)) 88%, transparent) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.25) !important;
+  backdrop-filter: blur(28px) saturate(1.25) !important;
+  box-shadow:
+    0 12px 38px rgba(0, 0, 0, 0.26),
+    0 2px 8px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 color-mix(in srgb, #fff 25%, transparent) !important;
+  overflow: hidden !important;
+  max-height: min(420px, calc(100dvh - 160px)) !important;
+  /* No `display` here: the shown/hidden contract lives in chat-input.css
+     (.composer-runtime-menu[hidden] { display: none !important }). This file
+     loads after chat-input.css, so an !important display here would win the
+     tie and the menu would stay painted while hidden — the clipped ghost
+     panel above the composer. Flex-column layout comes from the same base
+     rule whenever the menu is actually shown. */
+  flex-direction: column !important;
+  padding: 0 !important;
+}
+
+[data-theme="dark"] .composer-runtime-menu:not(.composer-runtime-speed-panel),
+[data-theme="dark"] .composer-permission-menu {
+  border: 1px solid color-mix(in srgb, var(--border, rgba(255, 255, 255, 0.14)) 65%, transparent) !important;
+  background: color-mix(in srgb, var(--surface-raised, #18181b) 86%, transparent) !important;
+  box-shadow:
+    0 12px 38px rgba(0, 0, 0, 0.38),
+    0 2px 8px rgba(0, 0, 0, 0.16),
+    inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent) !important;
+}
+
+.composer-runtime-view {
+  display: none;
+  flex-direction: column !important;
+  min-height: 0;
+  max-height: 100%;
+  width: 100%;
+  background: transparent !important;
+}
+.composer-runtime-view.active {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+}
+
+.composer-runtime-view-header {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  min-height: 44px !important;
+  padding: 0 14px !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--divider-subtle, var(--border)) 35%, transparent) !important;
+  background: color-mix(in srgb, var(--surface-raised, var(--bg-secondary)) 75%, transparent) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  backdrop-filter: blur(20px) !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+}
+
+[data-theme="dark"] .composer-runtime-view-header {
+  background: color-mix(in srgb, var(--surface-raised, #18181b) 75%, transparent) !important;
+}
+
+.composer-runtime-options,
+.composer-runtime-model-options,
+.composer-runtime-permission-options {
+  background: transparent !important;
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior: contain !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: color-mix(in srgb, var(--text) 22%, transparent) transparent !important;
+}
+
+.composer-runtime-options::-webkit-scrollbar {
+  width: 5px !important;
+}
+.composer-runtime-options::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text) 22%, transparent) !important;
+  border-radius: 999px !important;
+}
+.composer-runtime-options::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.composer-runtime-option {
+  width: 100% !important;
+  min-height: 42px !important;
+  padding: 9px 16px !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--text-secondary) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  text-align: left !important;
+  box-sizing: border-box !important;
+  cursor: pointer !important;
+  -webkit-tap-highlight-color: transparent !important;
+  transition: background 140ms ease, color 140ms ease !important;
+  position: relative !important;
+}
+
+.composer-runtime-option + .composer-runtime-option {
+  border-top: 1px solid color-mix(in srgb, var(--divider-subtle, var(--border)) 35%, transparent) !important;
+}
+
+.composer-runtime-option.active,
+.composer-runtime-option[aria-checked="true"] {
+  border-radius: 0 !important;
+  border: 0 !important;
+  outline: none !important;
+  background: color-mix(in srgb, var(--text) 8%, transparent) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] .composer-runtime-option.active,
+[data-theme="dark"] .composer-runtime-option[aria-checked="true"] {
+  background: color-mix(in srgb, var(--text) 10%, transparent) !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+
+.composer-runtime-option.active:hover {
+  background: color-mix(in srgb, var(--text) 12%, transparent) !important;
+}
+
+.composer-runtime-option-label {
+  font-size: 13.5px !important;
+  font-weight: 550 !important;
+  color: inherit !important;
+}
+
+.composer-runtime-option.active .composer-runtime-option-label {
+  font-weight: 600 !important;
+  color: var(--text) !important;
+}
+
+.composer-runtime-option-note {
+  font-size: 12px !important;
+  color: var(--text-muted) !important;
+  background: color-mix(in srgb, var(--text) 7%, transparent) !important;
+  padding: 2px 8px !important;
+  border-radius: 6px !important;
+  font-weight: 500 !important;
+}
+
+.composer-runtime-option.active .composer-runtime-option-note {
+  color: var(--text-muted) !important;
+  background: color-mix(in srgb, var(--text) 9%, transparent) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.composer-add-menu-item,
+.composer-add-panel-row {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.composer-runtime-model-btn {
+  background: var(--composer-panel-surface) !important;
+  box-shadow: none !important;
+}
+
+/* The plus and model controls are part of the composer, not elevated cards.
+   Reuse the exact same flat material so the compact capsule reads as one
+   object in light and dark mode. */
+.composer-action-btn--upload,
+.composer-runtime-btn:not(.composer-runtime-speed-btn),
+.composer-runtime-model-btn {
+  background: var(--composer-flat-fill, var(--composer-panel-surface)) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Keep the + affordance visually inside the capsule: no second surface or
+   border, while preserving its full touch target. */
+.composer-action-btn--upload {
+  margin-left: -4px;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.composer-action-btn--upload:hover,
+.composer-action-btn--upload:focus-visible {
+  background: color-mix(in srgb, var(--text) 6%, transparent) !important;
+  box-shadow: none !important;
+}
+
+/* Borderless controls; focus remains explicit and accessible. */
+.custom-select-wrap .cs-trigger,
+.custom-select-wrap.cs-full .cs-trigger,
+.composer-runtime-btn:not(.composer-runtime-speed-btn),
+.composer-permission-btn,
+.sidebar-search-input {
+  border: 0 !important;
+  border-radius: var(--ui-control-radius) !important;
+  box-shadow: none !important;
+}
+
+.custom-select-wrap .cs-trigger {
+  background: color-mix(in srgb, var(--surface-soft, var(--bg-tertiary)) 62%, transparent);
+}
+
+.custom-select-wrap .cs-trigger:hover,
+.custom-select-wrap.open .cs-trigger {
+  background: color-mix(in srgb, var(--surface-hover, var(--bg-tertiary)) 72%, transparent);
+}
+
+.custom-select-wrap .cs-trigger:focus-visible,
+.sidebar-search-input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent) !important;
+  outline-offset: 2px;
+}
+
+.custom-select-panel,
+.custom-select-wrap .cs-panel {
+  border-radius: var(--ui-menu-radius) !important;
+}
+
+/* Keep ordinary content tonal; status/error/focus rules elsewhere still win
+   because they use their own semantic selectors. */
+.thinking-block,
+.runtime-approval-summary {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* The mobile composer is one frosted object. Remove the diagonal sheen and
+   inset hairlines while retaining translucency and backdrop blur. */
+.input-wrapper::before {
+  display: none !important;
+}
+
+@media (max-width: 767px) {
+  .sidebar-overlay:hover,
+  .sidebar-overlay:focus-within {
+    width: var(--sidebar-width) !important;
+  }
+
+  .input-wrapper {
+    border: 0 !important;
+    box-shadow:
+      0 2px 8px color-mix(in srgb, #000 4%, transparent),
+      0 10px 24px color-mix(in srgb, #000 6%, transparent) !important;
+    background: var(--composer-flat-fill, var(--composer-glass-fill, var(--ui-glass-surface))) !important;
+    -webkit-backdrop-filter: blur(var(--ui-glass-blur)) saturate(1.04) !important;
+    backdrop-filter: blur(var(--ui-glass-blur)) saturate(1.04) !important;
+  }
+
+  /* Keep the compact and expanded states recognizably the same Android-like
+     flat material. Only the corner radius changes with the state. */
+  .input-area.composer-collapsed .input-wrapper {
+    border-radius: 999px !important;
+  }
+
+  .input-area.composer-expanded .input-wrapper {
+    border-radius: 20px !important;
+  }
+
+  .composer-runtime-menu:not(.composer-runtime-speed-panel),
+  .composer-permission-menu {
+    border-radius: var(--ui-sheet-radius) !important;
+  }
+}
+
+/* Composer and the return-to-latest control use the same ambient elevation as
+   the three floating chat-header controls. Their surfaces remain independent
+   so the composer keeps its existing flat translucent material. */
+.input-wrapper {
+  box-shadow: var(--ui-top-control-shadow) !important;
+}
+
+.scroll-to-bottom-fab {
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: var(--ui-top-control-surface, var(--ui-top-control-surface-fallback)) !important;
+  box-shadow: var(--ui-top-control-shadow) !important;
+  -webkit-backdrop-filter: blur(var(--ui-glass-blur)) saturate(1.04) !important;
+  backdrop-filter: blur(var(--ui-glass-blur)) saturate(1.04) !important;
+}
+
+.scroll-to-bottom-fab:hover,
+.scroll-to-bottom-fab:focus-visible {
+  background: var(--ui-top-control-hover-surface, var(--ui-top-control-surface-fallback)) !important;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--text) 6%, transparent) !important;
+}
+
+/* Message actions are compact, borderless, and low-distraction (ChatGPT style) */
+.msg-meta .msg-action-btn {
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: var(--text-muted) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.msg-meta .msg-action-btn:hover,
+.msg-meta .msg-action-btn:focus-visible {
+  background: var(--surface-hover, color-mix(in srgb, var(--text) 8%, transparent)) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+}
+
+.msg-meta .msg-action-btn:active {
+  background: color-mix(in srgb, var(--text) 12%, transparent) !important;
+  transform: scale(0.92) !important;
+}
+
+/* OneUI-inspired long-press context menu: flat borderless surface, edge-to-edge
+   row items, no dividing lines (pure seamless surface), and click-deepening tactile feedback. */
+.msg-touch-menu {
+  width: min(168px, calc(100vw - 28px)) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background: var(--composer-panel-surface, color-mix(in srgb, var(--surface-raised, var(--bg-secondary)) 94%, transparent)) !important;
+  border: 0 !important;
+  border-radius: 13px !important;
+  box-shadow: var(--ui-menu-shadow, 0 4px 18px rgba(0, 0, 0, 0.08)) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.15) !important;
+  backdrop-filter: blur(24px) saturate(1.15) !important;
+}
+
+.msg-touch-menu .msg-action-btn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  width: 100% !important;
+  min-height: 35px !important;
+  padding: 0 12px !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+  text-align: left !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  -webkit-tap-highlight-color: transparent !important;
+  touch-action: manipulation !important;
+  transition: background 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1), color 120ms ease !important;
+}
+
+.msg-touch-menu .msg-action-btn:hover,
+.msg-touch-menu .msg-action-btn:focus-visible {
+  background: color-mix(in srgb, var(--text) 7%, transparent) !important;
+  color: var(--text) !important;
+}
+
+.msg-touch-menu .msg-action-btn:active {
+  background: color-mix(in srgb, var(--text) 14%, transparent) !important;
+  transform: scale(0.985) !important;
+}
+
+.msg-touch-menu .msg-action-btn + .msg-action-btn {
+  border-top: none !important;
+}
+
+.msg-touch-menu .msg-action-btn .rl-icon {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+/* Unified OneUI menu item and popover row rules: edge-to-edge 100% width, 35px height,
+   no dividing lines, seamless flat surface with interactive click-deepening animation. */
+.header-overflow-menu-item,
+.composer-add-menu-item,
+.composer-runtime-option,
+.custom-select-panel .cs-option,
+.custom-select-wrap .cs-panel .cs-option,
+.queued-steer-menu-item {
+  width: 100% !important;
+  min-height: 35px !important;
+  padding: 0 12px !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+  text-align: left !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  -webkit-tap-highlight-color: transparent !important;
+  touch-action: manipulation !important;
+  transition: background 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1), color 120ms ease !important;
+  box-sizing: border-box !important;
+}
+
+.header-overflow-menu-item:hover,
+.header-overflow-menu-item:focus-visible,
+.composer-add-menu-item:hover,
+.composer-add-menu-item:focus-visible,
+.composer-add-menu-item.active,
+.composer-add-menu-item[aria-checked="true"],
+.composer-runtime-option:hover,
+.composer-runtime-option:focus-visible,
+.custom-select-panel .cs-option:hover,
+.custom-select-panel .cs-option:focus-visible,
+.custom-select-wrap .cs-panel .cs-option:hover,
+.custom-select-wrap .cs-panel .cs-option:focus-visible,
+.queued-steer-menu-item:hover,
+.queued-steer-menu-item:focus-visible {
+  background: color-mix(in srgb, var(--text) 7%, transparent) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+}
+
+.header-overflow-menu-item:active,
+.composer-add-menu-item:active,
+.composer-runtime-option:active,
+.custom-select-panel .cs-option:active,
+.custom-select-wrap .cs-panel .cs-option:active,
+.queued-steer-menu-item:active {
+  background: color-mix(in srgb, var(--text) 14%, transparent) !important;
+  transform: scale(0.985) !important;
+}
+
+.header-overflow-menu-item + .header-overflow-menu-item,
+.composer-add-menu-item + .composer-add-menu-item,
+.composer-runtime-option + .composer-runtime-option,
+.custom-select-panel .cs-option + .custom-select-panel .cs-option,
+.custom-select-wrap .cs-panel .cs-option + .custom-select-wrap .cs-panel .cs-option,
+.queued-steer-menu-item + .queued-steer-menu-item {
+  border-top: none !important;
+}
+
+.header-overflow-menu-item .rl-icon,
+.header-overflow-menu-icon .rl-icon,
+.composer-add-menu-item .rl-icon,
+.composer-runtime-option .rl-icon,
+.custom-select-panel .cs-option .rl-icon,
+.custom-select-wrap .cs-panel .cs-option .rl-icon,
+.queued-steer-menu-item .rl-icon {
+  width: 14px !important;
+  height: 14px !important;
+  flex-shrink: 0 !important;
+}
+
+.header-overflow-menu-icon {
+  flex: 0 0 16px !important;
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.composer-add-menu-title,
+.composer-runtime-menu-title {
+  padding: 8px 12px 6px !important;
+  border-bottom: none !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--text) !important;
+  margin: 0 !important;
+}
+
+.composer-runtime-options {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Modals & Sheets: zero inset stroke, 16px unified radius, subtle flat shadow */
+.modal {
+  border: 0 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Drawer Containers (抽屉容器) OneUI Standard:
+   16px sheet radius, 0 border, 0 inset stroke, flat integrated surfaces,
+   full-width edge-to-edge items with 0 dividing lines and tactile click-deepening. */
+.sidebar-action-sheet-panel {
+  border: 0 !important;
+  border-radius: 16px 16px 0 0 !important;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.12), 0 -2px 8px rgba(0, 0, 0, 0.04) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background: var(--ui-glass-surface, var(--surface-raised, var(--bg))) !important;
+  -webkit-backdrop-filter: blur(var(--ui-glass-blur, 22px)) saturate(1.04) !important;
+  backdrop-filter: blur(var(--ui-glass-blur, 22px)) saturate(1.04) !important;
+}
+
+.sidebar-action-sheet-panel::before {
+  width: 36px !important;
+  height: 4px !important;
+  margin: 8px auto 6px !important;
+  border-radius: 999px !important;
+  background: var(--text-muted) !important;
+  opacity: 0.35 !important;
+}
+
+.sidebar-action-sheet-header {
+  padding: 8px 16px 4px !important;
+  border: 0 !important;
+}
+
+.sidebar-action-sheet-actions {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.sidebar-action-sheet-action {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  width: 100% !important;
+  min-height: 44px !important;
+  padding: 0 16px !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  text-align: left !important;
+  cursor: pointer !important;
+  -webkit-tap-highlight-color: transparent !important;
+  touch-action: manipulation !important;
+  transition: background 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1), color 120ms ease !important;
+}
+
+.sidebar-action-sheet-action + .sidebar-action-sheet-action {
+  border-top: none !important;
+}
+
+.sidebar-action-sheet-action:hover,
+.sidebar-action-sheet-action:focus-visible {
+  background: color-mix(in srgb, var(--text) 7%, transparent) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+}
+
+.sidebar-action-sheet-action:active:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 14%, transparent) !important;
+  transform: scale(0.985) !important;
+}
+
+.sidebar-action-sheet-action.is-danger {
+  color: var(--error) !important;
+}
+
+.sidebar-action-sheet-action.is-danger:hover,
+.sidebar-action-sheet-action.is-danger:focus-visible {
+  background: color-mix(in srgb, var(--error) 10%, transparent) !important;
+  color: var(--error) !important;
+}
+
+.sidebar-action-sheet-action.is-danger:active:not(:disabled) {
+  background: color-mix(in srgb, var(--error) 18%, transparent) !important;
+  transform: scale(0.985) !important;
+}
+
+/* Run Sheet Drawer (Standard Container Alignment — No nested cards, seamless edge-to-edge items) */
+.run-sheet {
+  border-top-left-radius: 16px !important;
+  border-top-right-radius: 16px !important;
+  border: 0 !important;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12) !important;
+  background: var(--composer-panel-surface, var(--surface-raised, #ffffff)) !important;
+}
+
+.run-sheet__header {
+  border-bottom: none !important;
+  box-shadow: none !important;
+}
+
+.run-sheet__header::before {
+  opacity: 0.35 !important;
+}
+
+.run-sheet__close,
+.run-sheet__reader-back {
+  border: 0 !important;
+  border-radius: 9999px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: background 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1), color 120ms ease !important;
+}
+
+.run-sheet__list,
+.run-sheet__md-list,
+.run-sheet-list {
+  gap: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.run-sheet__file,
+.run-sheet__plan-item,
+.run-sheet__md-file,
+.run-sheet__md-button,
+.run-sheet__now-action,
+.run-sheet__reader-action,
+.run-sheet__item,
+.run-sheet-status-item {
+  width: 100% !important;
+  border: 0 !important;
+  border-top: none !important;
+  border-bottom: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 12px 20px !important;
+  margin: 0 !important;
+  transition: background 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1), color 120ms ease !important;
+}
+
+.run-sheet__file + .run-sheet__file,
+.run-sheet__plan-item + .run-sheet__plan-item,
+.run-sheet__md-file + .run-sheet__md-file,
+.run-sheet__item + .run-sheet__item,
+.run-sheet-status-item + .run-sheet-status-item {
+  border-top: none !important;
+}
+
+.run-sheet__close:hover,
+.run-sheet__reader-back:hover,
+.run-sheet__file:hover,
+.run-sheet__plan-item:hover,
+.run-sheet__now-action:hover,
+.run-sheet__md-button:hover,
+.run-sheet__reader-action:hover,
+.run-sheet__item:hover,
+.run-sheet-status-item:hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent) !important;
+}
+
+.run-sheet__close:active,
+.run-sheet__reader-back:active,
+.run-sheet__file:active,
+.run-sheet__plan-item:active,
+.run-sheet__now-action:active,
+.run-sheet__md-button:active,
+.run-sheet__reader-action:active,
+.run-sheet__item:active,
+.run-sheet-status-item:active {
+  background: color-mix(in srgb, var(--text) 14%, transparent) !important;
+  transform: scale(0.985) !important;
+}
+
+/* Decision Sheet Drawer (Standard Container Alignment & Capsule Actions) */
+#decisionSheet {
+  border-radius: 16px 16px 0 0 !important;
+  border: 0 !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12) !important;
+}
+
+.decision-sheet__action,
+#decisionSheet .decision-sheet__action,
+#decisionSheet .oneui-notification__action,
+#decisionSheet .decision-sheet__plan-editor-send {
+  min-height: 40px !important;
+  border-radius: 9999px !important;
+  border: 0 !important;
+  padding: 0 20px !important;
+  font-weight: 600 !important;
+  transition: background 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1), color 120ms ease, opacity 120ms ease !important;
+}
+
+.decision-sheet__action:active,
+#decisionSheet .decision-sheet__action:active,
+#decisionSheet .oneui-notification__action:active,
+#decisionSheet .decision-sheet__plan-editor-send:active {
+  background: color-mix(in srgb, var(--text) 14%, transparent) !important;
+  transform: scale(0.97) !important;
+}
+
+#decisionSheet .oneui-notification__batch.decision-sheet__batch-section {
+  border-top: none !important;
+}
+
+/* Composer Agent & Connector Drawers/Panels */
+#composerAgentPanel,
+#composerConnectorPanel {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+#composerAgentPanel .composer-agent-list-item,
+#composerConnectorPanel .composer-connector-list-item {
+  width: 100% !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: background 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1), color 120ms ease !important;
+}
+
+#composerAgentPanel .composer-agent-list-item + .composer-agent-list-item,
+#composerConnectorPanel .composer-connector-list-item + .composer-connector-list-item {
+  border-top: none !important;
+}
+
+#composerAgentPanel .composer-agent-list-item:hover,
+#composerConnectorPanel .composer-connector-list-item:hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent) !important;
+}
+
+#composerAgentPanel .composer-agent-list-item:active,
+#composerConnectorPanel .composer-connector-list-item:active {
+  background: color-mix(in srgb, var(--text) 14%, transparent) !important;
+  transform: scale(0.985) !important;
+}
+
+#composerAgentPanel .composer-agent-list-item.is-selected {
+  background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
+}
+
+/* Mobile Bottom Sheets. The runtime/permission pickers are NOT in this list:
+   on mobile the portal anchors their lower edge above the composer trigger
+   (they float, they do not dock to the screen bottom), so the flat-top sheet
+   radius would leave their bottom corners square in mid-air. Their uniform
+   radius comes from the `--ui-sheet-radius` rule in the composer block above. */
+@media (max-width: 767px) {
+  .sidebar-action-sheet-panel,
+  .composer-add-menu.composer-menu--sheet,
+  .header-overflow-menu.composer-menu--sheet,
+  #goalSheet .modal {
+    border-radius: 16px 16px 0 0 !important;
+    border: 0 !important;
+  }
+}
+
+/* ==========================================================================
+   Stream Cards & Containers: OneUI Standard Container surface, capsule buttons,
+   and un-nested seamless layout (no card-in-card)
+   ========================================================================== */
+
+.plan-card,
+.tool-card,
+.plan-approval-card,
+.runtime-approval-card {
+  background: var(--composer-panel-surface, #ffffff) !important;
+  border: 0 !important;
+  border-radius: 13px !important;
+  box-shadow: var(--ui-menu-shadow, 0 4px 18px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04)) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.15) !important;
+  backdrop-filter: blur(24px) saturate(1.15) !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* Plan Card & Approval Card Typography and Layout */
+.plan-card {
+  padding: 0 !important;
+  margin: 10px 0 14px !important;
+}
+
+.plan-card__header {
+  padding: 14px 16px 8px !important;
+  background: transparent !important;
+}
+
+.plan-card__label {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: var(--text-secondary) !important;
+  margin-bottom: 2px !important;
+}
+
+.plan-card__title {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: var(--text) !important;
+  line-height: 1.35 !important;
+}
+
+.plan-card__body {
+  padding: 4px 16px 14px !important;
+}
+
+/* Plan Card Action Row & Capsule (Pill) Buttons */
+.plan-card__actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 0 16px 14px !important;
+  margin: 10px 0 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.plan-card__action,
+.plan-approval-card .plan-card__action,
+.runtime-approval-card__action {
+  min-height: 38px !important;
+  padding: 0 20px !important;
+  border-radius: 9999px !important; /* Authentic capsule / pill button */
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  border: 0 !important;
+  cursor: pointer !important;
+  text-align: center !important;
+  justify-content: center !important;
+  align-items: center !important;
+  display: inline-flex !important;
+  touch-action: manipulation !important;
+  -webkit-tap-highlight-color: transparent !important;
+  transition: background 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1), opacity 120ms ease !important;
+}
+
+/* Primary Capsule Button (Execute / Approve) */
+.plan-card__action[data-plan-action="execute"],
+.plan-approval-card .plan-card__action[data-approval-decision="approve"],
+.runtime-approval-card__action[data-approval-decision="approve"] {
+  background: var(--text) !important;
+  color: var(--composer-panel-surface, #ffffff) !important;
+}
+
+.plan-card__action[data-plan-action="execute"]:hover:not(:disabled),
+.plan-approval-card .plan-card__action[data-approval-decision="approve"]:hover:not(:disabled) {
+  opacity: 0.9 !important;
+}
+
+.plan-card__action[data-plan-action="execute"]:active:not(:disabled),
+.plan-approval-card .plan-card__action[data-approval-decision="approve"]:active:not(:disabled) {
+  transform: scale(0.97) !important;
+  opacity: 0.8 !important;
+}
+
+/* Secondary Capsule Button (Later / Dismiss / Modify) */
+.plan-card__action:not([data-plan-action="execute"]):not([data-approval-decision="approve"]):not([data-approval-decision="deny"]) {
+  background: color-mix(in srgb, var(--text) 8%, transparent) !important;
+  color: var(--text) !important;
+}
+
+.plan-card__action:not([data-plan-action="execute"]):not([data-approval-decision="approve"]):not([data-approval-decision="deny"]):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 12%, transparent) !important;
+}
+
+.plan-card__action:not([data-plan-action="execute"]):not([data-approval-decision="approve"]):not([data-approval-decision="deny"]):active:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 16%, transparent) !important;
+  transform: scale(0.97) !important;
+}
+
+/* Danger / Deny Capsule Button */
+.plan-approval-card .plan-card__action[data-approval-decision="deny"],
+.runtime-approval-card__action[data-approval-decision="deny"] {
+  background: color-mix(in srgb, var(--error) 12%, transparent) !important;
+  color: var(--error) !important;
+}
+
+.plan-approval-card .plan-card__action[data-approval-decision="deny"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--error) 18%, transparent) !important;
+}
+
+.plan-approval-card .plan-card__action[data-approval-decision="deny"]:active:not(:disabled) {
+  background: color-mix(in srgb, var(--error) 24%, transparent) !important;
+  transform: scale(0.97) !important;
+}
+
+/* ==========================================================================
+   Tool Execution Card: Unified OneUI Surface (No Card-Inside-Card Nesting)
+   ========================================================================== */
+
+.tool-card {
+  padding: 0 !important;
+  margin: 8px 0 12px !important;
+  overflow: hidden !important;
+}
+
+.tool-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-height: 38px !important;
+  padding: 0 14px !important;
+  background: transparent !important;
+  border: 0 !important;
+  font-size: 12.5px !important;
+  color: var(--text) !important;
+  cursor: pointer !important;
+  transition: background 120ms ease !important;
+  -webkit-tap-highlight-color: transparent !important;
+  touch-action: manipulation !important;
+}
+
+.tool-header:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent) !important;
+}
+
+.tool-header:active {
+  background: color-mix(in srgb, var(--text) 10%, transparent) !important;
+}
+
+.tool-header .tool-name {
+  font-family: var(--font-mono, ui-monospace, 'SF Mono', Monaco, Consolas, monospace) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--text) !important;
+}
+
+.tool-header .tool-toggle {
+  margin-left: auto !important;
+  font-size: 10px !important;
+  color: var(--text-muted) !important;
+  transition: transform 150ms ease !important;
+}
+
+/* Completely eliminate nested card appearance in tool body */
+.tool-body {
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+}
+
+.tool-body.expanded {
+  padding-bottom: 0 !important;
+}
+
+.tool-body pre {
+  background: color-mix(in srgb, var(--text) 3.5%, transparent) !important;
+  border: 0 !important;
+  border-radius: 0 !important; /* Zero corner radius: flush with card body */
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 10px 14px 12px 14px !important;
+  font-family: var(--font-mono, ui-monospace, 'SF Mono', Monaco, Consolas, monospace) !important;
+  font-size: 11.5px !important;
+  line-height: 1.55 !important;
+  color: var(--text-secondary) !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  box-sizing: border-box !important;
+}
+
+.tool-card .tool-result {
+  background: color-mix(in srgb, var(--text) 3.5%, transparent) !important;
+  border: 0 !important;
+  border-radius: 0 !important; /* Zero corner radius: flush with card body */
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 10px 14px 12px 14px !important;
+  font-family: var(--font-mono, ui-monospace, 'SF Mono', Monaco, Consolas, monospace) !important;
+  font-size: 11.5px !important;
+  line-height: 1.55 !important;
+  color: var(--text-secondary) !important;
+  box-sizing: border-box !important;
+}
+
+.settings-group-card {
+  border: 0 !important;
+  border-radius: 13px !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05) !important;
+}
+
+.settings-row + .settings-row {
+  border-top: none !important;
+}
+
+.settings-row:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent) !important;
+}
+
+.settings-row:active {
+  background: color-mix(in srgb, var(--text) 10%, transparent) !important;
+}
+
+/* Toasts are transient feedback, so they share the quiet floating material
+   used by the header controls. Keep the semantic level as a small edge cue
+   instead of turning the whole surface into an error or warning banner. */
+.system-toast {
+  min-height: 48px !important;
+  padding: 10px 20px !important;
+  border: 0 !important;
+  border-radius: 9999px !important;
+  background: var(--ui-top-control-surface, var(--sys-surface-container-high)) !important;
+  color: var(--sys-on-surface, var(--text)) !important;
+  box-shadow: var(--ui-notification-shadow, var(--m3-elevation-2)) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  transition: transform 140ms ease, opacity 180ms ease, background 120ms ease, filter 120ms ease !important;
+}
+
+.system-toast[data-level="error"] {
+  background: var(--ui-top-control-surface, var(--sys-surface-container-high)) !important;
+  color: var(--status-failed, #dc2626) !important;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--status-failed, #dc2626) 20%, transparent), 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+}
+
+.system-toast[data-level="warn"] {
+  background: var(--ui-top-control-surface, var(--sys-surface-container-high)) !important;
+  color: var(--warning, #d97706) !important;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--warning, #d97706) 20%, transparent), 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+}
+
+.system-toast:active {
+  transform: scale(0.975) !important;
+}
+
+/* Notification controls are CSS surfaces, not platform-native widgets. Reset
+   the browser painting layer so mobile Safari/Chrome cannot introduce a
+   different bevel, gradient, or control chrome than the desktop surface. */
+.system-toast,
+.oneui-notification__close,
+.oneui-notification__summary,
+.oneui-notification__action,
+.oneui-notification__choice,
+.oneui-notification__optrow,
+.oneui-notification__answer-input,
+.oneui-notification__answer-deny {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+.system-toast:hover,
+.system-toast:focus-visible {
+  background: var(--ui-top-control-hover-surface, var(--ui-top-control-surface-fallback, var(--sys-surface-container-highest))) !important;
+}
+
+.system-toast[data-level="error"]:hover,
+.system-toast[data-level="error"]:focus-visible {
+  background: color-mix(in srgb, var(--ui-top-control-hover-surface, var(--bg-secondary)) 92%, var(--error) 8%) !important;
+}
+
+.system-toast[data-level="warn"]:hover,
+.system-toast[data-level="warn"]:focus-visible {
+  background: color-mix(in srgb, var(--ui-top-control-hover-surface, var(--bg-secondary)) 92%, var(--warning) 8%) !important;
+}
+
+@supports not ((backdrop-filter: blur(1px))) {
+  .system-toast {
+    background: var(--ui-top-control-surface-fallback, var(--sys-surface-container-high)) !important;
+  }
+
+  .system-toast[data-level="error"] {
+    background: color-mix(in srgb, var(--ui-top-control-surface-fallback, var(--bg-secondary)) 92%, var(--error) 8%) !important;
+  }
+
+  .system-toast[data-level="warn"] {
+    background: color-mix(in srgb, var(--ui-top-control-surface-fallback, var(--bg-secondary)) 92%, var(--warning) 8%) !important;
+  }
+}
+
+/* Notification/chat visual convergence -----------------------------------
+   Brief attention notices are a floating control in the chat hierarchy, not
+   a separate modal language. Keep the existing responsive rail and glass
+   parameters, but share the chat shape, shadow, type scale, and quiet state
+   treatment. Detailed notices retain the sheet shape because they contain a
+   real scrolling action scope. */
+#attentionPopupHost .oneui-notification {
+  border: 0 !important;
+  border-radius: var(--ui-notification-brief-radius) !important;
+  background: var(--ui-top-control-surface, var(--sys-surface-container-high)) !important;
+  box-shadow: var(--ui-notification-shadow) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+#attentionPopupHost .oneui-notification.oneui-notification--detailed {
+  border-radius: var(--ui-notification-detail-radius) !important;
+}
+
+#attentionPopupHost .oneui-notification__header {
+  padding: 14px 16px 8px !important;
+  background: transparent !important;
+}
+
+#attentionPopupHost .oneui-notification__footer {
+  padding: 8px 16px max(12px, env(safe-area-inset-bottom, 0px)) !important;
+  background: transparent !important;
+}
+
+#attentionPopupHost .oneui-notification__title {
+  color: var(--text) !important;
+  font-family: var(--font-ui) !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  line-height: 21px !important;
+}
+
+#attentionPopupHost .oneui-notification__session,
+#attentionPopupHost .oneui-notification__brief,
+#attentionPopupHost .oneui-notification__message,
+#attentionPopupHost .oneui-notification__detail-value,
+#attentionPopupHost .oneui-notification__code {
+  font-family: var(--font-ui) !important;
+}
+
+#attentionPopupHost .oneui-notification__action {
+  min-height: 48px !important;
+  border: 0 !important;
+  border-radius: var(--m3-shape-full) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  transition: transform 120ms ease, filter 120ms ease, background 120ms ease !important;
+}
+
+#attentionPopupHost .oneui-notification__action:active:not(:disabled) {
+  transform: scale(0.97) !important;
+  filter: brightness(0.92) !important;
+}
+
+#attentionPopupHost .oneui-notification__detail,
+#attentionPopupHost .oneui-notification__choice,
+#attentionPopupHost .oneui-notification__optrow {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#attentionPopupHost .oneui-notification__detail {
+  border-radius: 0 !important;
+}
+
+#attentionPopupHost .oneui-notification__choices {
+  margin-top: 8px !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+#attentionPopupHost .oneui-notification__choice,
+#attentionPopupHost .oneui-notification__optrow {
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+  min-height: 34px !important;
+  margin: 1px 0 !important;
+  padding: 6px 12px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--text-secondary, var(--oneui-muted)) !important;
+  font-size: 13px !important;
+  line-height: 20px !important;
+  text-align: left !important;
+  transition: background 120ms ease, color 120ms ease !important;
+}
+
+#attentionPopupHost .oneui-notification__choice:hover,
+#attentionPopupHost .oneui-notification__choice:focus-visible,
+#attentionPopupHost .oneui-notification__optrow:hover,
+#attentionPopupHost .oneui-notification__optrow:focus-visible {
+  background: color-mix(in srgb, var(--text) 4%, transparent) !important;
+  color: var(--text) !important;
+}
+
+#attentionPopupHost .oneui-notification__choice:active,
+#attentionPopupHost .oneui-notification__optrow:active {
+  background: color-mix(in srgb, var(--text) 10%, transparent) !important;
+}
+
+#attentionPopupHost .oneui-notification__choice.is-selected,
+#attentionPopupHost .oneui-notification__choice[aria-selected="true"] {
+  border-radius: 0 !important;
+  background: color-mix(in srgb, var(--text) 7%, transparent) !important;
+  color: var(--text) !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+#attentionPopupHost .oneui-notification__answer-input {
+  border: 0 !important;
+  border-radius: 9999px !important;
+  background: color-mix(in srgb, var(--text) 6%, transparent) !important;
+}
+
+#attentionPopupHost .oneui-notification__batch {
+  border-top: none !important;
+}
+
+/* Session error container convergence (OneUI standard) */
+.messages-session-error__surface {
+  border: 0 !important;
+  border-radius: 16px !important;
+  background: var(--ui-top-control-surface, var(--sys-surface-container-high)) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06) !important;
+}
+
+.messages-session-error__retry {
+  border: 0 !important;
+  border-radius: 9999px !important;
+  min-height: 40px !important;
+  padding: 8px 18px !important;
+  background: var(--status-failed, #dc2626) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--status-failed, #dc2626) 32%, transparent) !important;
+  transition: transform 120ms ease, filter 120ms ease, background 120ms ease !important;
+}
+
+.messages-session-error__retry:hover {
+  filter: brightness(1.08) !important;
+}
+
+.messages-session-error__retry:active:not(:disabled) {
+  transform: scale(0.96) !important;
+  filter: brightness(0.92) !important;
+}
+
+/* Modal dialog container and capsule buttons convergence */
+.modal {
+  border: 0 !important;
+  border-radius: 16px !important;
+  background: #ffffff !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+:root[data-theme="dark"] .modal {
+  background: #18181b !important;
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="amber"]) .modal {
+    background: #18181b !important;
+    box-shadow: 0 24px 56px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+  }
+}
+
+.modal-header {
+  border-bottom: none !important;
+}
+
+.modal-footer {
+  border-top: none !important;
+}
+
+.modal-btn {
+  border: 0 !important;
+  border-radius: 9999px !important;
+  min-height: 40px !important;
+  padding: 8px 20px !important;
+  transition: transform 120ms ease, filter 120ms ease, background 120ms ease, color 120ms ease !important;
+}
+
+.modal-btn:hover {
+  box-shadow: none !important;
+  filter: brightness(1.06) !important;
+}
+
+.modal-btn:active {
+  transform: scale(0.96) !important;
+  filter: brightness(0.92) !important;
+}
+
+.modal-close {
+  border: 0 !important;
+  border-radius: 9999px !important;
+  transition: transform 120ms ease, background 120ms ease, color 120ms ease !important;
+}
+
+.modal-close:active {
+  transform: scale(0.94) !important;
+}
+
+/* Failed message action buttons capsule convergence */
+.msg-failed-actions button {
+  border-radius: 9999px !important;
+  transition: transform 120ms ease, filter 120ms ease, background 120ms ease, color 120ms ease !important;
+}
+
+.msg-failed-actions button:active {
+  transform: scale(0.96) !important;
+  filter: brightness(0.92) !important;
+}
+
+/* Mobile transcript bubbles are intentionally flat. Keep the existing
+   platform-independent tone and shape, but remove every material layer that
+   can read as a raised/glass surface: border, elevation, sheen, and blur. */
+@media (max-width: 767px) {
+  .msg-user-bubble,
+  .msg-user-bubble.msg-failed {
+    background: var(--user-bubble) !important;
+    background-image: none !important;
+    border: 0 !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+/* ==========================================================================
+   Standard Container & Control Surface Global Convergence Contract
+   Aligns all remaining panels, sidebars, workbench, selectors, and controls
+   with the Chat Page OneUI / Material Finish standard:
+   1. Zero Borders (border: 0 !important; no fake box-shadow inset borders)
+   2. Standard Radius Hierarchy (16px sheets/drawers/cards, 9999px pills/buttons/triggers)
+   3. No Hard Dividers (headers, tabs, footers are seamless)
+   4. Single-layer Continuous Surfaces (anti-clashing, solid, no cards-in-cards)
+   ========================================================================== */
+
+/* 1. Universal Pill Action Buttons & Dropdown Triggers */
+.cs-trigger,
+.custom-select-wrap .cs-trigger,
+.custom-select-wrap.cs-full .cs-trigger,
+.custom-select-wrap.cs-full-bg .cs-trigger,
+.custom-select-wrap.cs-browser .cs-trigger,
+.sidebar-workspace-confirm,
+.cross-device-action,
+.settings-row-button,
+.settings-app-btn,
+.workspace-file-reader-btn,
+.organization-inspector-refresh,
+.organization-node-open,
+.workbench-inspector-back,
+.workbench-inspector-close,
+.workbench-inspector-tab,
+.right-sidebar-back,
+.right-sidebar-close,
+.cross-device-close,
+.modal-close,
+.goal-sheet-close {
+  border: 0 !important;
+  border-radius: 9999px !important;
+}
+
+/* Universal Close Controls (Standard Capsule & Vector SVG Icon) */
+.cross-device-close,
+.modal-close,
+.goal-sheet-close,
+.workbench-inspector-close,
+.workspace-file-reader-close,
+.right-sidebar-close {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 9999px !important;
+  background: color-mix(in srgb, var(--text) 7%, transparent) !important;
+  color: var(--text-secondary) !important;
+  cursor: pointer !important;
+  box-shadow: none !important;
+  outline: none !important;
+  transition: transform 120ms ease, background 120ms ease, color 120ms ease !important;
+}
+
+.cross-device-close:hover,
+.modal-close:hover,
+.goal-sheet-close:hover,
+.workbench-inspector-close:hover,
+.workspace-file-reader-close:hover,
+.right-sidebar-close:hover {
+  background: color-mix(in srgb, var(--text) 14%, transparent) !important;
+  color: var(--text) !important;
+}
+
+.cross-device-close:active,
+.modal-close:active,
+.goal-sheet-close:active,
+.workbench-inspector-close:active,
+.workspace-file-reader-close:active,
+.right-sidebar-close:active {
+  transform: scale(0.92) !important;
+}
+
+.cross-device-close .rl-icon,
+.cross-device-close svg,
+.modal-close .rl-icon,
+.modal-close svg,
+.goal-sheet-close .rl-icon,
+.goal-sheet-close svg,
+.workbench-inspector-close .rl-icon,
+.workbench-inspector-close svg,
+.workspace-file-reader-close .rl-icon,
+.workspace-file-reader-close svg,
+.right-sidebar-close .rl-icon,
+.right-sidebar-close svg {
+  width: 16px !important;
+  height: 16px !important;
+  stroke: currentColor !important;
+  stroke-width: 2 !important;
+  fill: none !important;
+  display: block !important;
+}
+
+/* Card Internal Breathing Room: Guarantee text never touches container boundaries */
+.settings-group-card {
+  padding: 18px 20px !important;
+  box-sizing: border-box !important;
+}
+
+.settings-group-card:has(.settings-row) {
+  padding: 6px 0 !important;
+}
+
+.settings-group-card .settings-row {
+  padding: 13px 20px !important;
+  min-height: 56px !important;
+}
+
+.settings-group-card .settings-row:first-child {
+  padding-top: 16px !important;
+}
+
+.settings-group-card .settings-row:last-child {
+  padding-bottom: 16px !important;
+}
+
+.settings-group-title {
+  margin: 0 0 6px 0 !important;
+  padding: 0 4px 4px !important;
+  color: var(--text-secondary) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+}
+
+.settings-group-description {
+  margin: 0 0 16px 0 !important;
+  padding: 0 4px !important;
+  font-size: 12px !important;
+  color: var(--text-secondary) !important;
+  line-height: 1.45 !important;
+}
+
+/* 2. Seamless Header & Section Dividers */
+.right-sidebar-header,
+.workbench-inspector-header,
+.workbench-inspector-tabs,
+.organization-inspector-header,
+.cross-device-tabs,
+.workspace-file-reader-header,
+.workspace-file-reader-search {
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+/* 3. Standard Container Radii & Surfaces */
+.right-sidebar-big-button,
+.workbench-status-card,
+.workbench-outcome-card,
+.cross-device-card,
+.cross-device-sheet,
+.settings-group-card,
+.home-overview-stat,
+.home-section--focus,
+.provider-helper-card {
+  border: 0 !important;
+  border-radius: 16px !important;
+}
+
+/* 4. Single-layer Sub-items (Eliminate cards-in-cards & fake borders) */
+.organization-summary-item,
+.organization-phase-row,
+.organization-node-row,
+.organization-blocker-row,
+.workbench-stat,
+.workbench-file-row,
+.workbench-context-list li,
+.workbench-session-link,
+.cross-device-device-row,
+.cross-device-history-row {
+  border: 0 !important;
+  border-left: 0 !important;
+  box-shadow: none !important;
+}
+
+/* 5. Solid Surface & Anti-Clash Tone Guarantees */
+:root[data-theme="dark"] .cross-device-sheet,
+:root[data-theme="dark"] .right-sidebar,
+:root[data-theme="dark"] .workbench-inspector {
+  background: #18181b !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="amber"]) .cross-device-sheet,
+  :root:not([data-theme="light"]):not([data-theme="amber"]) .right-sidebar,
+  :root:not([data-theme="light"]):not([data-theme="amber"]) .workbench-inspector {
+    background: #18181b !important;
+  }
+}
+
+:root[data-theme="light"] .cross-device-sheet,
+:root[data-theme="light"] .right-sidebar,
+:root[data-theme="light"] .workbench-inspector {
+  background: #ffffff !important;
+}
+
+/* 6. Sidebar L1 (Projects) & L2 (Sessions) Standard Container Convergence
+   - Zero Borders: border-right: 0, no divider borders.
+   - Standard Radius Hierarchy: 16px popovers, 10px-12px list rows, 9999px pills/triggers, 50% circle icon buttons.
+   - Flat Single-layer Structure: eliminate cards-in-cards and balloon puffiness.
+   - Refined Selected State: compact height (min-height 40-42px), clean container tint, 0 box-shadow.
+   - Restored Attention Section Headers: "运行中" / "最近会话" visible and well-proportioned.
+   - 50% Circular Icon Buttons: clean vector SVG, no broken characters. */
+
+.sidebar {
+  border-right: 0 !important;
+}
+
+.sidebar-app-bar,
+.sidebar-project-header,
+.sidebar-bottom-actions {
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+/* Universal Capsule Controls & Pills in Sidebar */
+.sidebar-device-name-btn,
+.sidebar-search-shell,
+.sidebar-workspace-summary,
+.sidebar-primary-action,
+.sidebar .sidebar-new-chat-btn,
+.sidebar .new-session-btn,
+.sidebar-project-head-count,
+.sidebar-project-match-tag,
+.folder-group-header .folder-count {
+  border-radius: 9999px !important;
+}
+
+/* 50% Circular Icon Controls in Sidebar */
+.sidebar-icon-btn,
+.sidebar-device-add-btn,
+.sidebar-project-create-btn,
+.sidebar-filter-btn,
+.sidebar-account-btn,
+.sidebar-agent-btn,
+#closeSidebar,
+#sidebarSearchBtn,
+#sidebarProjectBackBtn,
+#sidebarProjectSettingsBtn {
+  border-radius: 50% !important;
+}
+
+/* Workspace Bar & Device Bar Unified Rhythm */
+.sidebar-device-bar,
+.sidebar-primary-nav .sidebar-workspace {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 0 14px 6px !important;
+  margin: 0 !important;
+  width: 100% !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.sidebar-device-name-btn,
+.sidebar-primary-nav .sidebar-workspace-summary {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  min-height: 42px !important;
+  padding: 0 14px !important;
+  border: 0 !important;
+  border-radius: 9999px !important;
+  background: color-mix(in srgb, var(--text) 5%, transparent) !important;
+  color: var(--text) !important;
+  font-size: 13px !important;
+  font-weight: 560 !important;
+  text-align: left !important;
+  box-shadow: none !important;
+}
+
+.sidebar-device-name-btn:hover,
+.sidebar-primary-nav .sidebar-workspace-summary:hover {
+  background: var(--surface-hover) !important;
+}
+
+.sidebar-device-add-btn,
+.sidebar-project-create-btn {
+  width: 42px !important;
+  height: 42px !important;
+  flex: 0 0 42px !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: color-mix(in srgb, var(--text) 5%, transparent) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: none !important;
+}
+
+.sidebar-device-add-btn:hover,
+.sidebar-project-create-btn:hover {
+  background: var(--surface-hover) !important;
+  color: var(--text) !important;
+}
+
+/* Project Head Count Pill */
+.sidebar-project-head-count {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 2px 8px !important;
+  border-radius: 9999px !important;
+  background: color-mix(in srgb, var(--text) 8%, transparent) !important;
+  color: var(--text-secondary) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+}
+
+/* 10px-12px Standard List Rows (No 22px / 20px puffy balloons) */
+.sidebar-project-head,
+.sidebar .sidebar-project-head,
+.sidebar-project-preview .session-item,
+.sidebar .sidebar-project-preview .session-item,
+.session-item,
+.sidebar .session-item {
+  border-radius: 10px !important;
+}
+
+/* Flat, Compact Heights without Bloat (No Cards-in-Cards) */
+.sidebar-project-head,
+.sidebar .sidebar-project-head {
+  min-height: 44px !important;
+  padding: 6px 12px !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.sidebar-project-head:hover,
+.sidebar .sidebar-project-head:hover {
+  background: var(--surface-hover) !important;
+}
+.sidebar-project-head.is-open,
+.sidebar .sidebar-project-head.is-open {
+  background: color-mix(in srgb, var(--text) 5%, transparent) !important;
+}
+
+.session-item,
+.sidebar .session-item {
+  height: auto !important;
+  min-height: 40px !important;
+  padding: 6px 12px !important;
+  margin-bottom: 2px !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+.session-item:hover,
+.sidebar .session-item:hover {
+  background: var(--surface-hover) !important;
+}
+
+.sidebar-project-preview .session-item,
+.sidebar .sidebar-project-preview .session-item {
+  min-height: 38px !important;
+  padding: 4px 10px !important;
+}
+
+/* Selected / Active State: Standard Container Material Tint (Eliminate high-contrast blue bubble & shadow) */
+.session-item.active,
+.sidebar .session-item.active,
+.sidebar .sidebar-project-preview .session-item.active {
+  background: color-mix(in srgb, var(--text) 7%, transparent) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+  border-radius: 10px !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+:root[data-theme="dark"] .session-item.active,
+:root[data-theme="dark"] .sidebar .session-item.active,
+:root:not([data-theme="light"]) .session-item.active,
+:root:not([data-theme="light"]) .sidebar .session-item.active {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: var(--text) !important;
+}
+.session-item.active .session-item-name,
+.sidebar .session-item.active .session-item-name {
+  font-weight: 600 !important;
+  color: var(--text) !important;
+}
+
+/* L2 Project Header (Back, Icon, Title, Settings) */
+.sidebar-project-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 8px 14px 4px !important;
+  min-height: 48px !important;
+  background: transparent !important;
+  border-bottom: none !important;
+}
+.sidebar-project-header .sidebar-icon-btn {
+  width: 36px !important;
+  height: 36px !important;
+  flex: 0 0 36px !important;
+  border-radius: 50% !important;
+  background: color-mix(in srgb, var(--text) 5%, transparent) !important;
+  color: var(--text) !important;
+}
+.sidebar-project-header .sidebar-icon-btn:hover {
+  background: var(--surface-hover) !important;
+}
+.sidebar-project-header-title {
+  flex: 1 1 auto !important;
+  font-size: 15px !important;
+  font-weight: 650 !important;
+  color: var(--text) !important;
+}
+
+/* L2 Section Headers: ensure clean visibility and comfortable spacing */
+.folder-group-header,
+.sidebar-session-section-header,
+.pinned-section-header {
+  display: flex !important;
+  align-items: center !important;
+  padding: 12px 14px 4px !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  color: var(--text-muted) !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+/* Bottom Actions Bar */
+.sidebar-bottom-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 10px 14px calc(10px + var(--safe-bottom, 0px)) !important;
+  background: var(--bg-secondary) !important;
+  border-top: none !important;
+}
+.sidebar .sidebar-new-chat-btn {
+  flex: 1 1 auto !important;
+  min-height: 42px !important;
+  padding: 0 18px !important;
+  border-radius: 9999px !important;
+  background: var(--text) !important;
+  color: var(--bg) !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  box-shadow: none !important;
+}
+.sidebar .sidebar-new-chat-btn:hover {
+  background: color-mix(in srgb, var(--text) 86%, transparent) !important;
+  color: var(--bg) !important;
+}
+.sidebar-bottom-actions .sidebar-filter-btn,
+.sidebar-bottom-actions .sidebar-account-btn,
+.sidebar-bottom-actions .sidebar-agent-btn {
+  width: 42px !important;
+  height: 42px !important;
+  flex: 0 0 42px !important;
+  border-radius: 50% !important;
+  background: color-mix(in srgb, var(--text) 5%, transparent) !important;
+  color: var(--text) !important;
+}
+.sidebar-bottom-actions .sidebar-filter-btn:hover,
+.sidebar-bottom-actions .sidebar-account-btn:hover,
+.sidebar-bottom-actions .sidebar-agent-btn:hover {
+  background: var(--surface-hover) !important;
+}

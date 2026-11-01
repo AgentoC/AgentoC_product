@@ -1,0 +1,5 @@
+<resources>
+    <string name="capture_shortcut_new">新任务</string>
+    <string name="capture_shortcut_target">在 %1$s 上创建任务</string>
+    <string name="capture_shortcut_removed">这台电脑已解除配对。</string>
+</resources>

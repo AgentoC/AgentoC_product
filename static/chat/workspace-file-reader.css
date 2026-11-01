@@ -1,0 +1,545 @@
+.workspace-file-reader[hidden] {
+  display: none !important;
+}
+
+.workspace-file-reader {
+  position: relative;
+  z-index: 23;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border-left: 0;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.workspace-file-reader-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 8px 12px;
+  border-bottom: none;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+}
+
+.workspace-file-reader-back,
+.workspace-file-reader-refresh,
+.workspace-file-reader-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: transform 120ms ease, filter 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.workspace-file-reader-back[hidden],
+.workspace-file-reader-close[hidden] {
+  display: none !important;
+}
+
+.workspace-file-reader-back:hover,
+.workspace-file-reader-refresh:hover,
+.workspace-file-reader-close:hover {
+  border: 0;
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+
+.workspace-file-reader-back:active,
+.workspace-file-reader-refresh:active,
+.workspace-file-reader-close:active {
+  transform: scale(0.95);
+}
+
+.workspace-file-reader-back .rl-icon,
+.workspace-file-reader-refresh .rl-icon,
+.workspace-file-reader-close .rl-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.workspace-file-reader-title-block {
+  min-width: 0;
+}
+
+.workspace-file-reader-eyebrow {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workspace-file-reader-title-block h2 {
+  margin: 1px 0 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 760;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-file-reader-path {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-file-reader-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, var(--workspace-file-reader-list-width, 32%));
+  min-height: 0;
+  flex: 1;
+  transition: grid-template-columns var(--motion-panel) var(--motion-ease-standard);
+}
+
+.workspace-file-reader-preview {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background:
+    radial-gradient(circle at 16% 0%, color-mix(in srgb, var(--notice) 8%, transparent), transparent 32%),
+    var(--bg);
+}
+
+.workspace-file-reader-list-panel {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-secondary) 80%, var(--bg));
+}
+
+.workspace-file-reader-list-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  z-index: 2;
+  width: 10px;
+  border: 0;
+  background: transparent;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.workspace-file-reader-list-resize-handle::after {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 4px;
+  width: 1px;
+  border-radius: 999px;
+  background: transparent;
+  content: "";
+  transition: background var(--motion-fast) ease;
+}
+
+.workspace-file-reader-list-resize-handle:hover::after,
+.workspace-file-reader-list-resize-handle:focus-visible::after,
+body.workspace-file-reader-list-resizing .workspace-file-reader-list-resize-handle::after {
+  background: var(--border-strong);
+}
+
+body.workspace-file-reader-list-resizing {
+  cursor: ew-resize;
+  user-select: none;
+}
+
+.workspace-file-reader--reading .workspace-file-reader-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace-file-reader--reading .workspace-file-reader-list-panel {
+  display: none;
+}
+
+.workspace-file-reader-view-enter {
+  animation: sidebar-surface-enter var(--motion-base) var(--motion-ease-out);
+}
+
+.workspace-file-reader-search {
+  flex-shrink: 0;
+  padding: 12px;
+  border-bottom: none;
+}
+
+.workspace-file-reader-search-input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.workspace-file-reader-search-input:focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-border) 45%, transparent);
+}
+
+.workspace-file-reader-tree {
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 10px 14px;
+}
+
+.workspace-file-tree-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workspace-file-tree-list.nested {
+  margin-left: 14px;
+  padding-left: 10px;
+  border-left: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+}
+
+.workspace-file-tree-folder {
+  display: grid;
+  gap: 2px;
+}
+
+.workspace-file-tree-folder-toggle,
+.workspace-file-tree-file {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 34px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace-file-tree-folder-toggle {
+  list-style: none;
+}
+
+.workspace-file-tree-folder-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.workspace-file-tree-folder-toggle:hover,
+.workspace-file-tree-file:hover,
+.workspace-file-tree-file.active {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.workspace-file-tree-file.active {
+  font-weight: 700;
+}
+
+.workspace-file-tree-folder-toggle .rl-icon,
+.workspace-file-tree-file .rl-icon {
+  width: 17px;
+  height: 17px;
+  color: var(--text-muted);
+}
+
+.workspace-file-tree-folder-toggle .workspace-file-tree-chevron {
+  transform: rotate(-90deg);
+  transition: transform var(--motion-fast) var(--motion-ease-standard);
+}
+
+.workspace-file-tree-folder details[open] > .workspace-file-tree-folder-toggle .workspace-file-tree-chevron {
+  transform: rotate(0deg);
+}
+
+.workspace-file-tree-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-file-tree-count,
+.workspace-file-tree-kind {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.workspace-file-tree-kind.pdf {
+  color: var(--error);
+}
+
+.workspace-file-reader-empty,
+.workspace-file-reader-status {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  min-height: 100%;
+  padding: 28px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.workspace-file-reader-empty-icon .rl-icon {
+  width: 34px;
+  height: 34px;
+  color: var(--text-muted);
+}
+
+.workspace-file-reader-empty-title,
+.workspace-file-reader-status-title {
+  margin-top: 12px;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 750;
+}
+
+.workspace-file-reader-empty-body,
+.workspace-file-reader-status-body {
+  max-width: 360px;
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.workspace-readable-markdown {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 26px 28px 46px;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.72;
+}
+
+.workspace-readable-markdown h1 {
+  font-size: clamp(26px, 5vw, 38px);
+  line-height: 1.2;
+}
+
+.workspace-readable-markdown h2 {
+  margin-top: 1.5em;
+  font-size: clamp(21px, 4vw, 28px);
+  line-height: 1.24;
+}
+
+.workspace-readable-markdown pre,
+.workspace-readable-markdown table {
+  overflow-x: auto;
+}
+
+.workspace-readable-pdf {
+  display: block;
+  width: 100%;
+  height: calc(100% - 54px);
+  min-height: 620px;
+  border: 0;
+  background: var(--bg-secondary);
+}
+
+.workspace-readable-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.workspace-readable-toolbar-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 740;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-readable-toolbar-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.workspace-readable-action {
+  min-height: 32px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.workspace-readable-action:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+@media (min-width: 1180px) {
+  :root {
+    --workspace-file-reader-width: clamp(560px, 45vw, 900px);
+  }
+
+  body.workspace-file-reader-open .app-container {
+    grid-template-columns: minmax(420px, 1fr) var(--workspace-file-reader-width);
+  }
+
+  body.workspace-file-reader-open .workspace-file-reader {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  body.workspace-file-reader-open .chat-area {
+    border-right: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 1179px) {
+  .workspace-file-reader {
+    position: fixed;
+    top: calc(var(--app-header-height) + var(--safe-top));
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 46;
+    border-left: 0;
+    transform: translateX(100%);
+    opacity: 0;
+    transition:
+      opacity var(--motion-base) ease,
+      transform var(--motion-panel) var(--motion-ease-standard);
+  }
+
+  body.workspace-file-reader-open .workspace-file-reader {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 767px) {
+  .workspace-file-reader {
+    top: calc(var(--app-header-height) + var(--safe-top));
+  }
+
+  .workspace-file-reader-header {
+    min-height: 54px;
+    padding: 8px 10px;
+  }
+
+  .workspace-file-reader-close {
+    display: none;
+  }
+
+  .workspace-file-reader-layout {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .workspace-file-reader-preview {
+    display: none;
+    flex: 1;
+  }
+
+  .workspace-file-reader--reading .workspace-file-reader-preview {
+    display: block;
+  }
+
+  .workspace-file-reader-list-panel {
+    flex: 1;
+    border-top: 0;
+    border-left: 0;
+  }
+
+  .workspace-file-reader-list-resize-handle {
+    display: none;
+  }
+
+  .workspace-file-reader-tree {
+    padding-bottom: calc(14px + var(--safe-bottom));
+  }
+
+  .workspace-readable-markdown {
+    max-width: none;
+    padding: 18px 17px 34px;
+    font-size: 16.5px;
+    line-height: 1.78;
+  }
+
+  .workspace-readable-pdf {
+    min-height: 100%;
+  }
+}
+
+.workspace-file-reader--embedded {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  border-left: 0;
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+
+.workspace-file-reader--embedded .workspace-file-reader-header {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.workspace-file-reader--embedded .workspace-file-reader-close {
+  display: none;
+}
+
+@media (max-width: 1179px) {
+  .workspace-file-reader--embedded {
+    position: relative;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    opacity: 1;
+    transform: none;
+  }
+}

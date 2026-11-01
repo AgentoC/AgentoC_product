@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <!-- Frame-export QA entry is only available in development builds. -->
+        <activity android:name=".Phase3RActivity" tools:node="remove" />
+    </application>
+</manifest>

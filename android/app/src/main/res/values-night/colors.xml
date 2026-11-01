@@ -1,0 +1,6 @@
+<resources>
+    <color name="window_canvas">#0A0A0C</color>
+    <!-- Brand splash background, dark mode: 8A S2 brand-dark. -->
+    <color name="splash_background">#161B22</color>
+    <color name="ic_launcher_background">#161B22</color>
+</resources>

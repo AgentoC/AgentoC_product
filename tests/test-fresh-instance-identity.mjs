@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';import {mkdtemp,readFile,writeFile,lstat,symlink} from 'node:fs/promises';import {join} from 'node:path';import {tmpdir} from 'node:os';
+import {initializeFreshInstanceIdentity,loadInstanceIdentity} from '../lib/instance-identity.mjs';
+const root=await mkdtemp(join(tmpdir(),'agct-fresh-identity-')),path=join(root,'instance-identity.json');
+await assert.rejects(initializeFreshInstanceIdentity(),/IID_EXPLICIT_PATH_REQUIRED/);
+const publicIdentity=await initializeFreshInstanceIdentity({filePath:path}),original=await readFile(path);assert.match(publicIdentity.instanceId,/^inst_[a-f0-9]{32}$/);assert.ok(!('privateKey' in publicIdentity));assert.equal((await loadInstanceIdentity({filePath:path})).instanceId,publicIdentity.instanceId);assert.equal((await lstat(path)).nlink,1);
+await assert.rejects(initializeFreshInstanceIdentity({filePath:path}),/IID_EXISTING_IDENTITY_REFUSED/);assert.deepEqual(await readFile(path),original);await lstat(path+'.initialize-lock');
+const corrupt=join(root,'corrupt.json');await writeFile(corrupt,'not-json');await assert.rejects(initializeFreshInstanceIdentity({filePath:corrupt}),/IID_EXISTING_IDENTITY_REFUSED/);assert.equal(await readFile(corrupt,'utf8'),'not-json');
+const raced=join(root,'raced.json'),outcomes=await Promise.allSettled(Array.from({length:8},()=>initializeFreshInstanceIdentity({filePath:raced})));assert.equal(outcomes.filter(x=>x.status==='fulfilled').length,1);await loadInstanceIdentity({filePath:raced});
+const pending=join(root,'pending.json');await writeFile(pending+'.pending','owned-canary');await assert.rejects(initializeFreshInstanceIdentity({filePath:pending}));assert.equal(await readFile(pending+'.pending','utf8'),'owned-canary');await lstat(pending+'.initialize-lock');
+const redirected=join(root,'redirected');await symlink(root,redirected,process.platform==='win32'?'junction':'dir');await assert.rejects(initializeFreshInstanceIdentity({filePath:join(redirected,'blocked.json')}),/IID_PRIVATE_DIRECTORY_REQUIRED/);
+console.log(JSON.stringify({pass:true,checks:7,root,freshDurableCryptoIdentity:true,privateKeyNotReturned:true,existingAndCorruptPreserved:true,concurrentCreators:8,onlyOneCreator:true,uncertainLocksRetained:true}));

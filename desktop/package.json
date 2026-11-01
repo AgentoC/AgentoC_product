@@ -1,0 +1,11 @@
+{
+  "name": "agentoc-desktop-manager",
+  "version": "0.3.12",
+  "private": true,
+  "description": "Windows desktop manager shell for AgentoC",
+  "main": "main.cjs",
+  "devDependencies": {
+    "electron": "44.9.3",
+    "rcedit": "5.0.2"
+  }
+}

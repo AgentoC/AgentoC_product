@@ -1,0 +1,2004 @@
+/* ---- Desktop and tablet (>= 768px) ---- */
+@media (min-width: 768px) {
+  :root {
+    --chat-column-width: clamp(720px, 88%, 920px);
+    --desktop-chat-gutter: clamp(32px, 5vw, 72px);
+    --chat-scrollbar-rail-width: 12px;
+  }
+
+  /* Desktop keeps the same compact speedometer affordance as Android. The
+     picker is anchored to the icon so the runtime controls remain aligned. */
+  .composer-runtime-speed-btn:not([hidden]) {
+    display: inline-flex;
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .composer-runtime-speed-panel:not([hidden]) {
+    display: block;
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 10px);
+    z-index: 75;
+    width: 220px;
+    margin: 0;
+    padding: 12px 14px;
+    border: 0;
+    border-radius: 22px;
+    background: var(--sys-surface-container-highest, var(--surface-soft, var(--bg-secondary)));
+    box-shadow:
+      0 2px 6px rgba(16, 21, 39, 0.08),
+      0 12px 28px rgba(16, 21, 39, 0.12);
+    transform: translateX(-50%);
+    transform-origin: 50% 100%;
+    animation: composer-runtime-speed-panel-rise 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .header #menuBtn { display: none; }
+
+  body.sessions-sidebar-collapsed .header #menuBtn {
+    display: inline-flex;
+  }
+
+  body.sessions-sidebar-collapsed .header-leading-actions {
+    width: 36px;
+    min-width: 36px;
+    height: 34px;
+    padding: 0 1px;
+    background: color-mix(in srgb, var(--bg-secondary) 96%, transparent);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 4%, transparent), 0 4px 14px color-mix(in srgb, var(--text) 4%, transparent);
+  }
+
+  .header,
+  .app-container {
+    margin-left: var(--sidebar-width);
+    transition:
+      margin-left var(--motion-panel) var(--motion-ease-standard),
+      width var(--motion-panel) var(--motion-ease-standard);
+  }
+
+  .header {
+    left: var(--sidebar-width);
+    width: calc(100% - var(--sidebar-width));
+    margin-left: 0;
+    transition:
+      left var(--motion-panel) var(--motion-ease-standard),
+      width var(--motion-panel) var(--motion-ease-standard);
+  }
+
+  body.sessions-sidebar-collapsed .header,
+  body.sessions-sidebar-collapsed .app-container {
+    margin-left: 0;
+  }
+
+  body.sessions-sidebar-collapsed .header {
+    left: 0;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .sidebar-overlay {
+    display: block !important; position: fixed; inset: 0 auto 0 0; background: none;
+    width: var(--sidebar-width); flex-shrink: 0;
+    height: var(--app-height, 100dvh);
+    border-right: 1px solid var(--border); z-index: 35;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(0);
+    transition:
+      width var(--motion-panel) var(--motion-ease-emphasized),
+      transform var(--motion-panel) var(--motion-ease-standard),
+      visibility var(--motion-panel) var(--motion-ease-standard);
+    will-change: transform;
+  }
+
+  .sidebar-overlay:hover,
+  .sidebar-overlay:focus-within {
+    width: calc(var(--sidebar-width) + 48px);
+  }
+
+  body.sessions-sidebar-collapsed .sidebar-overlay {
+    pointer-events: none;
+    transform: translateX(calc(-1 * var(--sidebar-width)));
+  }
+
+  .sidebar {
+    position: relative; left: auto; width: 100%; height: 100%;
+    border-right: none; z-index: auto; transition: none; padding-top: 0;
+    transform: none;
+    will-change: auto;
+  }
+  .sidebar-overlay.open .sidebar { left: auto; transform: none; }
+  .sidebar-close-btn {
+    display: inline-flex;
+    position: absolute;
+    top: 9px;
+    right: 8px;
+    z-index: 6;
+    width: 36px;
+    height: 36px;
+    border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--bg-secondary) 94%, var(--bg));
+    color: var(--text-secondary);
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--bg) 70%, transparent) inset;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-8px) scale(0.96);
+    transition:
+      opacity var(--motion-fast) ease,
+      transform var(--motion-panel) var(--motion-ease-emphasized),
+      color var(--motion-fast) ease,
+      background var(--motion-fast) ease,
+      border-color var(--motion-fast) ease;
+  }
+
+  .sidebar-close-btn .rl-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .sidebar-overlay:hover .sidebar-close-btn,
+  .sidebar:focus-within .sidebar-close-btn,
+  .sidebar-close-btn:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0) scale(1);
+  }
+
+  .sidebar-close-btn:hover,
+  .sidebar-close-btn:focus-visible {
+    border-color: var(--border-strong);
+    background: var(--bg-secondary);
+    color: var(--text);
+  }
+
+  body.sessions-sidebar-collapsed .sidebar-close-btn {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-8px) scale(0.96);
+  }
+
+  /* Desktop: keep the reading column wide and stable instead of scaling by percentage. */
+  .messages {
+    padding: 28px var(--desktop-chat-gutter);
+    padding-bottom: calc(28px + var(--chat-bottom-overlay-height, 0px));
+  }
+  .messages-inner,
+  .input-stack {
+    width: min(100%, var(--chat-column-width));
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .queued-panel.visible { margin-bottom: 0; }
+  .input-area {
+    margin-right: var(--chat-scrollbar-rail-width);
+    padding: 0 var(--desktop-chat-gutter) 12px;
+    padding-bottom: calc(12px + var(--safe-bottom));
+  }
+  .modal-backdrop { padding-left: calc(var(--sidebar-width) + 24px); }
+  body.sessions-sidebar-collapsed .modal-backdrop { padding-left: 24px; }
+
+  .input-wrapper {
+    border-radius: 16px;
+    box-shadow: 0 4px 16px rgba(16, 21, 39, 0.06);
+  }
+  .input-row {
+    padding: 20px 18px 8px;
+  }
+  .input-row textarea {
+    min-height: calc(1.55em * 1);
+    max-height: calc(1.55em * 8 + 8px);
+  }
+  .composer-markdown-editor {
+    max-height: calc(1.55em * 8 + 8px);
+  }
+  .input-actions-row {
+    padding: 7px 9px 9px;
+  }
+  .composer-action-btn {
+    width: 32px;
+    height: 32px;
+  }
+  .composer-runtime-btn,
+  .composer-runtime-model-btn,
+  .composer-permission-btn {
+    min-height: 38px;
+  }
+
+  .sidebar-search {
+    padding: 8px 8px 0;
+  }
+  .sidebar-tabs {
+    width: calc(100% - 16px);
+    margin: 7px auto;
+  }
+  .sidebar-overlay:hover .sidebar-tabs,
+  .sidebar-overlay:focus-within .sidebar-tabs {
+    width: calc(var(--sidebar-width) - 16px);
+    margin-left: 8px;
+    margin-right: auto;
+  }
+  .sidebar-tab {
+    min-height: 32px;
+    padding: 0;
+  }
+  .sidebar-workspace {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 6px 8px;
+    margin: 6px 8px 0;
+    padding: 7px 8px;
+    border-radius: 10px;
+  }
+  .sidebar-workspace:not(.is-expanded) {
+    display: block;
+    width: calc(100% - 24px);
+    margin: 8px auto 4px;
+    padding: 7px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: transparent;
+    text-align: center;
+  }
+  .sidebar-workspace:not(.is-expanded) .sidebar-workspace-summary,
+  .sidebar-workspace:not(.is-expanded) .sidebar-workspace-summary-text {
+    display: block;
+    width: 100%;
+    font-size: 15px;
+    text-align: center;
+  }
+  /* Inline project row inside the sidebar primary nav: folder icon + name +
+     chevron on one line, create button right-aligned on the same baseline. */
+  .sidebar-primary-nav .sidebar-workspace:not(.is-expanded) {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    margin: 0;
+    padding: 0 8px 0 12px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    text-align: left;
+  }
+  .sidebar-primary-nav .sidebar-workspace:not(.is-expanded) .sidebar-workspace-summary {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: 8px;
+    align-items: center;
+    align-content: center;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 8px 0 0;
+    text-align: left;
+  }
+  .sidebar-workspace .sidebar-section-note {
+    display: none;
+  }
+  .sidebar-workspace-form {
+    grid-column: 2;
+    gap: 0;
+  }
+  .sidebar-workspace-custom,
+  .sidebar-workspace-browser {
+    grid-column: 1 / -1;
+  }
+  .sidebar-workspace .custom-select-wrap.cs-full-bg .cs-trigger,
+  .sidebar-workspace-select,
+  .sidebar-search-input {
+    min-height: 32px;
+    border-radius: 9px;
+  }
+  .sidebar-list {
+    padding: 7px 7px;
+  }
+  .session-item {
+    margin-bottom: 3px;
+    padding: 8px 9px 8px 10px;
+    border-radius: 10px;
+  }
+}
+
+/* ---- Workstation shell (>= 1180px) ---- */
+@media (min-width: 1180px) {
+  :root {
+    --sidebar-width: clamp(272px, 21vw, 332px);
+    --right-sidebar-width: clamp(360px, 32vw, 760px);
+    --chat-column-width: minmax(0, 1fr);
+    --desktop-chat-gutter: clamp(18px, 2vw, 34px);
+  }
+
+  .app-container {
+    display: grid;
+    grid-template-columns: minmax(520px, 1fr) 0;
+    grid-template-rows: minmax(0, 1fr);
+    min-width: 0;
+    transition: grid-template-columns var(--motion-panel) var(--motion-ease-standard);
+  }
+
+  body.right-sidebar-open .app-container {
+    grid-template-columns: minmax(420px, 1fr) var(--right-sidebar-width);
+  }
+
+  .sidebar-overlay,
+  .chat-area,
+  .right-sidebar {
+    min-width: 0;
+  }
+
+  .chat-area {
+    grid-column: 1;
+    grid-row: 1;
+    border-right: 1px solid var(--border);
+    background: var(--chat-area-bg, #fff);
+  }
+
+  .right-sidebar {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .messages {
+    padding: 22px var(--desktop-chat-gutter);
+    padding-bottom: calc(22px + var(--chat-bottom-overlay-height, 0px));
+  }
+
+  .messages-inner,
+  .input-stack {
+    width: min(100%, 900px);
+  }
+
+  .input-area {
+    padding-left: var(--desktop-chat-gutter);
+    padding-right: var(--desktop-chat-gutter);
+  }
+
+  .modal-backdrop {
+    padding-left: calc(var(--sidebar-width) + 24px);
+    padding-right: 24px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1679px) {
+  :root {
+    --chat-column-width: clamp(700px, 92%, 880px);
+    --desktop-chat-gutter: clamp(24px, 4vw, 56px);
+  }
+}
+
+@media (min-width: 1680px) {
+  :root {
+    --chat-column-width: clamp(820px, 92%, 1040px);
+    --desktop-chat-gutter: clamp(32px, 3.2vw, 64px);
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --app-header-height: 52px;
+    --chat-gutter: 10px;
+    --chat-edge: 24px;
+  }
+
+  .header {
+    gap: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .header-btn--sessions {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0;
+    border-color: transparent;
+    background: color-mix(in srgb, var(--bg-secondary) 92%, var(--bg));
+    color: var(--text);
+    box-shadow:
+      0 2px 6px rgba(150, 150, 150, 0.25),
+      0 5px 12px rgba(150, 150, 150, 0.15),
+      inset 0 1px 0 color-mix(in srgb, var(--bg) 70%, transparent);
+  }
+
+  .header-btn--sessions:hover {
+    background: var(--bg-secondary);
+    color: var(--text);
+  }
+
+  .header-btn--sessions .header-btn-icon .rl-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .header-btn--home {
+    display: inline-flex;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--bg-secondary) 92%, var(--bg));
+    box-shadow:
+      0 2px 6px rgba(150, 150, 150, 0.25),
+      0 5px 12px rgba(150, 150, 150, 0.15),
+      inset 0 1px 0 color-mix(in srgb, var(--bg) 70%, transparent);
+  }
+
+  .header-btn--home .header-btn-icon .rl-icon { width: 18px; height: 18px; }
+
+  /* One UI: enlarge the primary composer touch targets on mobile */
+  .send-btn { width: 44px; height: 44px; }
+  .send-stop-slot { width: 44px; height: 44px; }
+  .composer-edit-cancel-btn { width: 44px; height: 44px; }
+  .composer-action-btn { width: 44px; height: 44px; }
+  .composer-runtime-btn,
+  .composer-permission-btn {
+    min-height: 44px;
+    max-width: min(36vw, 148px);
+    padding: 0 12px;
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface-soft, var(--bg-secondary)));
+    color: var(--text);
+    box-shadow: 0 1px 4px rgba(16, 21, 39, 0.12);
+  }
+  .composer-runtime-btn:hover,
+  .composer-runtime-btn[aria-expanded="true"],
+  .composer-permission-btn:hover,
+  .composer-permission-btn[aria-expanded="true"] {
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface-hover));
+    box-shadow: 0 4px 12px rgba(16, 21, 39, 0.16);
+  }
+
+  /* WeChat-style: cap auto-grow at 5 lines on mobile; the expand button
+     (revealed by the full-screen module) takes over beyond that. The
+     button floats over the text's top-right corner instead of pushing
+     the text sideways (user decision 2026-08-05). */
+  .input-row textarea { max-height: calc(1.55em * 5 + 8px); }
+  .composer-markdown-editor { max-height: calc(1.55em * 5 + 8px); }
+
+  .header-share-btn,
+  .header-review-btn,
+  .header-sidebar-btn,
+  .header-refresh-btn {
+    display: none !important;
+  }
+
+  .header-more-btn:not([hidden]) {
+    display: flex;
+    min-width: 40px;
+    width: 40px;
+    min-height: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--sidebar-glass-fallback, color-mix(in srgb, var(--bg-secondary) 92%, var(--bg)));
+    box-shadow:
+      0 2px 8px rgba(16, 21, 39, 0.08),
+      inset 0 0 0 1px color-mix(in srgb, var(--glass-edge, var(--border)) 76%, transparent);
+  }
+
+  .header-more-btn:not([hidden]) .rl-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .header-overflow-menu {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: 100vw;
+    padding: 10px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+    border-radius: 24px 24px 0 0 !important;
+    transform-origin: bottom center;
+    box-shadow:
+      0 -14px 42px -12px rgba(16, 21, 39, 0.52),
+      inset 0 1px 0 0 color-mix(in srgb, var(--glass-edge, var(--border)) 78%, transparent);
+  }
+  .header-overflow-menu::before {
+    content: "";
+    display: block;
+    width: 38px;
+    height: 4px;
+    margin: 2px auto 10px auto;
+    border-radius: 999px;
+    background: color-mix(in srgb, currentColor 24%, transparent);
+  }
+  .header-overflow-menu.is-open {
+    animation: sheet-slide-up var(--motion-enter, 240ms) var(--motion-ease-emphasized, cubic-bezier(0.16, 1, 0.3, 1));
+  }
+  .header-overflow-menu.is-closing {
+    animation: sheet-slide-down var(--motion-exit, 180ms) var(--motion-ease-standard, ease-in) forwards;
+  }
+
+  /* Plan cards share the Decision Sheet glass on mobile: the base .plan-card
+     recipe already provides glass + tight shadow + de-bordered surfaces, so
+     this block only adopts the mobile radius tier and stacks the decision
+     rail full-width. */
+  .plan-card {
+    margin: 10px 0 14px;
+    border-radius: var(--radius-sheet-top, 24px) var(--radius-sheet-top, 24px) 18px 18px;
+    box-shadow: var(--sheet-shadow, var(--shadow-sheet-tight));
+    scroll-margin-bottom: calc(var(--chat-bottom-overlay-height, 0px) + 18px);
+  }
+
+  .plan-card__actions {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 10px 12px 12px;
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
+    backdrop-filter: blur(14px) saturate(130%);
+  }
+
+  .plan-card__action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 7px;
+    font-size: 12px;
+    background: var(--surface-soft, var(--bg-secondary));
+  }
+
+  .plan-card__copy { top: 8px; right: 10px; }
+
+  .composer-controls-btn:not([hidden]) {
+    display: flex;
+    min-width: 44px;
+    height: 40px;
+    padding: 0 12px;
+    border-color: color-mix(in srgb, var(--accent) 10%, var(--border));
+    background: var(--bg-secondary);
+    color: var(--text);
+    font-weight: 650;
+  }
+
+  .composer-controls-btn:not([hidden]):active {
+    background: var(--bg-tertiary);
+    transform: scale(0.98);
+  }
+
+  .input-area.composer-config-open .input-wrapper {
+    position: relative;
+    z-index: 61;
+    box-shadow: var(--shadow-glass, var(--shadow-soft, 0 6px 22px rgba(16, 21, 39, 0.08)));
+  }
+
+  .input-config-row {
+    display: none;
+    margin-bottom: 8px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    overflow: visible;
+  }
+
+  .input-area.composer-config-open .input-config-row {
+    display: flex;
+  }
+
+  .input-config-group.left {
+    display: none;
+  }
+
+  .input-area.composer-config-open .input-config-group.left {
+    position: relative;
+    z-index: 61;
+    display: grid;
+    order: 1;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sheet-top, 24px) var(--radius-sheet-top, 24px) 18px 18px;
+    background: var(--surface-glass-strong, var(--surface-raised, color-mix(in srgb, var(--bg) 88%, var(--bg-secondary))));
+    box-shadow: var(--shadow-glass, var(--sheet-shadow, 0 18px 48px rgba(16, 21, 39, 0.16)));
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur, 18px) * 0.9)) saturate(1.12);
+    backdrop-filter: blur(calc(var(--glass-blur, 18px) * 0.9)) saturate(1.12);
+  }
+
+  .input-config-group.right {
+    order: 2;
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .input-config-group.right:empty {
+    display: none;
+  }
+
+  .input-config-group.left .custom-select-wrap {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .tool-select,
+  .model-select,
+  .effort-select,
+  .service-tier-select,
+  .thinking-toggle,
+  .compact-btn {
+    width: 100%;
+    max-width: none;
+    min-height: 52px;
+    padding: 0 14px;
+    border-radius: 16px;
+    font-size: 14px;
+    background: var(--surface-soft, var(--bg-secondary));
+    border-color: transparent;
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--divider-subtle, var(--border)) 58%, transparent);
+  }
+
+  /* Service tiers move into the mobile runtime sheet. The desktop native
+     select remains the source of truth and stays visible outside this query. */
+  .composer-runtime-controls > .service-tier-select {
+    display: none !important;
+  }
+
+  .composer-runtime-model-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .composer-runtime-controls > .composer-runtime-speed-anchor {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  .composer-runtime-model-row > .composer-runtime-model-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    margin-top: 0;
+  }
+
+  .composer-runtime-speed-btn:not([hidden]) {
+    display: flex;
+  }
+
+  .composer-runtime-speed-btn {
+    min-height: 52px;
+    border-radius: 14px;
+  }
+
+  .composer-runtime-speed-panel:not([hidden]) {
+    display: block;
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    z-index: 4;
+    width: min(252px, calc(100vw - 40px));
+    margin: 0;
+    padding: 12px;
+    border-radius: 22px;
+    background: color-mix(in srgb, var(--accent) 5%, var(--surface-soft, var(--bg-secondary)));
+    box-shadow:
+      0 2px 6px rgba(16, 21, 39, 0.08),
+      0 12px 28px rgba(16, 21, 39, 0.12);
+    transform: translateX(-50%);
+    animation: composer-runtime-speed-panel-rise 180ms cubic-bezier(0.22, 1, 0.36, 1);
+    transform-origin: 50% 100%;
+  }
+
+  .composer-runtime-speed-panel.composer-menu--portaled:not([hidden]) {
+    transform: none;
+    animation-name: composer-runtime-speed-panel-rise-portaled;
+  }
+
+  .composer-runtime-speed-select-wrap {
+    position: relative;
+    width: 50%;
+    min-width: 0;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--surface-soft, var(--bg-secondary));
+    color: var(--text);
+    border: 0;
+    box-shadow: none;
+  }
+
+  .composer-runtime-speed-chevron {
+    position: absolute;
+    top: 50%;
+    right: 13px;
+    width: 7px;
+    height: 7px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    pointer-events: none;
+    transform: translateY(-50%) rotate(-45deg);
+    transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .composer-runtime-speed-select-wrap:focus-within .composer-runtime-speed-chevron,
+  .composer-runtime-speed-select-wrap:active .composer-runtime-speed-chevron {
+    transform: translateY(-50%) rotate(-135deg);
+  }
+
+  .composer-runtime-speed-panel:not(.has-effort-range) .composer-runtime-effort-value,
+  .composer-runtime-speed-panel:not(.has-effort-range) .composer-runtime-effort-range,
+  .composer-runtime-speed-panel:not(.has-effort-range) .composer-runtime-effort-slider {
+    display: none;
+  }
+
+  .composer-runtime-speed-panel:not(.has-speed-choice) .composer-runtime-speed-select-wrap {
+    display: none;
+  }
+
+  .composer-runtime-speed-panel:not(.has-speed-choice) .composer-runtime-effort-slider {
+    margin-top: 0;
+  }
+
+  .composer-runtime-speed-select {
+    min-height: 44px;
+    padding-right: 0;
+    border-radius: 999px;
+    background: transparent;
+    border: 0 !important;
+    box-shadow: none;
+  }
+
+  .composer-runtime-speed-toggle {
+    min-height: 44px;
+  }
+
+  .composer-runtime-effort-track {
+    order: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .input-config-group.left .custom-select-wrap .cs-trigger {
+    width: 100%;
+    min-height: 52px;
+    padding: 0 36px 0 14px;
+    border-radius: 16px;
+    background: var(--surface-soft, var(--bg-secondary));
+    border-color: transparent;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 580;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--divider-subtle, var(--border)) 58%, transparent);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .input-config-group.left .custom-select-wrap.open .cs-trigger {
+    background: var(--surface-hover);
+    border-color: transparent;
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--border-strong) 72%, transparent),
+      0 0 0 3px color-mix(in srgb, var(--focus-border) 14%, transparent);
+  }
+
+  #contextTokens {
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    color: var(--text-muted);
+    background: var(--surface-soft, var(--bg-secondary));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--divider-subtle, var(--border)) 58%, transparent);
+  }
+
+  .input-config-group.right .compact-btn {
+    width: auto;
+    min-height: 36px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    border-color: transparent;
+    background: var(--surface-soft, var(--bg-secondary));
+    color: var(--text-secondary);
+    box-shadow: none;
+  }
+
+  .input-actions-row {
+    gap: 8px;
+  }
+
+  .input-actions-group--add {
+    gap: 6px;
+  }
+
+  .input-actions-group.right {
+    gap: 6px;
+  }
+
+  .composer-runtime-controls {
+    flex: 0 1 auto;
+    max-width: min(62vw, 260px);
+    gap: 5px;
+  }
+
+  .composer-runtime-btn,
+  .composer-permission-btn {
+    max-width: min(32vw, 132px);
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .composer-permission-btn {
+    display: none !important;
+  }
+
+  .composer-runtime-permission-row-btn:not([hidden]) {
+    display: flex !important;
+  }
+
+  /* Sheet shape: near-full width, top radii follow the mobile --mx-r-control
+     token (24px, enforced !important by the unified mobile-radius rules below);
+     the 12px bottom radius is a fallback only, so a 24px full radius still
+     renders if the token block is ever dropped. */
+  .composer-runtime-menu.composer-menu--sheet,
+  .composer-permission-menu.composer-menu--sheet {
+    width: calc(100vw - 16px);
+    max-height: min(420px, calc(100dvh - 142px));
+    padding: 0;
+    overflow: hidden;
+    border-color: transparent;
+    border-radius: 16px;
+    background: var(--surface-glass-strong, var(--surface-raised, var(--bg)));
+    box-shadow: var(--sheet-shadow, var(--shadow-glass, var(--shadow-floating, var(--modal-shadow))));
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur, 18px) * 0.88)) saturate(1.1);
+    backdrop-filter: blur(calc(var(--glass-blur, 18px) * 0.88)) saturate(1.1);
+  }
+
+  .composer-runtime-menu.composer-menu--sheet .composer-runtime-option,
+  .composer-permission-menu.composer-menu--sheet .composer-runtime-option {
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 0;
+  }
+
+  .composer-runtime-menu.composer-menu--sheet .composer-runtime-view-header,
+  .composer-permission-menu.composer-menu--sheet .composer-runtime-view-header {
+    min-height: 52px;
+    padding: 0 4px 6px;
+  }
+
+  .composer-runtime-menu.composer-menu--sheet .composer-runtime-menu-title,
+  .composer-permission-menu.composer-menu--sheet .composer-runtime-menu-title {
+    font-size: 15px;
+  }
+
+  .composer-runtime-menu.composer-menu--sheet .composer-runtime-model-btn,
+  .composer-permission-menu.composer-menu--sheet .composer-runtime-model-btn {
+    min-height: 52px;
+    margin-top: 8px;
+    border-radius: 14px;
+  }
+
+  .composer-runtime-menu.composer-menu--sheet .composer-runtime-back {
+    min-height: 44px;
+    padding: 0 12px;
+    color: var(--text-secondary);
+  }
+
+  .composer-add-menu {
+    left: -2px;
+    width: min(288px, calc(100vw - 20px));
+    padding: 0;
+    overflow: hidden;
+    border-color: transparent;
+    border-radius: 13px;
+    background: var(--surface-glass-strong, var(--surface-raised, var(--bg)));
+    box-shadow: var(--shadow-glass, var(--shadow-floating, var(--modal-shadow)));
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur, 18px) * 0.88)) saturate(1.1);
+    backdrop-filter: blur(calc(var(--glass-blur, 18px) * 0.88)) saturate(1.1);
+  }
+
+  .composer-add-panel-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: block;
+    background: color-mix(in srgb, var(--overlay-backdrop, rgba(0, 0, 0, 0.42)) 78%, transparent);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+  }
+
+  .composer-add-panel-backdrop[hidden] {
+    display: none !important;
+  }
+
+  .composer-add-panel-backdrop.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .composer-add-panel {
+    position: fixed !important;
+    inset: auto 0 0;
+    z-index: 201;
+    width: 100vw !important;
+    max-height: min(82dvh, 720px);
+    padding: 16px 16px calc(16px + var(--safe-bottom));
+    border: 0;
+    border-radius: 24px 24px 0 0;
+    background: var(--surface-glass-strong, var(--surface-raised, var(--bg)));
+    box-shadow: var(--shadow-glass, var(--shadow-floating, var(--modal-shadow)));
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur, 18px) * 0.88)) saturate(1.1);
+    backdrop-filter: blur(calc(var(--glass-blur, 18px) * 0.88)) saturate(1.1);
+  }
+
+  .composer-add-panel.is-open {
+    animation: composer-sheet-rise var(--motion-enter, 220ms) var(--motion-ease-emphasized, cubic-bezier(0.16, 1, 0.3, 1)) both;
+  }
+
+  .composer-add-panel.is-closing {
+    animation: composer-sheet-dismiss var(--motion-exit, 180ms) var(--motion-ease-standard, ease-in) both;
+  }
+
+  .composer-add-panel-handle-zone {
+    align-self: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    min-height: 36px;
+    margin: -8px 0 4px;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .composer-add-panel-handle-zone:active,
+  .composer-add-panel--dragging .composer-add-panel-handle-zone {
+    cursor: grabbing;
+  }
+
+  .composer-add-panel-handle {
+    align-self: center;
+    width: 36px;
+    height: 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text-secondary) 42%, transparent);
+  }
+
+  .composer-add-panel--dragging {
+    transition: none !important;
+    animation: none !important;
+    user-select: none;
+  }
+
+  @keyframes composer-sheet-rise {
+    from { opacity: 0; transform: translate3d(0, 100%, 0); }
+    to { opacity: 1; transform: translate3d(0, 0, 0); }
+  }
+
+  @keyframes composer-sheet-dismiss {
+    from { opacity: 1; transform: translate3d(0, 0, 0); }
+    to { opacity: 0; transform: translate3d(0, 100%, 0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .header-overflow-menu,
+    .header-overflow-menu.is-open,
+    .header-overflow-menu.is-closing,
+    .composer-add-panel-backdrop,
+    .composer-add-panel,
+    .composer-add-panel.is-open,
+    .composer-add-panel.is-closing {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+
+  /* Keep the panel scrollable without exposing a desktop-style scrollbar on touch screens. */
+  .composer-add-panel-list {
+    touch-action: pan-y;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scrollbar-gutter: auto;
+  }
+
+  .composer-add-panel-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .composer-add-panel-row {
+    min-height: 48px;
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  .composer-add-panel-footer {
+    min-height: 48px;
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  .composer-add-panel-action,
+  .composer-add-panel-add,
+  .composer-add-panel-disclosure,
+  .composer-add-panel-back,
+  .composer-add-panel-refresh {
+    min-height: 48px;
+  }
+
+  .composer-add-panel-disclosure {
+    margin-top: 14px;
+  }
+
+  .composer-add-panel-codex-input,
+  .composer-add-panel-claude-input {
+    font-size: 16px;
+  }
+
+  .composer-add-menu-title {
+    padding: 4px 6px 8px;
+  }
+
+  .composer-add-menu-item {
+    align-items: center;
+    min-height: 35px;
+    padding: 0 12px;
+    border-radius: 0;
+  }
+
+  .composer-add-menu-item {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 42%) 18px;
+    gap: 8px;
+  }
+
+  .composer-add-menu-item.active,
+  .composer-add-menu-item[aria-checked="true"] {
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface-hover));
+    color: var(--text);
+    box-shadow: none;
+  }
+
+  .composer-add-menu-main {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .composer-add-menu-note {
+    flex: 1 1 auto;
+    text-align: right;
+    white-space: normal;
+  }
+
+  .composer-plan-chip {
+    min-height: 34px;
+    max-width: 92px;
+    padding-right: 10px;
+    border: 1px solid transparent;
+    background: color-mix(in srgb, var(--notice) 12%, var(--surface-soft, var(--bg-secondary)));
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--notice) 24%, var(--divider-subtle));
+  }
+
+  .composer-plan-chip-close {
+    background: color-mix(in srgb, var(--notice) 18%, transparent);
+    color: var(--text);
+  }
+
+  .queued-panel {
+    margin-left: var(--chat-gutter);
+    margin-right: calc(var(--chat-gutter) + var(--chat-scrollbar-rail-width));
+    margin-bottom: 0;
+  }
+
+  .queued-panel.visible {
+    margin-bottom: 0;
+  }
+
+  .queued-steer-row {
+    min-height: 44px;
+    padding: 6px 8px 7px 10px;
+    border-radius: var(--radius-pill, 999px);
+  }
+
+  .queued-steer-actions {
+    gap: 2px;
+  }
+
+  .queued-steer-action {
+    min-width: 26px;
+    height: 26px;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .queued-steer-action--steer {
+    max-width: 70px;
+  }
+
+  .queued-steer-text {
+    font-size: 12px;
+  }
+
+  body.keyboard-open .messages {
+    padding-top: 12px;
+    padding-bottom: calc(12px + var(--chat-bottom-overlay-height, 0px));
+    overscroll-behavior-y: none;
+  }
+
+  body.keyboard-open .input-area {
+    padding-bottom: calc(6px + var(--safe-bottom));
+    overscroll-behavior: none;
+  }
+
+  /* The app shell and message list are the scroll owners. Keep the document
+     itself fixed while the IME is visible so a composer swipe cannot pan the
+     layout viewport and reveal a white strip below the dock. */
+  html.keyboard-open,
+  body.keyboard-open {
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
+  }
+  body.keyboard-open {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  body.keyboard-open .input-config-row {
+    margin-bottom: 6px;
+  }
+
+  body.keyboard-open .input-area.composer-config-open .input-config-group.left {
+    padding: 10px;
+  }
+
+  body.keyboard-open .input-row {
+    padding-top: 10px;
+  }
+
+  body.keyboard-open .input-actions-row {
+    padding-top: 6px;
+    padding-bottom: 8px;
+  }
+}
+
+@media (min-width: 768px) {
+  .quick-entry-focus-prompt {
+    display: none !important;
+  }
+}
+
+/* ---- Visitor mode: chat-only, no sidebar ---- */
+body.visitor-mode .sidebar-overlay { display: none !important; }
+body.visitor-mode .header #menuBtn { display: none !important; }
+body.visitor-mode .composer-summary { display: none !important; }
+body.share-snapshot-mode .input-area {
+  opacity: 1;
+}
+
+/* Full-width mobile sidebar navigation shell. */
+@media (max-width: 767px) {
+  .sidebar-overlay {
+    background: transparent;
+    /* The closing class keeps the panel paintable until JS removes it after
+       the slide has finished. */
+    transition:
+      opacity var(--motion-enter) var(--motion-ease-standard),
+      visibility 0s linear 0s;
+  }
+
+  .sidebar-overlay.open {
+    visibility: visible;
+    transition:
+      opacity var(--motion-enter) var(--motion-ease-standard),
+      visibility 0s linear 0s;
+  }
+
+  .sidebar-overlay.is-closing {
+    visibility: visible;
+    opacity: 0;
+    pointer-events: none;
+    transition-duration: var(--motion-exit);
+  }
+
+  /* Edge-pan gestures directly manipulate the session drawer. Keep the
+     preview on the compositor and let release/cancel settle through the
+     existing sidebar transition. */
+  .sidebar-overlay.is-gesture-dragging {
+    transition: none;
+  }
+
+  .sidebar-overlay.is-gesture-dragging .sidebar {
+    transform: var(--sidebar-gesture-transform, translateX(-100%));
+    transform-origin: left center;
+    transition: none;
+    will-change: transform;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .sidebar-overlay.is-gesture-settling .sidebar {
+    transform: var(--sidebar-gesture-transform, translateX(-100%));
+    transform-origin: left center;
+    transition: transform var(--motion-exit) var(--motion-ease-standard);
+    will-change: transform;
+    user-select: none;
+  }
+
+  /* L2 project back: expose the existing L1 surface underneath and move the
+     L2 header/list as one panel. JS writes only transform while the finger is
+     down; release adds the short settle transition. This keeps the gesture
+     interruptible and avoids layout-driven animation. */
+  .sidebar-session-surface.sidebar-edge-back-swipe-active {
+    isolation: isolate;
+    touch-action: pan-y;
+  }
+
+  .sidebar-session-surface.sidebar-edge-back-swipe-active .sidebar-projects-view,
+  .sidebar-session-surface.sidebar-edge-back-swipe-active .sidebar-list {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    flex: none;
+  }
+
+  .sidebar-session-surface.sidebar-edge-back-swipe-active .sidebar-projects-view {
+    display: flex !important;
+    z-index: 1;
+    visibility: visible;
+    overflow-y: auto;
+    pointer-events: none;
+    touch-action: pan-y;
+  }
+
+  .sidebar-session-surface.sidebar-edge-back-swipe-active .sidebar-list {
+    display: block !important;
+    z-index: 2;
+    overflow-y: auto;
+    pointer-events: auto;
+    touch-action: pan-y;
+    user-select: none;
+  }
+
+  .sidebar-edge-back-swipe-panel {
+    will-change: transform;
+    transform: translate3d(0, 0, 0);
+  }
+
+  .sidebar-session-surface.sidebar-edge-back-swipe-settling .sidebar-list,
+  .sidebar-project-header.sidebar-edge-back-swipe-settling {
+    transition: transform 220ms var(--motion-ease-standard);
+  }
+
+  .sidebar-project-header.sidebar-edge-back-swipe-panel {
+    will-change: transform;
+    transform: translate3d(0, 0, 0);
+    touch-action: pan-y;
+    user-select: none;
+  }
+
+  .sidebar {
+    width: 100vw;
+    max-width: none;
+    padding-top: 0;
+    border-right: 0;
+    background: var(--bg);
+    box-shadow: none;
+  }
+
+  .sidebar-app-bar,
+  .sidebar-search-mode-header,
+  .sidebar-subpage-header {
+    min-height: calc(72px + var(--safe-top));
+    padding: var(--safe-top) 16px 0;
+  }
+
+  .sidebar-primary-nav {
+    z-index: 10;
+    width: auto;
+    margin: 0;
+    padding: 0 12px 5px;
+  }
+
+  .sidebar-primary-nav .sidebar-workspace,
+  .sidebar-primary-nav .sidebar-workspace:not(.is-expanded) {
+    width: 100%;
+    margin: 0;
+    padding: 0 8px 0 12px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    text-align: left;
+  }
+
+  .sidebar-primary-nav .sidebar-workspace-summary,
+  .sidebar-primary-nav .sidebar-workspace:not(.is-expanded) .sidebar-workspace-summary,
+  .sidebar-primary-nav .sidebar-workspace-summary-text,
+  .sidebar-primary-nav .sidebar-workspace:not(.is-expanded) .sidebar-workspace-summary-text {
+    width: 100%;
+    font-size: 14px;
+    text-align: left;
+  }
+
+  .sidebar-primary-nav .sidebar-workspace-summary {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .sidebar-primary-action-chevron {
+    display: none;
+  }
+
+  .sidebar-primary-nav .sidebar-workspace-popover {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    top: auto;
+    z-index: 140;
+    width: 100%;
+    max-height: min(74dvh, 640px);
+    margin: 0;
+    padding: 22px 16px calc(20px + var(--safe-bottom));
+    border: 0;
+    border-radius: 30px 30px 0 0;
+    overflow-y: auto;
+    transform-origin: bottom center;
+  }
+
+  .sidebar-primary-nav .sidebar-workspace-popover:not([hidden]):not(.is-closing) {
+    animation: sidebar-workspace-sheet-in var(--motion-panel) var(--motion-ease-emphasized) both;
+  }
+
+  .sidebar-primary-nav .sidebar-workspace-popover .sidebar-section-title {
+    margin-bottom: 14px;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 24px;
+  }
+
+  .sidebar-primary-nav .sidebar-workspace-popover .cs-trigger,
+  .sidebar-primary-nav .sidebar-workspace-select,
+  .sidebar-primary-nav .sidebar-workspace-browser-select {
+    min-height: 52px;
+    padding: 0 42px 0 16px;
+    border-radius: 16px;
+    font-size: 15px;
+  }
+
+  .sidebar-primary-nav .sidebar-workspace-confirm {
+    width: 100%;
+    min-height: 52px;
+    border-radius: 24px;
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .sidebar-primary-nav .sidebar-workspace-browser {
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .sidebar-primary-nav .sidebar-workspace-browser-actions {
+    gap: 10px;
+  }
+
+  .sidebar-primary-nav .sidebar-workspace-browser-actions .btn {
+    min-height: 48px;
+    padding: 0 16px;
+    border-radius: 14px;
+    font-size: 14px;
+  }
+
+  .sidebar-session-surface .sidebar-list {
+    padding: 8px 8px var(--sidebar-bottom-reserve);
+  }
+
+  .sidebar[data-sidebar-mode="agents"] .settings-panel#agentsPanel,
+  .sidebar[data-sidebar-mode="settings"] .settings-panel#settingsPanel {
+    background: transparent;
+  }
+
+  .sidebar[data-sidebar-mode="model-providers"] .settings-panel#modelProvidersPanel,
+  .sidebar[data-sidebar-mode="harnesses"] .settings-panel#harnessesPanel {
+    background: transparent;
+  }
+}
+/* Subpage modes (agents / settings / search) hide the bottom frost on every
+   viewport: the bottom actions bar is hidden in these modes too, so the frost
+   has nothing to back — it only blurs the last items of the scrolling panel
+   behind it. Sessions mode keeps it as the fade-out bed for its bottom bar. */
+.sidebar[data-sidebar-mode="agents"] .sidebar-bottom-frost,
+.sidebar[data-sidebar-mode="settings"] .sidebar-bottom-frost,
+.sidebar[data-sidebar-mode="model-providers"] .sidebar-bottom-frost,
+.sidebar[data-sidebar-mode="harnesses"] .sidebar-bottom-frost,
+.sidebar[data-sidebar-mode="search"] .sidebar-bottom-frost {
+  display: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+body.share-snapshot-mode .session-mode-banner {
+  display: block;
+}
+body.share-snapshot-mode .composer-summary,
+body.share-snapshot-mode .input-config-row,
+body.share-snapshot-mode .input-row,
+body.share-snapshot-mode .input-actions-row,
+body.share-snapshot-mode .composer-pending-state {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .provider-helper-grid { grid-template-columns: 1fr; }
+  .modal { width: 100%; max-height: calc(100dvh - 24px); }
+  .modal-body { padding: 14px; }
+  .modal-header,
+  .modal-footer { padding: 12px 14px; }
+}
+
+@media (min-width: 768px) {
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-overlay.is-gesture-settling .sidebar {
+    transition: none;
+  }
+}
+
+/* ===== Mobile unified control style: proportional large rounded corners =====
+   Radius scales WITH element size, not one flat value. Settings page: only the
+   category cards, the dropdown triggers and the dropdown options are rounded —
+   individual settings rows stay flat inside their card. The shared .cs-trigger +
+   .cs-option rules unify EVERY dropdown (settings, workspace switcher, source
+   filter). Bottom sheets keep --radius-sheet-top. Desktop untouched (<=767px). */
+@media (max-width: 767px) {
+  :root {
+    --mx-r-control: 24px; /* dropdown triggers / buttons / short bars (~40-52px) */
+    --mx-r-row: 28px;     /* session / agent-result rows (~56-64px) */
+    --mx-r-card: 34px;    /* settings category cards / agent cards (~96px+) */
+    --mx-dd-trigger-h: 52px; /* dropdown trigger bars (settings 40 -> 52; matches workspace) */
+    --mx-dd-option-h: 52px;  /* dropdown option buttons (comfortable thumb target) */
+    --mx-card-pad: 18px;  /* big-card padding — breathes inside the 34px radius */
+  }
+
+  /* Category / big cards (settings-section is a real card on mobile) */
+  .sidebar .settings-section,
+  .sidebar .settings-app-card {
+    border-radius: var(--mx-r-card) !important;
+    padding: var(--mx-card-pad) !important;
+  }
+  /* Workspace path browser card (24px radius) — proportional padding */
+  .sidebar .sidebar-workspace-browser {
+    padding: 16px !important;
+  }
+
+  /* Full-width rows (settings rows stay flat, not rounded) */
+  .sidebar .session-item,
+  .sidebar .sidebar-agent-search-result {
+    border-radius: var(--mx-r-row) !important;
+  }
+
+  /* Search shell: proven 22px on ~48px height (~46%) */
+  .sidebar .sidebar-search-shell {
+    border-radius: 22px !important;
+  }
+
+  /* Dropdown triggers + dropdown options + action controls.
+     The first two are GLOBAL (no .sidebar prefix): custom-select panels are
+     portaled to document.body, so a .sidebar-scoped rule never reaches the
+     options. .custom-select-wrap .cs-trigger covers every dropdown button;
+     .cs-option covers every dropdown option, wherever the panel is rendered. */
+  .custom-select-wrap .cs-trigger,
+  .custom-select-panel .cs-option,
+  .sidebar .sidebar-workspace-summary,
+  .sidebar .settings-app-btn,
+  .sidebar .sidebar-workspace-select,
+  .sidebar .sidebar-workspace-browser-select,
+  .sidebar .sidebar-workspace-confirm,
+  .sidebar .sidebar-workspace-browser-actions {
+    border-radius: var(--mx-r-control) !important;
+  }
+
+  /* Larger touch target for agent action buttons */
+  .sidebar .settings-app-btn {
+    min-height: 48px;
+  }
+
+  /* Unified mobile touch SIZES for dropdown triggers + option buttons.
+     Settings dropdown trigger grows from 40px to the same 52px already used by
+     the workspace switcher; every dropdown option becomes a uniform 52px row
+     with consistent padding/font. (Source-filter options already match.) */
+  .sidebar .custom-select-wrap.cs-settings-row .cs-trigger {
+    min-height: var(--mx-dd-trigger-h) !important;
+    font-size: 15px !important;
+  }
+  .custom-select-panel .cs-option {
+    min-height: var(--mx-dd-option-h) !important;
+    padding: 0 16px !important;
+    font-size: 15px !important;
+  }
+  .custom-select-panel .cs-option + .cs-option {
+    margin-top: 4px !important;
+  }
+
+  /* Workspace switcher internals + floating dropdown panels.
+     Floating custom-select panels grow 12px -> 24px to match their option
+     buttons. Workspace browser card + its action buttons join the same 24px
+     radius and 52px touch size. The mode/name/path selects are reaffirmed at
+     52px with a broader scope (the prior rule was pinned under
+     .sidebar-primary-nav). */
+  .custom-select-panel {
+    border-radius: var(--mx-r-control) !important;
+  }
+  .sidebar .sidebar-workspace-browser {
+    border-radius: var(--mx-r-control) !important;
+  }
+  .sidebar .sidebar-workspace-browser-actions .btn {
+    min-height: var(--mx-dd-trigger-h) !important;
+    border-radius: var(--mx-r-control) !important;
+  }
+  .sidebar .sidebar-workspace-select,
+  .sidebar .sidebar-workspace-browser-select,
+  .sidebar-primary-nav .sidebar-workspace-popover .cs-trigger {
+    min-height: var(--mx-dd-trigger-h) !important;
+  }
+
+  /* Keep the primary action legible and stable: project creation must stay on
+     one line, while the L2 Agent action joins the same bottom row instead of
+     floating above the Settings/account controls. */
+  .sidebar {
+    --sidebar-bottom-reserve: calc(96px + var(--safe-bottom));
+  }
+
+  .sidebar-agent-btn {
+    position: static;
+    flex: 0 0 48px;
+    width: 48px;
+    min-width: 48px;
+    height: 48px;
+    padding: 0;
+    gap: 0;
+    border-radius: 50%;
+  }
+
+  .sidebar-bottom-actions {
+    gap: 6px;
+  }
+
+  .sidebar .sidebar-new-chat-btn {
+    flex: 0 0 160px;
+    width: 160px;
+    min-width: 160px;
+    max-width: 160px;
+    min-height: 52px;
+    height: 52px;
+    padding: 0 16px;
+    gap: 8px;
+    white-space: nowrap;
+    border-radius: 26px;
+  }
+
+  /* L2 has one extra circular action. Preserve the full-size primary action
+     on L1, then make room for the fourth control without squeezing labels. */
+  .sidebar-bottom-actions:has(.sidebar-agent-btn:not([hidden])) .sidebar-new-chat-btn {
+    flex: 0 0 136px;
+    width: 136px;
+    min-width: 136px;
+    max-width: 136px;
+    min-height: 52px;
+    height: 52px;
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .sidebar-bottom-frost {
+    height: calc(84px + var(--safe-bottom));
+  }
+
+  /* ===== Main canvas — align with the sidebar tier system (first pass) =====
+     Composer container + user bubbles + the "+" add-menu join the same
+     proportional radius tokens. More surfaces (assistant blocks, approval
+     cards, workbench) follow in later passes. */
+  .input-wrapper {
+    border-radius: var(--mx-r-control) !important;
+  }
+  .composer-add-menu {
+    border-radius: var(--mx-r-control) !important;
+  }
+
+  /* ===== Main canvas — batch 2: content cards ===== */
+  .tool-card,
+  .thinking-block {
+    border-radius: var(--mx-r-row) !important;
+  }
+  .tool-card {
+    padding: 0 !important;
+  }
+  .attachment-card {
+    border-radius: var(--mx-r-control) !important;
+  }
+
+  /* ===== Main canvas — batch 3: modals, popover menus, settings controls =====
+     Finish the remaining high-frequency mobile surfaces with the same radius and
+     padding tiers. Icon-only buttons stay circular; text/actions get 52px touch
+     rows and control-tier corners. */
+  .modal {
+    border-radius: var(--mx-r-card) !important;
+  }
+  .modal-body {
+    padding: var(--mx-card-pad) !important;
+  }
+  .modal-header,
+  .modal-footer {
+    padding: 16px var(--mx-card-pad) !important;
+  }
+  .modal-btn,
+  .settings-row-button,
+  .settings-inline-primary {
+    min-height: var(--mx-dd-trigger-h) !important;
+    padding: 0 18px !important;
+    border-radius: var(--mx-r-control) !important;
+  }
+  .modal-close {
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 50% !important;
+  }
+  .composer-add-menu,
+  .header-overflow-menu,
+  .msg-touch-menu {
+    border-radius: 13px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    border: 0 !important;
+  }
+  .composer-add-menu-item,
+  .composer-runtime-option,
+  .header-overflow-menu-item,
+  .msg-touch-menu .msg-action-btn {
+    min-height: 35px !important;
+    padding: 0 12px !important;
+    border-radius: 0 !important;
+    font-size: 13px !important;
+    gap: 8px !important;
+  }
+  .settings-inline-input,
+  .settings-inline-select {
+    min-height: var(--mx-dd-trigger-h) !important;
+    padding: 0 16px !important;
+    border-radius: var(--mx-r-control) !important;
+    font-size: 15px !important;
+  }
+  .settings-inline-textarea {
+    min-height: 104px !important;
+    padding: 14px 16px !important;
+    border-radius: var(--mx-r-row) !important;
+    font-size: 15px !important;
+  }
+  .composer-add-menu-item .rl-icon,
+  .composer-runtime-option .rl-icon,
+  .header-overflow-menu-item .rl-icon,
+  .msg-touch-menu .msg-action-btn .rl-icon {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  /* ===== Main canvas — batch 4: peripheral mobile surfaces =====
+     Header/queued menus, provider helper forms, delivery cards, and the mobile
+     right-sidebar launcher now match the same touch and surface scale. */
+  .queued-steer-menu {
+    border-radius: 13px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    border: 0 !important;
+  }
+  .queued-steer-menu-item {
+    min-height: 35px !important;
+    padding: 0 12px 0 34px !important;
+    border-radius: 0 !important;
+    font-size: 13px !important;
+  }
+  .provider-helper-card {
+    border-radius: var(--mx-r-row) !important;
+    padding: var(--mx-card-pad) !important;
+  }
+  .provider-helper-field input,
+  .provider-helper-field select {
+    min-height: var(--mx-dd-trigger-h) !important;
+    padding: 0 16px !important;
+    border-radius: var(--mx-r-control) !important;
+    font-size: 15px !important;
+  }
+  .provider-helper-field textarea {
+    min-height: 104px !important;
+    padding: 14px 16px !important;
+    border-radius: var(--mx-r-row) !important;
+    font-size: 15px !important;
+  }
+  .right-sidebar-big-button {
+    min-height: 88px !important;
+    padding: var(--mx-card-pad) !important;
+    border-radius: var(--mx-r-card) !important;
+  }
+  .right-sidebar-big-button-icon {
+    border-radius: 20px !important;
+  }
+
+  /* ===== Main canvas — batch 5: workspace file reader =====
+     The mobile file reader is a full-panel tool, so its search, file rows, and
+     header actions need the same large touch scale as the rest of the app. */
+  .workspace-file-reader-search-input {
+    min-height: var(--mx-dd-trigger-h) !important;
+    padding: 0 16px !important;
+    border-radius: var(--mx-r-control) !important;
+    font-size: 15px !important;
+  }
+  .workspace-file-tree-folder-toggle,
+  .workspace-file-tree-file {
+    min-height: var(--mx-dd-option-h) !important;
+    padding: 0 14px !important;
+    border-radius: var(--mx-r-control) !important;
+    font-size: 15px !important;
+  }
+  .workspace-file-reader-back,
+  .workspace-file-reader-refresh,
+  .workspace-file-reader-close {
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 50% !important;
+  }
+  .workspace-file-reader-empty,
+  .workspace-file-reader-status {
+    padding: calc(var(--mx-card-pad) + 10px) !important;
+  }
+
+  /* ===== Main canvas — batch 6: Run Sheet internals =====
+     Run Sheet CSS can be injected after chat.css, so these declarations are
+     important and intentionally limited to high-touch rows/buttons/status cards. */
+  .run-sheet__content {
+    padding: var(--mx-card-pad) 20px calc(22px + var(--safe-bottom, 0px)) !important;
+  }
+  .run-sheet__md-button,
+  .run-sheet__reader-status {
+    border-radius: var(--mx-r-control) !important;
+  }
+  .run-sheet__md-button {
+    min-height: var(--mx-dd-option-h) !important;
+    padding: 10px 14px !important;
+  }
+  .run-sheet__file {
+    min-height: 44px !important;
+    padding: 6px 10px !important;
+    border-radius: var(--mx-r-control) !important;
+  }
+  .run-sheet__reader-action {
+    min-height: 44px !important;
+    padding: 0 14px !important;
+    border-radius: var(--mx-r-control) !important;
+    font-size: 13px !important;
+  }
+  .run-sheet__reader-content {
+    padding: var(--mx-card-pad) 20px calc(30px + var(--safe-bottom, 0px)) !important;
+  }
+
+  .codex-plan-progress {
+    display: none !important;
+  }
+
+  /* Widen dropdown triggers + panels so English values aren't truncated.
+     The settings control column was capped at 136px; lifting the cap lets each
+     dropdown size to its content (label takes the rest), and the portaled panel
+     gets a comfortable min-width so options show in full. */
+  .sidebar .settings-row-control,
+  .sidebar .settings-row-select,
+  .sidebar .custom-select-wrap.cs-settings-row {
+    max-width: none !important;
+  }
+  .sidebar .custom-select-wrap.cs-settings-row {
+    min-width: 180px !important;
+  }
+  .custom-select-panel {
+    min-width: min(220px, calc(100vw - 32px));
+  }
+
+  /* ===== Delivery artifact group =====
+     The group owns the surface; its file rows stay flat and touch-sized. */
+  .delivery-card {
+    border-radius: 0 !important;
+    padding: 0 !important;
+  }
+  .delivery-card-files {
+    border-radius: var(--artifact-group-radius, var(--mx-r-row)) !important;
+  }
+  .delivery-card .attachment-card {
+    border-radius: 0 !important;
+    min-height: var(--artifact-row-height, 52px);
+  }
+  /* Icon-only download buttons — touch-sized square on mobile */
+  .delivery-card .attachment-download-btn,
+  .run-sheet__reader-action.run-sheet__reader-download--icon,
+  .markdown-reader-action.markdown-reader-download--icon {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    padding: 0 !important;
+  }
+
+  /* The Agent page opens with one clear action, then a short list of reusable
+     rows. No helper paragraph or full-height wrapper competes with the list. */
+  .sidebar[data-sidebar-mode="agents"] .settings-panel#agentsPanel .settings-section {
+    min-height: auto;
+  }
+
+  .sidebar[data-sidebar-mode="agents"] .settings-panel#agentsPanel .settings-app-header {
+    padding: 0 2px 12px;
+  }
+
+  .sidebar[data-sidebar-mode="agents"] .settings-panel#agentsPanel #createAgentBtn {
+    width: 100%;
+  }
+
+  .sidebar[data-sidebar-mode="agents"] .settings-panel#agentsPanel .settings-app-actions {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .sidebar[data-sidebar-mode="settings"] .settings-panel#settingsPanel .settings-group-card,
+  .sidebar[data-sidebar-mode="model-providers"] .settings-panel#modelProvidersPanel .settings-group-card,
+  .sidebar[data-sidebar-mode="harnesses"] .settings-panel#harnessesPanel .settings-group-card {
+    border-radius: 28px;
+    background: var(--surface-soft, var(--bg-secondary));
+  }
+}
+
+/* Compact mobile hierarchy. Target sizes remain accessible; only the visible
+   corner language and card mass are reduced. */
+@media (max-width: 767px) {
+  :root {
+    --mx-r-control: 14px;
+    --mx-r-row: 16px;
+    --mx-r-card: 20px;
+    --mx-card-pad: 14px;
+  }
+  .header-btn--sessions,
+  .header-more-btn:not([hidden]) { background: transparent; box-shadow: none; }
+  .header-overflow-menu,
+  .composer-add-menu { border-radius: 13px !important; }
+  .msg-touch-menu { border-radius: 13px !important; }
+  .thinking-block { border-radius: 13px !important; box-shadow: none; }
+  .sidebar .settings-section,
+  .sidebar .settings-app-card { border-radius: 18px !important; }
+  .sidebar[data-sidebar-mode="settings"] .settings-panel#settingsPanel .settings-group-card { border-radius: 16px; }
+  .sidebar .session-item { border-radius: 12px !important; }
+  .sidebar .session-item.active { border-radius: 999px !important; }
+  /* Keep the primary project/session action capsule-shaped on touch too. */
+  .sidebar .sidebar-new-chat-btn { border-radius: 26px; }
+}
+/* Side panels should read as navigation and configuration, not a card gallery. */
+@media (max-width: 767px) {
+  .sidebar-app-bar,
+  .sidebar-search-mode-header,
+  .sidebar-subpage-header {
+    min-height: calc(60px + var(--safe-top));
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .sidebar-brand {
+    font-size: 22px;
+    line-height: 28px;
+    font-weight: 680;
+  }
+
+  .sidebar[data-sidebar-mode="agents"] .settings-panel#agentsPanel .settings-app-header {
+    justify-content: flex-start;
+    padding: 0 0 10px;
+  }
+
+  .sidebar[data-sidebar-mode="agents"] .settings-panel#agentsPanel #createAgentBtn {
+    width: auto;
+    min-height: 44px;
+    padding: 0 14px;
+    border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text);
+  }
+
+  .sidebar[data-sidebar-mode="agents"] .settings-panel#agentsPanel .settings-apps-list {
+    gap: 0;
+  }
+
+  .sidebar[data-sidebar-mode="agents"] .settings-panel#agentsPanel .settings-app-card,
+  .sidebar[data-sidebar-mode="agents"] .settings-panel#agentsPanel .settings-app-card:first-child {
+    padding: 13px 2px;
+    border: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--divider-subtle) 82%, transparent);
+    border-radius: 0 !important;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .sidebar[data-sidebar-mode="agents"] .settings-panel#agentsPanel .settings-app-actions {
+    margin-top: 8px;
+    gap: 4px;
+    grid-template-columns: auto auto;
+    justify-content: start;
+  }
+
+  .sidebar[data-sidebar-mode="agents"] .settings-panel#agentsPanel .settings-app-btn {
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: 10px;
+  }
+
+  .sidebar[data-sidebar-mode="agents"] .settings-panel#agentsPanel .settings-app-btn.settings-app-btn-primary {
+    border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+    background: var(--surface-hover);
+    color: var(--text);
+  }
+
+  .sidebar[data-sidebar-mode="agents"] .settings-panel#agentsPanel .settings-app-btn.settings-app-btn-danger {
+    border-color: transparent;
+  }
+
+  .sidebar[data-sidebar-mode="settings"] .settings-panel#settingsPanel .settings-group-card {
+    box-shadow: none;
+  }
+}
+@media (max-width: 767px) {
+  .sidebar-app-bar,
+  .sidebar-search-mode-header,
+  .sidebar-subpage-header {
+    min-height: calc(72px + var(--safe-top));
+  }
+}
+
+/* Previous package control geometry. */
+@media (max-width: 767px) {
+  .header-leading-actions {
+    width: 82px;
+    min-width: 82px;
+    height: 40px;
+    padding: 0 1px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--bg-secondary) 96%, transparent);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 4%, transparent), 0 4px 14px color-mix(in srgb, var(--text) 4%, transparent);
+  }
+  .header-leading-actions .header-btn--sessions,
+  .header-leading-actions .header-btn--home {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0;
+    border-color: transparent;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: none;
+  }
+  .header-btn--sessions .header-btn-icon .rl-icon { width: 18px; height: 18px; }
+  .composer-runtime-btn, .composer-permission-btn { max-width: min(32vw, 132px); min-height: 34px; padding: 0 10px; font-size: 12px; }
+}

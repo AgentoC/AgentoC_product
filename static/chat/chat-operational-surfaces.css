@@ -1,0 +1,200 @@
+/* Operational surface finish -------------------------------------------------
+   This last cascade boundary keeps transient UI tangible and quiet. It removes
+   historical glass treatment from decision scopes without changing their DOM
+   or interaction contracts. */
+
+:root {
+  --operational-hairline: color-mix(in srgb, var(--sys-outline-variant) 78%, transparent);
+  --operational-surface: var(--sys-surface-container-high);
+  --operational-floating-shadow: var(--m3-elevation-3);
+}
+
+/* A temporary scope earns a restrained shadow and a quiet edge. The rest of
+   the workbench stays tonal, rather than turning every grouped region into a
+   framed card. */
+#decisionSheet.oneui-notification,
+#goalSheet .modal,
+.custom-select-panel,
+.custom-select-wrap .cs-panel,
+#composerAgentPanel,
+#composerConnectorPanel {
+  background: var(--operational-surface) !important;
+  border: 0.5px solid var(--operational-hairline) !important;
+  box-shadow: var(--operational-floating-shadow) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+#decisionSheet.oneui-notification {
+  --oneui-raised: var(--sys-surface-container-highest);
+}
+
+/* Dialog regions are one action scope, not a stack of glass cards. The
+   decision sheet's header strip must not keep the older --oneui-surface tint:
+   the surface boundary above forces the sheet body to container-high, so a
+   container-tinted header reads as a visibly darker top half (obvious in dark
+   mode). Same single-surface treatment as the popup and the footer. */
+#attentionPopupHost .oneui-notification__header,
+#attentionPopupHost .oneui-notification__footer,
+#decisionSheet .oneui-notification__header,
+#decisionSheet .oneui-notification__footer,
+#goalSheet .modal-header,
+#goalSheet .modal-body,
+#goalSheet .goal-sheet-footer {
+  background: transparent !important;
+}
+
+#attentionPopupHost .oneui-notification__detail,
+#decisionSheet .oneui-notification__detail,
+#attentionPopupHost .oneui-notification__optrow,
+#attentionPopupHost .oneui-notification__answer-input,
+#decisionSheet .decision-sheet__batch-section {
+  border: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* The transcript remains content-first. Both streamed and settled content use
+   the same cadence, so new text advances without visual jumping. */
+.msg-assistant-body,
+.msg-assistant-body .md-content {
+  line-height: 1.68;
+}
+
+.msg-assistant-body > :is(p, ul, ol, blockquote, pre, table),
+.msg-assistant-body .md-content > :is(p, ul, ol, blockquote, pre, table) {
+  margin-block: 0 14px;
+}
+
+.tool-card,
+.md-content .code-block-wrap,
+.runtime-approval-summary,
+.msg-failed-status {
+  border: 0.5px solid var(--operational-hairline);
+  box-shadow: none;
+}
+
+/* Code is a reading surface, not a screenshot-like card. Keep the wrapper
+   inside the message column, then give the pre element ownership of the
+   horizontal viewport. chat-m3-components.css intentionally uses a shared
+   overflow reset for many surfaces; this later, code-specific rule restores
+   the scroll contract without allowing the page itself to pan. */
+.msg-assistant-body,
+.msg-assistant-body .md-content,
+.md-content .code-block-wrap {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.md-content .code-block-wrap {
+  background: #f1f2f4 !important;
+  border: 0 !important;
+  border-radius: var(--m3-shape-large, 16px) !important;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--text) 5%, transparent) !important;
+  overflow: hidden !important;
+}
+
+.md-content .code-block-header {
+  background: #e7e9ed !important;
+  color: #4c5360;
+}
+
+.md-content .code-block-language,
+.md-content .code-block-language-icon {
+  color: #4c5360;
+}
+
+.md-content .code-block-wrap pre {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  background: transparent !important;
+  border: 0;
+  border-radius: inherit;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  scrollbar-width: thin;
+}
+
+.md-content .code-block-wrap pre > code {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.md-content .code-block-wrap .code-copy-btn {
+  position: static;
+  top: auto;
+  right: auto;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-secondary);
+}
+
+.md-content .code-block-wrap .code-copy-btn:hover,
+.md-content .code-block-wrap .code-copy-btn:focus-visible {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text);
+  border-color: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .md-content .code-block-wrap {
+    background: #252629 !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24) !important;
+  }
+  :root:not([data-theme="light"]) .md-content .code-block-header {
+    background: #2c2d31 !important;
+    color: #c8ccd4;
+  }
+  :root:not([data-theme="light"]) .md-content .code-block-language,
+  :root:not([data-theme="light"]) .md-content .code-block-language-icon {
+    color: #c8ccd4;
+  }
+}
+
+:root[data-theme="dark"] .md-content .code-block-wrap {
+  background: #252629 !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24) !important;
+}
+:root[data-theme="dark"] .md-content .code-block-header {
+  background: #2c2d31 !important;
+  color: #c8ccd4;
+}
+:root[data-theme="dark"] .md-content .code-block-language,
+:root[data-theme="dark"] .md-content .code-block-language-icon {
+  color: #c8ccd4;
+}
+
+/* Status changes are spatially stable: no bounce, no decorative reveal. */
+.oneui-notification,
+#decisionSheet,
+.system-toast,
+.reconnect-indicator,
+.msg-assistant.stream-settling {
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oneui-notification,
+  #decisionSheet,
+  .system-toast,
+  .reconnect-indicator,
+  .msg-assistant.stream-settling {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+  }
+}
