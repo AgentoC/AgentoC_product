@@ -41,12 +41,28 @@ jobs:
           if (@(Get-Service -Name $services -ErrorAction SilentlyContinue).Count) { throw 'Existing AgentoC service detected' }
           $installer = (Get-ChildItem (Join-Path $env:RUNNER_TEMP 'agentoc-installer') -Filter '*.msi' -File).FullName
           $log = Join-Path $env:RUNNER_TEMP 'agentoc-msi.log'
+          $installStarted = (Get-Date).AddSeconds(-5)
           $p = Start-Process msiexec.exe -ArgumentList @('/i', "`"$installer`"", '/qn', '/norestart', '/l*v', "`"$log`"") -Wait -PassThru
           if ($p.ExitCode -ne 0) {
             Select-String -Path $log -Pattern 'Return value 3' -Context 20,5 | ForEach-Object { $_.ToString() }
             $diagnostic = 'C:\ProgramData\AgentoC\instances\owner\runtime\owner-msi-activation-failure.json'
             if (Test-Path -LiteralPath $diagnostic) { Get-Content -LiteralPath $diagnostic -Raw }
-            Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='AgentoC'; Id=4101} -ErrorAction SilentlyContinue | Select-Object -First 5 | Format-List TimeCreated,Id,Message
+            # The installer can unregister its event source during rollback.
+            # Filter the Application log by event ID first, then by provider;
+            # requesting the removed provider directly can throw and obscure
+            # the original installer exit code. Print only stable error codes.
+            try {
+              $events = Get-WinEvent -FilterHashtable @{ LogName='Application'; Id=@(1002,1004,1006,4101); StartTime=$installStarted } -MaxEvents 200 -ErrorAction Stop |
+                Where-Object { $_.ProviderName -eq 'AgentoC' } | Select-Object -First 20
+              foreach ($event in $events) {
+                $values = @($event.Properties | ForEach-Object { [string]$_.Value })
+                foreach ($value in $values) {
+                  foreach ($match in [regex]::Matches($value, '\b(?:SHT|OAT|OAX|OMI)_[A-Z0-9_]+\b')) {
+                    Write-Host ("AgentoC event {0}: {1}" -f $event.Id, $match.Value)
+                  }
+                }
+              }
+            } catch { Write-Host 'AgentoC startup event diagnostics unavailable.' }
             throw "Installer exited $($p.ExitCode)"
           }
           foreach ($name in $services) {
