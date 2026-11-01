@@ -1,0 +1,53 @@
+name: Windows installer smoke test
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag (drafts supported)
+        required: true
+      sha256:
+        description: Expected installer SHA-256
+        required: true
+permissions:
+  contents: read
+jobs:
+  fresh-install:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download and check the installer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          EXPECTED_SHA256: ${{ inputs.sha256 }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'agentoc-installer'
+          New-Item -ItemType Directory -Path $dir | Out-Null
+          gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --pattern '*.msi' --dir $dir
+          if ($LASTEXITCODE -ne 0) { throw 'Installer download failed' }
+          $files = @(Get-ChildItem $dir -Filter '*.msi' -File)
+          if ($files.Count -ne 1) { throw 'Expected exactly one installer' }
+          $actual = (Get-FileHash $files[0].FullName -Algorithm SHA256).Hash
+          if ($actual -ine $env:EXPECTED_SHA256) { throw 'Installer SHA-256 mismatch' }
+      - name: Fresh install and health check
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:RUNNER_TEMP -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') { throw 'A disposable GitHub-hosted runner is required' }
+          $services = @('AgentoC-ControlPlane', 'AgentoC-RunnerSupervisor', 'AgentoC-PrivilegedBroker')
+          if (@(Get-Service -Name $services -ErrorAction SilentlyContinue).Count) { throw 'Existing AgentoC service detected' }
+          $installer = (Get-ChildItem (Join-Path $env:RUNNER_TEMP 'agentoc-installer') -Filter '*.msi' -File).FullName
+          $log = Join-Path $env:RUNNER_TEMP 'agentoc-msi.log'
+          $p = Start-Process msiexec.exe -ArgumentList @('/i', "`"$installer`"", '/qn', '/norestart', '/l*v', "`"$log`"") -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content $log -Tail 100; throw "Installer exited $($p.ExitCode)" }
+          foreach ($name in $services) {
+            if ((Get-Service -Name $name -ErrorAction Stop).Status -ne 'Running') { throw "$name is not running" }
+          }
+          $healthy = $false
+          for ($attempt = 0; $attempt -lt 30; $attempt++) {
+            try { if ((Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:7690/healthz' -TimeoutSec 2).StatusCode -eq 200) { $healthy = $true; break } } catch {}
+            Start-Sleep -Seconds 2
+          }
+          if (-not $healthy) { throw 'Local health check failed' }
