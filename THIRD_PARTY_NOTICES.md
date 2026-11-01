@@ -26,6 +26,14 @@ Other npm, Gradle, Android SDK, and runtime dependencies retain their respective
 licenses. Consult their distributed license files; they are not relicensed by
 the AgentoC project license.
 
+The Android client uses Google ML Kit barcode scanning and Google Play services.
+These dependencies are subject to their own terms, including the [ML Kit terms
+and privacy notice](https://developers.google.com/ml-kit/terms) and [Android SDK
+terms](https://developer.android.com/studio/terms). Google states that ML Kit
+processes input on-device and may send API performance and usage metrics to
+Google. Review the applicable notices and data disclosures for the actual
+Android release build.
+
 License texts for the Go modules used by the P2P host build are collected in
 [`third_party_licenses/go/`](third_party_licenses/go/README.md). Packaging and
 license review for all delivered components remains in progress.
