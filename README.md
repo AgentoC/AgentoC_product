@@ -33,7 +33,7 @@ support, and actual model availability depend on the selected deployment and
 installed runtimes. See the release notes for the features verified in a given
 version.
 
-![Windows Electron desktop manager showing Harness management](docs/media/windows-desktop-manager.png)
+![Windows Electron desktop manager showing Harness management](docs/media/windows-desktop-manager-v2.png)
 
 *Windows desktop manager connected to a disposable local instance; no personal data is shown.*
 
