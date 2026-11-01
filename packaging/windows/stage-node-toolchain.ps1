@@ -6,6 +6,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $nodeRuntimeRoot = Split-Path -Parent $NodePath
+$nodeVersion = (& $NodePath --version | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $nodeVersion -notmatch '^v\d+\.\d+\.\d+$') { throw 'Cannot determine the bundled Node runtime version.' }
+$nodeLicense = Join-Path $PayloadRoot ("third_party_licenses\node\$nodeVersion-LICENSE.txt")
+if (-not (Test-Path -LiteralPath $nodeLicense -PathType Leaf)) { throw "Missing license and bundled notices for Node ${nodeVersion}: $nodeLicense" }
 $payloadNodeModules = Join-Path $PayloadRoot 'node_modules'
 New-Item -ItemType Directory -Path $payloadNodeModules -Force | Out-Null
 Copy-Item -LiteralPath $NodePath -Destination (Join-Path $PayloadRoot 'node.exe') -Force

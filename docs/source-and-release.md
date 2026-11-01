@@ -22,6 +22,10 @@ signing status, and verification result. A release may require toolchains or
 service configurations that are not bundled here. In particular, production
 signing keys and hosted-service credentials are never included.
 
+The current Windows packaging configuration includes Node.js v24.12.0 notices.
+Packaging with a different Node version requires adding that version's complete
+upstream license and bundled dependency notices before building the MSI.
+
 The account and relay code is available for inspection, but an independently
 deployed service and a full cross-device connection have not yet been validated
 from this candidate. Windows currently uses the project's hosted endpoints

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -13,8 +13,10 @@ if (process.platform !== 'win32') {
 }
 const exec = promisify(execFile);
 const root = await mkdtemp(join(tmpdir(), 'agentoc-node-toolchain-'));
+try {
 const payload = join(root, 'payload with spaces');
 await mkdir(payload);
+await mkdir(join(payload, 'third_party_licenses/node'), { recursive: true });
 await writeFile(join(payload, 'package.json'), '{"name":"toolchain-fixture","version":"1.0.0"}');
 await writeFile(join(payload, 'package-lock.json'), JSON.stringify({
   name: 'toolchain-fixture', version: '1.0.0', lockfileVersion: 3,
@@ -23,6 +25,8 @@ await writeFile(join(payload, 'package-lock.json'), JSON.stringify({
 const stage = () => exec(WINDOWS_POWERSHELL_EXECUTABLE, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
   '-File', resolve('packaging/windows/stage-node-toolchain.ps1'), '-NodePath', process.execPath, '-PayloadRoot', payload],
 { timeout: 60_000, windowsHide: true });
+await assert.rejects(stage(), (error) => /Missing license and bundled notices/.test(error.stderr));
+await copyFile(resolve(`third_party_licenses/node/${process.version}-LICENSE.txt`), join(payload, `third_party_licenses/node/${process.version}-LICENSE.txt`));
 await stage();
 // Reproduce the old build order using real npm ci, with no registry access.
 await exec(process.execPath, [join(dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js'),
@@ -55,3 +59,6 @@ const spec = buildPlatformSpawnSpec(join(payload, 'npm.cmd'), [
 await exec(spec.file, spec.args, { ...spec, env, timeout: 30_000, windowsHide: true });
 assert.equal(JSON.parse(await readFile(join(prefix, 'node_modules/agentoc-toolchain-smoke/package.json'), 'utf8')).version, '1.0.0');
 console.log(`PASS: reproduced ci pruning; bundled npm/corepack run without Node on PATH; offline install works. Fixture: ${root}`);
+} finally {
+  await rm(root, { recursive: true, force: true });
+}
