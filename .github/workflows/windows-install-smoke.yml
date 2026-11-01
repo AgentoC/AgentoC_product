@@ -42,7 +42,10 @@ jobs:
           $installer = (Get-ChildItem (Join-Path $env:RUNNER_TEMP 'agentoc-installer') -Filter '*.msi' -File).FullName
           $log = Join-Path $env:RUNNER_TEMP 'agentoc-msi.log'
           $p = Start-Process msiexec.exe -ArgumentList @('/i', "`"$installer`"", '/qn', '/norestart', '/l*v', "`"$log`"") -Wait -PassThru
-          if ($p.ExitCode -ne 0) { Get-Content $log -Tail 100; throw "Installer exited $($p.ExitCode)" }
+          if ($p.ExitCode -ne 0) {
+            Select-String -Path $log -Pattern 'Return value 3' -Context 20,5 | ForEach-Object { $_.ToString() }
+            throw "Installer exited $($p.ExitCode)"
+          }
           foreach ($name in $services) {
             if ((Get-Service -Name $name -ErrorAction Stop).Status -ne 'Running') { throw "$name is not running" }
           }
