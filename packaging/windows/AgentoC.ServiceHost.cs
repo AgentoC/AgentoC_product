@@ -625,16 +625,29 @@ namespace AgentoC.ServiceHost
             for(string p=Path.GetDirectoryName(path);p!=null;p=Path.GetDirectoryName(p)) {
                 pins.Add(ServiceDirectoryPin.Directory(p));var directory=Directory.GetAccessControl(p);
                 if(!admins.Contains(directory.GetOwner(typeof(SecurityIdentifier)).Value))throw new InvalidOperationException("SHT_INITIALIZATION_INPUT_OWNER");
-                foreach(FileSystemAccessRule rule in directory.GetAccessRules(true,true,typeof(SecurityIdentifier)))if(rule.AccessControlType==AccessControlType.Allow&&(rule.PropagationFlags&PropagationFlags.InheritOnly)==0&&!admins.Contains(rule.IdentityReference.Value)&&((long)rule.FileSystemRights&0x500d0152L)!=0)throw new InvalidOperationException("SHT_INITIALIZATION_INPUT_WRITABLE");
+                foreach(FileSystemAccessRule rule in directory.GetAccessRules(true,true,typeof(SecurityIdentifier)))if(rule.AccessControlType==AccessControlType.Allow&&(rule.PropagationFlags&PropagationFlags.InheritOnly)==0&&!admins.Contains(rule.IdentityReference.Value)&&((long)rule.FileSystemRights&0x500d0152L)!=0)throw new InvalidOperationException("SHT_INITIALIZATION_INPUT_WRITABLE "+AdministrativeInputStage(p,path,false));
             }
             var file=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);pins.Add(file);
             ServiceDirectoryPin.VerifyFile(file.SafeFileHandle,path);
             var acl=File.GetAccessControl(path);
             if(!admins.Contains(acl.GetOwner(typeof(SecurityIdentifier)).Value))throw new InvalidOperationException("SHT_INITIALIZATION_INPUT_OWNER");
-            foreach(FileSystemAccessRule rule in acl.GetAccessRules(true,true,typeof(SecurityIdentifier)))if(rule.AccessControlType==AccessControlType.Allow&&(rule.PropagationFlags&PropagationFlags.InheritOnly)==0&&!admins.Contains(rule.IdentityReference.Value)&&((long)rule.FileSystemRights&0x500d0156L)!=0)throw new InvalidOperationException("SHT_INITIALIZATION_INPUT_WRITABLE");
+            foreach(FileSystemAccessRule rule in acl.GetAccessRules(true,true,typeof(SecurityIdentifier)))if(rule.AccessControlType==AccessControlType.Allow&&(rule.PropagationFlags&PropagationFlags.InheritOnly)==0&&!admins.Contains(rule.IdentityReference.Value)&&((long)rule.FileSystemRights&0x500d0156L)!=0)throw new InvalidOperationException("SHT_INITIALIZATION_INPUT_WRITABLE "+AdministrativeInputStage(path,path,true));
             if(file.Length<1||file.Length>maximum)throw new InvalidOperationException("SHT_INITIALIZATION_INPUT_SIZE");
             if(maximum>8192)return null;
             var bytes=new byte[file.Length];int offset=0;while(offset<bytes.Length){int count=file.Read(bytes,offset,bytes.Length-offset);if(count<=0)throw new InvalidOperationException("SHT_INITIALIZATION_INPUT_TRUNCATED");offset+=count;}return bytes;
+        }
+
+        // Report only a fixed category, never an installation path, identity,
+        // ACL content, or credential. The checks themselves remain unchanged.
+        private static string AdministrativeInputStage(string ancestor,string input,bool file) {
+            if(file)return "SHT_INPUT_FILE";
+            string full=Path.GetFullPath(ancestor).TrimEnd('\\');
+            string root=Path.GetPathRoot(ancestor).TrimEnd('\\');
+            if(String.Equals(full,root,StringComparison.OrdinalIgnoreCase))return "SHT_INPUT_DRIVE_ROOT";
+            if(String.Equals(full,@"C:\ProgramData",StringComparison.OrdinalIgnoreCase))return "SHT_INPUT_PROGRAMDATA";
+            if(String.Equals(full,@"C:\Program Files",StringComparison.OrdinalIgnoreCase))return "SHT_INPUT_PROGRAM_FILES";
+            if(String.Equals(full,Path.GetDirectoryName(input).TrimEnd('\\'),StringComparison.OrdinalIgnoreCase))return "SHT_INPUT_PARENT";
+            return "SHT_INPUT_OTHER_ANCESTOR";
         }
 
         private static void CheckDataDirectory(string path,string sid,bool privateReads)
