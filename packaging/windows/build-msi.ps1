@@ -83,6 +83,8 @@ try {
     $runtimeStager = Join-Path $SourceRoot 'scripts\stage-runtime-payload.mjs'
     & $node.Source $runtimeStager --source $SourceRoot --destination $payloadRoot --profile desktop
     if ($LASTEXITCODE -ne 0) { throw 'Clean allowlisted Windows runtime staging failed.' }
+    # Keep the host's displayed build version aligned with the actual package.
+    & (Join-Path $scriptRoot 'write-package-version.ps1') -PayloadRoot $payloadRoot -Version $Version
     # Build Electron in a temporary, locked install so npm never mutates the
     # developer checkout. The staged tree contains only Electron's runtime and
     # the three desktop shell files, not npm or its build-only dependencies.
