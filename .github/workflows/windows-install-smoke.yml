@@ -9,7 +9,8 @@ on:
         description: Expected installer SHA-256
         required: true
 permissions:
-  contents: read
+  # GitHub exposes draft release assets only to identities with push access.
+  contents: write
 jobs:
   fresh-install:
     runs-on: windows-latest
