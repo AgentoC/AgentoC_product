@@ -2,7 +2,7 @@
 
 This repository is prepared from the AgentoC product source. The execution
 host, Android client, web workbench, account service source, TURN credential
-broker source, and selected tests are included in this candidate. Deployment
+broker source, and selected tests are included in the public tree. Deployment
 credentials, production data, private operational records, and historical design
 archives are excluded.
 
@@ -10,7 +10,7 @@ The public risk benchmark contains the AgentoC-maintained boundary fixture only.
 External datasets used in private evaluation are not distributed here, so its
 results are not comparable to the full private benchmark.
 
-The current candidate has contributor-build and test changes on top of its
+The public tree has contributor-build and test changes on top of its
 private source baseline. Those changes must be reviewed and reconciled before
 the candidate is treated as a release. The public Git commit recorded on a
 release, not an unpublished development checkout, will identify the public
@@ -28,5 +28,5 @@ upstream license and bundled dependency notices before building the MSI.
 
 The account and relay code is available for inspection, but an independently
 deployed service and a full cross-device connection have not yet been validated
-from this candidate. Windows currently uses the project's hosted endpoints
+from the public source. Windows currently uses the project's hosted endpoints
 outside the isolated test configuration.

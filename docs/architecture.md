@@ -1,7 +1,7 @@
 # Architecture
 
-> Preparation draft: service ownership, security boundaries, and deployment
-> instructions still require release review.
+> Service ownership, security boundaries, and deployment instructions still
+> require release verification.
 
 AgentoC consists of an execution host and client interfaces. The host manages
 sessions and integrates agent runtimes; clients render work and send requests.

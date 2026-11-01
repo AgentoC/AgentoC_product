@@ -1,8 +1,8 @@
 # Contributing
 
-This source tree is being prepared for public release. Before proposing a
-change, run the relevant tests in an isolated development environment; do not
-use production accounts, workspaces, or credentials as fixtures.
+Before proposing a change, run the relevant tests in an isolated development
+environment; do not use production accounts, workspaces, or credentials as
+fixtures.
 
 Useful checks from the repository root include:
 

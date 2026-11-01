@@ -6,8 +6,8 @@ AgentoC is an AI workbench that connects agent runtimes on a computer with a web
 interface and an Android app. It is designed for working with agent sessions
 across devices while the execution host remains under the user's control.
 
-> **Public candidate:** this README and the published feature and installation
-> claims require final review. Do not treat this candidate as a release.
+> **Early access:** the source is public for review. Release packages and
+> supported deployment configurations are still being verified.
 
 ## At a glance
 
