@@ -33,9 +33,9 @@ support, and actual model availability depend on the selected deployment and
 installed runtimes. See the release notes for the features verified in a given
 version.
 
-![Web workbench with an empty local instance](docs/media/workbench-empty.png)
+![Windows Electron desktop manager showing Harness management](docs/media/windows-desktop-manager.png)
 
-*Web workbench shown with a disposable local instance and no personal data.*
+*Windows desktop manager connected to a disposable local instance; no personal data is shown.*
 
 ## Explore the code
 

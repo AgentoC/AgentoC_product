@@ -5,6 +5,10 @@ AgentoC 是一个 AI 工作台，将计算机上运行的智能体工具与 Web 
 
 > 当前源码已公开供审阅；发布安装包及受支持的部署配置仍在验证。
 
+![Windows Electron 桌面管理器中的 Harness 管理界面](docs/media/windows-desktop-manager.png)
+
+*Windows 桌面管理器连接隔离的临时实例，画面不含个人数据。*
+
 ## 源码入口
 
 - `chat/`、`lib/`：会话、执行、运行时适配与共享逻辑。
