@@ -37,6 +37,10 @@ version.
 
 *Windows desktop manager connected to a disposable local instance; no personal data is shown.*
 
+<img src="docs/media/android-session.png" alt="Android app showing a completed example session" width="300">
+
+*Android test build connected to a shared demonstration instance.*
+
 ## Explore the code
 
 - `chat/` and `lib/`: session behavior, runtime integration and shared logic.

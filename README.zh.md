@@ -9,6 +9,10 @@ AgentoC 是一个 AI 工作台，将计算机上运行的智能体工具与 Web 
 
 *Windows 桌面管理器连接隔离的临时实例，画面不含个人数据。*
 
+<img src="docs/media/android-session.png" alt="Android 应用中已完成的示例会话" width="300">
+
+*Android 测试版本连接共享演示实例的实际画面。*
+
 ## 源码入口
 
 - `chat/`、`lib/`：会话、执行、运行时适配与共享逻辑。
