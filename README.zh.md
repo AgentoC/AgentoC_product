@@ -40,5 +40,5 @@ Google Play 发布，也不能用于验证正式 Google 登录或推送。
 
 ## 许可证
 
-项目自有源码计划采用 Apache-2.0；第三方组件保留各自的许可证，参见
+项目自有源码采用 Apache-2.0；第三方组件保留各自的许可证，参见
 `LICENSE`、`NOTICE` 和 `THIRD_PARTY_NOTICES.md`。依赖与素材审查仍在进行。

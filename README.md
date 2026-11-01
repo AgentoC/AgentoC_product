@@ -9,6 +9,21 @@ across devices while the execution host remains under the user's control.
 > **Public candidate:** this README and the published feature and installation
 > claims require final review. Do not treat this candidate as a release.
 
+## At a glance
+
+- Run a work session on a computer and follow it from the web workbench or
+  Android client, with streamed responses and session history.
+- Integrate agent runtimes, including Codex and Claude, through Harness and
+  provider adapters; supported features and installed versions vary.
+- Manage projects, files, runtime settings and approval requests on the host.
+- Connect devices through pairing and optional account, signaling and relay
+  services. The deployment, network path and account features determine which
+  remote capabilities are available.
+
+The local web interface is designed for local access. An operator exposing it
+to other machines must provide appropriate access control at the network or
+proxy boundary.
+
 ## What is in this repository
 
 The source includes multi-Harness and model-provider adapters, session and
@@ -109,7 +124,7 @@ are still being prepared.
 
 ## Licensing
 
-The intended license for AgentoC's own published code is Apache-2.0; see
+AgentoC's own published code is licensed under Apache-2.0; see
 `LICENSE` and `NOTICE`. Third-party components retain their own licenses; see
 `THIRD_PARTY_NOTICES.md`. The dependency and asset review is not yet complete.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for focused checks and
