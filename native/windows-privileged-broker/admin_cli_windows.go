@@ -219,8 +219,7 @@ func verifyBrokerAdminPipeServer(pipe windows.Handle) error {
 	if err != nil {
 		return errors.New("APB_ADMIN_PIPE_SERVER_IDENTITY_REFUSED")
 	}
-	member, err := token.IsMember(serviceSID)
-	if err != nil || !member {
+	if err := tokenHasExpectedServiceSID(token, serviceSID); err != nil {
 		return errors.New("APB_ADMIN_PIPE_SERVER_IDENTITY_REFUSED")
 	}
 	return nil

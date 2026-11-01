@@ -84,8 +84,7 @@ func (brokerService) Execute(args []string, requests <-chan svc.ChangeRequest, c
 	if err != nil {
 		return true, brokerExitServiceSIDRefused
 	}
-	member, err := windows.GetCurrentProcessToken().IsMember(serviceSID)
-	if err != nil || !member {
+	if err := tokenHasExpectedServiceSID(windows.GetCurrentProcessToken(), serviceSID); err != nil {
 		return true, brokerExitServiceSIDRefused
 	}
 	stateDirectory, err := brokerStateDirectory()
