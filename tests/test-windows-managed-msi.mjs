@@ -54,13 +54,13 @@ assert.match(activatedWix,/MSIUNINSTALLSUPERSEDEDCOMPONENTS/,'the minor update m
 assert.match(activatedWix,/NOT UPGRADINGPRODUCTCODE/,'major-upgrade removal must preserve Owner and Broker state');
 assert.match(activatedWix,/ManagedMajorUpgradeRefused/,'unvalidated ProductCode changes must stop before RemoveExistingProducts');
 assert.match(activatedWix,/<\?if \$\(var\.MsiUpgradeLane\) = "major" \?>\s*<Custom Action="ManagedMajorUpgradeRefused"/,'the minor lane must omit the major-upgrade refusal sequence when WiX disables that action');
-assert.match(activatedWix,/<CustomAction Id="ManagedUpgradeGuard"[^>]+Execute="immediate"/,'minor-upgrade admission must inspect live service tokens before MSI stops services');
+assert.match(activatedWix,/<CustomAction Id="ManagedUpgradeGuard"[^>]+Execute="deferred" Impersonate="no"/,'minor-upgrade admission must run elevated to inspect protected service state');
 assert.match(activatedWix,/upgrade-admission \$\(var\.MsiProductVersion\) &quot;\$\(var\.ProductCode\)&quot;/,'minor-upgrade admission must compare the candidate MSI version and product identity');
 assert.match(activatedWix,/<Package[^>]+Version="\$\(var\.MsiProductVersion\)"/,'the MSI package version must use its three-part effective version');
 assert.match(msiBuilder,/MSI_MINOR_EFFECTIVE_VERSION_REQUIRED/,'minor updates must specify a Windows Installer effective version');
 assert.match(msiBuilder,/MSI_MINOR_EFFECTIVE_VERSION_NOT_NEWER/,'minor updates must increase a Windows Installer version field');
 assert.match(msiBuilder,/assert-minor-component-compat\.ps1/,'minor updates must preserve the previous MSI component tree');
-assert.match(activatedWix,/<Custom Action="ManagedUpgradeGuard" Before="InstallValidate" Condition="Installed AND REINSTALL/,'minor-upgrade admission must run before MSI validation/service/file mutations');
+assert.match(activatedWix,/<Custom Action="ManagedUpgradeGuard" Before="ManagedUpgradeRollback" Condition="Installed AND REINSTALL/,'minor-upgrade admission must precede rollback registration, service stops, and file mutations');
 assert.match(bridge,/MsiGetProductInfo\(productCode,"VersionString"/,'minor-upgrade admission must read the installed version from Windows Installer');
 assert.match(bridge,/package\.CompareTo\(installed\)<0/,'downgrades must be refused while same-version repair remains available');
 assert.match(bridge,/OMI_UPDATE_OLDER/,'downgrade refusal must have a typed result');

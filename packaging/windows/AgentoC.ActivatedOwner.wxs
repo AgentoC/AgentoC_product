@@ -70,7 +70,9 @@
     <CustomAction Id="ManagedConfigureBrokerServiceTrustUpgrade" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="configure-broker-service $(var.ProductVersion) $(var.BrokerSha256) &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedBrokerOwnerReset" FileRef="PrivilegedBrokerBinary" ExeCommand="admin owner-reset" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedRemoveRollback" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="remove-rollback $(var.ProductVersion) $(var.BrokerSha256) &quot;[INSTALLFOLDER].&quot;" Execute="rollback" Impersonate="no" Return="ignore" />
-    <CustomAction Id="ManagedUpgradeGuard" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-admission $(var.MsiProductVersion) &quot;$(var.ProductCode)&quot; &quot;[INSTALLFOLDER].&quot;" Execute="immediate" Return="check" />
+    <!-- Admission needs an administrator token to inspect the protected owner
+         state. Run it in the elevated transaction before any mutation. -->
+    <CustomAction Id="ManagedUpgradeGuard" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-admission $(var.MsiProductVersion) &quot;$(var.ProductCode)&quot; &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedUpgradeBegin" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-begin &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedUpgradeRollback" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-rollback &quot;[INSTALLFOLDER].&quot;" Execute="rollback" Impersonate="no" Return="ignore" />
     <CustomAction Id="ManagedPrepareExisting" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-prepare &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
@@ -122,7 +124,7 @@
 
       <?if $(var.MsiUpgradeLane) = "minor" ?>
         <Custom Action="ManagedMaintenanceRefused" Before="InstallValidate" Condition="Installed AND NOT (REMOVE = &quot;ALL&quot;) AND NOT REINSTALL" />
-        <Custom Action="ManagedUpgradeGuard" Before="InstallValidate" Condition="Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;)" />
+        <Custom Action="ManagedUpgradeGuard" Before="ManagedUpgradeRollback" Condition="Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;)" />
         <Custom Action="ManagedUpgradeRollback" Before="ManagedUpgradeBegin" Condition="Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;)" />
         <Custom Action="ManagedUpgradeBegin" Before="StopServices" Condition="Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;)" />
       <?else?>
