@@ -13,7 +13,23 @@ function Initialize-OwnerUpgradeTokenReader {
  Add-Type -TypeDefinition @'
 using System;using System.Text;using System.Collections.Generic;using System.Runtime.InteropServices;using System.Security.Principal;
 public sealed class AgentoCOwnerUpgradeTokenFacts {public string userSid;public int integrityRid,sessionId;public bool elevated,enabledAdministrators;public string[] privileges;}
+public sealed class AgentoCOwnerBrokerFacts {public string account,binary;public int state,startType,serviceType;}
 public static class AgentoCOwnerUpgradeTokenReader {
+ [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)]struct ServiceConfig {public int serviceType,startType,errorControl;public IntPtr binary,group;public int tag;public IntPtr dependencies,account,displayName;}
+ [StructLayout(LayoutKind.Sequential)]struct ServiceStatus {public int serviceType,state,controlsAccepted,win32ExitCode,serviceSpecificExitCode,checkPoint,waitHint,processId,flags;}
+ [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern IntPtr OpenSCManager(string machine,string database,uint access);
+ [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern IntPtr OpenService(IntPtr manager,string name,uint access);
+ [DllImport("advapi32.dll",SetLastError=true)]static extern bool CloseServiceHandle(IntPtr handle);
+ [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern bool QueryServiceConfig(IntPtr service,IntPtr buffer,int size,out int needed);
+ [DllImport("advapi32.dll",SetLastError=true)]static extern bool QueryServiceStatusEx(IntPtr service,int level,out ServiceStatus status,int size,out int needed);
+ public static AgentoCOwnerBrokerFacts ReadBroker(string name){
+  IntPtr manager=OpenSCManager(null,null,1);Need(manager!=IntPtr.Zero);try{IntPtr service=OpenService(manager,name,5);Need(service!=IntPtr.Zero);try{
+   int needed;QueryServiceConfig(service,IntPtr.Zero,0,out needed);Need(needed>0&&needed<=65536);IntPtr buffer=Marshal.AllocHGlobal(needed);try{
+    Need(QueryServiceConfig(service,buffer,needed,out needed));var c=(ServiceConfig)Marshal.PtrToStructure(buffer,typeof(ServiceConfig));ServiceStatus s;Need(QueryServiceStatusEx(service,0,out s,Marshal.SizeOf(typeof(ServiceStatus)),out needed));
+    return new AgentoCOwnerBrokerFacts{account=Marshal.PtrToStringUni(c.account),binary=Marshal.PtrToStringUni(c.binary),state=s.state,startType=c.startType,serviceType=c.serviceType};
+   }finally{Marshal.FreeHGlobal(buffer);}
+  }finally{CloseServiceHandle(service);}}finally{CloseServiceHandle(manager);}
+ }
  [DllImport("kernel32.dll",SetLastError=true)]static extern IntPtr OpenProcess(uint access,bool inherit,int pid);
  [DllImport("kernel32.dll",SetLastError=true)]static extern bool CloseHandle(IntPtr handle);
  [DllImport("advapi32.dll",SetLastError=true)]static extern bool OpenProcessToken(IntPtr process,uint access,out IntPtr token);
@@ -124,9 +140,9 @@ function Invoke-OwnerUpgradeAdmission {
   $path=if($kind -ceq 'security'){Join-Path $ownerRoot 'security'}else{$policyPath};$acl=if($kind -ceq 'security'){[IO.Directory]::GetAccessControl($path)}else{[IO.File]::GetAccessControl($path)}
   if(-not $acl.AreAccessRulesProtected -or $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -cne 'S-1-5-32-544' -or $acl.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::Access) -cne (New-OwnerPolicySecurity $policy $kind).GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::Access)){throw 'OUG_INSTALL_POLICY_ACL_MISMATCH'}
  }
- $broker=Get-CimInstance Win32_Service -Filter "Name='AgentoC-PrivilegedBroker'"
+ $broker=[AgentoCOwnerUpgradeTokenReader]::ReadBroker('AgentoC-PrivilegedBroker')
  $brokerBinary=Join-Path $product 'Broker\AgentoC.PrivilegedBroker.exe'
- if(-not $broker -or $broker.StartName -ine 'LocalSystem' -or $broker.State -cne 'Running' -or $broker.StartMode -cne 'Auto' -or $broker.PathName -cne ('"'+$brokerBinary+'"')){throw 'OUG_BROKER_STATE_REFUSED'}
+ if(-not $broker -or $broker.account -ine 'LocalSystem' -or $broker.state -ne 4 -or $broker.startType -ne 2 -or $broker.serviceType -ne 16 -or $broker.binary.Trim('"') -ine $brokerBinary){throw 'OUG_BROKER_STATE_REFUSED'}
  Assert-UpgradePath $brokerBinary $false
  return @{ok=$true;readOnly=$true;upgradeAdmitted=$true;credentialContentsRead=$false;identityReused=$true;dataMigration='in-place-preserve';services=@($services|ForEach-Object {@{name=$_.name;role=$_.role;tokenVerified=$true}});dataLayoutVerified=$true;brokerServicePresent=$true;authorityIssued=$false}
 }
