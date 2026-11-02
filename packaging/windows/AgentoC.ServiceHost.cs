@@ -625,7 +625,15 @@ namespace AgentoC.ServiceHost
             for(string p=Path.GetDirectoryName(path);p!=null;p=Path.GetDirectoryName(p)) {
                 pins.Add(ServiceDirectoryPin.Directory(p));var directory=Directory.GetAccessControl(p);
                 if(!admins.Contains(directory.GetOwner(typeof(SecurityIdentifier)).Value))throw new InvalidOperationException("SHT_INITIALIZATION_INPUT_OWNER");
-                foreach(FileSystemAccessRule rule in directory.GetAccessRules(true,true,typeof(SecurityIdentifier)))if(rule.AccessControlType==AccessControlType.Allow&&(rule.PropagationFlags&PropagationFlags.InheritOnly)==0&&!admins.Contains(rule.IdentityReference.Value)&&((long)rule.FileSystemRights&0x500d0152L)!=0)throw new InvalidOperationException("SHT_INITIALIZATION_INPUT_WRITABLE "+AdministrativeInputStage(p,path,false));
+                bool needsWitness=false;
+                foreach(FileSystemAccessRule rule in directory.GetAccessRules(true,true,typeof(SecurityIdentifier))) {
+                    if(rule.AccessControlType!=AccessControlType.Allow||(rule.PropagationFlags&PropagationFlags.InheritOnly)!=0||admins.Contains(rule.IdentityReference.Value))continue;
+                    long rights=(long)rule.FileSystemRights;
+                    if((rights&0x500d0152L)==0)continue;
+                    if(!AllowPinnedProgramDataAncestor(p,rights))throw new InvalidOperationException("SHT_INITIALIZATION_INPUT_WRITABLE "+AdministrativeInputStage(p,path,false));
+                    needsWitness=true;
+                }
+                if(needsWitness)pins.AddRange(ServiceDirectoryPin.NonemptyDirectory(@"C:\ProgramData",@"C:\ProgramData\Microsoft"));
             }
             var file=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);pins.Add(file);
             ServiceDirectoryPin.VerifyFile(file.SafeFileHandle,path);
@@ -635,6 +643,11 @@ namespace AgentoC.ServiceHost
             if(file.Length<1||file.Length>maximum)throw new InvalidOperationException("SHT_INITIALIZATION_INPUT_SIZE");
             if(maximum>8192)return null;
             var bytes=new byte[file.Length];int offset=0;while(offset<bytes.Length){int count=file.Read(bytes,offset,bytes.Length-offset);if(count<=0)throw new InvalidOperationException("SHT_INITIALIZATION_INPUT_TRUNCATED");offset+=count;}return bytes;
+        }
+
+        private static bool AllowPinnedProgramDataAncestor(string path,long rights) {
+            return String.Equals(Path.GetFullPath(path).TrimEnd('\\'),@"C:\ProgramData",StringComparison.OrdinalIgnoreCase)
+                && (rights&0x500d0040L)==0;
         }
 
         // Report only a fixed category, never an installation path, identity,
