@@ -37,7 +37,6 @@
       <SetProperty Id="REINSTALLMODE" Value="amus" Before="CostInitialize" Sequence="execute" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
     <?endif?>
     <CustomAction Id="LaunchAgentoC" BinaryRef="Wix4UtilCA_X64" DllEntry="WixUnelevatedShellExec" Execute="immediate" Return="check" />
-    <util:CloseApplication Id="CloseAgentoCManager" Target="AgentoC.exe" CloseMessage="yes" PromptToContinue="yes" Description="AgentoC is still open. Close it to continue setup or removal." Timeout="15" />
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
     <UI>
       <Publish Dialog="ExitDialog" Control="Finish" Property="WixUnelevatedShellExecTarget" Value="[INSTALLFOLDER]payload\Desktop\AgentoC.exe" Order="1" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
@@ -47,6 +46,8 @@
     <Binary Id="ManagedOwnerMsiBridge" SourceFile="!(bindpath.ManagedBridge)\AgentoC.ManagedOwnerMsiBridge.exe" />
     <CustomAction Id="ManagedFreshGuard" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="fresh &quot;[UserSID]&quot; &quot;[INSTALLFOLDER].&quot;" Execute="immediate" Return="check" />
     <CustomAction Id="ManagedRemoveGuard" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="remove-admission &quot;[INSTALLFOLDER].&quot;" Execute="immediate" Return="check" />
+    <CustomAction Id="ManagedCloseDesktopBeforeValidation" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="close-desktop-current-user &quot;[INSTALLFOLDER].&quot;" Execute="immediate" Return="check" />
+    <CustomAction Id="ManagedCloseDesktop" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="close-desktop &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedConfigureBrokerServiceTrust" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="configure-broker-service $(var.ProductVersion) $(var.BrokerSha256) &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedConfigureBrokerServiceTrustUpgrade" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="configure-broker-service $(var.ProductVersion) $(var.BrokerSha256) &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedBrokerOwnerReset" FileRef="PrivilegedBrokerBinary" ExeCommand="admin owner-reset" Execute="deferred" Impersonate="no" Return="check" />
@@ -93,6 +94,8 @@
       <?endif?>
       <Custom Action="ManagedFreshGuard" Before="InstallValidate" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
       <Custom Action="ManagedRemoveGuard" Before="InstallValidate" Condition="Installed AND REMOVE = &quot;ALL&quot;" />
+      <Custom Action="ManagedCloseDesktopBeforeValidation" After="ManagedRemoveGuard" Condition="Installed AND REMOVE = &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="ManagedCloseDesktop" Before="ManagedRemoveRollback" Condition="Installed AND REMOVE = &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
       <Custom Action="ManagedRemoveRollback" Before="ManagedBrokerOwnerReset" Condition="Installed AND REMOVE = &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
       <Custom Action="ManagedBrokerOwnerReset" Before="StopServices" Condition="Installed AND REMOVE = &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
 

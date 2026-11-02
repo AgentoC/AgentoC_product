@@ -1,6 +1,6 @@
 // Compile, query and exercise read-only local refusals. Never msiexec/SCM writes.
 import assert from 'node:assert/strict';import {execFile} from 'node:child_process';import {promisify} from 'node:util';import {existsSync} from 'node:fs';import {mkdir,readFile,writeFile} from 'node:fs/promises';import {tmpdir} from 'node:os';import {resolve,join} from 'node:path';
-const exec=promisify(execFile),ps='C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe',root=resolve('artifacts/showcase/T2-current-20261020/managed-msi/local');await mkdir(root,{recursive:true});
+const exec=promisify(execFile),ps='C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe',root=resolve(process.env.AGENTOC_MSI_TEST_EVIDENCE_DIR||'artifacts/showcase/T2-current-20261020/managed-msi/local');await mkdir(root,{recursive:true});
 await exec(ps,['-NoProfile','-NonInteractive','-File','packaging/windows/build-managed-owner-msi-bridge.ps1','-OutputPath',join(root,'AgentoC.ManagedOwnerMsiBridge.exe')],{windowsHide:true,timeout:30000,maxBuffer:65536});
 const exe=join(root,'AgentoC.ManagedOwnerMsiBridge.exe');let count=0;
 const missingRoot=join(tmpdir(),`agentoc-owner-msi-bridge-missing-${process.pid}`);assert.equal(existsSync(missingRoot),false,'negative-path root must be absent');
@@ -85,6 +85,10 @@ assert.match(bridge,/Run\("UpgradeCommit",null\)/,'successful recovery must comm
 assert.match(activatedWix,/<Custom Action="ManagedInstallCommit" Before="InstallFinalize" Condition="NOT Installed/,'recovery commit cleanup must run inside the fresh-install transaction');
 assert.match(activatedWix,/<Property Id="MSIRESTARTMANAGERCONTROL" Value="Disable"/,'Restart Manager must be disabled at MSI session creation so the Broker stays available for administrator revocation');
 assert.match(activatedWix,/<Custom Action="ManagedRemove" Before="DeleteServices"/,'active removal must drain and verify ordinary services before MSI deletes their registrations');
+assert.match(activatedWix,/<CustomAction Id="ManagedCloseDesktop"[^>]+Execute="deferred" Impersonate="no"/,'uninstall must use the elevated scoped desktop shutdown action');
+assert.match(activatedWix,/<Custom Action="ManagedCloseDesktopBeforeValidation" After="ManagedRemoveGuard"/,'close the current user desktop before MSI checks in-use files');
+assert.match(activatedWix,/<Custom Action="ManagedCloseDesktop" Before="ManagedRemoveRollback" Condition="Installed AND REMOVE = &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE"/,'desktop shutdown must be part of uninstall before service teardown');
+assert.doesNotMatch(activatedWix,/<util:CloseApplication[^>]+Target="AgentoC\.exe"/,'uninstall must not terminate other same-named applications by name alone');
 assert.match(activatedWix,/<Custom Action="ManagedRemoveRollback" Before="ManagedBrokerOwnerReset"/,'uninstall rollback must be registered before irreversible owner reset');
 assert.equal((activatedWix.match(/<PermissionEx Sddl="O:SYG:SYD:\(A;;GA;;;SY\)\(A;;GA;;;BA\)\(A;;CCLCSWLOCRRC;;;IU\)\(A;;CCLCSWLOCRRC;;;SU\)"\s*\/>/g)||[]).length,2,'both Owner service objects must grant SYSTEM service configuration rights without granting ordinary users mutations');
 assert.match(bridge,/RemoveRollback\(string version,string expectedSha256\)/,'uninstall rollback must verify the fixed Broker package identity');

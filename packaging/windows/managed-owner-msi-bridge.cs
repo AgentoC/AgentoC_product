@@ -31,6 +31,11 @@ static class ManagedOwnerMsiBridge {
  [DllImport("advapi32.dll",SetLastError=true)]static extern bool QueryServiceObjectSecurity(IntPtr service,uint information,IntPtr descriptor,uint size,out uint needed);
  [DllImport("advapi32.dll",SetLastError=true)]static extern bool SetServiceObjectSecurity(IntPtr service,uint information,IntPtr descriptor);
  [DllImport("advapi32.dll")]static extern bool CloseServiceHandle(IntPtr handle);
+ [DllImport("kernel32.dll",SetLastError=true)]static extern IntPtr OpenProcess(uint access,bool inherit,int processId);
+ [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern bool QueryFullProcessImageName(IntPtr process,uint flags,StringBuilder name,ref int size);
+ [DllImport("kernel32.dll",SetLastError=true)]static extern bool TerminateProcess(IntPtr process,uint exitCode);
+ [DllImport("kernel32.dll",SetLastError=true)]static extern uint WaitForSingleObject(IntPtr handle,uint milliseconds);
+ [DllImport("kernel32.dll",SetLastError=true)]static extern bool CloseHandle(IntPtr handle);
  static void Need(bool ok,string code){if(!ok)throw new InvalidOperationException(code);}
  static int UpgradeAdmission(string packageVersion,string productCode){
   Need(Regex.IsMatch(packageVersion,@"\A\d{1,5}(?:\.\d{1,5}){2}\z"),"OMI_PRODUCT_VERSION_INVALID");
@@ -55,6 +60,40 @@ static class ManagedOwnerMsiBridge {
   string full=Path.GetFullPath(value).TrimEnd('\\');
   Need(full.Length>2&&!String.Equals(full,Path.GetPathRoot(full).TrimEnd('\\'),StringComparison.OrdinalIgnoreCase),"OMI_INSTALL_ROOT_REFUSED");
   Product=full;
+ }
+ static void CloseInstalledDesktop(){
+  Need(WindowsIdentity.GetCurrent().User.Value=="S-1-5-18","OMI_CLOSE_SYSTEM_REQUIRED");
+  ValidateProductRoot();if(ActiveLayout())ActiveAdmission();else RemoveCheck(true);
+  string expected=Path.GetFullPath(Path.Combine(Product,"payload","Desktop","AgentoC.exe"));
+  CloseProcessesForPath(expected,false);
+ }
+ static void CloseCurrentUserDesktop(){
+  ValidateProductRoot();if(ActiveLayout())ActiveAdmission();else RemoveCheck(true);
+  CloseProcessesForPath(Path.GetFullPath(Path.Combine(Product,"payload","Desktop","AgentoC.exe")),true);
+ }
+ static bool HasWindow(Process process){try{return process.MainWindowHandle!=IntPtr.Zero;}catch{return false;}}
+ static void CloseProcessesForPath(string expected,bool tolerateAccessDenied){
+  for(int round=0;round<3;round++){
+   int matched=0;var processes=Process.GetProcessesByName("AgentoC").OrderByDescending(HasWindow).ToArray();
+   try{foreach(var process in processes){
+    IntPtr handle=OpenProcess(0x1000|0x0001|0x00100000,false,process.Id);
+    if(handle==IntPtr.Zero){int error=Marshal.GetLastWin32Error();if(error==87||error==1168||(tolerateAccessDenied&&error==5))continue;throw new InvalidOperationException("OMI_CLOSE_PROCESS_OPEN_FAILED");}
+    try{
+     if(WaitForSingleObject(handle,0)==0)continue;
+     var image=new StringBuilder(32768);int length=image.Capacity;
+     Need(QueryFullProcessImageName(handle,0,image,ref length),"OMI_CLOSE_PROCESS_QUERY_FAILED");
+     if(!String.Equals(Path.GetFullPath(image.ToString()),expected,StringComparison.OrdinalIgnoreCase))continue;
+     matched++;
+     bool requested=false;
+     try{requested=process.CloseMainWindow();}catch(InvalidOperationException){}catch(System.ComponentModel.Win32Exception){}catch(NotSupportedException){}
+     if(requested&&WaitForSingleObject(handle,3000)==0)continue;
+     if(!TerminateProcess(handle,0)&&WaitForSingleObject(handle,0)!=0)throw new InvalidOperationException("OMI_CLOSE_PROCESS_TERMINATE_FAILED");
+     Need(WaitForSingleObject(handle,10000)==0,"OMI_CLOSE_PROCESS_TIMEOUT");
+    }finally{CloseHandle(handle);}
+   }}finally{foreach(var process in processes)process.Dispose();}
+   if(matched==0){Console.WriteLine("OMI_DESKTOP_CLOSED");return;}
+  }
+  throw new InvalidOperationException("OMI_CLOSE_PROCESS_RESPAWNING");
  }
  static string Hash(Stream stream){using(var sha=SHA256.Create())return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-","").ToLowerInvariant();}
  static void PinBrokerInputs(List<IDisposable> pins,string binary,string manifest){
@@ -398,6 +437,8 @@ static class ManagedOwnerMsiBridge {
    // admission only reads public state; the deferred non-impersonating Remove
    // repeats all privileged validation before any deletion or RemoveFiles.
    if(args.Length==1&&args[0]=="remove-admission"){if(ActiveLayout()){ActiveAdmission();Console.WriteLine(new JavaScriptSerializer().Serialize(new{ok=true,readOnly=true,requiresDeferredValidation=true,activeInstallation=true,authorityIssued=false}));return 0;}bool policy=RemoveCheck(true);Console.WriteLine(new JavaScriptSerializer().Serialize(new{ok=true,readOnly=true,requiresDeferredValidation=true,policyPrepared=policy,authorityIssued=false}));return 0;}
+   if(args.Length==1&&args[0]=="close-desktop-current-user"){CloseCurrentUserDesktop();return 0;}
+   if(args.Length==1&&args[0]=="close-desktop"){CloseInstalledDesktop();return 0;}
    if(args.Length==1&&args[0]=="remove-check"){if(ActiveLayout()){ActiveAdmission();return Run("ActiveRemoveCheck",null);}if(RemoveCheck(true))return Run("PolicyRemoveCheck",null);Console.WriteLine("OMI_REMOVABLE_PREPARED");return 0;}
    if(args.Length==1&&args[0]=="remove"){if(ActiveLayout()){ActiveAdmission();return Run("ActiveRemove",null);}return Run(RemoveCheck(true)?"PolicyRemove":"Remove",null);}
    if(args.Length==1&&args[0]=="initialize"){
