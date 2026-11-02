@@ -85,6 +85,13 @@ try {
    try{$removedStream.Write($removedBytes,0,$removedBytes.Length);$removedStream.Flush($true)}finally{$removedStream.Dispose()}
    $confirmed=Read-OwnerPinnedFile $removedMarker @(Get-OwnerAdministrativeSids) $pins 8192
    if((Get-OwnerDigest $confirmed) -cne (Get-OwnerDigest $removedBytes)){throw 'ORP_REMOVAL_MARKER_INVALID'}
+   # Best-effort discovery hint only: recovery still verifies the protected
+   # removal receipts, owner and retained policy before accepting this path.
+   # If the hint cannot be written, the installer asks for the old folder.
+   try{
+    $key=[Microsoft.Win32.Registry]::LocalMachine.CreateSubKey('SOFTWARE\AgentoC')
+    if($key){try{$key.SetValue('LastRemovedProductRoot',$product,[Microsoft.Win32.RegistryValueKind]::String)}finally{$key.Dispose()}}
+   }catch{}
   }else{foreach($s in $services){$s.Verify()};for($i=$services.Count-1;$i -ge 0;$i--){$services[$i].Remove()}}
  }
  $complete=$true

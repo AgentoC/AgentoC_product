@@ -338,6 +338,28 @@ bool ChooseRecoverySource(std::wstring& chosen) {
     return !chosen.empty();
 }
 
+std::wstring FindRecoverySourceHint() {
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\AgentoC", 0,
+        KEY_QUERY_VALUE | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS) return {};
+    DWORD type = 0, bytes = 0;
+    const LONG query = RegQueryValueExW(key, L"LastRemovedProductRoot", nullptr, &type, nullptr, &bytes);
+    if (query != ERROR_SUCCESS || type != REG_SZ || bytes < sizeof(wchar_t) || bytes > 65536) {
+        RegCloseKey(key); return {};
+    }
+    std::vector<wchar_t> buffer(bytes / sizeof(wchar_t) + 1, L'\0');
+    const LONG read = RegQueryValueExW(key, L"LastRemovedProductRoot", nullptr, &type,
+        reinterpret_cast<BYTE*>(buffer.data()), &bytes);
+    RegCloseKey(key);
+    if (read != ERROR_SUCCESS || type != REG_SZ) return {};
+    const std::wstring candidate(buffer.data());
+    if (candidate.empty()) return {};
+    const std::wstring marker = candidate + L"\\owner-msi.removed.json";
+    const DWORD attributes = GetFileAttributesW(marker.c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT))) return {};
+    return candidate;
+}
+
 bool NormalizeInstallPath(std::wstring value, std::wstring& normalized, std::wstring& error) {
     while (!value.empty() && iswspace(value.front())) value.erase(value.begin());
     while (!value.empty() && iswspace(value.back())) value.pop_back();
@@ -598,8 +620,8 @@ void SubmitInstall() {
     const std::wstring selectedReceipt = selected + L"owner-msi.removed.json";
     if (retained != INVALID_FILE_ATTRIBUTES && (retained & FILE_ATTRIBUTE_DIRECTORY)
         && GetFileAttributesW(selectedReceipt.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        std::wstring previous, normalizedPrevious;
-        if (!ChooseRecoverySource(previous) || !NormalizeInstallPath(previous, normalizedPrevious, error)) {
+        std::wstring previous = FindRecoverySourceHint(), normalizedPrevious;
+        if ((previous.empty() && !ChooseRecoverySource(previous)) || !NormalizeInstallPath(previous, normalizedPrevious, error)) {
             g.errorDetail = error.empty()
                 ? Text(L"Select the previous installation folder to retain existing data.",
                        L"请选择之前的安装文件夹，以保留现有数据。") : error;
