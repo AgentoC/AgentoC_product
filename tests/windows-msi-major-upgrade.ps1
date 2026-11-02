@@ -14,6 +14,8 @@ $upgrade=[Guid]::NewGuid().ToString('B').ToUpperInvariant();$component=[Guid]::N
 $report=[ordered]@{pass=$false;test='major upgrade, service SID restoration and rollback of isolated service';service=$service;oldProduct=$oldProduct;newProduct=$newProduct;failedUpgradeExit=$null;oldRestored=$false;serviceSidRestored=$false;successfulUpgradeExit=$null;newInstalled=$false;cleanupConfirmed=$false}
 if(Test-Path -LiteralPath $root){throw 'MJU_ROOT_EXISTS'}
 New-Item -ItemType Directory -Path $root | Out-Null
+& icacls.exe $root /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
+if($LASTEXITCODE -ne 0){throw 'MJU_WORKSPACE_ACL_FAILED'}
 try{
  $serviceSource=Join-Path $root 'QaService.cs';$serviceExe=Join-Path $root 'QaService.exe';$failSource=Join-Path $root 'QaFail.cs';$failExe=Join-Path $root 'QaFail.exe';$guardSource=Join-Path $root 'QaGuard.cs';$guardExe=Join-Path $root 'QaGuard.exe';$restoreSource=Join-Path $root 'QaRestore.cs';$restoreExe=Join-Path $root 'QaRestore.exe';$restoredMarker=Join-Path $root 'restored.txt'
  @"
