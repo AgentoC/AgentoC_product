@@ -11,17 +11,26 @@ $id=[Guid]::NewGuid().ToString('N');$root=Join-Path $parent ('agentoc-major-qa-'
 $install=Join-Path $root 'installed';$service='AgentoC-MajorQa-'+$id.Substring(0,12)
 $oldProduct=[Guid]::NewGuid().ToString('B').ToUpperInvariant();$newProduct=[Guid]::NewGuid().ToString('B').ToUpperInvariant()
 $upgrade=[Guid]::NewGuid().ToString('B').ToUpperInvariant();$component=[Guid]::NewGuid().ToString('B').ToUpperInvariant();$contentComponent=[Guid]::NewGuid().ToString('B').ToUpperInvariant()
-$report=[ordered]@{pass=$false;test='major upgrade and rollback of isolated service';service=$service;oldProduct=$oldProduct;newProduct=$newProduct;failedUpgradeExit=$null;oldRestored=$false;successfulUpgradeExit=$null;newInstalled=$false;cleanupConfirmed=$false}
+$report=[ordered]@{pass=$false;test='major upgrade, service SID restoration and rollback of isolated service';service=$service;oldProduct=$oldProduct;newProduct=$newProduct;failedUpgradeExit=$null;oldRestored=$false;serviceSidRestored=$false;successfulUpgradeExit=$null;newInstalled=$false;cleanupConfirmed=$false}
 if(Test-Path -LiteralPath $root){throw 'MJU_ROOT_EXISTS'}
 New-Item -ItemType Directory -Path $root | Out-Null
 try{
- $serviceSource=Join-Path $root 'QaService.cs';$serviceExe=Join-Path $root 'QaService.exe';$failSource=Join-Path $root 'QaFail.cs';$failExe=Join-Path $root 'QaFail.exe';$guardSource=Join-Path $root 'QaGuard.cs';$guardExe=Join-Path $root 'QaGuard.exe'
+ $serviceSource=Join-Path $root 'QaService.cs';$serviceExe=Join-Path $root 'QaService.exe';$failSource=Join-Path $root 'QaFail.cs';$failExe=Join-Path $root 'QaFail.exe';$guardSource=Join-Path $root 'QaGuard.cs';$guardExe=Join-Path $root 'QaGuard.exe';$restoreSource=Join-Path $root 'QaRestore.cs';$restoreExe=Join-Path $root 'QaRestore.exe';$restoredMarker=Join-Path $root 'restored.txt'
  @"
 using System.ServiceProcess;
 public sealed class QaService:ServiceBase {public QaService(){ServiceName="$service";} protected override void OnStart(string[] args){} protected override void OnStop(){} public static void Main(){ServiceBase.Run(new QaService());}}
 "@ | Set-Content -LiteralPath $serviceSource -Encoding UTF8
  [IO.File]::WriteAllText($failSource,'public static class QaFail { public static int Main(){return 93;} }')
  [IO.File]::WriteAllText($guardSource,'using System.ServiceProcess; public static class QaGuard { public static int Main(){try{using(var s=new ServiceController("'+$service+'")){return s.Status==ServiceControllerStatus.Running?0:92;}}catch{return 92;}} }')
+ $restoreCode=@"
+using System;using System.Diagnostics;using System.IO;using System.ServiceProcess;
+public static class QaRestore {public static int Main(){try{
+ var p=Process.Start(new ProcessStartInfo{FileName=@"C:\Windows\System32\sc.exe",Arguments="sidtype $service unrestricted",UseShellExecute=false,CreateNoWindow=true});p.WaitForExit();if(p.ExitCode!=0)return 91;
+ using(var s=new ServiceController("$service")){s.Refresh();if(s.Status!=ServiceControllerStatus.Running){if(s.Status!=ServiceControllerStatus.Stopped)s.WaitForStatus(ServiceControllerStatus.Stopped,TimeSpan.FromSeconds(30));s.Start();s.WaitForStatus(ServiceControllerStatus.Running,TimeSpan.FromSeconds(30));}}
+ File.WriteAllText(@"$restoredMarker","restored");return 0;
+}catch{return 92;}}}
+"@
+ [IO.File]::WriteAllText($restoreSource,$restoreCode)
  $csc=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
  & $csc /nologo /target:exe /r:System.ServiceProcess.dll ('/out:'+$serviceExe) $serviceSource
  if($LASTEXITCODE -ne 0){throw 'MJU_SERVICE_COMPILE_FAILED'}
@@ -29,11 +38,13 @@ public sealed class QaService:ServiceBase {public QaService(){ServiceName="$serv
  if($LASTEXITCODE -ne 0){throw 'MJU_FAIL_COMPILE_FAILED'}
  & $csc /nologo /target:exe /r:System.ServiceProcess.dll ('/out:'+$guardExe) $guardSource
  if($LASTEXITCODE -ne 0){throw 'MJU_GUARD_COMPILE_FAILED'}
+ & $csc /nologo /target:exe /r:System.ServiceProcess.dll ('/out:'+$restoreExe) $restoreSource
+ if($LASTEXITCODE -ne 0){throw 'MJU_RESTORE_COMPILE_FAILED'}
  function Build-Qa([string]$version,[string]$label,[string]$product,[bool]$isUpgrade){
   $content=Join-Path $root ($label+'.txt');[IO.File]::WriteAllText($content,$label)
   $wxs=Join-Path $root ($label+'.wxs');$msi=Join-Path $root ($label+'.msi')
   $major=if($isUpgrade){'<MajorUpgrade DowngradeErrorMessage="Newer version installed." Schedule="afterInstallExecute" />'}else{''}
-  $fault=if($isUpgrade){'<Binary Id="Failure" SourceFile="'+$failExe+'" /><Binary Id="Guard" SourceFile="'+$guardExe+'" /><CustomAction Id="QaGuard" BinaryRef="Guard" ExeCommand="" Execute="deferred" Impersonate="no" Return="check" /><CustomAction Id="QaInjectedFailure" BinaryRef="Failure" ExeCommand="" Execute="deferred" Impersonate="no" Return="check" /><InstallExecuteSequence><Custom Action="QaGuard" After="InstallInitialize" Condition="WIX_UPGRADE_DETECTED" /><InstallExecute After="QaGuard" /><Custom Action="QaInjectedFailure" After="StartServices" Condition="QA_FAIL_UPDATE = 1" /></InstallExecuteSequence>'}else{''}
+  $fault=if($isUpgrade){'<Binary Id="Failure" SourceFile="'+$failExe+'" /><Binary Id="Guard" SourceFile="'+$guardExe+'" /><Binary Id="Restore" SourceFile="'+$restoreExe+'" /><CustomAction Id="QaGuard" BinaryRef="Guard" ExeCommand="" Execute="deferred" Impersonate="no" Return="check" /><CustomAction Id="QaRestore" BinaryRef="Restore" ExeCommand="" Execute="rollback" Impersonate="no" Return="ignore" /><CustomAction Id="QaInjectedFailure" BinaryRef="Failure" ExeCommand="" Execute="deferred" Impersonate="no" Return="check" /><InstallExecuteSequence><Custom Action="QaGuard" After="InstallInitialize" Condition="WIX_UPGRADE_DETECTED" /><Custom Action="QaRestore" After="QaGuard" Condition="WIX_UPGRADE_DETECTED" /><InstallExecute After="QaRestore" Condition="WIX_UPGRADE_DETECTED" /><Custom Action="QaInjectedFailure" After="StartServices" Condition="QA_FAIL_UPDATE = 1" /></InstallExecuteSequence>'}else{''}
   $xml=@"
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
  <Package Name="AgentoC Major Upgrade QA $id" Manufacturer="AgentoC QA" Version="$version" ProductCode="$product" UpgradeCode="$upgrade" Scope="perMachine">
@@ -56,12 +67,16 @@ public sealed class QaService:ServiceBase {public QaService(){ServiceName="$serv
  $code=Invoke-Qa @('/i',('"'+$old+'"'),('INSTALLFOLDER="'+$install+'"'),'/qn','/norestart')
  if($code -ne 0){throw ('MJU_OLD_INSTALL_FAILED_'+$code)}
  if((Get-Service -Name $service).Status -ne 'Running'){throw 'MJU_OLD_SERVICE_NOT_RUNNING'}
+ & sc.exe sidtype $service unrestricted | Out-Null
+ if($LASTEXITCODE -ne 0){throw 'MJU_INITIAL_SID_FAILED'}
  $failedLog=Join-Path $root 'failed.log'
  $report.failedUpgradeExit=Invoke-Qa @('/i',('"'+$new+'"'),('INSTALLFOLDER="'+$install+'"'),'QA_FAIL_UPDATE=1','/qn','/norestart','/l*v',('"'+$failedLog+'"'))
  $wi=New-Object -ComObject WindowsInstaller.Installer
  try{$oldVersion=$wi.ProductInfo($oldProduct,'VersionString')}catch{$oldVersion=''}
  $oldService=Get-Service -Name $service -ErrorAction SilentlyContinue
- $report.oldRestored=($report.failedUpgradeExit -ne 0 -and $oldVersion -match '^0\.0\.1' -and $oldService -and $oldService.Status -eq 'Running' -and [IO.File]::ReadAllText((Join-Path $install 'payload.txt')) -ceq 'v1' -and (Select-String -LiteralPath $failedLog -Pattern 'QaInjectedFailure' -Quiet))
+ $sidType=(Get-ItemProperty -LiteralPath ('HKLM:\SYSTEM\CurrentControlSet\Services\'+$service) -Name ServiceSidType -ErrorAction SilentlyContinue).ServiceSidType
+ $report.serviceSidRestored=($sidType -eq 1 -and (Test-Path -LiteralPath $restoredMarker -PathType Leaf))
+ $report.oldRestored=($report.failedUpgradeExit -ne 0 -and $oldVersion -match '^0\.0\.1' -and $oldService -and $oldService.Status -eq 'Running' -and $report.serviceSidRestored -and [IO.File]::ReadAllText((Join-Path $install 'payload.txt')) -ceq 'v1' -and (Select-String -LiteralPath $failedLog -Pattern 'QaInjectedFailure' -Quiet))
  if(-not $report.oldRestored){throw 'MJU_ROLLBACK_MISMATCH'}
  $report.successfulUpgradeExit=Invoke-Qa @('/i',('"'+$new+'"'),('INSTALLFOLDER="'+$install+'"'),'/qn','/norestart','/l*v',('"'+(Join-Path $root 'success.log')+'"'))
  try{$newVersion=$wi.ProductInfo($newProduct,'VersionString')}catch{$newVersion=''}
