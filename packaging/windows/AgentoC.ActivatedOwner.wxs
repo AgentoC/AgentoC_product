@@ -46,6 +46,11 @@
            versioning rules. Apply this before file costing on reinstall only. -->
       <SetProperty Id="REINSTALLMODE" Value="vamus" Before="CostInitialize" Sequence="execute" Condition="Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;)" />
     <?else?>
+      <?if $(var.ExperimentalMajorUpgrade) = "1" ?>
+      <!-- A repeated launch of the same package is a guarded reinstall. -->
+      <Property Id="AGENTOC_INPLACE_UPDATE" Value="1" />
+      <CustomAction Id="SetRepairReinstallMode" Property="REINSTALLMODE" Value="vamus" />
+      <?endif?>
       <!-- A validated recovery can retain files from an older installation
            whose internal file version is higher than the public MSI version.
            Fresh installs must lay down this package's own immutable payload. -->
@@ -80,6 +85,9 @@
          state. Run it in the elevated transaction before any mutation. -->
     <?if $(var.MsiUpgradeLane) = "major" ?>
     <CustomAction Id="ManagedUpgradeGuard" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-admission $(var.MsiProductVersion) &quot;[WIX_UPGRADE_DETECTED]&quot; &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
+    <CustomAction Id="ManagedSameUpgradeGuard" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-admission $(var.MsiProductVersion) &quot;[ProductCode]&quot; &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
+    <CustomAction Id="ManagedSameUpgradeRollback" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-rollback &quot;[INSTALLFOLDER].&quot;" Execute="rollback" Impersonate="no" Return="ignore" />
+    <CustomAction Id="ManagedSameUpgradeBegin" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-begin &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <?else?>
     <CustomAction Id="ManagedUpgradeGuard" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-admission $(var.MsiProductVersion) &quot;$(var.ProductCode)&quot; &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <?endif?>
@@ -151,7 +159,15 @@
         <Custom Action="ManagedUpgradeRollback" Before="ManagedUpgradeBegin" Condition="Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;)" />
         <Custom Action="ManagedUpgradeBegin" Before="StopServices" Condition="Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;)" />
       <?else?>
+        <?if $(var.ExperimentalMajorUpgrade) = "1" ?>
+        <Custom Action="SetRepairReinstallMode" Before="CostInitialize" Condition="Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;)" />
+        <Custom Action="ManagedMaintenanceRefused" Before="InstallValidate" Condition="Installed AND NOT (REMOVE = &quot;ALL&quot;) AND NOT REINSTALL" />
+        <Custom Action="ManagedSameUpgradeGuard" Before="ManagedSameUpgradeRollback" Condition="Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;)" />
+        <Custom Action="ManagedSameUpgradeRollback" Before="ManagedSameUpgradeBegin" Condition="Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;)" />
+        <Custom Action="ManagedSameUpgradeBegin" Before="StopServices" Condition="Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;)" />
+        <?else?>
         <Custom Action="ManagedMaintenanceRefused" Before="InstallValidate" Condition="Installed AND NOT (REMOVE = &quot;ALL&quot;)" />
+        <?endif?>
       <?endif?>
 
       <Custom Action="ManagedRelocationRollback" Before="InstallFiles" Condition="AGENTOC_RECOVERY_SOURCE AND NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
@@ -176,12 +192,12 @@
       <?endif ?>
       <?if $(var.MsiUpgradeLane) = "major" ?>
       <?if $(var.ExperimentalMajorUpgrade) = "1" ?>
-        <Custom Action="ManagedConfigureBrokerServiceTrustUpgrade" After="InstallServices" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
-        <Custom Action="ManagedPrepareExisting" After="ManagedConfigureBrokerServiceTrustUpgrade" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
-        <Custom Action="ManagedPreparePolicyExisting" After="ManagedPrepareExisting" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
-        <Custom Action="ManagedUpgradeActivationCheck" After="ManagedPreparePolicyExisting" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
-        <Custom Action="ManagedUpgradeActivate" After="ManagedUpgradeActivationCheck" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
-        <Custom Action="ManagedUpgradeCommit" Before="InstallFinalize" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
+        <Custom Action="ManagedConfigureBrokerServiceTrustUpgrade" After="InstallServices" Condition="(WIX_UPGRADE_DETECTED AND NOT Installed) OR (Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;))" />
+        <Custom Action="ManagedPrepareExisting" After="ManagedConfigureBrokerServiceTrustUpgrade" Condition="(WIX_UPGRADE_DETECTED AND NOT Installed) OR (Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;))" />
+        <Custom Action="ManagedPreparePolicyExisting" After="ManagedPrepareExisting" Condition="(WIX_UPGRADE_DETECTED AND NOT Installed) OR (Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;))" />
+        <Custom Action="ManagedUpgradeActivationCheck" After="ManagedPreparePolicyExisting" Condition="(WIX_UPGRADE_DETECTED AND NOT Installed) OR (Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;))" />
+        <Custom Action="ManagedUpgradeActivate" After="ManagedUpgradeActivationCheck" Condition="(WIX_UPGRADE_DETECTED AND NOT Installed) OR (Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;))" />
+        <Custom Action="ManagedUpgradeCommit" Before="InstallFinalize" Condition="(WIX_UPGRADE_DETECTED AND NOT Installed) OR (Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;))" />
       <?endif?>
       <?endif?>
       <?if $(var.TestPostActivationRollback) = 1 ?>
@@ -191,7 +207,7 @@
         <?endif ?>
         <?if $(var.MsiUpgradeLane) = "major" ?>
           <?if $(var.ExperimentalMajorUpgrade) = "1" ?>
-          <Custom Action="ManagedInjectedPostUpgradeFailure" After="ManagedUpgradeActivate" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
+          <Custom Action="ManagedInjectedPostUpgradeFailure" After="ManagedUpgradeActivate" Condition="(WIX_UPGRADE_DETECTED AND NOT Installed) OR (Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;))" />
           <?endif?>
         <?endif?>
       <?endif ?>
