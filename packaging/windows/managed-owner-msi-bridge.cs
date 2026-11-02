@@ -222,6 +222,38 @@ static class ManagedOwnerMsiBridge {
   if(!Present(product))return true;
   return Directory.Exists(product)&&!Directory.EnumerateFileSystemEntries(product).Any();
  }
+ // A removed installation is useful for recovery only when its public
+ // receipts match the protected Owner policy that survived uninstall.
+ // This check is read-only; it never imports receipts or changes services.
+ static void ValidateRecoverySource(string ownerSid){
+  Need(ownerSid!=null&&Regex.IsMatch(ownerSid,@"\AS-1-5-21-(\d+-){3}\d+\z"),"OMI_OWNER_SID_REQUIRED");
+  foreach(string name in Names)Need(!ServiceRows(name).Any(),"OMI_EXISTING_SERVICE_REFUSED");
+  var removed=RemovedAdmission();
+  Need(String.Equals((string)removed["ownerSid"],ownerSid,StringComparison.Ordinal),"OMI_RECOVERY_OWNER_MISMATCH");
+  string policyPath=Path.Combine(Data,@"instances\owner\security\owner-bootstrap-install.json");
+  Need(Present(policyPath),"OMI_RECOVERY_POLICY_MISSING");
+  var pins=new List<IDisposable>();try{
+   string receiptHash;
+   var policyReceipt=ReadRemovalJson("owner-msi.policy.activated.json",pins,out receiptHash);
+   Need(String.Equals(receiptHash,removed["policySha256"] as string,StringComparison.Ordinal)
+    &&policyReceipt.ContainsKey("policySha256")&&policyReceipt.ContainsKey("instanceId")
+    &&String.Equals(policyReceipt["instanceId"] as string,removed["instanceId"] as string,StringComparison.Ordinal),"OMI_RECOVERY_POLICY_MISMATCH");
+   for(string path=Path.GetDirectoryName(policyPath);path!=null;path=Path.GetDirectoryName(path)){
+    pins.Add(ServiceDirectoryPin.Directory(path));Acl(path,true,true);
+   }
+   using(var stream=new FileStream(policyPath,FileMode.Open,FileAccess.Read,FileShare.Read)){
+    ServiceDirectoryPin.VerifyFile(stream.SafeFileHandle,policyPath);Acl(policyPath,false,false);
+    Need(stream.Length>=2&&stream.Length<=8192,"OMI_RECOVERY_POLICY_INVALID");
+    Need(String.Equals(Hash(stream),policyReceipt["policySha256"] as string,StringComparison.Ordinal),"OMI_RECOVERY_POLICY_MISMATCH");
+    stream.Position=0;
+    string raw;using(var reader=new StreamReader(stream,new UTF8Encoding(false,true)))raw=reader.ReadToEnd();
+    var policy=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(raw);
+    Need(policy!=null&&policy.ContainsKey("instanceId")&&policy.ContainsKey("ownerSid")
+     &&String.Equals(policy["instanceId"] as string,removed["instanceId"] as string,StringComparison.Ordinal)
+     &&String.Equals(policy["ownerSid"] as string,ownerSid,StringComparison.Ordinal),"OMI_RECOVERY_POLICY_MISMATCH");
+   }
+  }finally{for(int i=pins.Count-1;i>=0;i--)pins[i].Dispose();}
+ }
  static bool Fresh(){
   ValidateProductRoot();
   foreach(string n in Names)Need(!ServiceRows(n).Any(),"OMI_EXISTING_SERVICE_REFUSED");
@@ -429,6 +461,9 @@ static class ManagedOwnerMsiBridge {
  public static int Main(string[] args){
   try{
    Need(args.Length>0,"OMI_ARGUMENTS_REFUSED");
+   if(args.Length==3&&args[0]=="recovery-source-check"){
+    SetProductRoot(args[2]);ValidateRecoverySource(args[1]);Console.WriteLine("OMI_RECOVERY_SOURCE_VALID");return 0;
+   }
    if(args[0]=="fresh"&&args.Length==3){SetProductRoot(args[2]);}
    else if(args.Length>1&&Regex.IsMatch(args[args.Length-1],@"\A[A-Za-z]:\\")){
     SetProductRoot(args[args.Length-1]);args=args.Take(args.Length-1).ToArray();
