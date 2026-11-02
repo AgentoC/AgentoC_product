@@ -176,7 +176,10 @@ function serviceIsReady() {
       timeout: 1600,
     }, (response) => {
       response.resume();
-      resolve(response.statusCode >= 200 && response.statusCode < 300);
+      // An unauthenticated probe can legitimately be redirected to the local
+      // login page. Do not follow it or treat arbitrary redirects as ready.
+      resolve((response.statusCode >= 200 && response.statusCode < 300)
+        || (response.statusCode === 302 && response.headers.location === '/login'));
     });
     request.on("timeout", () => {
       request.destroy();
