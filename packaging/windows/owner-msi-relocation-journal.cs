@@ -115,4 +115,20 @@ internal static class OwnerMsiRelocationJournal {
   File.Delete(Path.Combine(target,JournalName));
   if(!Directory.EnumerateFileSystemEntries(backup).Any())Directory.Delete(backup,false);
  }
+ // A committed installation retains the pre-existing destination receipts
+ // inside the administrator-owned backup. Never discard another instance's
+ // files merely because its folder was selected for this installation.
+ internal static void Commit(string target){
+  target=Path.GetFullPath(target).TrimEnd('\\');var journal=ReadJournal(target);
+  string backup=BackupPath(target,Text(journal,"id"));
+  foreach(Dictionary<string,object> row in (System.Collections.ArrayList)journal["entries"]){
+   string name=Text(row,"name"),previous=Text(row,"previous");
+   string old=Path.Combine(backup,name),staged=Path.Combine(backup,name+".incoming");
+   if(previous!="")Need(IsRegular(old)&&Hash(old)==previous,"OMR_BACKUP_CHANGED");
+   else Need(!File.Exists(old)&&!Directory.Exists(old),"OMR_BACKUP_CHANGED");
+   Need(!File.Exists(staged)&&!Directory.Exists(staged),"OMR_STAGED_REMAINS");
+  }
+  File.Delete(Path.Combine(target,JournalName));
+  if(!Directory.EnumerateFileSystemEntries(backup).Any())Directory.Delete(backup,false);
+ }
 }

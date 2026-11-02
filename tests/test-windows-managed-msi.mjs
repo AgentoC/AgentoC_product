@@ -9,6 +9,10 @@ const bridge=await readFile(resolve('packaging/windows/managed-owner-msi-bridge.
 const activatedWix=await readFile(resolve('packaging/windows/AgentoC.ActivatedOwner.wxs'),'utf8');
 assert.match(activatedWix, /<EmbeddedUI Id="AgentoCMsiEmbeddedUI"/, 'the released owner MSI must include the custom installer UI');
 assert.match(activatedWix, /SetSelectedInstallFolder[^\n]*AGENTOC_INSTALLFOLDER/, 'the custom installer must pass its chosen directory to MSI');
+assert.match(activatedWix, /Property Id="AGENTOC_RECOVERY_SOURCE" Secure="yes"/, 'the recovery source survives elevation');
+assert.match(activatedWix, /ManagedRelocationRollback" Before="InstallFiles"/, 'relocation rollback is scheduled before receipts can be moved');
+assert.match(activatedWix, /ManagedRelocationPrepare" After="InstallFiles"/, 'relocation preparation follows MSI payload installation');
+assert.match(activatedWix, /ManagedRelocationCommit" After="ManagedInstallCommit"/, 'old destination data stays recoverable until owner activation commits');
 assert.match(activatedWix, /AGENTOC_LAUNCH = &quot;1&quot; AND NOT Installed/, 'the custom installer launch option must reach the execution sequence');
 const msiBuilder=await readFile(resolve('packaging/windows/build-msi.ps1'),'utf8');
 const brokerBuilder=await readFile(resolve('packaging/windows/build-privileged-broker.ps1'),'utf8');

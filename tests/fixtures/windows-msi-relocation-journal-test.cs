@@ -45,6 +45,16 @@ internal static class OwnerMsiRelocationJournalTest {
    catch(InvalidOperationException error){Check(error.Message=="OMR_TARGET_CHANGED","wrong refusal "+error.Message);}
    Check(File.ReadAllText(changed,Encoding.UTF8)=="unexpected content","modified file was overwritten");
    Check(File.Exists(Path.Combine(targetTamper,"owner-msi.relocation.json")),"refused rollback must retain journal");
+   string sourceCommit=Path.Combine(root,"source-commit"),targetCommit=Path.Combine(root,"target-commit");
+   Directory.CreateDirectory(sourceCommit);Directory.CreateDirectory(targetCommit);
+   foreach(string name in OwnerMsiRelocationJournal.ReceiptNames)File.WriteAllText(Path.Combine(sourceCommit,name),"source-"+name,Encoding.UTF8);
+   foreach(string name in OwnerMsiRelocationJournal.ReceiptNames.Skip(1))File.WriteAllText(Path.Combine(targetCommit,name),"previous-"+name,Encoding.UTF8);
+   OwnerMsiRelocationJournal.Begin(sourceCommit,targetCommit,0);
+   OwnerMsiRelocationJournal.Commit(targetCommit);
+   string committedBackup=Directory.GetDirectories(targetCommit,"owner-msi.relocation-backup-*").Single();
+   foreach(string name in OwnerMsiRelocationJournal.ReceiptNames.Skip(1))
+    Check(File.ReadAllText(Path.Combine(committedBackup,name),Encoding.UTF8)=="previous-"+name,"commit lost old destination");
+   Check(!File.Exists(Path.Combine(targetCommit,"owner-msi.relocation.json")),"commit must clear journal");
    Console.WriteLine("PASS: recovery receipts roll back after each injected failure and preserve source and unrelated files");
    return 0;
   }catch(Exception error){Console.Error.WriteLine(error.ToString());return 1;}

@@ -16,6 +16,10 @@ assert.match(source, /MsiRecordGetInteger\(record, 1\) == 1722\s*&& CopyRecordFi
 assert.match(initialize, /g\.installPath\.clear\(\)/, 'no install folder is prefilled before the user chooses one');
 assert.match(source, /CoCreateInstance\(CLSID_FileOpenDialog[\s\S]*?FOS_PICKFOLDERS/, 'Browse uses the modern Windows shell folder picker');
 assert.match(source, /SetWindowTextW\(g\.pathEdit, path\)/, 'the selected folder is copied into the custom path field');
+assert.match(source, /ChooseRecoverySource\(previous\)[\s\S]*?g\.recoverySource = std::move\(normalizedPrevious\)/,
+  'retained data can use an explicitly selected previous installation directory');
+assert.match(initialize, /MsiSetPropertyW\(install, L"AGENTOC_RECOVERY_SOURCE", g\.recoverySource\.c_str\(\)\)/,
+  'the recovery source is passed to the MSI transaction');
 
 assert.match(
   initialize,

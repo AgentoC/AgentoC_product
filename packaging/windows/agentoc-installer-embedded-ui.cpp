@@ -70,6 +70,7 @@ struct InstallerState {
     int progress = 0;
     float scale = 1.0f;
     std::wstring installPath;
+    std::wstring recoverySource;
     std::wstring currentAction;
     std::wstring errorDetail;
     Gdiplus::Image* logo = nullptr;
@@ -309,6 +310,32 @@ void BrowseForFolder() {
         }
     }
     dialog->Release();
+}
+
+bool ChooseRecoverySource(std::wstring& chosen) {
+    IFileOpenDialog* dialog = nullptr;
+    HRESULT result = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
+        IID_PPV_ARGS(&dialog));
+    if (FAILED(result) || !dialog) return false;
+    FILEOPENDIALOGOPTIONS options{};
+    if (SUCCEEDED(dialog->GetOptions(&options)))
+        dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+    dialog->SetTitle(Text(L"Choose the previous AgentoC installation folder",
+        L"选择之前的 AgentoC 安装文件夹").c_str());
+    result = dialog->Show(g.window);
+    if (SUCCEEDED(result)) {
+        IShellItem* item = nullptr;
+        if (SUCCEEDED(dialog->GetResult(&item)) && item) {
+            PWSTR path = nullptr;
+            if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &path)) && path) {
+                chosen = path;
+                CoTaskMemFree(path);
+            }
+            item->Release();
+        }
+    }
+    dialog->Release();
+    return !chosen.empty();
 }
 
 bool NormalizeInstallPath(std::wstring value, std::wstring& normalized, std::wstring& error) {
@@ -565,6 +592,22 @@ void SubmitInstall() {
         InvalidateRect(g.window, nullptr, TRUE);
         MessageBeep(MB_ICONWARNING);
         return;
+    }
+    g.recoverySource.clear();
+    const DWORD retained = GetFileAttributesW(L"C:\\ProgramData\\AgentoC");
+    const std::wstring selectedReceipt = selected + L"owner-msi.removed.json";
+    if (retained != INVALID_FILE_ATTRIBUTES && (retained & FILE_ATTRIBUTE_DIRECTORY)
+        && GetFileAttributesW(selectedReceipt.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        std::wstring previous, normalizedPrevious;
+        if (!ChooseRecoverySource(previous) || !NormalizeInstallPath(previous, normalizedPrevious, error)) {
+            g.errorDetail = error.empty()
+                ? Text(L"Select the previous installation folder to retain existing data.",
+                       L"请选择之前的安装文件夹，以保留现有数据。") : error;
+            InvalidateRect(g.window, nullptr, TRUE);
+            MessageBeep(MB_ICONWARNING);
+            return;
+        }
+        g.recoverySource = std::move(normalizedPrevious);
     }
     g.installPath = std::move(selected);
     g.errorDetail.clear();
@@ -888,6 +931,7 @@ extern "C" __declspec(dllexport) UINT __stdcall InitializeEmbeddedUI(MSIHANDLE i
     g.progress = 0;
     g.errorDetail.clear();
     g.installPath.clear();
+    g.recoverySource.clear();
     g.closing = false;
     ClearEvents();
     gStartEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
@@ -936,6 +980,8 @@ extern "C" __declspec(dllexport) UINT __stdcall InitializeEmbeddedUI(MSIHANDLE i
     }
 
     UINT propertyResult = MsiSetPropertyW(install, L"AGENTOC_INSTALLFOLDER", g.installPath.c_str());
+    const UINT recoveryPropertyResult = MsiSetPropertyW(install, L"AGENTOC_RECOVERY_SOURCE", g.recoverySource.c_str());
+    if (propertyResult == ERROR_SUCCESS && recoveryPropertyResult != ERROR_SUCCESS) propertyResult = recoveryPropertyResult;
     const UINT launchPropertyResult = MsiSetPropertyW(install, L"AGENTOC_LAUNCH", g.openAfterInstall ? L"1" : L"");
     if (propertyResult == ERROR_SUCCESS && launchPropertyResult != ERROR_SUCCESS) propertyResult = launchPropertyResult;
     if (propertyResult != ERROR_SUCCESS) {

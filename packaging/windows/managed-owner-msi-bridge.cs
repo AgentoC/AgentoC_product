@@ -254,7 +254,7 @@ static class ManagedOwnerMsiBridge {
    }
   }finally{for(int i=pins.Count-1;i>=0;i--)pins[i].Dispose();}
  }
- static int ValidateRecoveryDestination(string ownerSid,string sourceRoot,string targetRoot){
+ static int ValidateRecoveryDestination(string ownerSid,string sourceRoot,string targetRoot,bool installedPayload=false){
   SetProductRoot(sourceRoot);string source=Product;
   ValidateRecoverySource(ownerSid);
   SetProductRoot(targetRoot);string target=Product;
@@ -269,7 +269,18 @@ static class ManagedOwnerMsiBridge {
   int conflicts=0;var pins=new List<IDisposable>();try{
    for(string path=target;path!=null;path=Path.GetDirectoryName(path)){pins.Add(ServiceDirectoryPin.Directory(path));Acl(path,true,true);}
    foreach(string path in Directory.EnumerateFileSystemEntries(target)){
-    Need(allowed.Contains(Path.GetFileName(path)),"OMI_RECOVERY_TARGET_NOT_EMPTY");
+    string name=Path.GetFileName(path);
+    if(installedPayload&&new[]{"payload","Broker"}.Contains(name,StringComparer.OrdinalIgnoreCase)){
+     Need(Present(path)&&Directory.Exists(path),"OMI_RECOVERY_TARGET_CONFLICT");
+     pins.Add(ServiceDirectoryPin.Directory(path));Acl(path,true,false);continue;
+    }
+    if(installedPayload&&String.Equals(name,"AgentoC.ServiceHost.exe",StringComparison.OrdinalIgnoreCase)){
+     Need(Present(path)&&(File.GetAttributes(path)&FileAttributes.Directory)==0,"OMI_RECOVERY_TARGET_CONFLICT");
+     var installedFile=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
+     try{ServiceDirectoryPin.VerifyFile(installedFile.SafeFileHandle,path);Acl(path,false,false);pins.Add(installedFile);}catch{installedFile.Dispose();throw;}
+     continue;
+    }
+    Need(allowed.Contains(name),"OMI_RECOVERY_TARGET_NOT_EMPTY");
     Need(Present(path)&&(File.GetAttributes(path)&FileAttributes.Directory)==0,"OMI_RECOVERY_TARGET_CONFLICT");
     var file=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
     try{ServiceDirectoryPin.VerifyFile(file.SafeFileHandle,path);Acl(path,false,false);
@@ -278,6 +289,24 @@ static class ManagedOwnerMsiBridge {
    }
   }finally{for(int i=pins.Count-1;i>=0;i--)pins[i].Dispose();}
   return conflicts;
+ }
+ static void PrepareRecoveryRelocation(string ownerSid,string source,string target){
+  Need(WindowsIdentity.GetCurrent().User.Value=="S-1-5-18","OMI_RELOCATION_SYSTEM_REQUIRED");
+  ValidateRecoveryDestination(ownerSid,source,target,true);
+  var pins=new List<IDisposable>();try{
+   foreach(string root in new[]{Path.GetFullPath(source).TrimEnd('\\'),Product}){
+    for(string path=root;path!=null;path=Path.GetDirectoryName(path)){pins.Add(ServiceDirectoryPin.Directory(path));Acl(path,true,true);}
+   }
+   OwnerMsiRelocationJournal.Begin(source,Product,0);
+  }finally{for(int i=pins.Count-1;i>=0;i--)pins[i].Dispose();}
+ }
+ static void FinishRecoveryRelocation(bool commit){
+  Need(WindowsIdentity.GetCurrent().User.Value=="S-1-5-18","OMI_RELOCATION_SYSTEM_REQUIRED");
+  if(!Present(Path.Combine(Product,"owner-msi.relocation.json")))return;
+  ValidateProductRoot();var pins=new List<IDisposable>();try{
+   for(string path=Product;path!=null;path=Path.GetDirectoryName(path)){pins.Add(ServiceDirectoryPin.Directory(path));Acl(path,true,true);}
+   if(commit)OwnerMsiRelocationJournal.Commit(Product);else OwnerMsiRelocationJournal.Rollback(Product);
+  }finally{for(int i=pins.Count-1;i>=0;i--)pins[i].Dispose();}
  }
  static bool Fresh(){
   ValidateProductRoot();
@@ -493,6 +522,15 @@ static class ManagedOwnerMsiBridge {
     int conflicts=ValidateRecoveryDestination(args[1],args[2],args[3]);
     Console.WriteLine(new JavaScriptSerializer().Serialize(new{ok=true,readOnly=true,targetConflicts=conflicts}));return 0;
    }
+   if(args.Length==4&&args[0]=="fresh"){
+    Need(args[1].Length<=184&&Regex.IsMatch(args[1],@"\AS-1-5-21-(\d+-){3}\d+\z"),"OMI_OWNER_SID_REQUIRED");
+    if(String.IsNullOrWhiteSpace(args[3])||args[3]=="."){SetProductRoot(args[2]);Fresh();}
+    else ValidateRecoveryDestination(args[1],args[3],args[2]);
+    Console.WriteLine("OMI_FRESH_ADMITTED");return 0;
+   }
+   if(args.Length==4&&args[0]=="relocation-prepare"){
+    PrepareRecoveryRelocation(args[1],args[2],args[3]);Console.WriteLine("OMI_RELOCATION_PREPARED");return 0;
+   }
    if(args[0]=="fresh"&&args.Length==3){SetProductRoot(args[2]);}
    else if(args.Length>1&&Regex.IsMatch(args[args.Length-1],@"\A[A-Za-z]:\\")){
     SetProductRoot(args[args.Length-1]);args=args.Take(args.Length-1).ToArray();
@@ -530,6 +568,8 @@ static class ManagedOwnerMsiBridge {
    if(args.Length==3&&args[0]=="remove-rollback")return RemoveRollback(args[1],args[2]);
    if(args.Length==1&&args[0]=="install-rollback")return InstallRollback();
    if(args.Length==1&&args[0]=="install-commit")return InstallCommit();
+   if(args.Length==1&&args[0]=="relocation-rollback"){FinishRecoveryRelocation(false);return 0;}
+   if(args.Length==1&&args[0]=="relocation-commit"){FinishRecoveryRelocation(true);return 0;}
    if(args.Length==1&&args[0]=="injected-failure"){
     Need(Directory.Exists(Product),"OMI_INSTALL_ROOT_MISSING");ValidateProductRoot();
     Need(new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator),"OMI_ADMIN_REQUIRED");

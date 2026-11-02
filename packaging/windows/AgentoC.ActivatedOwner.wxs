@@ -20,6 +20,7 @@
     <Icon Id="AgentoCIcon" SourceFile="!(bindpath.BrandAsset)\agentoc.ico" />
     <Property Id="ARPPRODUCTICON" Value="AgentoCIcon" />
     <Property Id="AGENTOC_INSTALLFOLDER" Secure="yes" />
+    <Property Id="AGENTOC_RECOVERY_SOURCE" Secure="yes" />
     <Property Id="AGENTOC_LAUNCH" Secure="yes" />
     <CustomAction Id="SetSelectedInstallFolder" Directory="INSTALLFOLDER" Value="[AGENTOC_INSTALLFOLDER]" />
     <CustomAction Id="SetAgentoCLaunchTarget" Property="WixUnelevatedShellExecTarget" Value="[INSTALLFOLDER]payload\Desktop\AgentoC.exe" />
@@ -54,7 +55,10 @@
     </UI>
 
     <Binary Id="ManagedOwnerMsiBridge" SourceFile="!(bindpath.ManagedBridge)\AgentoC.ManagedOwnerMsiBridge.exe" />
-    <CustomAction Id="ManagedFreshGuard" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="fresh &quot;[UserSID]&quot; &quot;[INSTALLFOLDER].&quot;" Execute="immediate" Return="check" />
+    <CustomAction Id="ManagedFreshGuard" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="fresh &quot;[UserSID]&quot; &quot;[INSTALLFOLDER].&quot; &quot;[AGENTOC_RECOVERY_SOURCE].&quot;" Execute="immediate" Return="check" />
+    <CustomAction Id="ManagedRelocationRollback" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="relocation-rollback &quot;[INSTALLFOLDER].&quot;" Execute="rollback" Impersonate="no" Return="ignore" />
+    <CustomAction Id="ManagedRelocationPrepare" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="relocation-prepare &quot;[UserSID]&quot; &quot;[AGENTOC_RECOVERY_SOURCE].&quot; &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
+    <CustomAction Id="ManagedRelocationCommit" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="relocation-commit &quot;[INSTALLFOLDER].&quot;" Execute="commit" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedRemoveGuard" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="remove-admission &quot;[INSTALLFOLDER].&quot;" Execute="immediate" Return="check" />
     <CustomAction Id="ManagedCloseDesktopBeforeValidation" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="close-desktop-current-user &quot;[INSTALLFOLDER].&quot;" Execute="immediate" Return="check" />
     <CustomAction Id="ManagedCloseDesktop" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="close-desktop &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
@@ -121,6 +125,8 @@
         <Custom Action="ManagedMaintenanceRefused" Before="InstallValidate" Condition="Installed AND NOT (REMOVE = &quot;ALL&quot;)" />
       <?endif?>
 
+      <Custom Action="ManagedRelocationRollback" Before="InstallFiles" Condition="AGENTOC_RECOVERY_SOURCE AND NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
+      <Custom Action="ManagedRelocationPrepare" After="InstallFiles" Condition="AGENTOC_RECOVERY_SOURCE AND NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
       <Custom Action="ManagedInstallRollback" After="InstallServices" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
       <Custom Action="ManagedConfigureBrokerServiceTrust" After="ManagedInstallRollback" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
       <Custom Action="ManagedPrepare" After="ManagedConfigureBrokerServiceTrust" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
@@ -129,6 +135,7 @@
       <Custom Action="ManagedActivationCheck" After="ManagedPreparePolicy" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
       <Custom Action="ManagedActivate" After="ManagedActivationCheck" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
       <Custom Action="ManagedInstallCommit" Before="InstallFinalize" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
+      <Custom Action="ManagedRelocationCommit" After="ManagedInstallCommit" Condition="AGENTOC_RECOVERY_SOURCE AND NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
 
       <?if $(var.MsiUpgradeLane) = "minor" ?>
         <Custom Action="ManagedConfigureBrokerServiceTrustUpgrade" After="InstallServices" Condition="Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;)" />
