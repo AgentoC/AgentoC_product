@@ -112,7 +112,10 @@ assert.match(activatedWix,/<Custom Action="ManagedRemoveRollback" Before="Manage
 assert.equal((activatedWix.match(/<PermissionEx Sddl="O:SYG:SYD:\(A;;GA;;;SY\)\(A;;GA;;;BA\)\(A;;CCLCSWLOCRRC;;;IU\)\(A;;CCLCSWLOCRRC;;;SU\)"\s*\/>/g)||[]).length,2,'both Owner service objects must grant SYSTEM service configuration rights without granting ordinary users mutations');
 assert.match(bridge,/RemoveRollback\(string version,string expectedSha256\)/,'uninstall rollback must verify the fixed Broker package identity');
 assert.match(bridge,/if\(marker\)RemovedAdmission\(\)/,'uninstall rollback must validate a completed removal marker before clearing it');
-assert.match(bridge,/if\(marker\)RemovedAdmission\(\);else ActiveAdmission\(\)/,'completed removal must admit rollback after Owner service registrations were deleted');
+assert.match(bridge,/if\(marker\)RemovedAdmission\(\);else ActiveAdmission\(true\)/,'rollback must admit an authenticated in-progress removal');
+assert.match(bridge,/OMI_REMOVAL_LOCK_INVALID/,'rollback must only accept the exact authenticated removal lock');
+assert.match(bridge,/Process\.GetProcesses\(\)\.OrderByDescending\(HasWindow\)/,'desktop shutdown must also find running images renamed by MSI rollback');
+assert.match(removeRollback,/ORR_REMOVAL_LOCK_INVALID/,'rollback must validate the removal lock before clearing it');
 assert.match(removeRollback,/Get-OwnerServicePreparationPlan/,'uninstall rollback must use the fixed Owner service plan');
 assert.match(removeRollback,/CreateService\(manager,name,display/,'uninstall rollback must recreate Owner service registrations deleted by the removal transaction');
 assert.match(removeRollback,/SetServiceObjectSecurity\(service,4,bytes\)/,'recreated Owner services must regain the restricted service DACL');

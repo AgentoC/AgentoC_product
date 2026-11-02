@@ -74,14 +74,17 @@ static class ManagedOwnerMsiBridge {
  static bool HasWindow(Process process){try{return process.MainWindowHandle!=IntPtr.Zero;}catch{return false;}}
  static void CloseProcessesForPath(string expected,bool tolerateAccessDenied){
   for(int round=0;round<3;round++){
-   int matched=0;var processes=Process.GetProcessesByName("AgentoC").OrderByDescending(HasWindow).ToArray();
+   // Windows Installer can rename an executable to a rollback filename while
+   // its old image remains mapped. Its process name then no longer matches
+   // AgentoC even though its executable path still identifies our desktop.
+   int matched=0;var processes=Process.GetProcesses().OrderByDescending(HasWindow).ToArray();
    try{foreach(var process in processes){
     IntPtr handle=OpenProcess(0x1000|0x0001|0x00100000,false,process.Id);
-    if(handle==IntPtr.Zero){int error=Marshal.GetLastWin32Error();if(error==87||error==1168||(tolerateAccessDenied&&error==5))continue;throw new InvalidOperationException("OMI_CLOSE_PROCESS_OPEN_FAILED");}
+    if(handle==IntPtr.Zero){int error=Marshal.GetLastWin32Error();if(error==87||error==1168||error==5)continue;throw new InvalidOperationException("OMI_CLOSE_PROCESS_OPEN_FAILED");}
     try{
      if(WaitForSingleObject(handle,0)==0)continue;
      var image=new StringBuilder(32768);int length=image.Capacity;
-     Need(QueryFullProcessImageName(handle,0,image,ref length),"OMI_CLOSE_PROCESS_QUERY_FAILED");
+     if(!QueryFullProcessImageName(handle,0,image,ref length))continue;
      if(!String.Equals(Path.GetFullPath(image.ToString()),expected,StringComparison.OrdinalIgnoreCase))continue;
      matched++;
      bool requested=false;
@@ -417,7 +420,7 @@ static class ManagedOwnerMsiBridge {
   // DeleteServices. A completed marker is the admission proof for recreating
   // those fixed registrations during rollback; ActiveAdmission requires them
   // to exist and therefore cannot be used in this phase.
-  if(marker)RemovedAdmission();else ActiveAdmission();
+  if(marker)RemovedAdmission();else ActiveAdmission(true);
   ConfigureBrokerService(version,expectedSha256);
   int result=Run("RemoveRollback",null);if(result!=0)return result;
   if(marker){
@@ -427,11 +430,18 @@ static class ManagedOwnerMsiBridge {
   }
   Console.WriteLine("OMI_REMOVE_ROLLBACK_RESTORED_OWNER_RESET_RETAINED");return 0;
  }
- static void ActiveAdmission(){
+ static void ActiveAdmission(bool allowRemovalLock=false){
   Need(Directory.Exists(Product),"OMI_INSTALL_ROOT_MISSING");ValidateProductRoot();
   var pins=new List<IDisposable>();try{
    for(string p=Product;p!=null;p=Path.GetDirectoryName(p)){pins.Add(ServiceDirectoryPin.Directory(p));Acl(p,true,true);}
-   Need(!Present(Path.Combine(Product,"owner-msi.prepare-lock")),"OMI_PREPARATION_INCOMPLETE");
+   string pending=Path.Combine(Product,"owner-msi.prepare-lock");
+   if(Present(pending)){
+    Need(allowRemovalLock,"OMI_PREPARATION_INCOMPLETE");
+    using(var f=new FileStream(pending,FileMode.Open,FileAccess.Read,FileShare.Read)){
+     ServiceDirectoryPin.VerifyFile(f.SafeFileHandle,pending);Acl(pending,false,false);
+     using(var r=new StreamReader(f,new UTF8Encoding(false,true)))Need(r.ReadToEnd()=="{\"version\":1,\"purpose\":\"owner-policy-removal\"}","OMI_REMOVAL_LOCK_INVALID");
+    }
+   }
    string path=Path.Combine(Product,"owner-msi.activated.json");using(var f=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read)){
     ServiceDirectoryPin.VerifyFile(f.SafeFileHandle,path);Acl(path,false,false);Need(f.Length>0&&f.Length<=8192,"OMI_ACTIVE_RECEIPT_INVALID");
     string text;using(var reader=new StreamReader(f,new UTF8Encoding(false,true)))text=reader.ReadToEnd();var r=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(text);

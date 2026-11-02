@@ -65,7 +65,8 @@ foreach($plan in $plans){
  }
 }
 $broker=Get-CimInstance Win32_Service -Filter "Name='AgentoC-PrivilegedBroker'"
-if(-not $broker -or $broker.PathName -cne ('"'+(Join-Path $product 'Broker\AgentoC.PrivilegedBroker.exe')+'"') -or $broker.StartName -ine 'LocalSystem' -or $broker.StartMode -ne 'Auto'){
+$brokerPath=Join-Path $product 'Broker\AgentoC.PrivilegedBroker.exe'
+if(-not $broker -or $broker.PathName -cnotin @($brokerPath,('"'+$brokerPath+'"')) -or $broker.StartName -ine 'LocalSystem' -or $broker.StartMode -ne 'Auto'){
  throw 'ORR_BROKER_BINDING_CHANGED'
 }
 $stage='STOP'
@@ -75,6 +76,16 @@ foreach($name in @('AgentoC-ControlPlane','AgentoC-RunnerSupervisor')){
 }
 $stage='CONFIGURE'
 foreach($plan in $plans){[OwnerMsiRollbackServiceTrust]::Restore($plan.name,$plan.command,$plan.account)}
+$stage='REMOVAL_LOCK'
+$lock=Join-Path $product 'owner-msi.prepare-lock'
+if(Test-Path -LiteralPath $lock){
+ $pins=[Collections.Generic.List[IDisposable]]::new()
+ try{
+  $bytes=Read-OwnerPinnedFile $lock @(Get-OwnerAdministrativeSids) $pins 1024
+  if([Text.UTF8Encoding]::new($false,$true).GetString($bytes) -cne '{"version":1,"purpose":"owner-policy-removal"}'){throw 'ORR_REMOVAL_LOCK_INVALID'}
+ }finally{for($i=$pins.Count-1;$i -ge 0;$i--){$pins[$i].Dispose()}}
+ [IO.File]::Delete($lock)
+}
 $stage='BROKER_START'
 if((Get-Service -Name 'AgentoC-PrivilegedBroker' -ErrorAction Stop).Status -ne 'Running'){
  Start-Service -Name 'AgentoC-PrivilegedBroker' -ErrorAction Stop
