@@ -11,6 +11,8 @@ const source = await readFile(
 const initializeStart = source.indexOf('extern "C" __declspec(dllexport) UINT __stdcall InitializeEmbeddedUI');
 assert.notEqual(initializeStart, -1, 'embedded UI initialization entrypoint exists');
 const initialize = source.slice(initializeStart);
+assert.match(source, /MsiRecordGetInteger\(record, 1\) == 1722\s*&& CopyRecordField\(record, 2\) == L"ManagedFreshGuard"[\s\S]*?Setup could not validate the selected folder or retained installation/,
+  'a fresh-install guard failure explains the folder or retained-installation issue instead of showing only 1722');
 assert.match(initialize, /g\.installPath\.clear\(\)/, 'no install folder is prefilled before the user chooses one');
 assert.match(source, /CoCreateInstance\(CLSID_FileOpenDialog[\s\S]*?FOS_PICKFOLDERS/, 'Browse uses the modern Windows shell folder picker');
 assert.match(source, /SetWindowTextW\(g\.pathEdit, path\)/, 'the selected folder is copied into the custom path field');

@@ -984,6 +984,13 @@ extern "C" __declspec(dllexport) INT __stdcall EmbeddedUIHandler(UINT messageTyp
         return IDOK;
     }
     if (message == INSTALLMESSAGE_ERROR || message == INSTALLMESSAGE_FATALEXIT || message == INSTALLMESSAGE_OUTOFDISKSPACE) {
+        if (message == INSTALLMESSAGE_ERROR && MsiRecordGetInteger(record, 1) == 1722
+            && CopyRecordField(record, 2) == L"ManagedFreshGuard") {
+            PostUiText(3, Text(
+                L"Setup could not validate the selected folder or retained installation. Check for an existing installation or folder conflict.",
+                L"安装程序无法验证所选文件夹或保留的安装数据。请检查是否存在旧安装或文件夹冲突。"));
+            return IDOK;
+        }
         std::wstring detail = CopyRecordField(record, 1);
         if (!detail.empty()) PostUiText(3, detail);
         return IDOK;
