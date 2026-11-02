@@ -314,7 +314,14 @@ partial class WindowsOwnerBootstrap {
     string name="agentoc-owner-activation-"+Str(policy,"instanceId");
     if(server){using(var pipe=Server(name,Str(policy,"controlSid"),Str(policy,"ownerSid"))){
       Emit(new{kind="ready"});var connect=pipe.BeginWaitForConnection(null,null);
-      try{Require(connect.AsyncWaitHandle.WaitOne(30000),"OBC_ACTIVATION_IDLE");pipe.EndWaitForConnection(connect);}finally{connect.AsyncWaitHandle.Close();}
+      bool completed=connect.AsyncWaitHandle.WaitOne(30000);
+      try{
+        // On timeout Dispose cancels the pipe, but the framework callback may
+        // still be in flight. Leave its wait handle alive for the GC rather
+        // than close it before the callback has finished signalling it.
+        if(!completed){pipe.Dispose();throw new InvalidOperationException("OBC_ACTIVATION_IDLE");}
+        pipe.EndWaitForConnection(connect);
+      }finally{if(completed)connect.AsyncWaitHandle.Close();}
       Dictionary<string,object> facts;using(var peer=ActivationPin(pipe,true,policy,out facts)){
         var seed=new Dictionary<string,object>{{"instanceId",Str(policy,"instanceId")},{"requestId",Guid.NewGuid().ToString("N")},{"expiresAtUnixMs",DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()+30000}};
         var challenge=Challenge(seed);challenge["version"]=1;challenge["operation"]="owner.activation.challenge";

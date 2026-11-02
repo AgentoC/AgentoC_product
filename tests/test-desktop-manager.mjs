@@ -39,7 +39,7 @@ assert.doesNotMatch(crossDevicePanel, /historyBody\.appendChild\([^;]*error\?\.m
 assert.match(template, /id="desktopManager\.js|chat\/desktop-manager\.js/);
 assert.match(electronMain, /requestSingleInstanceLock/);
 assert.match(electronMain, /MANAGER_URL = `\$\{SERVICE_ORIGIN\}\/\?desktop=manager`/);
-assert.match(electronMain, /http\.get\(MANAGER_URL,\s*\{\s*headers:\s*\{\s*Accept:\s*"text\/html"\s*\}/);
+assert.match(electronMain, /http\.get\(MANAGER_URL,\s*\{[\s\S]*?Accept:\s*"\*\/\*"/);
 assert.match(electronMain, /AUTH_HOSTS/);
 assert.match(electronMain, /nodeIntegration: false/);
 assert.match(electronMain, /contextIsolation: true/);
@@ -50,9 +50,9 @@ assert.doesNotMatch(preload, /exec|spawn|readFile|writeFile/);
 assert.match(preload, /onExternalOpenFailed/);
 assert.match(installer, /WixUnelevatedShellExec/);
 assert.match(installer, /CloseApplication Id="CloseAgentoCManager" Target="AgentoC\.exe" CloseMessage="yes" PromptToContinue="yes"/);
-assert.match(installer, /WixUI_InstallDir/);
+assert.match(installer, /EmbeddedUI Id="AgentoCMsiEmbeddedUI"/);
 assert.match(installer, /Property Id="ARPPRODUCTICON" Value="AgentoCIcon"/);
-assert.match(installer, /WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Open AgentoC/);
+assert.match(installer, /Property Id="AGENTOC_LAUNCH"/);
 assert.match(installer, /Target="\[INSTALLFOLDER\]payload\\Desktop\\AgentoC\.exe"/);
 assert.match(installer, /AgentoCStartMenuShortcut/);
 assert.match(build, /generate-brand-assets\.ps1/);
@@ -64,6 +64,7 @@ assert.match(build, /wixtoolset\.org\/schemas\/v4\/wxs/);
 assert.doesNotMatch(build, /Get-Command heat\.exe/);
 assert.match(build, /600MB/);
 assert.match(waitPage, /id="serviceState"/);
+assert.match(waitPage, /img-src 'self'/);
 assert.match(waitPage, /id="retry"/);
 assert.match(waitPage, /agentocDesktop\?\.retryService/);
 assert.match(acceptance, /existingOwnerCookieAccepted=\$true/);
@@ -86,7 +87,7 @@ const managerMarkup = template
   .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const normalMarkup = managerMarkup.replace('class="desktop-manager"', 'class=""');
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ headless: true, ...(process.env.AGENTOC_TEST_BROWSER_CHANNEL ? {channel: process.env.AGENTOC_TEST_BROWSER_CHANNEL} : {}) });
 try {
   const page = await browser.newPage({ viewport: { width: 1100, height: 760 } });
   await page.setContent(managerMarkup);

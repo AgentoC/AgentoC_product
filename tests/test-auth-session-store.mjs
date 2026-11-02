@@ -91,3 +91,17 @@ test('admin counts committed rows read-only and reports unavailable instead of s
   const store=f.open();store.insert(key(),session());assert.deepEqual(readAuthSessionStoreUsage(f.options.databaseFile),{migrated:true,count:1});store.close();await unlink(f.options.databaseFile);
   assert.deepEqual(readAuthSessionStoreUsage(f.options.databaseFile),{migrated:true,count:null});
 });
+test('full session store reclaims only a disposable loopback session for local recovery',async t=>{
+  const f=await fixture(t),store=f.open(),sql=new DatabaseSync(f.options.databaseFile);f.cleanups.push(()=>sql.close());
+  const expiry=Date.now()+600000,google=key(),local=key(),newLocal=key();
+  const insert=sql.prepare('INSERT INTO sessions VALUES(?,?,?)');sql.exec('BEGIN');
+  insert.run(google,expiry,JSON.stringify({role:'owner',authMethod:'google_accounts',expiry}));
+  insert.run(local,expiry-1,JSON.stringify({role:'owner',authMethod:'local_web',expiry:expiry-1}));
+  for(let i=0;i<9998;i++)insert.run(key(),expiry,JSON.stringify({role:'visitor',authMethod:'guest',expiry}));
+  sql.exec('COMMIT');
+  assert.throws(()=>store.insert(key(),{role:'owner',authMethod:'google_accounts',expiry}),{code:'AUTH_SESSION_CAPACITY'});
+  store.insert(newLocal,{role:'owner',authMethod:'local_web',expiry});
+  assert.equal(store.get(local),null);assert.equal(store.get(google).authMethod,'google_accounts');
+  assert.equal(store.get(newLocal).authMethod,'local_web');assert.equal(store.snapshot().size,10000);
+  assert.throws(()=>store.insert(key(),{role:'owner',authMethod:'google_accounts',expiry}),{code:'AUTH_SESSION_CAPACITY'});
+});

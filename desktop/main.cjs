@@ -170,7 +170,9 @@ function serviceIsReady() {
     // transport. It can report degraded while the local web UI is available
     // for management, so gate this window on its actual manager route.
     const request = http.get(MANAGER_URL, {
-      headers: { Accept: "text/html" },
+      // A probe has no cookie jar: an HTML navigation would issue an owner
+      // session on every poll and eventually exhaust the session store.
+      headers: { Accept: "*/*" },
       timeout: 1600,
     }, (response) => {
       response.resume();
