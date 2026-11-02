@@ -926,6 +926,30 @@ void ClearEvents() {
     }
 }
 
+// Resolve the installed directory from MSI's registered component, rather than
+// assuming the default Program Files location for an existing installation.
+bool FindInstalledFolder(MSIHANDLE install, const wchar_t* productCode, std::wstring& folder) {
+    MSIHANDLE database = MsiGetActiveDatabase(install), view = 0, record = 0;
+    if (!database) return false;
+    const wchar_t* sql = L"SELECT `ComponentId` FROM `Component` WHERE `Component` = 'ManagedServiceHost'";
+    bool ok = MsiDatabaseOpenViewW(database, sql, &view) == ERROR_SUCCESS &&
+        MsiViewExecute(view, 0) == ERROR_SUCCESS && MsiViewFetch(view, &record) == ERROR_SUCCESS;
+    wchar_t component[64]{}; DWORD componentLength = static_cast<DWORD>(std::size(component));
+    if (ok) ok = MsiRecordGetStringW(record, 1, component, &componentLength) == ERROR_SUCCESS;
+    if (record) MsiCloseHandle(record);
+    if (view) MsiCloseHandle(view);
+    MsiCloseHandle(database);
+    if (!ok) return false;
+    std::vector<wchar_t> file(32768, L'\0'); DWORD fileLength = static_cast<DWORD>(file.size());
+    if (MsiGetComponentPathW(productCode, component, file.data(), &fileLength) != INSTALLSTATE_LOCAL) return false;
+    std::filesystem::path service(file.data());
+    if (_wcsicmp(service.filename().c_str(), L"AgentoC.ServiceHost.exe") != 0) return false;
+    folder = service.parent_path().wstring();
+    if (folder.empty()) return false;
+    if (folder.back() != L'\\') folder += L'\\';
+    return true;
+}
+
 } // namespace
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) {
@@ -979,6 +1003,7 @@ extern "C" __declspec(dllexport) UINT __stdcall InitializeEmbeddedUI(MSIHANDLE i
     g.progress = 0;
     g.errorDetail.clear();
     g.installPath.clear();
+    if (g.updating && !FindInstalledFolder(install, productCode, g.installPath)) return ERROR_INSTALL_FAILURE;
     g.recoverySource.clear();
     g.closing = false;
     ClearEvents();
@@ -1028,6 +1053,8 @@ extern "C" __declspec(dllexport) UINT __stdcall InitializeEmbeddedUI(MSIHANDLE i
     }
 
     UINT propertyResult = MsiSetPropertyW(install, L"AGENTOC_INSTALLFOLDER", g.installPath.c_str());
+    if (propertyResult == ERROR_SUCCESS && g.updating)
+        propertyResult = MsiSetPropertyW(install, L"INSTALLFOLDER", g.installPath.c_str());
     if (propertyResult == ERROR_SUCCESS && g.updating)
         propertyResult = MsiSetPropertyW(install, L"REINSTALL", L"ALL");
     const UINT recoveryPropertyResult = MsiSetPropertyW(install, L"AGENTOC_RECOVERY_SOURCE", g.recoverySource.c_str());
