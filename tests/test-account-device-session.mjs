@@ -391,12 +391,14 @@ await check('新绑定不会恢复旧代次未兑换的授权', async () => {
 });
 
 const logout = await broker.logoutAccountSession({ credential: secondRac });
-await check('普通 logout 只撤销 rac_ 并记录可恢复的 phone unboundAt', async () => {
+await check('logout 删除账号与手机的关联并使原凭据失效', async () => {
   assert.equal(logout.loggedOut, true);
   assert.equal(logout.deviceId, accountDeviceId);
   assert.ok(logout.unboundAt);
-  assert.equal(state.accountDevices[0].unboundAt, logout.unboundAt);
-  assert.equal(state.accountDevices[0].revokedAt, '');
+  assert.equal(state.accountDevices.some((device) => device.deviceId === accountDeviceId), false);
+  assert.equal(state.accountDeviceKeys.some((key) => key.deviceId === accountDeviceId), false);
+  assert.equal(state.accountCredentials.some((credential) => credential.deviceId === accountDeviceId), false);
+  assert.equal(state.accountJoinGrants.some((grant) => grant.accountDeviceId === accountDeviceId), false);
   await assert.rejects(() => broker.discoverInstances({}, { credential: secondRac }), {
     code: 'owner_auth_account_credential_expired',
   });
@@ -419,7 +421,7 @@ const relogin = await broker.completeAccountSession({
     nonce: reloginChallenge.nonce,
   })),
 });
-await check('同一 adev_ 重新登录复用原 account_devices 记录并清除 unboundAt', async () => {
+await check('同一安装重新登录重新建立唯一账号设备记录', async () => {
   assert.match(relogin.credential.token, /^rac_/);
   assert.equal(state.accountDevices.length, 1);
   assert.equal(state.accountDevices[0].deviceId, accountDeviceId);
@@ -486,6 +488,17 @@ await check('key reuse cannot overwrite a device bound to another account', asyn
   assert.equal(state.accountDevices[0].accountId, 'acct_another_owner');
   assert.equal(state.accountDeviceKeys[0].revokedAt, previousRevocation);
   state.accountDevices[0].accountId = accountId;
+});
+
+await check('主动解绑移除账号关联及旧凭据，重新登录需要新的 Google 认证', async () => {
+  state.accountDeviceKeys[0].revokedAt = '';
+  const result = await broker.revokeAccountDirectoryDevice({ deviceId: accountDeviceId, credential: revokedRelogin.credential.token });
+  assert.equal(result.revoked, true);
+  assert.equal(state.accountDevices.some((device) => device.deviceId === accountDeviceId), false);
+  await assert.rejects(() => broker.discoverInstances({}, { credential: revokedRelogin.credential.token }), { code: 'owner_auth_account_credential_expired' });
+  const fresh = await attemptGuardedRelogin('session-after-detach-0001');
+  assert.match(fresh.credential.token, /^rac_/);
+  assert.equal(state.accountDevices.filter((device) => device.deviceId === accountDeviceId).length, 1);
 });
 
 console.log(`test-account-device-session: ${passed} assertions passed`);

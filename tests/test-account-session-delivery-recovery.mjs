@@ -37,7 +37,7 @@ async function fixture() {
 {
   const f=await fixture();
   await f.broker.logoutAccountSession({credential:f.result.credential.token});
-  await assert.rejects(f.broker.completeAccountSession(f.proof),{code:'owner_auth_account_credential_expired'});
+  await assert.rejects(f.broker.completeAccountSession(f.proof),{code:'owner_auth_account_session_expired'});
 }
 {
   const f=await fixture();f.state().accountDeviceKeys[0].revokedAt=new Date().toISOString();

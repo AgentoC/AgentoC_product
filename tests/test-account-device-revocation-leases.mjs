@@ -95,21 +95,21 @@ try {
   assert.deepEqual(state.turnConnectionLeases.slice(4, 6), historical, 'Expired and previously released records stay unchanged');
   const historyLength = state.bindingHistory.length; now += 1000;
   const repeated = await revoke(a.instance.instanceId);
-  assert.equal(repeated.body.revokedAt, unboundA.body.revokedAt); assert.equal(repeated.body.releasedConnections, 0);
+  assert.equal(repeated.status, 404, 'removed account association is no longer present');
   assert.equal(state.bindingHistory.length, historyLength, 'Repeating the same revocation cannot create a new revocation generation');
-  assert.equal((await native(a, 'publish-identity')).status, 409, 'Revoked computer cannot republish itself');
+  assert.equal((await native(a, 'publish-identity')).status, 403, 'Unbound computer cannot republish itself');
   state.devices.push({ deviceId: 'rdev_cannot_reopen', instanceId: a.instance.instanceId, accountId, deviceKind: 'phone', createdAt: iso() });
   const connectionId = createTurnConnectionId({ accountId, instanceId: a.instance.instanceId, deviceId: 'rdev_cannot_reopen' });
   const reserveFields = { ...proof(a, 'turn-reserve'), transactionId: connectionId };
   reserveFields.signature = sign(null, Buffer.from(buildOwnerAuthDeviceMessage({ instanceId: a.instance.instanceId, transactionId: connectionId,
     purpose: 'turn-reserve', issuedAt: reserveFields.issuedAt, audience: reserveFields.audience })), a.privateKey).toString('base64');
   assert.equal((await request('/v1/owner-auth/turn/connections/reserve', { body: { ...reserveFields, requestId: connectionId,
-    accountId, connectionId, deviceId: 'rdev_cannot_reopen', deviceKind: 'phone', expiresAt: iso(60000) } })).status, 409);
+    accountId, connectionId, deviceId: 'rdev_cannot_reopen', deviceKind: 'phone', expiresAt: iso(60000) } })).status, 403);
   const unboundB = await native(b); assert.equal(unboundB.status, 200); assert.equal(unboundB.body.releasedConnections, 1);
   assert.deepEqual((await usage()).body.turn.used, { phones: 0, computers: 0 });
-  assert.equal((await native(b)).status, 409);
+  assert.equal((await native(b)).status, 404);
   assert.equal((await native(legacy, 'publish-identity')).status, 200, 'Canonical legacy ID cryptographically commits to its key');
   assert.equal((await native(legacy, 'publish-identity', { instanceId: 'inst_arbitrary_legacy' })).status, 409,
     'Noncanonical keyless legacy binding needs authenticated enrollment');
-  console.log('PASS computer unbind HTTP: atomic quota release, account/target isolation, expiry boundary, idempotent tombstone, native proof key binding, revoked reserve denial, safe legacy identity publication');
+  console.log('PASS computer unbind HTTP: atomic quota release, account/target isolation, expiry boundary, association deletion, native proof key binding, unbound reserve denial, safe legacy identity publication');
 } finally { await new Promise(done => server.close(done)); }

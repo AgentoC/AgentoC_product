@@ -271,11 +271,10 @@ try {
   }];
   const routeLogout = await request(port, 'POST', '/accounts/v1/owner-auth/account/session/logout',
     { requestId: 'route-logout-request-0001' }, { authorization: `Bearer ${routeCredential}` });
-  check('账号 logout 路由撤销当前 rac 并保留可复用 adev_', routeLogout.status === 200
+  check('账号 logout 路由删除账号设备关联及旧凭据', routeLogout.status === 200
     && routeLogout.json?.loggedOut === true
-    && state.accountCredentials[0].revokedAt
-    && state.accountDevices[0].unboundAt
-    && !state.accountDevices[0].revokedAt);
+    && !state.accountCredentials.some((item) => item.deviceId === routeDeviceId)
+    && !state.accountDevices.some((item) => item.deviceId === routeDeviceId));
 
   // ---------- instance_poll：无公网实例主动领取 ----------
   const pollTx = 'tx_route_poll_1';

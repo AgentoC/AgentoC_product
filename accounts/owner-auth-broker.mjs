@@ -2989,6 +2989,24 @@ export function createOwnerAuthBroker({
     return binding;
   }
 
+  function removeAccountComputerAssociation(draft, accountId, instanceId, now) {
+    const intentIds = new Set(getAccountJoinIntents(draft).filter((item) => item.instanceId === instanceId).map((item) => item.intentId));
+    const releasedConnections = releaseRevokedInstanceTurnConnections(draft, {
+      accountId, instanceId, nowMs: new Date(now).getTime(),
+    });
+    draft.accountJoinGrants = getAccountJoinGrants(draft).filter((grant) => grant.instanceId !== instanceId && !intentIds.has(grant.intentId));
+    draft.accountJoinIntents = getAccountJoinIntents(draft).filter((intent) => !intentIds.has(intent.intentId));
+    draft.nativeAuthRequests = getNativeAuthRequests(draft).filter((request) => request.instanceId !== instanceId);
+    draft.ownerAuthTransactions = getTransactions(draft).filter((transaction) => transaction.instance?.instanceId !== instanceId);
+    draft.targetRuntimeAuthorizations = getTargetRuntimeAuthorizations(draft).filter((authorization) =>
+      authorization.accountId !== accountId || (authorization.sourceInstanceId !== instanceId && authorization.targetInstanceId !== instanceId));
+    if (Array.isArray(draft.accountPairingExchanges)) draft.accountPairingExchanges = draft.accountPairingExchanges
+      .filter((exchange) => !(exchange.accountId === accountId && exchange.instanceId === instanceId));
+    draft.devices = getDevices(draft).filter((device) => !(device.accountId === accountId && device.instanceId === instanceId));
+    draft.instanceBindings = getInstanceBindings(draft).filter((binding) => !(binding.accountId === accountId && binding.instanceId === instanceId));
+    return releasedConnections;
+  }
+
   async function unbindInstance(input) {
     const { instance, accountId } = normalizeDeviceOpInput(input, 'unbind', clock);
     const result = await store.mutate(async (draft) => {
@@ -3002,12 +3020,7 @@ export function createOwnerAuthBroker({
         throw createError('owner_auth_already_unbound', 'This binding was already unbound.', 409);
       }
       const now = nowIso(clock);
-      binding.revokedAt = now;
-      const device = getDevices(draft).find((item) => item.deviceId === instance.instanceId);
-      if (device) device.unboundAt = now;
-      const releasedConnections = releaseRevokedInstanceTurnConnections(draft, {
-        accountId, instanceId: instance.instanceId, nowMs: new Date(now).getTime(),
-      });
+      const releasedConnections = removeAccountComputerAssociation(draft, accountId, instance.instanceId, now);
       recordBindingEvent(draft, { instanceId: instance.instanceId, accountId, action: 'unbind', now });
       return { instanceId: instance.instanceId, accountId, unboundAt: now, releasedConnections };
     });
@@ -3084,7 +3097,8 @@ export function createOwnerAuthBroker({
   function projectAccountDeviceDirectory(draft, accountId, { localInstanceId = '' } = {}) {
     const bindings = getInstanceBindings(draft);
     const devices = getDevices(draft)
-      .filter((item) => item.accountId === accountId)
+      .filter((item) => item.accountId === accountId && !item.unboundAt
+        && !bindings.find((binding) => binding.instanceId === item.instanceId)?.revokedAt)
       .map((device) => {
         const deviceBinding = bindings.find((item) => item.instanceId === device.instanceId);
         return {
@@ -3109,7 +3123,7 @@ export function createOwnerAuthBroker({
     // the account directory is complete instead of silently showing only
     // computers and legacy `rdev_` rows.
     for (const accountDevice of getAccountDevices(draft)
-      .filter((item) => item.accountId === accountId)) {
+      .filter((item) => item.accountId === accountId && !item.unboundAt && !item.revokedAt)) {
       if (knownDeviceIds.has(accountDevice.deviceId)) continue;
       devices.push({
         deviceId: accountDevice.deviceId,
@@ -3128,7 +3142,7 @@ export function createOwnerAuthBroker({
     // legacy trusted-device row exists. Project the binding as a computer so
     // account-based clients can still manage every bound endpoint.
     for (const binding of getInstanceBindings(draft)
-      .filter((item) => item.accountId === accountId)) {
+      .filter((item) => item.accountId === accountId && !item.revokedAt)) {
       if (knownDeviceIds.has(binding.instanceId)) continue;
       devices.push({
         deviceId: binding.instanceId,
@@ -3298,23 +3312,44 @@ export function createOwnerAuthBroker({
     return result;
   }
 
+  function removeAccountPhoneAssociation(draft, accountId, deviceId, now) {
+    const credentialIds = new Set(getAccountCredentials(draft)
+      .filter((item) => item.accountId === accountId && item.deviceId === deviceId).map((item) => item.credentialId));
+    const linkedGrants = getAccountJoinGrants(draft)
+      .filter((item) => item.accountId === accountId && item.accountDeviceId === deviceId);
+    const grantIntentIds = new Set(linkedGrants.map((item) => item.intentId));
+    const linkedIntents = getAccountJoinIntents(draft)
+      .filter((item) => item.accountId === accountId && (item.accountDeviceId === deviceId || grantIntentIds.has(item.intentId)));
+    const intentIds = new Set(linkedIntents.map((item) => item.intentId));
+    const linkedLegacyDevices = new Set([...linkedIntents, ...linkedGrants]
+      .map((item) => JSON.stringify([item.instanceId, item.deviceId])));
+    const releasedConnections = releaseRevokedPhoneTurnConnections(draft, { accountId, deviceId, nowMs: new Date(now).getTime() });
+    draft.accountJoinGrants = getAccountJoinGrants(draft).filter((grant) =>
+      !(grant.accountId === accountId && grant.accountDeviceId === deviceId) && !intentIds.has(grant.intentId));
+    draft.accountJoinIntents = getAccountJoinIntents(draft).filter((intent) => !intentIds.has(intent.intentId));
+    draft.devices = getDevices(draft).filter((item) => item.accountId !== accountId
+      || !linkedLegacyDevices.has(JSON.stringify([item.instanceId, item.deviceId])));
+    draft.accountCredentialRefreshes = getAccountCredentialRefreshes(draft).filter((refresh) => !credentialIds.has(refresh.credentialId));
+    draft.accountCredentials = getAccountCredentials(draft).filter((item) => !(item.accountId === accountId && item.deviceId === deviceId));
+    draft.accountDeviceKeys = getAccountDeviceKeys(draft).filter((item) => !(item.accountId === accountId && item.deviceId === deviceId));
+    draft.accountDevices = getAccountDevices(draft).filter((item) => !(item.accountId === accountId && item.deviceId === deviceId));
+    draft.accountSessionChallenges = getAccountSessionChallenges(draft).filter((item) => item.deviceId !== deviceId);
+    return releasedConnections;
+  }
+
   async function logoutAccountSession({ credential: rawCredential = '' } = {}) {
     const result = await store.mutate(async (draft) => {
       const authenticated = authenticateAccountCredential(draft, rawCredential, 'account-directory');
       const now = nowIso(clock);
-      authenticated.credential.revokedAt = now;
-      authenticated.device.unboundAt = authenticated.device.unboundAt || now;
-      if (authenticated.credential.accountId.startsWith('acct_demo_')) {
-        for (const grant of getAccountJoinGrants(draft)) {
-          if (grant.accountId === authenticated.credential.accountId && grant.accountDeviceId === authenticated.device.deviceId
-            && !grant.redeemedAt) grant.expiresAt = now;
-        }
-      }
+      const accountId = authenticated.credential.accountId;
+      const deviceId = authenticated.device.deviceId;
+      const releasedConnections = removeAccountPhoneAssociation(draft, accountId, deviceId, now);
       return {
-        accountId: authenticated.credential.accountId,
-        deviceId: authenticated.credential.deviceId,
+        accountId,
+        deviceId,
         credentialId: authenticated.credential.credentialId,
-        unboundAt: authenticated.device.unboundAt,
+        unboundAt: now,
+        releasedConnections,
       };
     });
     audit({
@@ -3336,31 +3371,15 @@ export function createOwnerAuthBroker({
       const accountDevice = getAccountDevices(draft).find((item) => item.deviceId === deviceId
         && item.accountId === accountId);
       if (accountDevice) {
-        if (!accountDevice.revokedAt) accountDevice.revokedAt = now;
-        if (!accountDevice.unboundAt) accountDevice.unboundAt = now;
-        for (const key of getAccountDeviceKeys(draft).filter((item) => item.accountId === accountId && item.deviceId === deviceId)) {
-          if (!key.revokedAt) key.revokedAt = now;
-        }
-        for (const token of getAccountCredentials(draft).filter((item) => item.accountId === accountId && item.deviceId === deviceId)) {
-          if (!token.revokedAt) token.revokedAt = now;
-        }
-        const releasedConnections = releaseRevokedPhoneTurnConnections(draft, {
-          accountId, deviceId, nowMs: new Date(now).getTime(),
-        });
-        return { revoked: true, deviceId, accountId, deviceKind: 'phone', revokedAt: accountDevice.revokedAt, releasedConnections };
+        const releasedConnections = removeAccountPhoneAssociation(draft, accountId, deviceId, now);
+        return { revoked: true, deviceId, accountId, deviceKind: 'phone', revokedAt: now, releasedConnections };
       }
       const binding = getInstanceBindings(draft).find((item) => item.instanceId === deviceId
         && item.accountId === accountId);
       if (!binding) throw createError('owner_auth_account_device_not_found', 'Account device was not found.', 404);
-      const newlyRevoked = !binding.revokedAt;
-      if (newlyRevoked) binding.revokedAt = now;
-      const trusted = getDevices(draft).find((item) => item.deviceId === deviceId && item.accountId === accountId);
-      if (trusted && !trusted.unboundAt) trusted.unboundAt = now;
-      const releasedConnections = releaseRevokedInstanceTurnConnections(draft, {
-        accountId, instanceId: deviceId, nowMs: new Date(now).getTime(),
-      });
-      if (newlyRevoked) recordBindingEvent(draft, { instanceId: deviceId, accountId, action: 'unbind', now });
-      return { revoked: true, deviceId, accountId, deviceKind: 'computer', revokedAt: binding.revokedAt, releasedConnections };
+      const releasedConnections = removeAccountComputerAssociation(draft, accountId, deviceId, now);
+      if (!binding.revokedAt) recordBindingEvent(draft, { instanceId: deviceId, accountId, action: 'unbind', now });
+      return { revoked: true, deviceId, accountId, deviceKind: 'computer', revokedAt: now, releasedConnections };
     });
     audit({ event: 'account_directory.device_revoked', deviceId: result.deviceId, accountId: result.accountId, deviceKind: result.deviceKind });
     return result;

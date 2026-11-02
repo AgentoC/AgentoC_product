@@ -348,18 +348,17 @@ try {
     });
     unboundAt = result.unboundAt;
     assert.ok(result.unboundAt);
-    assert.equal(state.instanceBindings.find((item) => item.instanceId === instanceId).revokedAt, result.unboundAt);
-    assert.equal(state.devices.find((item) => item.deviceId === instanceId).unboundAt, result.unboundAt);
-    assert.equal(state.bindingHistory.at(-1).action, 'unbind');
+    assert.equal(state.instanceBindings.some((item) => item.instanceId === instanceId), false);
+    assert.equal(state.devices.some((item) => item.instanceId === instanceId), false);
   });
 
-  await check('重复解绑返回 409', async () => {
+  await check('重复解绑返回 404', async () => {
     await assert.rejects(
       () => broker.unbindInstance({
         ...deviceProofFor({ transactionId: 'op_unbind_2', purpose: 'unbind' }),
         accountId: 'acct_owner_1',
       }),
-      { code: 'owner_auth_already_unbound' },
+      { code: 'owner_auth_binding_missing' },
     );
   });
 

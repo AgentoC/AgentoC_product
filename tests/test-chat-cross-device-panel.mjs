@@ -188,7 +188,7 @@ try {
   const opened = await page.evaluate(() => window.AgentoCCrossDevicePanel.open({ view: 'account' }));
   assert.equal(opened, true, 'workspace should open');
   await page.waitForSelector('#crossDeviceAccountContent .cross-device-card');
-  assert.equal(await page.locator('#crossDeviceAccountContent .cross-device-card').count(), 2, 'account view should have one account card and one history card');
+  assert.equal(await page.locator('#crossDeviceAccountContent .cross-device-card').count(), 1, 'account view should not show a history card');
   assert.equal(await page.locator('#crossDeviceOverlay').getAttribute('hidden'), null, 'overlay should be visible');
   assert.equal(await page.locator('#crossDeviceOverlay').getAttribute('inert'), null, 'visible overlay must remain interactive');
   assert.equal(await page.locator('#crossDeviceClose').isEnabled(), true, 'close button must remain interactive');
@@ -206,24 +206,19 @@ try {
   });
   await page.getByRole('button', { name: 'Refresh' }).first().click();
   await page.getByRole('heading', { name: 'Devices on this account' }).waitFor();
-  assert.equal(await page.locator('#crossDeviceAccountContent .cross-device-device-row').count(), 11, 'account records must all remain available');
+  assert.equal(await page.locator('#crossDeviceAccountContent .cross-device-device-row').count(), 10, 'only currently bound account records are shown');
   assert.equal(await page.getByRole('heading', { name: 'Computer records · 3' }).count(), 1);
   assert.equal(await page.getByRole('heading', { name: 'Mobile app installation records · 7' }).count(), 1);
   const accountList = page.locator('#crossDeviceAccountContent');
   assert.equal(await accountList.locator('.cross-device-account-more').first().getAttribute('open'), null, 'older phone records start collapsed');
-  assert.equal(await accountList.getByText('Old phone').isVisible(), false, 'unbound records start collapsed');
+  assert.equal(await accountList.getByText('Old phone').count(), 0, 'unbound records are not displayed');
   await accountList.getByText('Show 2 more records').click();
   assert.equal(await accountList.locator('.cross-device-account-group').nth(1).locator('.cross-device-device-row:visible').count(), 7, 'expanding retains same-named identities separately');
   const deviceRowTexts = await page.locator('#crossDeviceAccountContent .cross-device-device-row').allInnerTexts();
   assert.ok(deviceRowTexts[0]?.includes('Local'), 'local instance should be labeled');
   assert.ok(deviceRowTexts[1]?.includes('Remote'), 'remote instance should be labeled');
-  const historyToggle = page.getByText('Show 3 history entries');
-  assert.equal(await historyToggle.locator('..').getAttribute('open'), null, 'history starts collapsed');
-  await historyToggle.click();
-  const historyRowTexts = await page.locator('#crossDeviceAccountContent .cross-device-history-row').allInnerTexts();
-  assert.equal(historyRowTexts.filter((text) => text.includes('Bound · inst_local')).length, 2, 'accounts history should render bind actions with instance ids');
-  assert.ok(historyRowTexts.some((text) => text.includes('Unbound · inst_local')), 'accounts history should render unbind actions');
-  assert.equal(await page.getByText('Server-side history for this account.').count(), 1, 'accounts history note should reflect server-side storage');
+  assert.equal(await page.locator('#crossDeviceAccountContent .cross-device-history-row').count(), 0, 'binding history is not shown');
+  assert.equal(await page.evaluate(() => window.__requests.some((request) => request.path === '/api/auth/google/binding-history')), false, 'account view should not request binding history');
 
   await page.getByRole('button', { name: 'Unbind this device' }).click();
   await page.getByRole('button', { name: 'Confirm unbind' }).click();

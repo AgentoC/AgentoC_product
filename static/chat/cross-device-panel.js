@@ -377,7 +377,7 @@
         const devicesBody = make("div", "cross-device-card-body");
         try {
           const data = await api("/api/auth/google/devices");
-          const devices = Array.isArray(data?.devices) ? data.devices : [];
+          const devices = (Array.isArray(data?.devices) ? data.devices : []).filter((device) => !device?.unboundAt && !device?.revokedAt);
           if (activeView !== "account") return;
           if (!devices.length) {
             devicesBody.appendChild(make("div", "cross-device-empty", fallback("crossDevice.account.accountDevicesEmpty", "No other devices use this account.")));
@@ -411,7 +411,6 @@
               return (Date.parse(b?.lastSeenAt || b?.boundAt || "") || 0) - (Date.parse(a?.lastSeenAt || a?.boundAt || "") || 0);
             });
             const active = sorted.filter((device) => !device?.unboundAt && !device?.revokedAt);
-            const inactive = sorted.filter((device) => device?.unboundAt || device?.revokedAt);
             const phones = active.filter((device) => device?.deviceKind === "phone" || (!device?.deviceKind && device?.platform === "android"));
             const computers = active.filter((device) => device?.deviceKind === "computer");
             const other = active.filter((device) => !phones.includes(device) && !computers.includes(device));
@@ -443,7 +442,6 @@
             appendGroup(fallback("crossDevice.account.computers", "Computer records"), computers);
             appendGroup(fallback("crossDevice.account.phones", "Mobile app installation records"), phones);
             appendGroup(fallback("crossDevice.account.other", "Other records"), other);
-            appendGroup(fallback("crossDevice.account.inactive", "Unbound records"), inactive, true);
           }
         } catch {
           devicesBody.appendChild(make("div", "cross-device-empty", fallback("crossDevice.account.accountDevicesFailed", "Device list is unavailable.")));
@@ -452,55 +450,6 @@
         stack.appendChild(devicesCard);
       }
 
-      const historyCard = make("article", "cross-device-card");
-      const historyHeader = appendCardTitle(
-        historyCard,
-        fallback("crossDevice.account.historyTitle", "Binding history"),
-        status?.mode === "accounts"
-          ? fallback("crossDevice.account.historyNoteAccounts", "Server-side history for this account.")
-          : fallback("crossDevice.account.historyNote", "This owner-only history stays on this device."),
-      );
-      const refresh = action(fallback("crossDevice.refresh", "Refresh"), () => void renderAccount());
-      historyHeader.appendChild(refresh);
-      const historyBody = make("div", "cross-device-card-body");
-      try {
-        const history = await api("/api/auth/google/binding-history");
-        const entries = Array.isArray(history?.entries) ? history.entries : [];
-        if (!entries.length) {
-          historyBody.appendChild(make("div", "cross-device-empty", fallback("crossDevice.account.noHistory", "No binding history yet.")));
-        } else {
-          const list = make("div", "cross-device-history-list");
-          const ordered = entries[0]?.action ? entries : entries.slice().reverse();
-          ordered.forEach((entry) => {
-            const row = make("div", "cross-device-history-row");
-            row.appendChild(makeIcon("file", "cross-device-device-icon"));
-            const rowCopy = make("div", "cross-device-device-meta");
-            if (entry?.action) {
-              const actionLabel = entry.action === "unbind"
-                ? fallback("crossDevice.history.action.unbind", "Unbound")
-                : fallback("crossDevice.history.action.bind", "Bound");
-              rowCopy.appendChild(make("strong", "", `${actionLabel} · ${shortId(entry?.instanceId)}`));
-              rowCopy.appendChild(make("span", "", formatDate(entry?.occurredAt)));
-            } else {
-              rowCopy.appendChild(make("strong", "", entry?.deviceAlias || entry?.name || fallback("crossDevice.account.unnamed", "Unnamed device")));
-              rowCopy.appendChild(make("span", "", entry?.email || fallback("crossDevice.account.emailHidden", "Google account details hidden")));
-            }
-            row.appendChild(rowCopy);
-            row.appendChild(make("span", "cross-device-pill", (entry?.unboundAt || entry?.action === "unbind")
-              ? fallback("crossDevice.status.unbound", "Unbound")
-              : fallback("crossDevice.status.bound", "Bound")));
-            list.appendChild(row);
-          });
-          const details = make("details", "cross-device-account-more");
-          details.appendChild(make("summary", "", fallback("crossDevice.account.showHistory", "Show {count} history entries", { count: ordered.length })));
-          details.appendChild(list);
-          historyBody.appendChild(details);
-        }
-      } catch {
-        historyBody.appendChild(make("div", "cross-device-empty", fallback("crossDevice.account.historyFailed", "Binding history is unavailable.")));
-      }
-      historyCard.appendChild(historyBody);
-      stack.appendChild(historyCard);
       accountContent.appendChild(stack);
       hydrateIcons(accountContent);
     } catch {
@@ -526,7 +475,7 @@
         ]);
         const accountDevices = Array.isArray(accountData?.devices) ? accountData.devices : [];
         trustedDevices = Array.isArray(localData?.devices) ? localData.devices : [];
-        listedDevices = accountDevices.filter(isAccountComputer).map((device) => ({
+        listedDevices = accountDevices.filter((device) => isAccountComputer(device) && !device?.unboundAt && !device?.revokedAt).map((device) => ({
           ...device,
           trustedDevice: findLocalTrustedDevice(device, trustedDevices),
         }));
@@ -542,6 +491,15 @@
       if (managerMode ? activeView === "register" : activeView !== "devices") return;
       clear(devicesContent);
       const stack = make("div", "cross-device-stack");
+      if (managerMode && useAccountDirectory) {
+        const picker = make("details", "cross-device-account-more desktop-manager-target-picker");
+        picker.appendChild(make("summary", "", fallback("crossDevice.account.switchComputer", "Switch work computer")));
+        await renderTargetRuntimeCard(picker, new Set(listedDevices.map((device) => device.instanceId || device.deviceId)));
+        stack.appendChild(picker);
+        devicesContent.appendChild(stack);
+        hydrateIcons(devicesContent);
+        return;
+      }
       await renderTargetRuntimeCard(stack);
       const card = make("article", "cross-device-card");
       const header = appendCardTitle(
@@ -662,42 +620,43 @@
 
   function targetStatusText(target) {
     const labels = {
-      online: "Online",
-      paired: "Paired",
-      connecting: "Connecting",
-      degraded: "Degraded",
-      offline: "Offline",
-      revoked: "Revoked",
+      online: fallback("crossDevice.target.online", "Online"),
+      paired: fallback("crossDevice.target.paired", "Paired"),
+      connecting: fallback("crossDevice.target.connecting", "Connecting"),
+      degraded: fallback("crossDevice.target.degraded", "Connection limited"),
+      offline: fallback("crossDevice.target.offline", "Offline"),
+      revoked: fallback("crossDevice.target.revoked", "Revoked"),
     };
-    return labels[target?.status] || "Unavailable";
+    return labels[target?.status] || fallback("crossDevice.target.unavailable", "Unavailable");
   }
 
   function targetSummaryText(summary) {
-    if (!summary) return "No runtime summary yet";
+    if (!summary) return fallback("crossDevice.target.noSummary", "No runtime summary yet");
     const sessions = Number(summary.sessions?.total) || 0;
     const active = Number(summary.runs?.active) || 0;
     const approvals = Number(summary.approvals?.pending) || 0;
-    return `${sessions} sessions · ${active} active runs · ${approvals} approvals · revision ${Number(summary.revision) || 0}`;
+    return fallback("crossDevice.target.summary", "{sessions} sessions · {active} active runs · {approvals} approvals", { sessions, active, approvals });
   }
 
-  async function renderTargetRuntimeCard(parent) {
+  async function renderTargetRuntimeCard(parent, boundIds = null) {
     const runtime = root.AgentoCTargetRuntime;
     if (!runtime || !parent) return;
     await runtime.refreshTargets?.().catch(() => null);
     const snapshot = runtime.getSnapshot?.() || { targets: [] };
     const card = make("article", "cross-device-card cross-device-runtime-card");
-    const header = appendCardTitle(card, "Runtime targets", "Choose which computer owns the workbench data and actions.");
+    const header = appendCardTitle(card, fallback("crossDevice.target.title", "Work computers"), fallback("crossDevice.target.note", "Choose the computer for your workbench."));
     const actions = make("div", "cross-device-actions");
-    actions.appendChild(action("Refresh", () => void (async () => {
+    actions.appendChild(action(fallback("crossDevice.refresh", "Refresh"), () => void (async () => {
       await runtime.refreshTargets?.();
       await runtime.refreshSummaries?.();
       await renderDevices();
     })()));
     header.appendChild(actions);
     const body = make("div", "cross-device-card-body");
-    const targets = Array.isArray(snapshot.targets) ? snapshot.targets : [];
+    const targets = (Array.isArray(snapshot.targets) ? snapshot.targets : []).filter((target) =>
+      target.status !== "revoked" && (!boundIds || target.targetId === snapshot.activeTargetId || boundIds.has(target.instanceId) || boundIds.has(target.targetId)));
     if (!targets.length) {
-      body.appendChild(make("div", "cross-device-empty", "No runtime targets are available."));
+      body.appendChild(make("div", "cross-device-empty", fallback("crossDevice.target.empty", "No work computers are available.")));
     } else {
       const list = make("div", "cross-device-device-list");
       for (const target of targets) {
@@ -706,7 +665,7 @@
         row.dataset.status = target.status || "offline";
         row.appendChild(makeIcon(target.targetId === snapshot.activeTargetId ? "check" : "monitor", "cross-device-device-icon"));
         const meta = make("div", "cross-device-device-meta");
-        meta.appendChild(make("strong", "", `${target.label}${target.targetId === snapshot.activeTargetId ? " · Current" : ""}`));
+        meta.appendChild(make("strong", "", `${target.label}${target.targetId === snapshot.activeTargetId ? ` · ${fallback("crossDevice.target.current", "Current")}` : ""}`));
         meta.appendChild(make("span", "", `${target.platform || target.deviceKind} · ${targetStatusText(target)}`));
         meta.appendChild(make("span", "cross-device-device-entry", targetSummaryText(runtime.getSummary?.(target.targetId))));
         row.appendChild(meta);
@@ -715,14 +674,14 @@
         pill.dataset.tone = target.status === "online" || target.status === "paired" ? "success" : "warning";
         side.appendChild(pill);
         if (target.targetId !== snapshot.activeTargetId && target.status !== "revoked") {
-          const switchButton = action("Use", async (button) => {
-            setBusy(button, true, "Switching...");
+          const switchButton = action(fallback("crossDevice.target.use", "Use"), async (button) => {
+            setBusy(button, true, fallback("crossDevice.target.switching", "Switching…"));
             try {
               await runtime.selectTarget(target.targetId);
-              showStatus(`Using ${target.label}`, "success");
+              showStatus(fallback("crossDevice.target.using", "Using {name}", { name: target.label }), "success");
               await renderDevices();
             } catch (error) {
-              handleError(error, "Target runtime could not be selected.");
+              handleError(error, fallback("crossDevice.target.switchFailed", "Could not switch computers."));
               setBusy(button, false);
             }
           }, "primary");

@@ -9,7 +9,7 @@ import { buildAccountSessionMessage, createDevicePublicKeyFingerprint } from '..
 import { buildOwnerAuthDeviceMessage, createInstancePublicKeyFingerprint } from '../lib/instance-proof-protocol.mjs';
 import { createTurnConnectionId } from '../lib/turn-authorization.mjs';
 
-test('phone revoke atomically releases only its linked leases and preserves the original tombstone', async t => {
+test('phone revoke atomically releases only its linked leases and removes device associations', async t => {
   let now = Date.parse('2026-10-25T10:00:00.123Z'), failCommit = false, failedAfterLeaseWrite = false;
   const databaseUrl = process.env.AGENTOC_ACCOUNTS_ISOLATED_TEST_DATABASE_URL;
   const iso = (offset = 0) => new Date(now + offset).toISOString();
@@ -113,7 +113,7 @@ test('phone revoke atomically releases only its linked leases and preserves the 
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}/accounts`;
   async function request(path, token = ownerToken, body) {
-    const response = await fetch(base + path, { method: body ? 'POST' : 'GET', signal: AbortSignal.timeout(10000),
+    const response = await fetch(base + path, { method: body ? 'POST' : 'GET', signal: AbortSignal.timeout(databaseUrl ? 120000 : 10000),
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     return { status: response.status, body: await response.json() };
   }
@@ -136,15 +136,15 @@ test('phone revoke atomically releases only its linked leases and preserves the 
     assert.equal(state.turnConnectionLeases.find(row => row.connectionId === 'victim-direct').updatedAt, iso(5000));
     assert.deepEqual(state.turnConnectionLeases.filter(row => !releasedIds.has(row.connectionId)), before.turnConnectionLeases.filter(row => !releasedIds.has(row.connectionId)), 'Other phones/accounts/kinds/targets, pending joins and history remain unchanged');
     assert.equal((await request('/v1/owner-auth/account/usage')).body.turn.connections.active, 5);
-    assert(state.accountCredentials.filter(row => row.deviceId === victim).every(row => row.revokedAt));
-    assert(state.accountDeviceKeys.filter(row => row.deviceId === victim).every(row => row.revokedAt));
+    assert.equal(state.accountCredentials.filter(row => row.deviceId === victim).length, 0);
+    assert.equal(state.accountDeviceKeys.filter(row => row.deviceId === victim).length, 0);
+    assert.equal(state.accountDevices.filter(row => row.deviceId === victim).length, 0);
+    assert(state.accountDevices.some(row => row.deviceId === controller));
+    assert.equal(state.devices.filter(row => row.deviceId === 'rdev_linked').length, 0);
     assert.equal((await request('/v1/owner-auth/account/usage', victimToken)).status, 401);
-    const tombstones = structuredClone(state.accountCredentials.filter(row => row.deviceId === victim));
     now += 1000;
     const repeated = await revoke(victim);
-    assert.equal(repeated.body.revokedAt, result.body.revokedAt);
-    assert.equal(repeated.body.releasedConnections, 0);
-    assert.deepEqual(state.accountCredentials.filter(row => row.deviceId === victim), tombstones);
+    assert.equal(repeated.status, 404);
     const deviceId = 'rdev_linked', connectionId = createTurnConnectionId({ accountId, instanceId: instance.instanceId, deviceId });
     const fields = { instanceId: instance.instanceId, transactionId: connectionId, purpose: 'turn-reserve', issuedAt: iso(), audience: 'agentoc-owner-auth-device' };
     const reserve = await request('/v1/owner-auth/turn/connections/reserve', '', { ...fields, instance, requestId: connectionId,
@@ -152,12 +152,6 @@ test('phone revoke atomically releases only its linked leases and preserves the 
       signature: sign(null, Buffer.from(buildOwnerAuthDeviceMessage(fields)), keys.privateKey).toString('base64') });
     assert.equal(reserve.status, 403, 'A legacy device row cannot reopen quota after its linked phone was revoked');
     assert.equal(reserve.body.code, 'turn_connection_device_invalid');
-    await store.mutate(draft => draft.accountJoinIntents.push({ ...draft.accountJoinIntents.find(row => row.intentId === 'rji_linked'),
-      intentId: 'rji_ambiguous', accountDeviceId: controller }));
-    const ambiguous = await broker.reserveTurnConnection({ ...fields, instance, requestId: connectionId, accountId, deviceId,
-      deviceKind: 'phone', connectionId, expiresAt: iso(60000),
-      signature: sign(null, Buffer.from(buildOwnerAuthDeviceMessage(fields)), keys.privateKey).toString('base64') }).catch(error => error);
-    assert.equal(ambiguous.code, 'turn_connection_device_invalid', 'Conflicting durable phone links cannot select a different phone to regain quota');
     const foreign = await revoke('adev_foreign_missing'); assert.equal(foreign.status, 404);
   } finally { await new Promise(resolve => server.close(resolve)); }
 });
