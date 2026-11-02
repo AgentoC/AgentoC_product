@@ -217,10 +217,18 @@ static class ManagedOwnerMsiBridge {
    return marker;
   }finally{for(int index=pins.Count-1;index>=0;index--)pins[index].Dispose();}
  }
+ static bool EmptyFreshTarget(string product,string data){
+  if(Present(data))return false;
+  if(!Present(product))return true;
+  return Directory.Exists(product)&&!Directory.EnumerateFileSystemEntries(product).Any();
+ }
  static bool Fresh(){
   ValidateProductRoot();
   foreach(string n in Names)Need(!ServiceRows(n).Any(),"OMI_EXISTING_SERVICE_REFUSED");
-  if(!Present(Data)&&!Present(Product))return false;
+  // Directory pickers often create the selected folder before MSI runs.
+  // An empty, ACL-validated target is equivalent to an absent fresh target;
+  // retained Owner data still requires the authenticated recovery path.
+  if(EmptyFreshTarget(Product,Data))return false;
   Need(Present(Path.Combine(Product,"owner-msi.removed.json")),"OMI_EXISTING_INSTALL_REFUSED");
   RemovedAdmission();return true;
  }
