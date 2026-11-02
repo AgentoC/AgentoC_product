@@ -99,7 +99,7 @@
     <CustomAction Id="ManagedUpgradeActivationCheck" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-activation-check &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedUpgradeActivate" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-activate &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedUpgradeCommit" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-commit &quot;[INSTALLFOLDER].&quot;" Execute="commit" Impersonate="no" Return="check" />
-    <CustomAction Id="ManagedMaintenanceRefused" Error="AgentoC repair is disabled; use the signed in-place update package." />
+    <CustomAction Id="ManagedMaintenanceRefused" Error="AgentoC maintenance is unavailable in this installer; use an AgentoC update package." />
     <CustomAction Id="ManagedMajorUpgradeRefused" Error="This MSI major upgrade is disabled until its rollback path is validated." />
 
     <!-- One rollback action covers the complete ordered fresh-install
