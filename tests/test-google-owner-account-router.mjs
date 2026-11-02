@@ -188,6 +188,19 @@ try {
     assert.equal(transactions.entries[redirectTx].alias, 'Browser laptop');
   });
 
+  const demoRedirectRes = makeRes();
+  await handleGoogleOwnerAuthRoutes({
+    req: makeReq({ method: 'GET', url: '/api/auth/google/bind/redirect?flow=demo', headers: { host: 'thelab.example.test' } }),
+    res: demoRedirectRes, pathname: '/api/auth/google/bind/redirect', authSession: { role: 'owner' }, writeJson,
+  });
+  await check('test account entry opens the existing identity transaction at the demo form', async () => {
+    assert.equal(demoRedirectRes.statusCode, 302);
+    const destination = new URL(demoRedirectRes.headers.Location);
+    assert.equal(destination.host, 'accounts.example.test');
+    assert.equal(destination.searchParams.get('flow'), 'demo');
+    assert.match(demoRedirectRes.headers['Set-Cookie'], /; Path=\//);
+  });
+
   const aliasBindRes = makeRes();
   await handleGoogleOwnerAuthRoutes({
     req: makeReq({

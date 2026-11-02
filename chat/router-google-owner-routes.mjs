@@ -210,17 +210,20 @@ export async function handleGoogleOwnerAuthRoutes({ req, res, pathname, authSess
         alias,
         publicBaseUrl: resolveOwnerAuthPublicBaseUrl(req),
       });
+      // Accounts owns credential entry; the hint contains no credentials.
+      const destination = new URL(started.authUrl);
+      if (query.get('flow') === 'demo') destination.searchParams.set('flow', 'demo');
       if (started.deliveryMode === 'instance_poll') {
         attachOwnerAuthPoller(started.transactionId);
         res.writeHead(302, {
-          Location: started.authUrl,
+          Location: destination.toString(),
           'Cache-Control': 'no-store',
         });
         res.end();
         return true;
       }
       res.writeHead(302, {
-        Location: started.authUrl,
+        Location: destination.toString(),
         'Set-Cookie': started.stateCookie,
         'Cache-Control': 'no-store',
       });

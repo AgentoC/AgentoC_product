@@ -568,6 +568,18 @@ export async function handleOwnerAuthRoutes({
       const phoneUrl = new URL(`${base}/owner/google/phone`);
       phoneUrl.searchParams.set('tx', transactionId);
       phoneUrl.searchParams.set('ticket', desktop.phoneTicket);
+      // Browser-callback mode needs its waiting page to retain the delivery
+      // grant; only instance-poll mode can safely skip directly to the form.
+      if (query.get('flow') === 'demo' && broker.canSignInDemoInstances === true && !desktop.deliveryGrant) {
+        phoneUrl.hash = 'demo-login';
+        res.writeHead(302, {
+          Location: phoneUrl.toString(),
+          'Cache-Control': 'no-store',
+          'Set-Cookie': [browserCookie(transactionId, desktopState), csrfCookie(transactionId, desktopState)],
+        });
+        res.end();
+        return true;
+      }
       const statusEndpoint = `${base}/v1/owner-auth/transactions/${encodeURIComponent(transactionId)}/desktop-status`;
       const styles = await loadAccountPageAssets();
       // instance_poll：页面只是等待端，不携带 delivery grant，也不回跳实例。

@@ -27,6 +27,8 @@
   let temporaryPairingState = null;
   let temporaryPairingPollTimer = null;
   let pairingMode = "formal";
+  let managerClaim = null;
+  let managerClaimTimer = null;
   // 入口健康探测的短缓存（P1-⑤）：探测失败不阻塞展示，60s 内复用结果。
   const deviceHealthCache = new Map();
   const DEVICE_HEALTH_TTL_MS = 60000;
@@ -268,12 +270,23 @@
       const status = await api("/api/auth/google/status");
       if (activeView !== "account") return;
       clear(accountContent);
+      const pairingNav = managerMode && document.querySelector('[data-desktop-manager-tab="pairing"]');
+      if (pairingNav) pairingNav.hidden = Boolean(status?.bound);
+      if (managerMode && status?.bound) {
+        if (managerClaimTimer) root.clearTimeout(managerClaimTimer);
+        managerClaimTimer = null;
+        managerClaim = null;
+      }
+      if (managerMode && status?.enabled && !status?.bound) {
+        await renderManagerSignIn(status);
+        return;
+      }
       const stack = make("div", "cross-device-stack");
       const card = make("article", "cross-device-card");
       appendCardTitle(
         card,
-        fallback("crossDevice.account.title", "Google owner sign-in"),
-        fallback("crossDevice.account.note", "One Google account can sign in as the owner from another device."),
+        managerMode ? fallback("crossDevice.claim.accountTitle", "Account") : fallback("crossDevice.account.title", "Google owner sign-in"),
+        managerMode ? fallback("crossDevice.claim.accountNote", "Manage the account connected to this computer.") : fallback("crossDevice.account.note", "One Google account can sign in as the owner from another device."),
       );
       const cardHeader = card.querySelector(".cross-device-card-header");
       cardHeader?.appendChild(action(fallback("crossDevice.refresh", "Refresh"), () => void renderAccount()));
@@ -282,7 +295,7 @@
       summary.appendChild(makeIcon("agent", "cross-device-summary-icon"));
       const copy = make("div", "cross-device-summary-copy");
       copy.appendChild(make("strong", "cross-device-summary-title", status?.bound
-        ? fallback("crossDevice.account.bound", "Google account bound")
+        ? (managerMode ? fallback("crossDevice.claim.connected", "Account connected") : fallback("crossDevice.account.bound", "Google account bound"))
         : fallback("crossDevice.account.unbound", "Google account not bound")));
       copy.appendChild(make("span", "cross-device-summary-detail", status?.enabled
         ? (status?.bound
@@ -460,6 +473,9 @@
 
   async function renderDevices() {
     if (!devicesContent || (!managerMode && activeView !== "devices")) return;
+    // The desktop manager controls this computer, not a remote workbench.
+    // Account-bound devices remain visible in the account section.
+    if (managerMode) { clear(devicesContent); return; }
     renderLoading(devicesContent, fallback("crossDevice.loading", "Loading devices…"));
     try {
       const accountStatus = await api("/api/auth/google/status").catch(() => null);
@@ -491,15 +507,6 @@
       if (managerMode ? activeView === "register" : activeView !== "devices") return;
       clear(devicesContent);
       const stack = make("div", "cross-device-stack");
-      if (managerMode && useAccountDirectory) {
-        const picker = make("details", "cross-device-account-more desktop-manager-target-picker");
-        picker.appendChild(make("summary", "", fallback("crossDevice.account.switchComputer", "Switch work computer")));
-        await renderTargetRuntimeCard(picker, new Set(listedDevices.map((device) => device.instanceId || device.deviceId)));
-        stack.appendChild(picker);
-        devicesContent.appendChild(stack);
-        hydrateIcons(devicesContent);
-        return;
-      }
       await renderTargetRuntimeCard(stack);
       const card = make("article", "cross-device-card");
       const header = appendCardTitle(
@@ -616,6 +623,56 @@
       clear(devicesContent);
       devicesContent.appendChild(make("div", "cross-device-empty", fallback("crossDevice.devices.failed", "Device list is unavailable.")));
     }
+  }
+
+  async function renderManagerSignIn(status) {
+    const card = make("article", "cross-device-card desktop-manager-sign-in");
+    const body = make("div", "cross-device-card-body desktop-manager-sign-in-body");
+    card.appendChild(body);
+    accountContent.appendChild(card);
+    if (status?.capabilities?.accountJoin !== false) {
+      body.appendChild(make("h3", "cross-device-card-title", fallback("crossDevice.claim.title", "Connect with your phone")));
+      body.appendChild(make("p", "cross-device-helper", fallback("crossDevice.claim.note", "In the AgentoC app, scan this code to connect this computer to your account.")));
+      const qr = make("div", "cross-device-pair-qr desktop-manager-claim-qr");
+      qr.setAttribute("role", "img");
+      qr.setAttribute("aria-label", fallback("crossDevice.pair.qrLabel", "Pairing QR code"));
+      body.appendChild(qr);
+      const detail = make("p", "cross-device-helper", fallback("crossDevice.pair.creating", "Creating code…"));
+      body.appendChild(detail);
+      void (async () => { try {
+        if (!managerClaim || Date.parse(managerClaim.expiresAt) <= Date.now()) {
+          const data = await api("/api/device-pairing/invitations", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+          if (!data?.invitation?.pairingUri || !data.invitation.expiresAt) throw new Error("Pairing code unavailable");
+          managerClaim = data.invitation;
+        }
+        if (!card.isConnected) return;
+        drawPairingQr(qr, managerClaim.pairingUri, 512);
+        detail.textContent = `${fallback("crossDevice.pair.expires", "Expires")} ${formatDate(managerClaim.expiresAt)}`;
+      } catch (error) {
+        if (!card.isConnected) return;
+        detail.textContent = fallback("crossDevice.claim.failed", "Could not create a pairing code.");
+        body.appendChild(action(fallback("crossDevice.refresh", "Retry"), () => void renderAccount()));
+      } })();
+    }
+    const actions = make("div", "cross-device-actions desktop-manager-sign-in-actions");
+    const openSignIn = (flow) => {
+      const bindUrl = new URL(productPath("/api/auth/google/bind/redirect"), root.location.href);
+      if (flow === "demo") bindUrl.searchParams.set("flow", "demo");
+      root.open(bindUrl.toString(), "_blank", "noopener");
+    };
+    actions.appendChild(action(fallback("crossDevice.claim.google", "Sign in with Google"), () => openSignIn("google")));
+    actions.appendChild(action(fallback("crossDevice.claim.demo", "Test account sign-in"), () => openSignIn("demo")));
+    body.appendChild(actions);
+    if (managerClaimTimer) root.clearTimeout(managerClaimTimer);
+    const poll = async () => {
+      if (!card.isConnected || document.body?.dataset.desktopManagerTab !== "account") return;
+      try {
+        const current = await api("/api/auth/google/status");
+        if (current?.bound || (managerClaim && Date.parse(managerClaim.expiresAt) <= Date.now())) { void renderAccount(); return; }
+      } catch { /* Keep the existing QR visible during a transient failure. */ }
+      managerClaimTimer = root.setTimeout(poll, 3000);
+    };
+    managerClaimTimer = root.setTimeout(poll, 3000);
   }
 
   function targetStatusText(target) {

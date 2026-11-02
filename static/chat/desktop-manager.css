@@ -182,6 +182,10 @@ body.desktop-manager .desktop-manager-nav button:hover {
   color: var(--text);
 }
 
+body.desktop-manager .desktop-manager-nav button[hidden] {
+  display: none;
+}
+
 body.desktop-manager .desktop-manager-nav button[aria-current="page"] {
   border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
   background: color-mix(in srgb, var(--accent) 12%, var(--bg));
@@ -266,6 +270,27 @@ body.desktop-manager .desktop-manager-devices-group {
 
 body.desktop-manager .desktop-manager-account-status {
   margin: 0 0 14px;
+}
+
+body.desktop-manager .desktop-manager-sign-in {
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+body.desktop-manager .desktop-manager-sign-in-body {
+  align-items: center;
+  text-align: center;
+}
+
+body.desktop-manager .desktop-manager-claim-qr {
+  width: min(320px, 100%);
+  margin: 12px auto 0;
+  padding: 8px;
+}
+
+body.desktop-manager .desktop-manager-sign-in-actions {
+  justify-content: center;
+  margin-top: 18px;
 }
 
 body.desktop-manager .desktop-manager-account-group[hidden],
