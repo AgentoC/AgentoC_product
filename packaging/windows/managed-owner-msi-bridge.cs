@@ -421,7 +421,10 @@ static class ManagedOwnerMsiBridge {
  static int Run(string action,string owner){
   Need(Directory.Exists(Product),"OMI_INSTALL_ROOT_MISSING");ValidateProductRoot();
   Need(new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator),"OMI_ADMIN_REQUIRED");
-  string parent=@"C:\Windows\Temp",root=Path.Combine(parent,"AgentoC-managed-msi-"+Guid.NewGuid().ToString("N"));
+  // Keep the private, transient installer workspace on the selected product
+  // volume. This avoids filling the system drive when AgentoC is installed
+  // elsewhere; the root is already ACL-validated above.
+  string parent=Product,root=Path.Combine(parent,"AgentoC-managed-msi-"+Guid.NewGuid().ToString("N"));
   Need(Directory.Exists(parent),"OMI_TEMP_UNAVAILABLE");
   var acl=new DirectorySecurity();acl.SetAccessRuleProtection(true,false);acl.SetOwner(new SecurityIdentifier("S-1-5-32-544"));
   foreach(string sid in new[]{"S-1-5-18","S-1-5-32-544"})acl.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(sid),FileSystemRights.FullControl,InheritanceFlags.ContainerInherit|InheritanceFlags.ObjectInherit,PropagationFlags.None,AccessControlType.Allow));
