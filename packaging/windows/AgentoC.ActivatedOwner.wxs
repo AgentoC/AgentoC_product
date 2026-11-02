@@ -30,6 +30,11 @@
            must not survive an in-place update under Windows Installer's normal
            versioning rules. Apply this before file costing on reinstall only. -->
       <SetProperty Id="REINSTALLMODE" Value="vamus" Before="CostInitialize" Sequence="execute" Condition="Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;)" />
+    <?else?>
+      <!-- A validated recovery can retain files from an older installation
+           whose internal file version is higher than the public MSI version.
+           Fresh installs must lay down this package's own immutable payload. -->
+      <SetProperty Id="REINSTALLMODE" Value="amus" Before="CostInitialize" Sequence="execute" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
     <?endif?>
     <CustomAction Id="LaunchAgentoC" BinaryRef="Wix4UtilCA_X64" DllEntry="WixUnelevatedShellExec" Execute="immediate" Return="check" />
     <util:CloseApplication Id="CloseAgentoCManager" Target="AgentoC.exe" CloseMessage="yes" PromptToContinue="yes" Description="AgentoC is still open. Close it to continue setup or removal." Timeout="15" />
