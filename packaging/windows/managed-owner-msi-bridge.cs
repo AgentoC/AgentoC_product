@@ -254,6 +254,31 @@ static class ManagedOwnerMsiBridge {
    }
   }finally{for(int i=pins.Count-1;i>=0;i--)pins[i].Dispose();}
  }
+ static int ValidateRecoveryDestination(string ownerSid,string sourceRoot,string targetRoot){
+  SetProductRoot(sourceRoot);string source=Product;
+  ValidateRecoverySource(ownerSid);
+  SetProductRoot(targetRoot);string target=Product;
+  Need(!String.Equals(source,target,StringComparison.OrdinalIgnoreCase)
+   &&!source.StartsWith(target+"\\",StringComparison.OrdinalIgnoreCase)
+   &&!target.StartsWith(source+"\\",StringComparison.OrdinalIgnoreCase),"OMI_RECOVERY_PATHS_OVERLAP");
+  ValidateProductRoot();
+  if(!Present(target))return 0;
+  Need(Directory.Exists(target),"OMI_INSTALL_ROOT_REFUSED");
+  var allowed=new HashSet<string>(new[]{"owner-msi.prepared.activated.json","owner-msi.policy.activated.json",
+   "owner-msi.activated.json","owner-msi.activation-health.json","owner-activation.committed-lock"},StringComparer.OrdinalIgnoreCase);
+  int conflicts=0;var pins=new List<IDisposable>();try{
+   for(string path=target;path!=null;path=Path.GetDirectoryName(path)){pins.Add(ServiceDirectoryPin.Directory(path));Acl(path,true,true);}
+   foreach(string path in Directory.EnumerateFileSystemEntries(target)){
+    Need(allowed.Contains(Path.GetFileName(path)),"OMI_RECOVERY_TARGET_NOT_EMPTY");
+    Need(Present(path)&&(File.GetAttributes(path)&FileAttributes.Directory)==0,"OMI_RECOVERY_TARGET_CONFLICT");
+    var file=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
+    try{ServiceDirectoryPin.VerifyFile(file.SafeFileHandle,path);Acl(path,false,false);
+     Need(file.Length>0&&file.Length<=8192,"OMI_RECOVERY_TARGET_CONFLICT");pins.Add(file);conflicts++;
+    }catch{file.Dispose();throw;}
+   }
+  }finally{for(int i=pins.Count-1;i>=0;i--)pins[i].Dispose();}
+  return conflicts;
+ }
  static bool Fresh(){
   ValidateProductRoot();
   foreach(string n in Names)Need(!ServiceRows(n).Any(),"OMI_EXISTING_SERVICE_REFUSED");
@@ -463,6 +488,10 @@ static class ManagedOwnerMsiBridge {
    Need(args.Length>0,"OMI_ARGUMENTS_REFUSED");
    if(args.Length==3&&args[0]=="recovery-source-check"){
     SetProductRoot(args[2]);ValidateRecoverySource(args[1]);Console.WriteLine("OMI_RECOVERY_SOURCE_VALID");return 0;
+   }
+   if(args.Length==4&&args[0]=="recovery-relocation-check"){
+    int conflicts=ValidateRecoveryDestination(args[1],args[2],args[3]);
+    Console.WriteLine(new JavaScriptSerializer().Serialize(new{ok=true,readOnly=true,targetConflicts=conflicts}));return 0;
    }
    if(args[0]=="fresh"&&args.Length==3){SetProductRoot(args[2]);}
    else if(args.Length>1&&Regex.IsMatch(args[args.Length-1],@"\A[A-Za-z]:\\")){

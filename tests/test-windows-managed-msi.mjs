@@ -145,6 +145,9 @@ for(const [args,code] of [[['remove',missingRoot],'OMI_INSTALL_ROOT_MISSING'],[[
 try{const result=await exec(exe,['fresh'],{windowsHide:true,timeout:15000,maxBuffer:16384});assert.match(result.stdout,/OMI_FRESH/);}
 catch(e){assert.equal(e.code,1);assert.ok(['OMI_EXISTING_SERVICE_REFUSED','OMI_EXISTING_INSTALL_REFUSED','OMI_INPUT_OWNER_REFUSED'].includes(e.stderr.trim()),`Unexpected safe fresh refusal: ${e.stderr.trim()}`);}
 count++;
+try{await exec(exe,['recovery-relocation-check','S-1-5-18',missingRoot,missingRoot],{windowsHide:true,timeout:15000,maxBuffer:16384});assert.fail('Relocation accepted a non-user owner');}
+catch(e){assert.equal(e.code,1);assert.equal(e.stderr.trim(),'OMI_OWNER_SID_REQUIRED');}
+count++;
 const source=resolve('packaging/windows/managed-owner-msi.ps1').replaceAll("'","''");
 const compile=`$ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue';$s=[IO.File]::ReadAllText('${source}');$m=[regex]::Match($s,"(?s)Add-Type -TypeDefinition @'\\r?\\n(.*?)\\r?\\n'@");if(-not $m.Success){throw 'Missing native handle class'};Add-Type -TypeDefinition $m.Groups[1].Value;@{pass=$true;nativePreparedHandlesCompiled=$true}|ConvertTo-Json -Compress`;
 // Literal regex escapes remain literal through argv; no shell interpolation.
