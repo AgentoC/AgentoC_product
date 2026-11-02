@@ -15,8 +15,12 @@ assert.match(source, /message == INSTALLMESSAGE_FILESINUSE\s*\|\|\s*message == I
 const initialize = source.slice(initializeStart);
 assert.match(initialize, /MsiQueryProductStateW\(productCode\) == INSTALLSTATE_DEFAULT[\s\S]*?AGENTOC_INPLACE_UPDATE[\s\S]*?_wcsicmp\(remove, L"ALL"\)/,
   'the update UI is enabled only for a supported installed product and leaves explicit uninstall to MSI');
-assert.match(initialize, /g\.updating[\s\S]*?MsiSetPropertyW\(install, L"REINSTALL", L"ALL"\)/,
-  'the accepted update enters the existing MSI reinstall transaction');
+assert.match(initialize, /g\.minorUpdate[\s\S]*?MsiSetPropertyW\(install, L"REINSTALL", L"ALL"\)/,
+  'only a same-product update enters the existing MSI reinstall transaction');
+assert.match(source, /MsiEnumRelatedProductsW[\s\S]*?if \(!product\.empty\(\)\) return false/,
+  'major-update discovery rejects ambiguous registered products');
+assert.match(initialize, /FindRelatedInstallation\(install, previousProduct\)[\s\S]*?FindInstalledFolder\(install, g\.minorUpdate \? productCode : previousProduct\.c_str\(\)/,
+  'the major-update UI resolves the predecessor installation path from MSI registration');
 assert.match(source, /if \(g\.updating\) SubmitInstall\(\); else \{ SetPage\(Page::Location\)/,
   'an update does not ask the user to select a new installation folder');
 assert.match(source, /MsiRecordGetInteger\(record, 1\) == 1722\s*&& CopyRecordField\(record, 2\) == L"ManagedFreshGuard"[\s\S]*?Setup could not validate the selected folder or retained installation/,

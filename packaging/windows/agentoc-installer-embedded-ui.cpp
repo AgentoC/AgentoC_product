@@ -68,6 +68,7 @@ struct InstallerState {
     bool installSucceeded = false;
     bool openAfterInstall = true;
     bool updating = false;
+    bool minorUpdate = false;
     int progress = 0;
     float scale = 1.0f;
     std::wstring installPath;
@@ -950,6 +951,22 @@ bool FindInstalledFolder(MSIHANDLE install, const wchar_t* productCode, std::wst
     return true;
 }
 
+// Find the installed predecessor before MSI's UI sequence runs. Never choose
+// arbitrarily if registration contains multiple installed related products.
+bool FindRelatedInstallation(MSIHANDLE install, std::wstring& product) {
+    wchar_t upgradeCode[40]{}; DWORD length = static_cast<DWORD>(std::size(upgradeCode));
+    if (MsiGetPropertyW(install, L"UpgradeCode", upgradeCode, &length) != ERROR_SUCCESS || !upgradeCode[0]) return false;
+    for (DWORD index = 0;; ++index) {
+        wchar_t candidate[40]{};
+        const UINT result = MsiEnumRelatedProductsW(upgradeCode, 0, index, candidate);
+        if (result == ERROR_NO_MORE_ITEMS) return true;
+        if (result != ERROR_SUCCESS) return false;
+        if (MsiQueryProductStateW(candidate) != INSTALLSTATE_DEFAULT) continue;
+        if (!product.empty()) return false;
+        product = candidate;
+    }
+}
+
 } // namespace
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) {
@@ -973,12 +990,18 @@ extern "C" __declspec(dllexport) UINT __stdcall InitializeEmbeddedUI(MSIHANDLE i
     const bool installed = MsiQueryProductStateW(productCode) == INSTALLSTATE_DEFAULT;
     wchar_t remove[32]{}; DWORD removeLength = static_cast<DWORD>(std::size(remove));
     wchar_t updateAllowed[8]{}; DWORD updateAllowedLength = static_cast<DWORD>(std::size(updateAllowed));
+    wchar_t majorAllowed[8]{}; DWORD majorAllowedLength = static_cast<DWORD>(std::size(majorAllowed));
     if (MsiGetPropertyW(install, L"REMOVE", remove, &removeLength) != ERROR_SUCCESS ||
-        MsiGetPropertyW(install, L"AGENTOC_INPLACE_UPDATE", updateAllowed, &updateAllowedLength) != ERROR_SUCCESS)
+        MsiGetPropertyW(install, L"AGENTOC_INPLACE_UPDATE", updateAllowed, &updateAllowedLength) != ERROR_SUCCESS ||
+        MsiGetPropertyW(install, L"AGENTOC_MAJOR_UPDATE_UI", majorAllowed, &majorAllowedLength) != ERROR_SUCCESS)
         return ERROR_INSTALL_FAILURE;
     if (installed && (_wcsicmp(remove, L"ALL") == 0 || wcscmp(updateAllowed, L"1") != 0))
         return (*uiLevel & 7);
-    g.updating = installed;
+    std::wstring previousProduct;
+    if (!installed && wcscmp(majorAllowed, L"1") == 0 && !FindRelatedInstallation(install, previousProduct))
+        return ERROR_INSTALL_FAILURE;
+    g.minorUpdate = installed;
+    g.updating = installed || !previousProduct.empty();
 
     const LANGID userLanguage = GetUserDefaultUILanguage();
     switch (PRIMARYLANGID(userLanguage)) {
@@ -1003,7 +1026,7 @@ extern "C" __declspec(dllexport) UINT __stdcall InitializeEmbeddedUI(MSIHANDLE i
     g.progress = 0;
     g.errorDetail.clear();
     g.installPath.clear();
-    if (g.updating && !FindInstalledFolder(install, productCode, g.installPath)) return ERROR_INSTALL_FAILURE;
+    if (g.updating && !FindInstalledFolder(install, g.minorUpdate ? productCode : previousProduct.c_str(), g.installPath)) return ERROR_INSTALL_FAILURE;
     g.recoverySource.clear();
     g.closing = false;
     ClearEvents();
@@ -1055,7 +1078,7 @@ extern "C" __declspec(dllexport) UINT __stdcall InitializeEmbeddedUI(MSIHANDLE i
     UINT propertyResult = MsiSetPropertyW(install, L"AGENTOC_INSTALLFOLDER", g.installPath.c_str());
     if (propertyResult == ERROR_SUCCESS && g.updating)
         propertyResult = MsiSetPropertyW(install, L"INSTALLFOLDER", g.installPath.c_str());
-    if (propertyResult == ERROR_SUCCESS && g.updating)
+    if (propertyResult == ERROR_SUCCESS && g.minorUpdate)
         propertyResult = MsiSetPropertyW(install, L"REINSTALL", L"ALL");
     const UINT recoveryPropertyResult = MsiSetPropertyW(install, L"AGENTOC_RECOVERY_SOURCE", g.recoverySource.c_str());
     if (propertyResult == ERROR_SUCCESS && recoveryPropertyResult != ERROR_SUCCESS) propertyResult = recoveryPropertyResult;

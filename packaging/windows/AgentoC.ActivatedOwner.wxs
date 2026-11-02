@@ -15,6 +15,7 @@
   <Package Name="AgentoC" Manufacturer="AgentoC" Version="$(var.MsiProductVersion)" ProductCode="$(var.ProductCode)" UpgradeCode="2D1D9C6B-5BA7-4C70-9A7A-7E7A55E3A001" UpgradeStrategy="$(var.MsiUpgradeStrategy)" Scope="perMachine">
     <?if $(var.MsiUpgradeLane) = "major" ?>
       <MajorUpgrade DowngradeErrorMessage="A newer AgentoC version is already installed." Schedule="afterInstallInitialize" />
+      <Property Id="AGENTOC_MAJOR_UPDATE_UI" Value="1" />
     <?endif?>
     <MediaTemplate EmbedCab="yes" />
     <Icon Id="AgentoCIcon" SourceFile="!(bindpath.BrandAsset)\agentoc.ico" />
