@@ -13,6 +13,12 @@ assert.notEqual(initializeStart, -1, 'embedded UI initialization entrypoint exis
 assert.match(source, /message == INSTALLMESSAGE_FILESINUSE\s*\|\|\s*message == INSTALLMESSAGE_RMFILESINUSE\) return IDIGNORE/,
   'interactive MSI must not automatically shut down other applications when files are in use');
 const initialize = source.slice(initializeStart);
+assert.match(initialize, /MsiQueryProductStateW\(productCode\) == INSTALLSTATE_DEFAULT[\s\S]*?AGENTOC_INPLACE_UPDATE[\s\S]*?_wcsicmp\(remove, L"ALL"\)/,
+  'the update UI is enabled only for a supported installed product and leaves explicit uninstall to MSI');
+assert.match(initialize, /g\.updating[\s\S]*?MsiSetPropertyW\(install, L"REINSTALL", L"ALL"\)/,
+  'the accepted update enters the existing MSI reinstall transaction');
+assert.match(source, /if \(g\.updating\) SubmitInstall\(\); else \{ SetPage\(Page::Location\)/,
+  'an update does not ask the user to select a new installation folder');
 assert.match(source, /MsiRecordGetInteger\(record, 1\) == 1722\s*&& CopyRecordField\(record, 2\) == L"ManagedFreshGuard"[\s\S]*?Setup could not validate the selected folder or retained installation/,
   'a fresh-install guard failure explains the folder or retained-installation issue instead of showing only 1722');
 assert.match(initialize, /g\.installPath\.clear\(\)/, 'no install folder is prefilled before the user chooses one');

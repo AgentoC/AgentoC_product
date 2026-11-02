@@ -34,6 +34,7 @@
     <Property Id="MSIRESTARTMANAGERCONTROL" Value="DisableShutdown" />
     <Property Id="MSIRMSHUTDOWN" Value="2" />
     <?if $(var.MsiUpgradeLane) = "minor" ?>
+      <Property Id="AGENTOC_INPLACE_UPDATE" Value="1" />
       <!-- Executable payload files are immutable. A modified, unversioned file
            must not survive an in-place update under Windows Installer's normal
            versioning rules. Apply this before file costing on reinstall only. -->

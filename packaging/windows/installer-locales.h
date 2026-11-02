@@ -3,6 +3,11 @@
 // Order: Traditional Chinese, Japanese, Korean, French, Spanish.
 struct InstallerTranslation { const wchar_t* en; const wchar_t* translated[5]; };
 static const InstallerTranslation kInstallerTranslations[] = {
+{L"Update AgentoC",{L"更新 AgentoC",L"AgentoC を更新",L"AgentoC 업데이트",L"Mettre à jour AgentoC",L"Actualizar AgentoC"}},
+{L"Update the existing installation in its current folder.",{L"在目前的資料夾中更新已安裝的 AgentoC。",L"現在のフォルダーにインストールされている AgentoC を更新します。",L"현재 폴더에 설치된 AgentoC를 업데이트합니다.",L"Mettez à jour AgentoC dans son dossier actuel.",L"Actualiza AgentoC en su carpeta actual."}},
+{L"Your account, settings, and existing data will be kept.",{L"你的帳號、設定及現有資料將予以保留。",L"アカウント、設定、既存のデータは保持されます。",L"계정, 설정 및 기존 데이터가 유지됩니다.",L"Votre compte, vos paramètres et vos données seront conservés.",L"Se conservarán tu cuenta, configuración y datos."}},
+{L"Update",{L"更新",L"更新",L"업데이트",L"Mettre à jour",L"Actualizar"}},
+{L"Starting update…",{L"正在開始更新…",L"更新を開始しています…",L"업데이트를 시작하는 중…",L"Démarrage de la mise à jour…",L"Iniciando la actualización…"}},
 {L"Windows could not open the folder picker.",{L"Windows 無法開啟資料夾選擇器。",L"フォルダー選択画面を開けませんでした。",L"폴더 선택 창을 열 수 없습니다.",L"Impossible d’ouvrir le sélecteur de dossier.",L"No se pudo abrir el selector de carpetas."}},
 {L"Choose an installation folder to continue.",{L"請選擇安裝資料夾以繼續。",L"インストール先を選択してください。",L"계속하려면 설치 폴더를 선택하세요.",L"Choisissez un dossier d’installation.",L"Elige una carpeta de instalación."}},
 {L"The folder path contains a character Windows does not allow.",{L"資料夾路徑包含 Windows 不允許的字元。",L"パスに使用できない文字が含まれています。",L"폴더 경로에 사용할 수 없는 문자가 있습니다.",L"Le chemin contient un caractère interdit par Windows.",L"La ruta contiene un carácter no permitido por Windows."}},

@@ -67,6 +67,7 @@ struct InstallerState {
     bool closing = false;
     bool installSucceeded = false;
     bool openAfterInstall = true;
+    bool updating = false;
     int progress = 0;
     float scale = 1.0f;
     std::wstring installPath;
@@ -446,6 +447,14 @@ void DrawMainContent(Gdiplus::Graphics& graphics, const RECT& client, float left
 
     switch (g.page) {
     case Page::Welcome: {
+        if (g.updating) {
+            DrawText(graphics, Text(L"Update AgentoC", L"更新 AgentoC"), x, y + Px(44), width, Px(31), ink, true);
+            DrawText(graphics, Text(L"Update the existing installation in its current folder.", L"在当前文件夹中更新已安装的 AgentoC。"),
+                x, y + Px(105), width, Px(15), muted);
+            DrawText(graphics, Text(L"Your account, settings, and existing data will be kept.", L"你的账号、设置和现有数据将被保留。"),
+                x, y + Px(160), width, Px(14), muted);
+            break;
+        }
         DrawText(graphics, Text(L"Welcome to AgentoC", L"欢迎使用 AgentoC"), x, y + Px(44), width, Px(31), ink, true);
         DrawText(graphics, Text(L"A calm, secure place to manage your local AI workbench.", L"在这里轻松、安全地管理本地 AI 工作台。"),
             x, y + Px(98), width, Px(15), muted);
@@ -533,7 +542,7 @@ void UpdateWindowTitle() {
 
 void UpdateLocalizedControls() {
     for (const auto& item : std::vector<std::pair<HWND, std::wstring>>{
-        {g.welcomeButton, Text(L"Continue", L"继续")},
+        {g.welcomeButton, g.updating ? Text(L"Update", L"更新") : Text(L"Continue", L"继续")},
         {g.backButton, Text(L"Back", L"上一步")},
         {g.browseButton, Text(L"Browse…", L"浏览…")},
         {g.installButton, Text(L"Install", L"安装")},
@@ -605,6 +614,16 @@ void DrawOwnerButton(const DRAWITEMSTRUCT* item) {
 }
 
 void SubmitInstall() {
+    if (g.updating) {
+        g.errorDetail.clear();
+        g.progress = 0;
+        g.currentAction = Text(L"Starting update…", L"正在启动更新…");
+        SetPage(Page::Installing);
+        UpdateWindowTitle();
+        SetWindowPos(g.window, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        SetEvent(gStartEvent);
+        return;
+    }
     std::vector<wchar_t> buffer(32768, L'\0');
     GetWindowTextW(g.pathEdit, buffer.data(), static_cast<int>(buffer.size()));
     std::wstring selected;
@@ -660,7 +679,7 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
             SendMessageW(g.pathEdit, WM_SETFONT, reinterpret_cast<WPARAM>(g.font), TRUE);
             SendMessageW(g.pathEdit, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(Text(L"Choose a folder — nothing is preselected", L"请选择文件夹（未预填任何路径）").c_str()));
         }
-        g.welcomeButton = MakeButton(window, kButtonWelcome, Text(L"Continue", L"继续"));
+        g.welcomeButton = MakeButton(window, kButtonWelcome, g.updating ? Text(L"Update", L"更新") : Text(L"Continue", L"继续"));
         g.backButton = MakeButton(window, kButtonBack, Text(L"Back", L"上一步"));
         g.browseButton = MakeButton(window, kButtonBrowse, Text(L"Browse…", L"浏览…"));
         g.installButton = MakeButton(window, kButtonInstall, Text(L"Install", L"安装"));
@@ -726,7 +745,7 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
             InvalidateRect(window, nullptr, TRUE);
             return 0;
         }
-        if (id == kButtonWelcome) { SetPage(Page::Location); LayoutControls(); UpdateWindowTitle(); return 0; }
+        if (id == kButtonWelcome) { if (g.updating) SubmitInstall(); else { SetPage(Page::Location); LayoutControls(); UpdateWindowTitle(); } return 0; }
         if (id == kButtonBack) { SetPage(Page::Welcome); LayoutControls(); UpdateWindowTitle(); return 0; }
         if (id == kButtonBrowse) { BrowseForFolder(); return 0; }
         if (id == kButtonInstall) { SubmitInstall(); return 0; }
@@ -921,14 +940,21 @@ extern "C" __declspec(dllexport) UINT __stdcall InitializeEmbeddedUI(MSIHANDLE i
     if (!uiLevel) return ERROR_INSTALL_FAILURE;
     if ((*uiLevel & 7) == INSTALLUILEVEL_NONE) return INSTALLUILEVEL_NONE;
 
-    // The custom flow only implements a fresh install. Keep Windows Installer's
-    // maintenance and uninstall UI for an existing installation of this product.
+    // Only validated in-place packages may change an installed product. Keep
+    // normal MSI handling for explicit uninstall and older unsupported packages.
     wchar_t productCode[40]{};
     DWORD productCodeLength = static_cast<DWORD>(std::size(productCode));
     if (MsiGetPropertyW(install, L"ProductCode", productCode, &productCodeLength) != ERROR_SUCCESS)
         return ERROR_INSTALL_FAILURE;
-    if (MsiQueryProductStateW(productCode) == INSTALLSTATE_DEFAULT)
+    const bool installed = MsiQueryProductStateW(productCode) == INSTALLSTATE_DEFAULT;
+    wchar_t remove[32]{}; DWORD removeLength = static_cast<DWORD>(std::size(remove));
+    wchar_t updateAllowed[8]{}; DWORD updateAllowedLength = static_cast<DWORD>(std::size(updateAllowed));
+    if (MsiGetPropertyW(install, L"REMOVE", remove, &removeLength) != ERROR_SUCCESS ||
+        MsiGetPropertyW(install, L"AGENTOC_INPLACE_UPDATE", updateAllowed, &updateAllowedLength) != ERROR_SUCCESS)
+        return ERROR_INSTALL_FAILURE;
+    if (installed && (_wcsicmp(remove, L"ALL") == 0 || wcscmp(updateAllowed, L"1") != 0))
         return (*uiLevel & 7);
+    g.updating = installed;
 
     const LANGID userLanguage = GetUserDefaultUILanguage();
     switch (PRIMARYLANGID(userLanguage)) {
@@ -1002,6 +1028,8 @@ extern "C" __declspec(dllexport) UINT __stdcall InitializeEmbeddedUI(MSIHANDLE i
     }
 
     UINT propertyResult = MsiSetPropertyW(install, L"AGENTOC_INSTALLFOLDER", g.installPath.c_str());
+    if (propertyResult == ERROR_SUCCESS && g.updating)
+        propertyResult = MsiSetPropertyW(install, L"REINSTALL", L"ALL");
     const UINT recoveryPropertyResult = MsiSetPropertyW(install, L"AGENTOC_RECOVERY_SOURCE", g.recoverySource.c_str());
     if (propertyResult == ERROR_SUCCESS && recoveryPropertyResult != ERROR_SUCCESS) propertyResult = recoveryPropertyResult;
     const UINT launchPropertyResult = MsiSetPropertyW(install, L"AGENTOC_LAUNCH", g.openAfterInstall ? L"1" : L"");
