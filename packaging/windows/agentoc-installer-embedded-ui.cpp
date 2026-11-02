@@ -24,6 +24,7 @@
 #include <cwctype>
 #include <iterator>
 #include <new>
+#include "installer-locales.h"
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "dwmapi.lib")
@@ -47,6 +48,7 @@ constexpr UINT kButtonCancel = 4105;
 constexpr UINT kButtonFinish = 4106;
 constexpr UINT kButtonLaunchOption = 4107;
 constexpr UINT kInstallEdit = 4201;
+constexpr UINT kLanguageSelect = 4202;
 
 enum class Page { Welcome, Location, Installing, Complete, Failed };
 
@@ -60,8 +62,8 @@ struct InstallerState {
     HWND cancelButton = nullptr;
     HWND finishButton = nullptr;
     HWND launchOption = nullptr;
+    HWND languageSelect = nullptr;
     Page page = Page::Welcome;
-    bool chinese = false;
     bool closing = false;
     bool installSucceeded = false;
     bool openAfterInstall = true;
@@ -89,6 +91,8 @@ std::atomic_int gInstallResult{-1};
 std::atomic_int gProgressValue{0};
 std::atomic_int gProgressTicks{0};
 std::atomic_int gProgressTotal{0};
+// English, Simplified Chinese, Traditional Chinese, Japanese, Korean, French, Spanish.
+std::atomic_int gLanguage{0};
 ULONG_PTR gGdiPlusToken = 0;
 std::wstring gResourceDirectory;
 
@@ -157,7 +161,13 @@ std::wstring CopyRecordField(MSIHANDLE record, UINT field) {
 }
 
 std::wstring Text(const wchar_t* en, const wchar_t* zh) {
-    return g.chinese ? zh : en;
+    const int language = gLanguage.load();
+    if (language == 1) return zh;
+    if (language >= 2 && language <= 6) {
+        for (const auto& row : kInstallerTranslations)
+            if (std::wstring(en) == row.en) return row.translated[language - 2];
+    }
+    return en;
 }
 
 void FillRounded(Gdiplus::Graphics& graphics, const Gdiplus::RectF& rect, float radius, const Gdiplus::Brush& brush) {
@@ -253,6 +263,8 @@ void LayoutControls() {
     const int gap = Px(10);
     const int right = width - margin;
 
+    Position(g.languageSelect, right - Px(170), Px(35), Px(170), Px(250), true);
+
     Position(g.pathEdit, left + margin, Px(270), width - left - margin * 2 - Px(120), Px(46), g.page == Page::Location);
     Position(g.browseButton, right - Px(108), Px(270), Px(108), Px(46), g.page == Page::Location);
     Position(g.launchOption, left + margin, Px(334), width - left - margin * 2, Px(28), g.page == Page::Location);
@@ -283,7 +295,7 @@ void BrowseForFolder() {
     if (SUCCEEDED(dialog->GetOptions(&options))) {
         dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
     }
-    dialog->SetTitle(g.chinese ? L"选择 AgentoC 安装文件夹" : L"Choose the AgentoC installation folder");
+    dialog->SetTitle(Text(L"Choose the AgentoC installation folder", L"选择 AgentoC 安装文件夹").c_str());
     result = dialog->Show(g.window);
     if (SUCCEEDED(result)) {
         IShellItem* item = nullptr;
@@ -467,7 +479,24 @@ void UpdateWindowTitle() {
     if (g.page == Page::Installing) SetWindowTextW(g.window, Text(L"Installing AgentoC", L"正在安装 AgentoC").c_str());
     else if (g.page == Page::Complete) SetWindowTextW(g.window, Text(L"AgentoC setup complete", L"AgentoC 安装完成").c_str());
     else if (g.page == Page::Failed) SetWindowTextW(g.window, Text(L"AgentoC setup", L"AgentoC 安装程序").c_str());
-    else SetWindowTextW(g.window, kWindowTitle);
+    else SetWindowTextW(g.window, Text(L"AgentoC setup", L"AgentoC 安装程序").c_str());
+}
+
+void UpdateLocalizedControls() {
+    for (const auto& item : std::vector<std::pair<HWND, std::wstring>>{
+        {g.welcomeButton, Text(L"Continue", L"继续")},
+        {g.backButton, Text(L"Back", L"上一步")},
+        {g.browseButton, Text(L"Browse…", L"浏览…")},
+        {g.installButton, Text(L"Install", L"安装")},
+        {g.cancelButton, Text(L"Cancel", L"取消")},
+        {g.finishButton, Text(L"Finish", L"完成")},
+        {g.launchOption, Text(L"Open AgentoC when setup finishes", L"安装完成后打开 AgentoC")}}) {
+        if (item.first) SetWindowTextW(item.first, item.second.c_str());
+    }
+    if (g.pathEdit) SendMessageW(g.pathEdit, EM_SETCUEBANNER, TRUE,
+        reinterpret_cast<LPARAM>(Text(L"Choose a folder — nothing is preselected", L"请选择文件夹（未预填任何路径）").c_str()));
+    UpdateWindowTitle();
+    InvalidateRect(g.window, nullptr, TRUE);
 }
 
 void DrawOwnerButton(const DRAWITEMSTRUCT* item) {
@@ -576,7 +605,12 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
             WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX, 0, 0, 1, 1, window,
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(kButtonLaunchOption)), gModule, nullptr);
         if (g.launchOption) SendMessageW(g.launchOption, BM_SETCHECK, BST_CHECKED, 0);
-        for (HWND control : {g.welcomeButton, g.backButton, g.browseButton, g.installButton, g.cancelButton, g.finishButton, g.launchOption}) {
+        g.languageSelect = CreateWindowExW(0, L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
+            0, 0, 1, 1, window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kLanguageSelect)), gModule, nullptr);
+        for (const wchar_t* label : {L"English", L"简体中文", L"繁體中文", L"日本語", L"한국어", L"Français", L"Español"})
+            SendMessageW(g.languageSelect, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label));
+        SendMessageW(g.languageSelect, CB_SETCURSEL, gLanguage.load(), 0);
+        for (HWND control : {g.welcomeButton, g.backButton, g.browseButton, g.installButton, g.cancelButton, g.finishButton, g.launchOption, g.languageSelect}) {
             if (control) SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(g.font), TRUE);
         }
 
@@ -611,6 +645,16 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         return 0;
     case WM_COMMAND: {
         const UINT id = LOWORD(wParam);
+        if (id == kLanguageSelect && HIWORD(wParam) == CBN_SELCHANGE) {
+            const int selected = static_cast<int>(SendMessageW(g.languageSelect, CB_GETCURSEL, 0, 0));
+            if (selected >= 0 && selected <= 6) {
+                gLanguage.store(selected);
+                if (g.page == Page::Location) g.errorDetail.clear();
+                if (g.page == Page::Installing) g.currentAction = Text(L"Preparing installation…", L"正在准备安装…");
+                UpdateLocalizedControls();
+            }
+            return 0;
+        }
         if (id == kInstallEdit && HIWORD(wParam) == EN_CHANGE) {
             if (!g.errorDetail.empty()) g.errorDetail.clear();
             LayoutControls();
@@ -821,7 +865,18 @@ extern "C" __declspec(dllexport) UINT __stdcall InitializeEmbeddedUI(MSIHANDLE i
     if (MsiQueryProductStateW(productCode) == INSTALLSTATE_DEFAULT)
         return (*uiLevel & 7);
 
-    g.chinese = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_CHINESE;
+    const LANGID userLanguage = GetUserDefaultUILanguage();
+    switch (PRIMARYLANGID(userLanguage)) {
+    case LANG_CHINESE:
+        gLanguage.store(SUBLANGID(userLanguage) == SUBLANG_CHINESE_TRADITIONAL ||
+            SUBLANGID(userLanguage) == SUBLANG_CHINESE_HONGKONG ||
+            SUBLANGID(userLanguage) == SUBLANG_CHINESE_MACAU ? 2 : 1); break;
+    case LANG_JAPANESE: gLanguage.store(3); break;
+    case LANG_KOREAN: gLanguage.store(4); break;
+    case LANG_FRENCH: gLanguage.store(5); break;
+    case LANG_SPANISH: gLanguage.store(6); break;
+    default: gLanguage.store(0); break;
+    }
     gResourceDirectory = resourcePath ? resourcePath : L"";
     gCancelRequested.store(false);
     gInstallEnded.store(false);
@@ -905,11 +960,7 @@ extern "C" __declspec(dllexport) INT __stdcall EmbeddedUIHandler(UINT messageTyp
         PostUiText(1, Text(L"Preparing AgentoC services and application files…", L"正在准备 AgentoC 服务和应用程序文件…"));
         return IDOK;
     }
-    if (message == INSTALLMESSAGE_ACTIONSTART) {
-        std::wstring action = CopyRecordField(record, 2);
-        if (!action.empty()) PostUiText(1, action);
-        return IDOK;
-    }
+    if (message == INSTALLMESSAGE_ACTIONSTART) return IDOK;
     if (message == INSTALLMESSAGE_PROGRESS) {
         const int type = MsiRecordGetInteger(record, 1);
         if (type == 0 || type == 1) {
