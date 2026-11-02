@@ -17,7 +17,8 @@ try{
   await exec(csc,['/nologo','/target:exe','/platform:x64','/main:DesktopShutdownFixture',
     '/r:System.Management.dll','/r:System.ServiceProcess.dll','/r:System.Security.dll','/r:System.Web.Extensions.dll',`/out:${runner}`,
     resolve('packaging/windows/managed-owner-msi-bridge.cs'),resolve('packaging/windows/AgentoC.ServiceHost.cs'),
-    resolve('packaging/windows/owner-service-activation-trial.cs'),resolve('tests/fixtures/windows-desktop-shutdown.cs')],{windowsHide:true});
+    resolve('packaging/windows/owner-service-activation-trial.cs'),resolve('packaging/windows/owner-msi-relocation-journal.cs'),
+    resolve('tests/fixtures/windows-desktop-shutdown.cs')],{windowsHide:true});
   owned=spawn(own,[],{windowsHide:true});unrelated=spawn(other,[],{windowsHide:true});
   await Promise.all([owned,unrelated].map(child=>new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);}))); 
   assert.equal(owned.exitCode,null);assert.equal(unrelated.exitCode,null);
