@@ -7,13 +7,17 @@ if(-not [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsId
 if(-not (Get-Command wix.exe -ErrorAction SilentlyContinue)){throw 'SMM_WIX_REQUIRED'}
 $id=[Guid]::NewGuid().ToString('N');$service='AgentoC-MsiMinorQa-'+$id.Substring(0,12)
 $root=Join-Path ([IO.Path]::GetTempPath()) ('agentoc-msi-minor-upgrade-'+$id)
-$install=Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles)) ('AgentoC-MsiMinorQa-'+$id)
+$tempRoot=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
+if(-not $tempRoot.StartsWith('G:\AgentoC\',[StringComparison]::OrdinalIgnoreCase)){throw 'SMM_TEMP_OUTSIDE_G'}
+$install=Join-Path $root 'installed'
 $productCode=[Guid]::NewGuid().ToString('B').ToUpperInvariant();$upgradeCode=[Guid]::NewGuid().ToString('B').ToUpperInvariant()
 $serviceComponent=[Guid]::NewGuid().ToString('B').ToUpperInvariant();$contentComponent=[Guid]::NewGuid().ToString('B').ToUpperInvariant()
 $report=[ordered]@{pass=$false;test='same-ProductCode in-place MSI minor upgrade with running-service rollback';serviceName=$service;productCode=$productCode;upgradeCode=$upgradeCode;serviceComponent=$serviceComponent;contentComponent=$contentComponent;v1ExitCode=$null;injectedFailureExitCode=$null;v2ExitCode=$null;rollbackRestoredRunningService=$false;uninstallActionDidNotRun=$false;productVersionAfterUpgrade=$null;serviceStartModeAfterUpgrade=$null;serviceStateAfterUpgrade=$null;contentAfterUpgrade=$null;cleanupConfirmed=$false;productionAgentoCServicesTouched=$false}
 if(Test-Path -LiteralPath $install){throw 'SMM_INSTALL_ROOT_EXISTS'}
 if(Get-CimInstance Win32_Service -Filter ("Name='"+$service+"'")){throw 'SMM_SERVICE_EXISTS'}
 $null=New-Item -ItemType Directory -Path $root
+& icacls.exe $root /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
+if($LASTEXITCODE -ne 0){throw 'SMM_WORKSPACE_ACL_FAILED'}
 $serviceSource=Join-Path $root 'QaService.cs';$serviceBinary=Join-Path $root 'QaService.exe'
 @"
 using System.ServiceProcess;
@@ -69,17 +73,17 @@ try{
  New-QaMsi '0.0.1.0' 'v1' 'demand' $v1;New-QaMsi '0.0.2.0' 'v2' 'disabled' $v2
  & sc.exe create $service 'binPath=' $serviceBinary 'start=' 'demand' 'obj=' 'LocalSystem' | Out-Null
  if($LASTEXITCODE -ne 0){throw 'SMM_SERVICE_CREATE_FAILED'}
- $report.v1ExitCode=Invoke-Msi @('/i',('"'+$v1+'"'),'/qn','/norestart')
+ $report.v1ExitCode=Invoke-Msi @('/i',('"'+$v1+'"'),('INSTALLFOLDER="'+$install+'"'),'/qn','/norestart')
  if($report.v1ExitCode -ne 0){throw 'SMM_V1_INSTALL_FAILED'}
  & sc.exe start $service | Out-Null
  for($i=0;$i -lt 100;$i++){$running=Get-CimInstance Win32_Service -Filter ("Name='"+$service+"'");if($running -and $running.State -ceq 'Running'){break};Start-Sleep -Milliseconds 100}
  if(-not $running -or $running.State -cne 'Running'){throw 'SMM_SERVICE_START_FAILED'}
  $wi=New-Object -ComObject WindowsInstaller.Installer
- $report.injectedFailureExitCode=Invoke-Msi @('/i',('"'+$v2+'"'),'REINSTALL=ALL','REINSTALLMODE=vomus','QA_FAIL_UPDATE=1','/qn','/norestart','/l*v',('"'+$failedUpdateLog+'"'))
+ $report.injectedFailureExitCode=Invoke-Msi @('/i',('"'+$v2+'"'),('INSTALLFOLDER="'+$install+'"'),'REINSTALL=ALL','REINSTALLMODE=vomus','QA_FAIL_UPDATE=1','/qn','/norestart','/l*v',('"'+$failedUpdateLog+'"'))
  $versionAfterRollback=$wi.ProductInfo($productCode,'VersionString');$serviceAfterRollback=Get-CimInstance Win32_Service -Filter ("Name='"+$service+"'");$contentAfterRollback=[IO.File]::ReadAllText((Join-Path $install 'payload.txt'))
  $report.rollbackRestoredRunningService=($versionAfterRollback -match '^0\.0\.1(?:\.0)?$' -and $serviceAfterRollback -and $serviceAfterRollback.State -ceq 'Running' -and $serviceAfterRollback.StartMode -ceq 'Manual' -and $contentAfterRollback -ceq 'v1' -and (Test-Path -LiteralPath $failedUpdateLog) -and (Select-String -LiteralPath $failedUpdateLog -Pattern 'QaInjectedFailure' -Quiet))
  if($report.injectedFailureExitCode -eq 0 -or -not $report.rollbackRestoredRunningService){throw 'SMM_ROLLBACK_STATE_MISMATCH'}
- $report.v2ExitCode=Invoke-Msi @('/i',('"'+$v2+'"'),'REINSTALL=ALL','REINSTALLMODE=vomus','QA_FAIL_UPDATE=0','/qn','/norestart')
+ $report.v2ExitCode=Invoke-Msi @('/i',('"'+$v2+'"'),('INSTALLFOLDER="'+$install+'"'),'REINSTALL=ALL','REINSTALLMODE=vomus','QA_FAIL_UPDATE=0','/qn','/norestart')
  if($report.v2ExitCode -ne 0){throw 'SMM_V2_UPDATE_FAILED'}
  $report.productVersionAfterUpgrade=$wi.ProductInfo($productCode,'VersionString')
  $serviceAfter=Get-CimInstance Win32_Service -Filter ("Name='"+$service+"'")
