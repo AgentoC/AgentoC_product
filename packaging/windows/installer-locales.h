@@ -3,6 +3,8 @@
 // Order: Traditional Chinese, Japanese, Korean, French, Spanish.
 struct InstallerTranslation { const wchar_t* en; const wchar_t* translated[5]; };
 static const InstallerTranslation kInstallerTranslations[] = {
+{L"Setup cancelled",{L"安裝已取消",L"セットアップをキャンセルしました",L"설치가 취소되었습니다",L"Installation annulée",L"Instalación cancelada"}},
+{L"If changes had started, Windows Installer attempted to roll them back.",{L"如果變更已開始，Windows Installer 已嘗試復原。",L"変更が開始されていた場合、Windows Installer はロールバックを試みました。",L"변경이 시작된 경우 Windows Installer가 롤백을 시도했습니다.",L"Si des modifications avaient commencé, Windows Installer a tenté de les annuler.",L"Si se habían iniciado cambios, Windows Installer intentó revertirlos."}},
 {L"Update AgentoC",{L"更新 AgentoC",L"AgentoC を更新",L"AgentoC 업데이트",L"Mettre à jour AgentoC",L"Actualizar AgentoC"}},
 {L"Update the existing installation in its current folder.",{L"在目前的資料夾中更新已安裝的 AgentoC。",L"現在のフォルダーにインストールされている AgentoC を更新します。",L"현재 폴더에 설치된 AgentoC를 업데이트합니다.",L"Mettez à jour AgentoC dans son dossier actuel.",L"Actualiza AgentoC en su carpeta actual."}},
 {L"Your account, settings, and existing data will be kept.",{L"你的帳號、設定及現有資料將予以保留。",L"アカウント、設定、既存のデータは保持されます。",L"계정, 설정 및 기존 데이터가 유지됩니다.",L"Votre compte, vos paramètres et vos données seront conservés.",L"Se conservarán tu cuenta, configuración y datos."}},

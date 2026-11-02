@@ -50,7 +50,7 @@ constexpr UINT kButtonLaunchOption = 4107;
 constexpr UINT kInstallEdit = 4201;
 constexpr UINT kLanguageSelect = 4202;
 
-enum class Page { Welcome, Location, Installing, Complete, Failed };
+enum class Page { Welcome, Location, Installing, Complete, Cancelled, Failed };
 
 struct InstallerState {
     HWND window = nullptr;
@@ -245,7 +245,7 @@ void SetPage(Page page) {
     if (g.browseButton) ShowWindow(g.browseButton, page == Page::Location ? SW_SHOW : SW_HIDE);
     if (g.installButton) ShowWindow(g.installButton, page == Page::Location ? SW_SHOW : SW_HIDE);
     if (g.cancelButton) ShowWindow(g.cancelButton, (page == Page::Location || page == Page::Installing) ? SW_SHOW : SW_HIDE);
-    if (g.finishButton) ShowWindow(g.finishButton, (page == Page::Complete || page == Page::Failed) ? SW_SHOW : SW_HIDE);
+    if (g.finishButton) ShowWindow(g.finishButton, (page == Page::Complete || page == Page::Cancelled || page == Page::Failed) ? SW_SHOW : SW_HIDE);
     if (g.launchOption) ShowWindow(g.launchOption, page == Page::Location ? SW_SHOW : SW_HIDE);
     if (g.window) {
         InvalidateRect(g.window, nullptr, TRUE);
@@ -277,7 +277,7 @@ void LayoutControls() {
     Position(g.cancelButton, left + margin, footerY, buttonW, buttonH,
         g.page == Page::Location || g.page == Page::Installing);
     Position(g.finishButton, right - buttonW, footerY, buttonW, buttonH,
-        g.page == Page::Complete || g.page == Page::Failed);
+        g.page == Page::Complete || g.page == Page::Cancelled || g.page == Page::Failed);
     if (g.installButton && g.page == Page::Location) {
         const int length = GetWindowTextLengthW(g.pathEdit);
         EnableWindow(g.installButton, length > 0);
@@ -517,6 +517,12 @@ void DrawMainContent(Gdiplus::Graphics& graphics, const RECT& client, float left
         DrawText(graphics, Text(L"AgentoC is ready", L"AgentoC 已准备就绪"), x, y + Px(124), width, Px(29), ink, true);
         DrawText(graphics, Text(L"Installation completed successfully. You can open the desktop manager from the Start menu.",
             L"安装已成功完成。你可以从开始菜单打开桌面管理器。"), x, y + Px(176), width, Px(14), muted);
+        break;
+    }
+    case Page::Cancelled: {
+        DrawText(graphics, Text(L"Setup cancelled", L"安装已取消"), x, y + Px(124), width, Px(26), ink, true);
+        DrawText(graphics, Text(L"If changes had started, Windows Installer attempted to roll them back.", L"如果更改已经开始，Windows Installer 已尝试回滚。"),
+            x, y + Px(170), width, Px(14), muted);
         break;
     }
     case Page::Failed: {
@@ -785,6 +791,7 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         } else if (wParam == 4) {
             g.installSucceeded = gInstallResult.load() == ERROR_SUCCESS;
             if (g.installSucceeded) SetPage(Page::Complete);
+            else if (gCancelRequested.load() && (gInstallResult.load() == 2 || gInstallResult.load() == ERROR_INSTALL_USEREXIT)) SetPage(Page::Cancelled);
             else SetPage(Page::Failed);
             UpdateWindowTitle();
             LayoutControls();
@@ -834,7 +841,7 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
             InvalidateRect(window, nullptr, TRUE);
             return 0;
         }
-        if (g.page == Page::Complete || g.page == Page::Failed || g.page == Page::Welcome || g.page == Page::Location) {
+        if (g.page == Page::Complete || g.page == Page::Cancelled || g.page == Page::Failed || g.page == Page::Welcome || g.page == Page::Location) {
             g.closing = true;
             SetEvent(gExitEvent);
             DestroyWindow(window);
@@ -1153,7 +1160,7 @@ extern "C" __declspec(dllexport) INT __stdcall EmbeddedUIHandler(UINT messageTyp
             PostUiProgress(100);
             PostUiText(4, L"");
         } else {
-            if (!gHasErrorDetail.load()) {
+            if (!gHasErrorDetail.load() && !(gCancelRequested.load() && (result == 2 || result == ERROR_INSTALL_USEREXIT))) {
                 const std::wstring code = std::to_wstring(result);
                 PostUiText(3, Text(L"Windows Installer error code: ", L"Windows Installer 错误代码：") + code);
             }
