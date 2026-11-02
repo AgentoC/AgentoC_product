@@ -371,7 +371,7 @@
         const devicesHeader = appendCardTitle(
           devicesCard,
           fallback("crossDevice.account.accountDevicesTitle", "Devices on this account"),
-          fallback("crossDevice.account.accountDevicesNote", "Instances that can sign in as the owner with this Google account."),
+          fallback("crossDevice.account.accountDevicesNote", "Account records for computers and app installations; a bound record does not mean a device is online."),
         );
         devicesHeader.appendChild(action(fallback("crossDevice.refresh", "Refresh"), () => void renderAccount()));
         const devicesBody = make("div", "cross-device-card-body");
@@ -382,9 +382,8 @@
           if (!devices.length) {
             devicesBody.appendChild(make("div", "cross-device-empty", fallback("crossDevice.account.accountDevicesEmpty", "No other devices use this account.")));
           } else {
-            const list = make("div", "cross-device-device-list");
-            devices.forEach((device) => {
-              const inactive = Boolean(device?.unboundAt);
+            const renderRow = (device) => {
+              const inactive = Boolean(device?.unboundAt || device?.revokedAt);
               const row = make("div", "cross-device-device-row");
               row.dataset.inactive = String(inactive);
               row.appendChild(makeIcon("monitor", "cross-device-device-icon"));
@@ -402,12 +401,49 @@
               row.appendChild(meta);
               const pill = make("span", "cross-device-pill", inactive
                 ? fallback("crossDevice.status.unbound", "Unbound")
-                : fallback("crossDevice.status.active", "Active"));
+                : fallback("crossDevice.status.bound", "Bound"));
               pill.dataset.tone = inactive ? "" : "success";
               row.appendChild(pill);
-              list.appendChild(row);
+              return row;
+            };
+            const sorted = devices.slice().sort((a, b) => {
+              if ((a?.source === "local") !== (b?.source === "local")) return a?.source === "local" ? -1 : 1;
+              return (Date.parse(b?.lastSeenAt || b?.boundAt || "") || 0) - (Date.parse(a?.lastSeenAt || a?.boundAt || "") || 0);
             });
-            devicesBody.appendChild(list);
+            const active = sorted.filter((device) => !device?.unboundAt && !device?.revokedAt);
+            const inactive = sorted.filter((device) => device?.unboundAt || device?.revokedAt);
+            const phones = active.filter((device) => device?.deviceKind === "phone" || (!device?.deviceKind && device?.platform === "android"));
+            const computers = active.filter((device) => device?.deviceKind === "computer");
+            const other = active.filter((device) => !phones.includes(device) && !computers.includes(device));
+            const appendGroup = (title, entries, collapsed = false) => {
+              if (!entries.length) return;
+              const section = make("section", "cross-device-account-group");
+              const list = make("div", "cross-device-device-list");
+              if (collapsed) {
+                const details = make("details", "cross-device-account-more");
+                details.appendChild(make("summary", "", `${title} · ${entries.length}`));
+                entries.forEach((device) => list.appendChild(renderRow(device)));
+                details.appendChild(list);
+                section.appendChild(details);
+              } else {
+                section.appendChild(make("h4", "cross-device-account-group-title", `${title} · ${entries.length}`));
+                entries.slice(0, 5).forEach((device) => list.appendChild(renderRow(device)));
+                section.appendChild(list);
+                if (entries.length > 5) {
+                  const more = make("details", "cross-device-account-more");
+                  more.appendChild(make("summary", "", fallback("crossDevice.account.showMore", "Show {count} more records", { count: entries.length - 5 })));
+                  const remaining = make("div", "cross-device-device-list");
+                  entries.slice(5).forEach((device) => remaining.appendChild(renderRow(device)));
+                  more.appendChild(remaining);
+                  section.appendChild(more);
+                }
+              }
+              devicesBody.appendChild(section);
+            };
+            appendGroup(fallback("crossDevice.account.computers", "Computer records"), computers);
+            appendGroup(fallback("crossDevice.account.phones", "Mobile app installation records"), phones);
+            appendGroup(fallback("crossDevice.account.other", "Other records"), other);
+            appendGroup(fallback("crossDevice.account.inactive", "Unbound records"), inactive, true);
           }
         } catch {
           devicesBody.appendChild(make("div", "cross-device-empty", fallback("crossDevice.account.accountDevicesFailed", "Device list is unavailable.")));
@@ -455,7 +491,10 @@
               : fallback("crossDevice.status.bound", "Bound")));
             list.appendChild(row);
           });
-          historyBody.appendChild(list);
+          const details = make("details", "cross-device-account-more");
+          details.appendChild(make("summary", "", fallback("crossDevice.account.showHistory", "Show {count} history entries", { count: ordered.length })));
+          details.appendChild(list);
+          historyBody.appendChild(details);
         }
       } catch {
         historyBody.appendChild(make("div", "cross-device-empty", fallback("crossDevice.account.historyFailed", "Binding history is unavailable.")));
@@ -511,7 +550,7 @@
           ? fallback("crossDevice.account.accountDevicesTitle", "Devices on this account")
           : fallback("crossDevice.devices.title", "Trusted devices"),
         useAccountDirectory
-          ? fallback("crossDevice.account.accountDevicesNote", "Authoritative device directory for this signed-in account.")
+          ? fallback("crossDevice.account.computersNote", "Computers associated with this account.")
           : fallback("crossDevice.devices.note", "Pair a device once. Its signing key is verified and registered automatically."),
       );
       const actions = make("div", "cross-device-actions");

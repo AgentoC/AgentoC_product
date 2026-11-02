@@ -70,7 +70,7 @@ const markup = `<!doctype html><html lang="en"><head><meta charset="utf-8"><base
   </div>
 </body></html>`;
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ headless: true, ...(process.env.AGENTOC_TEST_BROWSER_CHANNEL ? { channel: process.env.AGENTOC_TEST_BROWSER_CHANNEL } : {}) });
 try {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
   page.on('pageerror', (error) => console.error(`cross-device pageerror: ${error.message}`));
@@ -109,6 +109,8 @@ try {
           { deviceId: 'inst_remote_001', instanceId: 'inst_remote_001', alias: 'Office laptop', deviceKind: 'computer', instancePublicKey: 'remote-key', endpoint: 'https://office.example.test/agentoc', sub: 'acct_owner_1', boundAt: '2026-08-10T07:00:00.000Z', unboundAt: null, lastSeenAt: '2026-08-10T09:30:00.000Z', source: 'remote' },
           { deviceId: 'inst_untrusted_001', instanceId: 'inst_untrusted_001', alias: 'Home laptop', deviceKind: 'computer', instancePublicKey: 'untrusted-key', endpoint: 'https://home.example.test/agentoc', sub: 'acct_owner_1', boundAt: '2026-08-10T06:30:00.000Z', unboundAt: null, lastSeenAt: '2026-08-10T09:00:00.000Z', source: 'remote' },
           { deviceId: 'adev_phone_001', instanceId: 'adev_phone_001', alias: 'Pixel', deviceKind: 'phone', sub: 'acct_owner_1', boundAt: '2026-08-10T06:00:00.000Z', unboundAt: null, lastSeenAt: '2026-08-10T09:00:00.000Z', source: 'remote' },
+          ...Array.from({ length: 6 }, (_, i) => ({ deviceId: `adev_more_${i}`, alias: 'Pixel', deviceKind: 'phone', boundAt: '2026-08-01T00:00:00.000Z', lastSeenAt: '2026-08-01T00:00:00.000Z' })),
+          { deviceId: 'adev_unbound', alias: 'Old phone', deviceKind: 'phone', unboundAt: '2026-08-02T00:00:00.000Z' },
         ] },
         '/api/auth/google/unbind': { unbound: true, mode: 'accounts' },
         '/api/device-pairing/devices': { devices: [
@@ -204,10 +206,20 @@ try {
   });
   await page.getByRole('button', { name: 'Refresh' }).first().click();
   await page.getByRole('heading', { name: 'Devices on this account' }).waitFor();
-  assert.equal(await page.locator('#crossDeviceAccountContent .cross-device-device-row').count(), 4, 'accounts device list should render computers and the bound phone');
+  assert.equal(await page.locator('#crossDeviceAccountContent .cross-device-device-row').count(), 11, 'account records must all remain available');
+  assert.equal(await page.getByRole('heading', { name: 'Computer records · 3' }).count(), 1);
+  assert.equal(await page.getByRole('heading', { name: 'Mobile app installation records · 7' }).count(), 1);
+  const accountList = page.locator('#crossDeviceAccountContent');
+  assert.equal(await accountList.locator('.cross-device-account-more').first().getAttribute('open'), null, 'older phone records start collapsed');
+  assert.equal(await accountList.getByText('Old phone').isVisible(), false, 'unbound records start collapsed');
+  await accountList.getByText('Show 2 more records').click();
+  assert.equal(await accountList.locator('.cross-device-account-group').nth(1).locator('.cross-device-device-row:visible').count(), 7, 'expanding retains same-named identities separately');
   const deviceRowTexts = await page.locator('#crossDeviceAccountContent .cross-device-device-row').allInnerTexts();
   assert.ok(deviceRowTexts[0]?.includes('Local'), 'local instance should be labeled');
   assert.ok(deviceRowTexts[1]?.includes('Remote'), 'remote instance should be labeled');
+  const historyToggle = page.getByText('Show 3 history entries');
+  assert.equal(await historyToggle.locator('..').getAttribute('open'), null, 'history starts collapsed');
+  await historyToggle.click();
   const historyRowTexts = await page.locator('#crossDeviceAccountContent .cross-device-history-row').allInnerTexts();
   assert.equal(historyRowTexts.filter((text) => text.includes('Bound · inst_local')).length, 2, 'accounts history should render bind actions with instance ids');
   assert.ok(historyRowTexts.some((text) => text.includes('Unbound · inst_local')), 'accounts history should render unbind actions');
