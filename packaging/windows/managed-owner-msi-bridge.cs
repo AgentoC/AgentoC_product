@@ -35,6 +35,7 @@ static class ManagedOwnerMsiBridge {
  [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern bool QueryFullProcessImageName(IntPtr process,uint flags,StringBuilder name,ref int size);
  [DllImport("kernel32.dll",SetLastError=true)]static extern bool TerminateProcess(IntPtr process,uint exitCode);
  [DllImport("kernel32.dll",SetLastError=true)]static extern uint WaitForSingleObject(IntPtr handle,uint milliseconds);
+ [DllImport("kernel32.dll",SetLastError=true)]static extern bool GetProcessTimes(IntPtr process,out long creation,out long exit,out long kernel,out long user);
  [DllImport("kernel32.dll",SetLastError=true)]static extern bool CloseHandle(IntPtr handle);
  static void Need(bool ok,string code){if(!ok)throw new InvalidOperationException(code);}
  static int UpgradeAdmission(string packageVersion,string productCode){
@@ -72,6 +73,24 @@ static class ManagedOwnerMsiBridge {
   CloseProcessesForPath(Path.GetFullPath(Path.Combine(Product,"payload","Desktop","AgentoC.exe")),true);
  }
  static bool HasWindow(Process process){try{return process.MainWindowHandle!=IntPtr.Zero;}catch{return false;}}
+ static bool MatchesDesktopImage(IntPtr handle,int pid,string image,string expected){
+  if(String.Equals(Path.GetFullPath(image),expected,StringComparison.OrdinalIgnoreCase))return true;
+  // MSI can move a mapped executable into its rollback folder while WMI
+  // retains its original executable path. Accept that path only for an MSI
+  // rollback image and bind the WMI row to the already-open process handle.
+  string rollback=Path.Combine(Path.GetPathRoot(expected),"Config.Msi")+Path.DirectorySeparatorChar;
+  if(!image.StartsWith(rollback,StringComparison.OrdinalIgnoreCase)||!image.EndsWith(".rbf",StringComparison.OrdinalIgnoreCase))return false;
+  long creation,exit,kernel,user;if(!GetProcessTimes(handle,out creation,out exit,out kernel,out user))return false;
+  try{using(var query=new ManagementObjectSearcher("SELECT ExecutablePath,CreationDate FROM Win32_Process WHERE ProcessId="+pid))
+   using(var rows=query.Get())foreach(ManagementObject row in rows){using(row){
+    string path=row["ExecutablePath"] as string,created=row["CreationDate"] as string;
+    if(String.IsNullOrEmpty(path)||String.IsNullOrEmpty(created))continue;
+    var wmiTime=ManagementDateTimeConverter.ToDateTime(created).ToUniversalTime();
+    if(Math.Abs((wmiTime-DateTime.FromFileTimeUtc(creation)).Ticks)<10000&&String.Equals(Path.GetFullPath(path),expected,StringComparison.OrdinalIgnoreCase))return true;
+   }}
+  }catch(ManagementException){}catch(UnauthorizedAccessException){}catch(ArgumentException){}
+  return false;
+ }
  static void CloseProcessesForPath(string expected,bool tolerateAccessDenied){
   for(int round=0;round<3;round++){
    // Windows Installer can rename an executable to a rollback filename while
@@ -85,7 +104,7 @@ static class ManagedOwnerMsiBridge {
      if(WaitForSingleObject(handle,0)==0)continue;
      var image=new StringBuilder(32768);int length=image.Capacity;
      if(!QueryFullProcessImageName(handle,0,image,ref length))continue;
-     if(!String.Equals(Path.GetFullPath(image.ToString()),expected,StringComparison.OrdinalIgnoreCase))continue;
+     if(!MatchesDesktopImage(handle,process.Id,image.ToString(),expected))continue;
      matched++;
      bool requested=false;
      try{requested=process.CloseMainWindow();}catch(InvalidOperationException){}catch(System.ComponentModel.Win32Exception){}catch(NotSupportedException){}

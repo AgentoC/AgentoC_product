@@ -115,6 +115,7 @@ assert.match(bridge,/if\(marker\)RemovedAdmission\(\)/,'uninstall rollback must 
 assert.match(bridge,/if\(marker\)RemovedAdmission\(\);else ActiveAdmission\(true\)/,'rollback must admit an authenticated in-progress removal');
 assert.match(bridge,/OMI_REMOVAL_LOCK_INVALID/,'rollback must only accept the exact authenticated removal lock');
 assert.match(bridge,/Process\.GetProcesses\(\)\.OrderByDescending\(HasWindow\)/,'desktop shutdown must also find running images renamed by MSI rollback');
+assert.match(bridge,/GetProcessTimes\(handle,out creation/,'rollback image matching must bind WMI process identity to the retained handle');
 assert.match(removeRollback,/ORR_REMOVAL_LOCK_INVALID/,'rollback must validate the removal lock before clearing it');
 assert.match(removeRollback,/Get-OwnerServicePreparationPlan/,'uninstall rollback must use the fixed Owner service plan');
 assert.match(removeRollback,/CreateService\(manager,name,display/,'uninstall rollback must recreate Owner service registrations deleted by the removal transaction');
