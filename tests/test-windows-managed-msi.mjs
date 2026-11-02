@@ -7,6 +7,9 @@ const missingRoot=join(tmpdir(),`agentoc-owner-msi-bridge-missing-${process.pid}
 const wix=await readFile(resolve('packaging/windows/AgentoC.ManagedOwner.wxs'),'utf8');
 const bridge=await readFile(resolve('packaging/windows/managed-owner-msi-bridge.cs'),'utf8');
 const activatedWix=await readFile(resolve('packaging/windows/AgentoC.ActivatedOwner.wxs'),'utf8');
+assert.match(activatedWix, /<EmbeddedUI Id="AgentoCMsiEmbeddedUI"/, 'the released owner MSI must include the custom installer UI');
+assert.match(activatedWix, /SetSelectedInstallFolder[^\n]*AGENTOC_INSTALLFOLDER/, 'the custom installer must pass its chosen directory to MSI');
+assert.match(activatedWix, /AGENTOC_LAUNCH = &quot;1&quot; AND NOT Installed/, 'the custom installer launch option must reach the execution sequence');
 const msiBuilder=await readFile(resolve('packaging/windows/build-msi.ps1'),'utf8');
 const brokerBuilder=await readFile(resolve('packaging/windows/build-privileged-broker.ps1'),'utf8');
 const activationTrialSource=await readFile(resolve('packaging/windows/owner-service-activation-trial.cs'),'utf8');

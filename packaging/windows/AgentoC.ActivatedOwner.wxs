@@ -19,6 +19,10 @@
     <MediaTemplate EmbedCab="yes" />
     <Icon Id="AgentoCIcon" SourceFile="!(bindpath.BrandAsset)\agentoc.ico" />
     <Property Id="ARPPRODUCTICON" Value="AgentoCIcon" />
+    <Property Id="AGENTOC_INSTALLFOLDER" Secure="yes" />
+    <Property Id="AGENTOC_LAUNCH" Secure="yes" />
+    <CustomAction Id="SetSelectedInstallFolder" Directory="INSTALLFOLDER" Value="[AGENTOC_INSTALLFOLDER]" />
+    <CustomAction Id="SetAgentoCLaunchTarget" Property="WixUnelevatedShellExecTarget" Value="[INSTALLFOLDER]payload\Desktop\AgentoC.exe" />
     <WixVariable Id="WixUIBannerBmp" Value="!(bindpath.BrandAsset)\wix-banner.bmp" />
     <WixVariable Id="WixUIDialogBmp" Value="!(bindpath.BrandAsset)\wix-dialog.bmp" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
@@ -39,6 +43,12 @@
     <CustomAction Id="LaunchAgentoC" BinaryRef="Wix4UtilCA_X64" DllEntry="WixUnelevatedShellExec" Execute="immediate" Return="check" />
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
     <UI>
+      <EmbeddedUI Id="AgentoCMsiEmbeddedUI" SourceFile="!(bindpath.InstallUi)\AgentoC.MsiEmbeddedUI.dll" SupportBasicUI="yes">
+        <EmbeddedUIResource Id="AgentoCEmbeddedLogo" Name="agentoc-android-logo.png" SourceFile="!(bindpath.InstallUi)\agentoc-android-logo.png" />
+        <?if $(var.IncludeMingwUiRuntime) = 1 ?>
+          <EmbeddedUIResource Id="AgentoCMingwThreadRuntime" Name="libwinpthread-1.dll" SourceFile="!(bindpath.InstallUi)\libwinpthread-1.dll" />
+        <?endif ?>
+      </EmbeddedUI>
       <Publish Dialog="ExitDialog" Control="Finish" Property="WixUnelevatedShellExecTarget" Value="[INSTALLFOLDER]payload\Desktop\AgentoC.exe" Order="1" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
       <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchAgentoC" Order="2" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
     </UI>
@@ -87,6 +97,9 @@
     <?endif?>
 
     <InstallExecuteSequence>
+      <Custom Action="SetSelectedInstallFolder" After="CostFinalize" Condition="AGENTOC_INSTALLFOLDER AND NOT Installed AND NOT (REMOVE = &quot;ALL&quot;)" />
+      <Custom Action="SetAgentoCLaunchTarget" After="InstallFinalize" Condition="AGENTOC_LAUNCH = &quot;1&quot; AND NOT Installed" />
+      <Custom Action="LaunchAgentoC" After="SetAgentoCLaunchTarget" Condition="AGENTOC_LAUNCH = &quot;1&quot; AND NOT Installed" />
       <!-- Refuse both the old SYSTEM install and prepared/active state before
            RemoveExistingProducts can make any change to an existing install. -->
       <?if $(var.MsiUpgradeLane) = "major" ?>

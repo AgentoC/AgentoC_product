@@ -810,7 +810,16 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) {
 
 extern "C" __declspec(dllexport) UINT __stdcall InitializeEmbeddedUI(MSIHANDLE install, LPCWSTR resourcePath, LPDWORD uiLevel) {
     if (!uiLevel) return ERROR_INSTALL_FAILURE;
-    if ((*uiLevel & INSTALLUILEVEL_NONE) != 0) return ERROR_SUCCESS;
+    if ((*uiLevel & 7) == INSTALLUILEVEL_NONE) return INSTALLUILEVEL_NONE;
+
+    // The custom flow only implements a fresh install. Keep Windows Installer's
+    // maintenance and uninstall UI for an existing installation of this product.
+    wchar_t productCode[40]{};
+    DWORD productCodeLength = static_cast<DWORD>(std::size(productCode));
+    if (MsiGetPropertyW(install, L"ProductCode", productCode, &productCodeLength) != ERROR_SUCCESS)
+        return ERROR_INSTALL_FAILURE;
+    if (MsiQueryProductStateW(productCode) == INSTALLSTATE_DEFAULT)
+        return (*uiLevel & 7);
 
     g.chinese = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_CHINESE;
     gResourceDirectory = resourcePath ? resourcePath : L"";
