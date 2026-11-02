@@ -1023,6 +1023,9 @@ extern "C" __declspec(dllexport) UINT __stdcall InitializeEmbeddedUI(MSIHANDLE i
 
 extern "C" __declspec(dllexport) INT __stdcall EmbeddedUIHandler(UINT messageType, MSIHANDLE record) {
     const INSTALLMESSAGE message = static_cast<INSTALLMESSAGE>(messageType & 0xFF000000);
+    // Do not let MSI's default UI ask Restart Manager to close applications.
+    // Our own deferred actions stop AgentoC services and desktop processes.
+    if (message == INSTALLMESSAGE_FILESINUSE || message == INSTALLMESSAGE_RMFILESINUSE) return IDIGNORE;
     if (message == INSTALLMESSAGE_INSTALLSTART) {
         if (HWND window = gUiWindow.load()) PostMessageW(window, kRestoreInstallerWindow, 0, 0);
         PostUiText(1, Text(L"Preparing AgentoC services and application files…", L"正在准备 AgentoC 服务和应用程序文件…"));

@@ -92,7 +92,8 @@ assert.match(bridge,/Run\("UpgradeBegin",null\)/,'recovery must begin the retain
 assert.match(bridge,/Run\("UpgradeRollback",null\)/,'failed recovery must restore archived receipts');
 assert.match(bridge,/Run\("UpgradeCommit",null\)/,'successful recovery must commit archived receipts');
 assert.match(activatedWix,/<Custom Action="ManagedInstallCommit" Before="InstallFinalize" Condition="NOT Installed/,'recovery commit cleanup must run inside the fresh-install transaction');
-assert.match(activatedWix,/<Property Id="MSIRESTARTMANAGERCONTROL" Value="Disable"/,'Restart Manager must be disabled at MSI session creation so the Broker stays available for administrator revocation');
+assert.match(activatedWix,/<Property Id="MSIRESTARTMANAGERCONTROL" Value="DisableShutdown"/,'use Restart Manager file detection without automatic restart mitigation');
+assert.match(activatedWix,/<Property Id="MSIRMSHUTDOWN" Value="2"/,'restrict unattended restart-manager shutdown to restartable applications');
 assert.match(activatedWix,/<Custom Action="ManagedRemove" Before="DeleteServices"/,'active removal must drain and verify ordinary services before MSI deletes their registrations');
 assert.match(activatedWix,/<CustomAction Id="ManagedCloseDesktop"[^>]+Execute="deferred" Impersonate="no"/,'uninstall must use the elevated scoped desktop shutdown action');
 assert.match(activatedWix,/<Custom Action="ManagedCloseDesktopBeforeValidation" After="ManagedRemoveGuard"/,'close the current user desktop before MSI checks in-use files');

@@ -29,7 +29,10 @@
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Open AgentoC" />
     <Property Id="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1" />
-    <Property Id="MSIRESTARTMANAGERCONTROL" Value="Disable" />
+    <!-- Use Restart Manager for accurate, fast file-in-use detection while
+         disabling its automatic restart mitigation in the ordinary UI. -->
+    <Property Id="MSIRESTARTMANAGERCONTROL" Value="DisableShutdown" />
+    <Property Id="MSIRMSHUTDOWN" Value="2" />
     <?if $(var.MsiUpgradeLane) = "minor" ?>
       <!-- Executable payload files are immutable. A modified, unversioned file
            must not survive an in-place update under Windows Installer's normal

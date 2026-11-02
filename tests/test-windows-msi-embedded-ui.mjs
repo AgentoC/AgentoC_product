@@ -10,6 +10,8 @@ const source = await readFile(
 );
 const initializeStart = source.indexOf('extern "C" __declspec(dllexport) UINT __stdcall InitializeEmbeddedUI');
 assert.notEqual(initializeStart, -1, 'embedded UI initialization entrypoint exists');
+assert.match(source, /message == INSTALLMESSAGE_FILESINUSE\s*\|\|\s*message == INSTALLMESSAGE_RMFILESINUSE\) return IDIGNORE/,
+  'interactive MSI must not automatically shut down other applications when files are in use');
 const initialize = source.slice(initializeStart);
 assert.match(source, /MsiRecordGetInteger\(record, 1\) == 1722\s*&& CopyRecordField\(record, 2\) == L"ManagedFreshGuard"[\s\S]*?Setup could not validate the selected folder or retained installation/,
   'a fresh-install guard failure explains the folder or retained-installation issue instead of showing only 1722');
