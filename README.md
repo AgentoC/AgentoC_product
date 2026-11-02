@@ -6,8 +6,12 @@ AgentoC is an AI workbench that connects agent runtimes on a computer with a web
 interface and an Android app. It is designed for working with agent sessions
 across devices while the execution host remains under the user's control.
 
-> **Early access:** the source is public for review. Release packages and
+> **Early access:** the source is public for review. Windows packages and
 > supported deployment configurations are still being verified.
+
+Windows x64 early-access packages are available from [GitHub Releases](https://github.com/AgentoC/AgentoC_product/releases/latest).
+The installer is unsigned and Windows may display a warning. Review the release
+notes for verification results and upgrade limitations before installing.
 
 ## At a glance
 
