@@ -53,7 +53,9 @@ assert.match(msiBuilder,/MSI_MINOR_UPGRADE_VERSION_MISMATCH/,'the build must ver
 assert.match(activatedWix,/MSIUNINSTALLSUPERSEDEDCOMPONENTS/,'the minor update must clean the single retired component');
 assert.match(activatedWix,/NOT UPGRADINGPRODUCTCODE/,'major-upgrade removal must preserve Owner and Broker state');
 assert.match(activatedWix,/ManagedMajorUpgradeRefused/,'unvalidated ProductCode changes must stop before RemoveExistingProducts');
-assert.match(activatedWix,/<\?if \$\(var\.MsiUpgradeLane\) = "major" \?>\s*<Custom Action="ManagedMajorUpgradeRefused"/,'the minor lane must omit the major-upgrade refusal sequence when WiX disables that action');
+assert.match(activatedWix,/<\?else\?>\s*<Custom Action="ManagedMajorUpgradeRefused" Before="RemoveExistingProducts"/,'major upgrades remain refused unless the explicit experimental lane is selected');
+assert.match(activatedWix,/<Custom Action="ManagedUpgradeGuard" After="InstallInitialize" Condition="WIX_UPGRADE_DETECTED AND NOT Installed"\s*\/>\s*<InstallExecute After="ManagedUpgradeGuard"/,'the experimental major lane flushes the elevated guard before old-product removal');
+assert.match(activatedWix,/<Custom Action="ManagedUpgradeRollback" After="RemoveExistingProducts"[\s\S]*?<Custom Action="ManagedUpgradeBegin" After="ManagedUpgradeRollback"/,'the experimental lane registers receipt rollback before beginning its migration');
 assert.match(activatedWix,/<CustomAction Id="ManagedUpgradeGuard"[^>]+Execute="deferred" Impersonate="no"/,'minor-upgrade admission must run elevated to inspect protected service state');
 assert.match(activatedWix,/upgrade-admission \$\(var\.MsiProductVersion\) &quot;\$\(var\.ProductCode\)&quot;/,'minor-upgrade admission must compare the candidate MSI version and product identity');
 assert.match(activatedWix,/<Package[^>]+Version="\$\(var\.MsiProductVersion\)"/,'the MSI package version must use its three-part effective version');

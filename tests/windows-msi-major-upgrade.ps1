@@ -15,22 +15,25 @@ $report=[ordered]@{pass=$false;test='major upgrade and rollback of isolated serv
 if(Test-Path -LiteralPath $root){throw 'MJU_ROOT_EXISTS'}
 New-Item -ItemType Directory -Path $root | Out-Null
 try{
- $serviceSource=Join-Path $root 'QaService.cs';$serviceExe=Join-Path $root 'QaService.exe';$failSource=Join-Path $root 'QaFail.cs';$failExe=Join-Path $root 'QaFail.exe'
+ $serviceSource=Join-Path $root 'QaService.cs';$serviceExe=Join-Path $root 'QaService.exe';$failSource=Join-Path $root 'QaFail.cs';$failExe=Join-Path $root 'QaFail.exe';$guardSource=Join-Path $root 'QaGuard.cs';$guardExe=Join-Path $root 'QaGuard.exe'
  @"
 using System.ServiceProcess;
 public sealed class QaService:ServiceBase {public QaService(){ServiceName="$service";} protected override void OnStart(string[] args){} protected override void OnStop(){} public static void Main(){ServiceBase.Run(new QaService());}}
 "@ | Set-Content -LiteralPath $serviceSource -Encoding UTF8
  [IO.File]::WriteAllText($failSource,'public static class QaFail { public static int Main(){return 93;} }')
+ [IO.File]::WriteAllText($guardSource,'using System.ServiceProcess; public static class QaGuard { public static int Main(){try{using(var s=new ServiceController("'+$service+'")){return s.Status==ServiceControllerStatus.Running?0:92;}}catch{return 92;}} }')
  $csc=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
  & $csc /nologo /target:exe /r:System.ServiceProcess.dll ('/out:'+$serviceExe) $serviceSource
  if($LASTEXITCODE -ne 0){throw 'MJU_SERVICE_COMPILE_FAILED'}
  & $csc /nologo /target:exe ('/out:'+$failExe) $failSource
  if($LASTEXITCODE -ne 0){throw 'MJU_FAIL_COMPILE_FAILED'}
+ & $csc /nologo /target:exe /r:System.ServiceProcess.dll ('/out:'+$guardExe) $guardSource
+ if($LASTEXITCODE -ne 0){throw 'MJU_GUARD_COMPILE_FAILED'}
  function Build-Qa([string]$version,[string]$label,[string]$product,[bool]$isUpgrade){
   $content=Join-Path $root ($label+'.txt');[IO.File]::WriteAllText($content,$label)
   $wxs=Join-Path $root ($label+'.wxs');$msi=Join-Path $root ($label+'.msi')
-  $major=if($isUpgrade){'<MajorUpgrade DowngradeErrorMessage="Newer version installed." Schedule="afterInstallInitialize" />'}else{''}
-  $fault=if($isUpgrade){'<Binary Id="Failure" SourceFile="'+$failExe+'" /><CustomAction Id="QaInjectedFailure" BinaryRef="Failure" ExeCommand="" Execute="deferred" Impersonate="no" Return="check" /><InstallExecuteSequence><Custom Action="QaInjectedFailure" After="StartServices" Condition="QA_FAIL_UPDATE = 1" /></InstallExecuteSequence>'}else{''}
+  $major=if($isUpgrade){'<MajorUpgrade DowngradeErrorMessage="Newer version installed." Schedule="afterInstallExecute" />'}else{''}
+  $fault=if($isUpgrade){'<Binary Id="Failure" SourceFile="'+$failExe+'" /><Binary Id="Guard" SourceFile="'+$guardExe+'" /><CustomAction Id="QaGuard" BinaryRef="Guard" ExeCommand="" Execute="deferred" Impersonate="no" Return="check" /><CustomAction Id="QaInjectedFailure" BinaryRef="Failure" ExeCommand="" Execute="deferred" Impersonate="no" Return="check" /><InstallExecuteSequence><Custom Action="QaGuard" After="InstallInitialize" Condition="WIX_UPGRADE_DETECTED" /><InstallExecute After="QaGuard" /><Custom Action="QaInjectedFailure" After="StartServices" Condition="QA_FAIL_UPDATE = 1" /></InstallExecuteSequence>'}else{''}
   $xml=@"
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
  <Package Name="AgentoC Major Upgrade QA $id" Manufacturer="AgentoC QA" Version="$version" ProductCode="$product" UpgradeCode="$upgrade" Scope="perMachine">

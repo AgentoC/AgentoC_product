@@ -10,6 +10,7 @@ param(
     [switch]$LegacySystemPreview,
     [switch]$InjectPostActivationFailure,
     [switch]$InjectPostRemovalFailure,
+    [switch]$ExperimentalMajorUpgrade,
     [ValidateSet('major','minor')] [string]$MsiUpgradeLane = 'major',
     [string]$ProductCode = '*',
     [string]$MsiProductVersion = '',
@@ -26,6 +27,7 @@ if($SignedOwnerBootstrapPath -or $OwnerBootstrapPublisherSha256){throw 'OLG_SIGN
 if(@(@($ManagedOwnerPreparation.IsPresent,$ManagedOwnerActivation.IsPresent,$LegacySystemPreview.IsPresent)|Where-Object {$_}).Count -gt 1){throw 'MSI_OWNER_INSTALL_LANE_CONFLICT'}
 $fullOwnerActivation=$ManagedOwnerActivation.IsPresent -or (-not $ManagedOwnerPreparation.IsPresent -and -not $LegacySystemPreview.IsPresent)
 if($MsiUpgradeLane -eq 'minor' -and -not $fullOwnerActivation){throw 'MSI_MINOR_UPGRADE_REQUIRES_ACTIVATED_OWNER'}
+if($ExperimentalMajorUpgrade -and ($MsiUpgradeLane -ne 'major' -or -not $fullOwnerActivation)){throw 'MSI_EXPERIMENTAL_MAJOR_LANE_REQUIRED'}
 if($InjectPostActivationFailure -and -not $fullOwnerActivation){throw 'MSI_ROLLBACK_INJECTION_REQUIRES_ACTIVATION_LANE'}
 if($InjectPostRemovalFailure -and -not $fullOwnerActivation){throw 'MSI_REMOVAL_ROLLBACK_INJECTION_REQUIRES_ACTIVATION_LANE'}
 if (-not (Get-Command wix.exe -ErrorAction SilentlyContinue)) { throw 'Pinned WiX 7 wix.exe is required to build the AgentoC MSI.' }
@@ -263,6 +265,8 @@ try {
         $managedWxs = if($fullOwnerActivation){Join-Path $installScriptRoot 'AgentoC.ActivatedOwner.wxs'}else{Join-Path $installScriptRoot 'AgentoC.ManagedOwner.wxs'}
         $wixArguments = @('--acceptEula','wix7','build','-arch','x64',$managedWxs,$payloadWxs,'-d',"ProductVersion=$Version",'-d',"MsiProductVersion=$MsiProductVersion",'-d',"ProductCode=$ProductCode",'-d',"MsiUpgradeLane=$MsiUpgradeLane",'-d',"MsiUpgradeStrategy=$msiUpgradeStrategy",'-d',"SourceDir=$payloadDir",'-bindpath',"ServiceHost=$serviceHostDir",'-bindpath',"ManagedBridge=$staging",'-bindpath',"BrandAsset=$brandRoot",'-ext','WixToolset.UI.wixext/7.0.0','-ext','WixToolset.Util.wixext/7.0.0','-o',$OutputPath)
         if($fullOwnerActivation){
+            $experimentalMajor = if($ExperimentalMajorUpgrade){'1'}else{'0'}
+            $wixArguments += @('-d',"ExperimentalMajorUpgrade=$experimentalMajor")
             $wixArguments += @('-d',"IncludeMingwUiRuntime=$includeMingwUiRuntime",'-bindpath',"InstallUi=$installerUiRoot")
             $wixArguments += @('-bindpath',"PrivilegedBroker=$brokerBuildRoot")
             $wixArguments += @('-d',"BrokerSha256=$brokerSha256")
