@@ -11,7 +11,7 @@ across devices while the execution host remains under the user's control.
 
 Windows x64 early-access packages are available from [GitHub Releases](https://github.com/AgentoC/AgentoC_product/releases/latest).
 The installer is unsigned and Windows may display a warning. Review the release
-notes for verification results and upgrade limitations before installing.
+notes for the package's exact source commit, validation results, and upgrade limitations before installing.
 
 ## At a glance
 
