@@ -70,6 +70,8 @@ assert.match(bridge,/args\[0\]=="upgrade-admission"/,'the MSI bridge must expose
 assert.match(bridge,/action=="UpgradeActivationCheck"\)scriptArguments=" -Action Check -PreserveExistingIdentity"/,'the upgrade activation path must retain the existing key without reading it');
 assert.match(activationCheck,/PreserveExistingIdentity/,'upgrade activation must validate the existing identity by metadata only');
 assert.match(upgradeAdmission,/credentialContentsRead=\$false/,'upgrade admission must not read credential contents');
+assert.match(upgradeAdmission,/ReadBroker\('AgentoC-PrivilegedBroker'\)/,'broker admission must query SCM directly because WMI cannot see the restricted service');
+assert.match(upgradeAdmission,/QueryServiceConfig[\s\S]*QueryServiceStatusEx/,'broker admission must check service configuration and live status');
 assert.doesNotMatch(upgradeAdmission,/foreach\(\$name in @\([^\r\n]*owner-msi\.activated\.json/,'read-only upgrade admission must accept the stable activated-install receipt');
 assert.match(upgradeAdmission,/\$brokerBinary=Join-Path \$product 'Broker\\AgentoC\.PrivilegedBroker\.exe'/,'upgrade admission must verify the Broker inside the selected MSI install root');
 assert.match(upgradeAdmission,/Assert-UpgradePath \$brokerBinary \$false/,'upgrade admission must pin the Broker binary at the selected install root');
