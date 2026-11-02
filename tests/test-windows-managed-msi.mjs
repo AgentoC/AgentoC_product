@@ -46,6 +46,7 @@ assert.match(activatedWix,/ProductCode="\$\(var\.ProductCode\)"/,'the first in-p
 assert.match(activatedWix,/MsiUpgradeLane/,'the migration and major-upgrade lanes must be explicit at build time');
 assert.match(activatedWix,/UpgradeStrategy="\$\(var\.MsiUpgradeStrategy\)"/,'the minor lane must disable WiX v5+ default major-upgrade authoring');
 assert.match(msiBuilder,/MsiUpgradeStrategy=\$msiUpgradeStrategy/,'the MSI build must explicitly select no major-upgrade strategy for minor updates');
+assert.match(msiBuilder,/\$experimentalMajor\s*=\s*if\s*\(\$MsiUpgradeLane\s+-eq\s+'major'\)\s*\{'1'\}\s*else\s*\{'0'\}/,'ordinary Owner major builds select the verified guarded transaction');
 assert.match(msiBuilder,/MSI_MINOR_UPGRADE_HAS_MAJOR_UPGRADE_ROWS/,'the build must reject a minor MSI with an Upgrade table row');
 assert.match(msiBuilder,/MSI_MINOR_UPGRADE_HAS_REMOVE_EXISTING_PRODUCTS/,'the build must reject a minor MSI with RemoveExistingProducts sequenced');
 assert.match(msiBuilder,/MSI_MINOR_UPGRADE_PRODUCT_CODE_MISMATCH/,'the build must verify the requested installed ProductCode in the MSI database');

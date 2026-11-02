@@ -265,7 +265,10 @@ try {
         $managedWxs = if($fullOwnerActivation){Join-Path $installScriptRoot 'AgentoC.ActivatedOwner.wxs'}else{Join-Path $installScriptRoot 'AgentoC.ManagedOwner.wxs'}
         $wixArguments = @('--acceptEula','wix7','build','-arch','x64',$managedWxs,$payloadWxs,'-d',"ProductVersion=$Version",'-d',"MsiProductVersion=$MsiProductVersion",'-d',"ProductCode=$ProductCode",'-d',"MsiUpgradeLane=$MsiUpgradeLane",'-d',"MsiUpgradeStrategy=$msiUpgradeStrategy",'-d',"SourceDir=$payloadDir",'-bindpath',"ServiceHost=$serviceHostDir",'-bindpath',"ManagedBridge=$staging",'-bindpath',"BrandAsset=$brandRoot",'-ext','WixToolset.UI.wixext/7.0.0','-ext','WixToolset.Util.wixext/7.0.0','-o',$OutputPath)
         if($fullOwnerActivation){
-            $experimentalMajor = if($ExperimentalMajorUpgrade){'1'}else{'0'}
+            # The guarded major-upgrade transaction has passed real upgrade
+            # and injected rollback verification. Use it for ordinary Owner
+            # builds as well as the explicit legacy test switch.
+            $experimentalMajor = if($MsiUpgradeLane -eq 'major'){'1'}else{'0'}
             $wixArguments += @('-d',"ExperimentalMajorUpgrade=$experimentalMajor")
             $wixArguments += @('-d',"IncludeMingwUiRuntime=$includeMingwUiRuntime",'-bindpath',"InstallUi=$installerUiRoot")
             $wixArguments += @('-bindpath',"PrivilegedBroker=$brokerBuildRoot")
