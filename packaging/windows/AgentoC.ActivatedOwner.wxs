@@ -85,6 +85,7 @@
     <?endif?>
     <CustomAction Id="ManagedUpgradeBegin" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-begin &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedUpgradeRollback" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-rollback &quot;[INSTALLFOLDER].&quot;" Execute="rollback" Impersonate="no" Return="ignore" />
+    <CustomAction Id="ManagedMajorBrokerRollback" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="restore-broker-after-major-rollback &quot;[INSTALLFOLDER].&quot;" Execute="rollback" Impersonate="no" Return="ignore" />
     <CustomAction Id="ManagedPrepareExisting" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-prepare &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedPreparePolicyExisting" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-policy &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedUpgradeActivationCheck" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="upgrade-activation-check &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
@@ -127,7 +128,10 @@
       <!-- Flush only the read-only elevated guard before MSI removes the old
            product; receipts must remain intact for the old uninstall guard. -->
       <Custom Action="ManagedUpgradeGuard" After="InstallInitialize" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
-      <InstallExecute After="ManagedUpgradeGuard" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
+      <!-- Rollback is registered before old-product removal, so it runs after
+           the predecessor MSI has recreated its Broker service. -->
+      <Custom Action="ManagedMajorBrokerRollback" After="ManagedUpgradeGuard" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
+      <InstallExecute After="ManagedMajorBrokerRollback" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
       <Custom Action="ManagedUpgradeRollback" After="RemoveExistingProducts" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
       <Custom Action="ManagedUpgradeBegin" After="ManagedUpgradeRollback" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
       <?else?>

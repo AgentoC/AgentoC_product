@@ -156,6 +156,31 @@ static class ManagedOwnerMsiBridge {
    }finally{CloseServiceHandle(manager);}
   }finally{for(int index=pins.Count-1;index>=0;index--)pins[index].Dispose();}
  }
+ // A major-upgrade rollback recreates the predecessor's service registration
+ // from its old MSI, which did not author the service SID/privilege settings.
+ // This action runs after that rollback and restores the verified old Broker.
+ static void RestoreBrokerAfterMajorRollback(){
+  Need(WindowsIdentity.GetCurrent().User.Value=="S-1-5-18","OMI_BROKER_ROLLBACK_SYSTEM_REQUIRED");
+  ValidateProductRoot();string binary=Path.Combine(Product,"Broker","AgentoC.PrivilegedBroker.exe"),manifest=Path.Combine(Product,"Broker","AgentoC.PrivilegedBroker.manifest.json");
+  var pins=new List<IDisposable>();string version,hash;
+  try{
+   PinBrokerInputs(pins,binary,manifest);var binaryStream=(FileStream)pins[pins.Count-2];var manifestStream=(FileStream)pins[pins.Count-1];
+   Need(manifestStream.Length>0&&manifestStream.Length<=8192,"OMI_BROKER_MANIFEST_REFUSED");
+   string text;using(var reader=new StreamReader(manifestStream,new UTF8Encoding(false,true),true,1024,true))text=reader.ReadToEnd();
+   var row=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(text);
+   Need(row!=null&&row.Count==3&&row.ContainsKey("schemaVersion")&&Convert.ToInt32(row["schemaVersion"])==1&&row.ContainsKey("productVersion")&&row.ContainsKey("sha256"),"OMI_BROKER_MANIFEST_REFUSED");
+   version=Convert.ToString(row["productVersion"]);hash=Convert.ToString(row["sha256"]);
+   Need(Regex.IsMatch(version??"",@"\A\d+\.\d+\.\d+\.\d+\z")&&Regex.IsMatch(hash??"",@"\A[a-f0-9]{64}\z")&&Hash(binaryStream)==hash,"OMI_BROKER_MANIFEST_REFUSED");
+   ConfigureBrokerService(version,hash);
+  }finally{for(int i=pins.Count-1;i>=0;i--)pins[i].Dispose();}
+  using(var service=new System.ServiceProcess.ServiceController(BrokerServiceName)){
+   service.Refresh();if(service.Status!=System.ServiceProcess.ServiceControllerStatus.Running){
+    if(service.Status!=System.ServiceProcess.ServiceControllerStatus.Stopped)service.WaitForStatus(System.ServiceProcess.ServiceControllerStatus.Stopped,TimeSpan.FromSeconds(60));
+    service.Start();service.WaitForStatus(System.ServiceProcess.ServiceControllerStatus.Running,TimeSpan.FromSeconds(60));
+   }
+  }
+  Console.WriteLine("OMI_BROKER_MAJOR_ROLLBACK_RESTORED");
+ }
  static void ValidateProductRoot(){
   string target=Path.GetFullPath(Product).TrimEnd('\\');Need(target.Length>2,"OMI_INSTALL_ROOT_REFUSED");
   for(string path=target;path!=null;path=Path.GetDirectoryName(path)){
@@ -546,6 +571,7 @@ static class ManagedOwnerMsiBridge {
    if(args.Length==3&&args[0]=="configure-broker-service"&&Regex.IsMatch(args[1],@"\A\d+\.\d+\.\d+\.\d+\z")&&Regex.IsMatch(args[2],@"\A[a-f0-9]{64}\z")){
     ConfigureBrokerService(args[1],args[2]);Console.WriteLine("OMI_BROKER_SERVICE_CONFIGURED");return 0;
    }
+   if(args.Length==1&&args[0]=="restore-broker-after-major-rollback"){RestoreBrokerAfterMajorRollback();return 0;}
    // MSI immediate actions may still impersonate an ordinary client. This
    // admission only reads public state; the deferred non-impersonating Remove
    // repeats all privileged validation before any deletion or RemoveFiles.
