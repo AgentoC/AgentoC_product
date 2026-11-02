@@ -8,12 +8,18 @@ $ownerServicesLibraryOnly=$LibraryOnly.IsPresent
 $product=Get-OwnerProductRoot
 
 function Get-OwnerServicePreparationPlan {
+  # Windows Installer quotes the service executable only when its path
+  # contains whitespace. Match its SCM representation exactly: an unquoted
+  # executable without whitespace is unambiguous, while one with whitespace
+  # must remain quoted.
+  $executable=Join-Path $product 'AgentoC.ServiceHost.exe'
+  $serviceBinary=if($executable -match '\s'){'"'+$executable+'"'}else{$executable}
   foreach($role in @('supervisor','control')){
     $name=if($role -eq 'control'){'AgentoC-ControlPlane'}else{'AgentoC-RunnerSupervisor'}
     $config=if($role -eq 'control'){'C:\ProgramData\AgentoC\instances\owner\config'}else{'C:\ProgramData\AgentoC\instances\owner\executor\config'}
     [pscustomobject]@{name=$name;account=('NT SERVICE\'+$name);startMode='Disabled';role=$role;
       dependencies=@($(if($role -eq 'control'){'AgentoC-RunnerSupervisor'}));
-      command=('"{0}\AgentoC.ServiceHost.exe" --role {1} --config-dir "{2}" --instance-root "C:\ProgramData\AgentoC\instances\owner"' -f $product,$role,$config)}
+      command=('{0} --role {1} --config-dir "{2}" --instance-root "C:\ProgramData\AgentoC\instances\owner"' -f $serviceBinary,$role,$config)}
   }
 }
 
