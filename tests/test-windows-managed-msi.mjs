@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';import {execFile} from 'node:child_proce
 const exec=promisify(execFile),ps='C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe',root=resolve(process.env.AGENTOC_MSI_TEST_EVIDENCE_DIR||'artifacts/showcase/T2-current-20261020/managed-msi/local');await mkdir(root,{recursive:true});
 await exec(ps,['-NoProfile','-NonInteractive','-File','packaging/windows/build-managed-owner-msi-bridge.ps1','-OutputPath',join(root,'AgentoC.ManagedOwnerMsiBridge.exe')],{windowsHide:true,timeout:30000,maxBuffer:65536});
 const exe=join(root,'AgentoC.ManagedOwnerMsiBridge.exe');let count=0;
+const binary=await readFile(exe);const peOffset=binary.readUInt32LE(0x3c);
+assert.equal(binary.readUInt16LE(peOffset+24+68),2,'MSI helper must use the Windows GUI subsystem to avoid a console window');
 const missingRoot=join(tmpdir(),`agentoc-owner-msi-bridge-missing-${process.pid}`);assert.equal(existsSync(missingRoot),false,'negative-path root must be absent');
 const wix=await readFile(resolve('packaging/windows/AgentoC.ManagedOwner.wxs'),'utf8');
 const bridge=await readFile(resolve('packaging/windows/managed-owner-msi-bridge.cs'),'utf8');
