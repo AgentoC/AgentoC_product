@@ -395,20 +395,13 @@ fun AgentoIcon(
     Icon(imageVector, contentDescription = contentDescription, modifier = modifier, tint = tint)
 }
 
-/**
- * One UI-style modal dim and window-level defocus. On API 31+, applies
- * `FLAG_BLUR_BEHIND` and `blurBehindRadius` matching the 16.dp navigation dock
- * defocus so the entire activity window behind the dialog is hardware blurred.
- */
+/** Dims the activity behind a modal without blurring the page. */
 @Composable
 fun AgentoModalBackgroundDim(
     amount: Float,
-    blurRadius: Dp = AgentoFrostedTokens.BlurNavigation,
 ) {
     val hostView = LocalView.current
     val isDark = LocalAgentocColors.current.canvas.red < 0.5f
-    val density = LocalDensity.current
-    val blurRadiusPx = with(density) { blurRadius.toPx().roundToInt() }
     SideEffect {
         val window = (hostView.parent as? DialogWindowProvider)?.window ?: return@SideEffect
         androidx.core.view.WindowCompat.getInsetsController(window, hostView).apply {
@@ -419,18 +412,16 @@ fun AgentoModalBackgroundDim(
             window.isStatusBarContrastEnforced = false
             window.isNavigationBarContrastEnforced = false
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blurRadiusPx > 0) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
-        }
+        window.clearFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
         window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         window.attributes = window.attributes.apply {
             dimAmount = amount.coerceIn(0f, 1f)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                blurBehindRadius = blurRadiusPx
+                blurBehindRadius = 0
             }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            window.setBackgroundBlurRadius(blurRadiusPx)
+            window.setBackgroundBlurRadius(0)
         }
     }
 }
@@ -1692,7 +1683,6 @@ fun AgentoDialog(
     actionLayout: AgentoDialogActionLayout = AgentoDialogActionLayout.Horizontal,
     backdropLayer: GraphicsLayer? = null,
     backgroundDimAmount: Float? = null,
-    backgroundBlurRadius: Dp = AgentoFrostedTokens.BlurNavigation,
     content: @Composable () -> Unit,
 ) {
     val colors = LocalAgentocColors.current
@@ -1714,7 +1704,6 @@ fun AgentoDialog(
         // frosted substrate is the only temporary material treatment.
         AgentoModalBackgroundDim(
             amount = backgroundDimAmount ?: if (colors.canvas.red < 0.5f) 0.20f else 0.16f,
-            blurRadius = backgroundBlurRadius,
         )
 
         BoxWithConstraints(

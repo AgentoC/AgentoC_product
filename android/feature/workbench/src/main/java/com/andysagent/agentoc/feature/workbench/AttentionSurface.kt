@@ -106,6 +106,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import com.andysagent.agentoc.core.designsystem.AgentoButton
+import com.andysagent.agentoc.core.designsystem.AgentoBackdropTone
 import com.andysagent.agentoc.core.designsystem.AgentoDiffuseShadowBox
 import com.andysagent.agentoc.core.designsystem.AgentoFrostedGlassBox
 import com.andysagent.agentoc.core.designsystem.AgentoGlassSurface
@@ -399,6 +400,7 @@ private fun AttentionCard(
                 // an additional 35% white layer over the live blur, which is
                 // why this surface previously read as a milky opaque card.
                 showTopHairline = true,
+                backdropTone = AgentoBackdropTone.QuietHeader,
                 specularBrush = if (colors.canvas.red < 0.5f) {
                     AgentoFrostedTokens.SpecularBorderDark
                 } else {

@@ -10,8 +10,11 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -32,6 +35,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.andysagent.agentoc.core.designsystem.AgentocTheme
+import com.andysagent.agentoc.core.model.AttentionItem
+import com.andysagent.agentoc.core.model.AttentionKind
+import com.andysagent.agentoc.core.model.AttentionUiState
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
@@ -177,7 +183,9 @@ class PairingOnboardingDeviceUiTest {
         rule.activityRule.scenario.onActivity { it.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
         rule.setContent {
             AgentocTheme(darkTheme = dark) {
-                Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFFB9D5FF), Color(0xFFFFD7BC)))))
+                Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFFB9D5FF), Color(0xFFFFD7BC))))) {
+                    Text("Background remains sharp", Modifier.padding(start = 24.dp, top = 90.dp), color = Color.Black)
+                }
                 AgentoAlertDialog(onDismissRequest = {}, title = { Text("Glass dialog") },
                     text = { Text("Readable content") }, confirmButton = { TextButton(onClick = { confirmed = true }) { Text("Confirm") } })
             }
@@ -192,4 +200,24 @@ class PairingOnboardingDeviceUiTest {
         rule.onNodeWithText("Confirm").performClick()
         assertTrue(confirmed)
     }
+    @Test fun topNotificationLeavesBackgroundUnmaskedAndInteractive() {
+        var clicked = false
+        rule.activityRule.scenario.onActivity { it.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+        rule.setContent {
+            AgentocTheme {
+                Box(Modifier.fillMaxSize().background(Color(0xFFB9D5FF))) {
+                    Text("Background action", Modifier.padding(start = 24.dp, top = 320.dp).clickable { clicked = true }, color = Color.Black)
+                    AttentionSurface(
+                        state = AttentionUiState(items = listOf(AttentionItem(id = "done", sessionId = "s", sessionTitle = "Test session", kind = AttentionKind.Completion, title = "Test session", summary = "Task complete")), activeItemId = "done"),
+                        onEvent = {}, onOpenSession = {},
+                    )
+                }
+            }
+        }
+        capture("top-notification-no-mask.png")
+        rule.onNodeWithText("Test session").assertIsDisplayed()
+        rule.onNodeWithText("Background action").performClick()
+        assertTrue(clicked)
+    }
+
 }
