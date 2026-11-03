@@ -48,7 +48,7 @@ self.addEventListener('push', (event) => {
       return self.registration.showNotification(data.title || 'AgentoC', {
         body: data.body || 'Task completed',
         icon: resolveScopeUrl('icon.svg'),
-        badge: resolveScopeUrl('apple-touch-icon.png'),
+        badge: resolveScopeUrl('notification-badge.png'),
         tag: 'agentoc-done',
         renotify: true,
         data: target,

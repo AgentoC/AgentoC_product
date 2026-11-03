@@ -4,6 +4,6 @@
          splash exit is seamless. Owner-approved theme-aware variant of the 8A S2 review
          recommendation ("always brand-dark"); brand-dark value lives in values-night. -->
     <color name="splash_background">#FDFDFE</color>
-    <!-- Owner-requested system-theme variant; preserve the existing blue brand foreground. -->
-    <color name="ic_launcher_background">#F4F6FA</color>
+    <!-- Light launcher background. -->
+    <color name="ic_launcher_background">#FFFFFF</color>
 </resources>
