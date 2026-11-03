@@ -3,6 +3,9 @@
 // Order: Traditional Chinese, Japanese, Korean, French, Spanish.
 struct InstallerTranslation { const wchar_t* en; const wchar_t* translated[5]; };
 static const InstallerTranslation kInstallerTranslations[] = {
+{L"Check the information below before trying again.",{L"請檢查下方資訊後再試。",L"以下の情報を確認してから再試行してください。",L"아래 정보를 확인한 후 다시 시도하세요.",L"Vérifiez les informations ci-dessous avant de réessayer.",L"Revisa la información siguiente antes de volver a intentarlo."}},
+{L"There is not enough disk space. Free space on the installation drive and try again.",{L"磁碟空間不足。請清理安裝磁碟的空間後再試。",L"ディスクの空き容量が不足しています。インストールドライブの容量を確保して再試行してください。",L"디스크 공간이 부족합니다. 설치 드라이브의 공간을 확보한 후 다시 시도하세요.",L"Espace disque insuffisant. Libérez de l’espace sur le disque d’installation et réessayez.",L"No hay suficiente espacio. Libera espacio en la unidad de instalación y vuelve a intentarlo."}},
+{L"The installation drive is low on space. Free space and try again.",{L"安裝磁碟的可用空間很少，請清理空間後再試。",L"インストールドライブの空き容量が少なくなっています。容量を確保して再試行してください。",L"설치 드라이브의 여유 공간이 부족합니다. 공간을 확보한 후 다시 시도하세요.",L"L’espace disponible sur le disque d’installation est faible. Libérez de l’espace et réessayez.",L"Queda poco espacio en la unidad de instalación. Libera espacio y vuelve a intentarlo."}},
 {L"Setup cancelled",{L"安裝已取消",L"セットアップをキャンセルしました",L"설치가 취소되었습니다",L"Installation annulée",L"Instalación cancelada"}},
 {L"If changes had started, Windows Installer attempted to roll them back.",{L"如果變更已開始，Windows Installer 已嘗試復原。",L"変更が開始されていた場合、Windows Installer はロールバックを試みました。",L"변경이 시작된 경우 Windows Installer가 롤백을 시도했습니다.",L"Si des modifications avaient commencé, Windows Installer a tenté de les annuler.",L"Si se habían iniciado cambios, Windows Installer intentó revertirlos."}},
 {L"Update AgentoC",{L"更新 AgentoC",L"AgentoC を更新",L"AgentoC 업데이트",L"Mettre à jour AgentoC",L"Actualizar AgentoC"}},

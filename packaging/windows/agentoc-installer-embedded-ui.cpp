@@ -535,8 +535,8 @@ void DrawMainContent(Gdiplus::Graphics& graphics, const RECT& client, float left
         FillRounded(graphics, Gdiplus::RectF(x, y + Px(44), Px(52), Px(52)), Px(16), failFill);
         DrawText(graphics, L"!", x, y + Px(53), Px(52), Px(25), Color(190, 63, 37), true, Gdiplus::StringAlignmentCenter);
         DrawText(graphics, Text(L"Installation could not finish", L"安装未能完成"), x, y + Px(124), width, Px(26), ink, true);
-        DrawText(graphics, Text(L"Windows Installer rolled back the incomplete changes. Your existing data is preserved.",
-            L"Windows Installer 已回滚未完成的更改，现有数据已保留。"), x, y + Px(170), width, Px(14), muted);
+        DrawText(graphics, Text(L"Check the information below before trying again.",
+            L"请检查下方信息后重试。"), x, y + Px(170), width, Px(14), muted);
         DrawText(graphics, g.errorDetail.empty() ? Text(L"See the Windows Installer log for details.", L"请查看 Windows Installer 日志了解详情。") : g.errorDetail,
             x, y + Px(222), width, Px(12), Color(141, 67, 57));
         break;
@@ -1150,6 +1150,12 @@ extern "C" __declspec(dllexport) INT __stdcall EmbeddedUIHandler(UINT messageTyp
         return IDOK;
     }
     if (message == INSTALLMESSAGE_ERROR || message == INSTALLMESSAGE_FATALEXIT || message == INSTALLMESSAGE_OUTOFDISKSPACE) {
+        const int errorNumber = MsiRecordGetInteger(record, 1);
+        if (message == INSTALLMESSAGE_OUTOFDISKSPACE || errorNumber == 1307 || errorNumber == 112) {
+            PostUiText(3, Text(L"There is not enough disk space. Free space on the installation drive and try again.",
+                L"磁盘空间不足。请清理安装位置所在磁盘的空间后重试。"));
+            return IDOK;
+        }
         if (message == INSTALLMESSAGE_ERROR && MsiRecordGetInteger(record, 1) == 1722
             && CopyRecordField(record, 2) == L"ManagedFreshGuard") {
             PostUiText(3, Text(
@@ -1171,8 +1177,14 @@ extern "C" __declspec(dllexport) INT __stdcall EmbeddedUIHandler(UINT messageTyp
             PostUiText(4, L"");
         } else {
             if (!gHasErrorDetail.load() && !(gCancelRequested.load() && (result == 2 || result == ERROR_INSTALL_USEREXIT))) {
-                const std::wstring code = std::to_wstring(result);
-                PostUiText(3, Text(L"Windows Installer error code: ", L"Windows Installer 错误代码：") + code);
+                ULARGE_INTEGER available{};
+                if (!g.installPath.empty() && GetDiskFreeSpaceExW(g.installPath.c_str(), &available, nullptr, nullptr)
+                    && available.QuadPart < 512ULL * 1024 * 1024) {
+                    PostUiText(3, Text(L"The installation drive is low on space. Free space and try again.",
+                        L"安装位置所在磁盘的可用空间很少，请清理空间后重试。"));
+                } else {
+                    PostUiText(3, Text(L"See the Windows Installer log for details.", L"请查看 Windows Installer 日志了解详情。"));
+                }
             }
             PostUiText(4, L"");
         }
