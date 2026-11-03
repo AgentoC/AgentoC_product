@@ -90,6 +90,7 @@ std::atomic<HWND> gUiWindow{nullptr};
 std::atomic_bool gCancelRequested{false};
 std::atomic_bool gInstallEnded{false};
 std::atomic_bool gHasErrorDetail{false};
+std::wstring gProductCode;
 std::atomic_int gInstallResult{-1};
 std::atomic_int gProgressValue{0};
 std::atomic_int gProgressTicks{0};
@@ -794,7 +795,8 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         } else if (wParam == 3) {
             if (detail && !detail->empty()) g.errorDetail = *detail;
         } else if (wParam == 4) {
-            g.installSucceeded = gInstallResult.load() == ERROR_SUCCESS;
+            // INSTALLEND reports the MSI action return value: 1 means success.
+            g.installSucceeded = gInstallResult.load() == 1;
             if (g.installSucceeded) SetPage(Page::Complete);
             else if (gCancelRequested.load() && (gInstallResult.load() == 2 || gInstallResult.load() == ERROR_INSTALL_USEREXIT)) SetPage(Page::Cancelled);
             else SetPage(Page::Failed);
@@ -1004,6 +1006,7 @@ extern "C" __declspec(dllexport) UINT __stdcall InitializeEmbeddedUI(MSIHANDLE i
     DWORD productCodeLength = static_cast<DWORD>(std::size(productCode));
     if (MsiGetPropertyW(install, L"ProductCode", productCode, &productCodeLength) != ERROR_SUCCESS)
         return ERROR_INSTALL_FAILURE;
+    gProductCode = productCode;
     const bool installed = MsiQueryProductStateW(productCode) == INSTALLSTATE_DEFAULT;
     wchar_t remove[32]{}; DWORD removeLength = static_cast<DWORD>(std::size(remove));
     wchar_t updateAllowed[8]{}; DWORD updateAllowedLength = static_cast<DWORD>(std::size(updateAllowed));
@@ -1168,11 +1171,15 @@ extern "C" __declspec(dllexport) INT __stdcall EmbeddedUIHandler(UINT messageTyp
         return IDOK;
     }
     if (message == INSTALLMESSAGE_INSTALLEND) {
+        // Major upgrades also emit INSTALLEND for the old product's removal.
+        // Only the package owning this UI can end the current installation.
+        const std::wstring product = CopyRecordField(record, 2);
+        if (!product.empty() && _wcsicmp(product.c_str(), gProductCode.c_str()) != 0) return IDOK;
         if (HWND window = gUiWindow.load()) PostMessageW(window, kRestoreInstallerWindow, 0, 0);
         const int result = MsiRecordGetInteger(record, 3);
         gInstallResult.store(result);
         gInstallEnded.store(true);
-        if (result == ERROR_SUCCESS) {
+        if (result == 1) {
             PostUiProgress(100);
             PostUiText(4, L"");
         } else {
