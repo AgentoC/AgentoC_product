@@ -95,6 +95,18 @@ sealed interface TimelineItem {
     ) : TimelineItem
 }
 
+/** Settle the latest turn when the authoritative session says its run ended. */
+fun settleLatestTurnMessages(items: List<TimelineItem>, terminal: Boolean): List<TimelineItem> {
+    if (!terminal) return items
+    val start = items.indexOfLast { it is TimelineItem.Message && it.role == TimelineRole.User }
+    if (start < 0) return items
+    val runId = (items[start] as TimelineItem.Message).runId?.takeIf(String::isNotBlank) ?: return items
+    return items.mapIndexed { index, item ->
+        if (index > start && item is TimelineItem.Message && item.role == TimelineRole.Agent &&
+            item.runId == runId && !item.completed) item.copy(completed = true, messageState = "completed") else item
+    }
+}
+
 data class TimelineEvent(
     val id: String,
     val seq: Long,

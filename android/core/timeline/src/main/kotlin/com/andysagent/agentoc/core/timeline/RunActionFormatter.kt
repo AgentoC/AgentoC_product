@@ -3,6 +3,7 @@ package com.andysagent.agentoc.core.timeline
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.Json
 
 /**
  * The small, human-readable sentence shown while a run is active.  This is a
@@ -31,7 +32,7 @@ object RunActionFormatter {
         }
         val sourceSeq = (activity?.get("sourceSeq") as? JsonPrimitive)?.contentOrNull?.toLongOrNull() ?: 0L
         val liveToolIsNewer = active != null && (sourceSeq == 0L || active.seq == 0L || active.seq > sourceSeq)
-        if (liveToolIsNewer && (canonical == null || canonical.kind in setOf("working", "thinking", "responding"))) {
+        if (liveToolIsNewer && (canonical == null || canonical.kind in setOf("working", "thinking", "think", "responding", "other", "tool"))) {
             return fromOperation(active!!)
         }
         return fromProgressPlan(items, runId) ?: canonical ?: forRun(status, phase, items)
@@ -138,13 +139,21 @@ object RunActionFormatter {
     enum class RunActionStatus { Working, WaitingApproval, Other }
 
     private fun fromOperation(operation: TimelineItem.Operation): RunActionUiState {
+        if (operation.isReasoning) return RunActionUiState("thinking", "Thinking through the task", operationId = operation.id)
         val command = operation.commandText()
         val semantic = command?.let(::parseCommand)
+        val tool = operation.toolName.orEmpty().trim().lowercase()
         val kind = semantic?.first ?: when (operation.kind) {
             TimelineOperationKind.FileEdit -> "edit"
             TimelineOperationKind.Diff -> "inspect"
             TimelineOperationKind.SubAgent -> "delegate"
-            TimelineOperationKind.Tool -> "tool"
+            TimelineOperationKind.Tool -> when (tool) {
+                "read" -> "read"; "glob", "ls" -> "list"; "grep", "search" -> "search"
+                "edit", "write", "multiedit", "notebookedit" -> "edit"
+                "bash", "shell", "execute", "exec" -> "execute"
+                "thinking", "think", "reasoning" -> "thinking"
+                else -> "tool"
+            }
             TimelineOperationKind.Command -> "execute"
             TimelineOperationKind.Unknown -> "working"
         }
@@ -158,12 +167,14 @@ object RunActionFormatter {
             "delegate" -> "Delegating $subject"
             "tool" -> "Using $subject"
             "execute" -> "Running $subject"
+            "thinking" -> "Thinking through the task"
             else -> "Working on $subject"
         }
         return RunActionUiState(kind, sentence, operation.detail.compact(), operation.id)
     }
 
     private fun TimelineItem.Operation.commandText(): String? {
+        inputField("command", "cmd", "script", "shell")?.let { return it }
         val candidates = listOf(inputJson, detail, title, toolName)
         candidates.firstNotNullOfOrNull { value ->
             val text = value.orEmpty()
@@ -177,10 +188,19 @@ object RunActionFormatter {
         kind == TimelineOperationKind.Command || toolName.orEmpty().contains("exec", true) || toolName.orEmpty().contains("shell", true)
 
     private fun TimelineItem.Operation.subject(): String = when {
-        kind == TimelineOperationKind.FileEdit -> basename(title.ifBlank { detail })
+        isReasoning -> "the task"
+        toolName.orEmpty().lowercase() in setOf("read", "write", "edit", "multiedit", "notebookedit") || kind == TimelineOperationKind.FileEdit ->
+            basename(inputField("file_path", "path", "notebook_path") ?: title.takeUnless { it.equals("edit", true) || it.equals("write", true) }.orEmpty().ifBlank { "file" })
+        toolName.orEmpty().lowercase() in setOf("grep", "glob", "search") -> inputField("pattern", "query", "glob")?.let { clipSubject(it, 48) } ?: "workspace"
+        toolName.orEmpty().lowercase() in setOf("bash", "shell", "execute", "exec") -> "command"
         kind == TimelineOperationKind.Diff -> "workspace changes"
         kind == TimelineOperationKind.SubAgent -> title.ifBlank { "sub-agent" }.compact()
         else -> (toolName ?: title).ifBlank { "next step" }.compact()
+    }
+
+    private fun TimelineItem.Operation.inputField(vararg keys: String): String? {
+        val input = runCatching { Json.parseToJsonElement(inputJson.orEmpty()) as? JsonObject }.getOrNull() ?: return null
+        return keys.firstNotNullOfOrNull { key -> (input[key] as? JsonPrimitive)?.contentOrNull?.takeIf(String::isNotBlank) }
     }
 
     private fun parseCommand(raw: String): Pair<String, String> {

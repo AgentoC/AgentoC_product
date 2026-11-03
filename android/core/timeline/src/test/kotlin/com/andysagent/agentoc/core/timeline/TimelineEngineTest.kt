@@ -11,6 +11,37 @@ import com.andysagent.agentoc.core.protocol.SessionEventDto
 import com.andysagent.agentoc.core.model.Message
 
 class TimelineEngineTest {
+    @Test fun canonicalClaudeOperationsRetainStructuredInputForTheActionLine() {
+        fun action(json: String): String? {
+            val dto = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.decodeFromString<SessionEventDto>(json)
+            val live = LiveTimelineProjector().apply(listOf(dto))
+            val items = TimelineProjector.project(emptyList(), live.events)
+            return RunActionFormatter.forRun(RunActionFormatter.RunActionStatus.Working, null, items)?.sentence
+        }
+        assertEquals("Editing report.md", action("""{"type":"operation","seq":1,"operationId":"one","state":"running","kind":"file_edit","toolName":"Write","input":{"file_path":"/work/report.md"}}"""))
+        assertEquals("Listing workspace", action("""{"type":"operation","seq":1,"operationId":"two","state":"running","kind":"execute","input":{"command":"ls -l"}}"""))
+    }
+    @Test fun authoritativeTerminalStatusSettlesOnlyTheLatestMatchingRun() {
+        val old = TimelineItem.Message("old", 1, TimelineRole.Agent, "old", false, runId = "old-run")
+        val prompt = TimelineItem.Message("user", 2, TimelineRole.User, "request", true, runId = "run-1")
+        val answer = TimelineItem.Message("live", 3, TimelineRole.Agent, "answer", false, runId = "run-1")
+        val other = TimelineItem.Message("other", 4, TimelineRole.Agent, "other", false, runId = "run-2")
+        val items = listOf(old, prompt, answer, other)
+        assertEquals(items, settleLatestTurnMessages(items, false))
+        val settled = settleLatestTurnMessages(items, true)
+        assertTrue((settled[2] as TimelineItem.Message).completed)
+        assertEquals(false, (settled[0] as TimelineItem.Message).completed)
+        assertEquals(false, (settled[3] as TimelineItem.Message).completed)
+    }
+    @Test fun liveTerminalEventSettlesTheRunAndRejectsLateUnsequencedTokens() {
+        val projector = LiveTimelineProjector()
+        projector.apply(listOf(SessionEventDto(id = "delta", type = "text_delta", entityId = "block-1", runId = "run-1", text = "answer")))
+        val terminal = projector.apply(listOf(SessionEventDto(id = "terminal", type = "status", runId = "run-1", runState = "completed")))
+        assertEquals("completed", terminal.events.single().messageState)
+        val late = projector.apply(listOf(SessionEventDto(id = "late", type = "text_delta", entityId = "block-1", runId = "run-1", text = "stale")))
+        assertEquals("answer", late.events.single().text)
+        assertEquals("completed", late.events.single().messageState)
+    }
     @Test
     fun durableRunCompletionRetiresMismatchedLiveBlockAndIgnoresLateDeltas() {
         val projector = LiveTimelineProjector()

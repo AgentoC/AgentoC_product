@@ -738,6 +738,7 @@ data class SessionEventDto(
     val command: String? = null,
     val outputPreview: JsonElement? = null,
     val toolName: String? = null,
+    val input: JsonElement? = null,
     val toolInput: JsonElement? = null,
     val toolOutput: JsonElement? = null,
     val attachments: List<AttachmentItemDto> = emptyList(),
@@ -1119,8 +1120,8 @@ fun SessionEventDto.allAttachments(): List<AttachmentItemDto> = when {
     else -> emptyList()
 }
 
-fun SessionEventDto.toolInputText(): String? = (toolInput as? JsonPrimitive)?.contentOrNull
-    ?: toolInput?.toString()
+fun SessionEventDto.toolInputText(): String? = ((toolInput ?: input) as? JsonPrimitive)?.contentOrNull
+    ?: (toolInput ?: input)?.toString()
 
 fun SessionEventDto.toolOutputText(): String? = (toolOutput as? JsonPrimitive)?.contentOrNull
     ?: toolOutput?.toString()

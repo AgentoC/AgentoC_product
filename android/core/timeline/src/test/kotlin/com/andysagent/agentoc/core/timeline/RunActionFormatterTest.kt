@@ -5,6 +5,17 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class RunActionFormatterTest {
+    @Test fun claudeToolsUseTheirStructuredInputsInsteadOfRawToolNames() {
+        fun action(name: String, input: String, reasoning: Boolean = false): String? {
+            val op = TimelineItem.Operation("op", 1, TimelineOperationKind.Tool, name, "", TimelineOperationStatus.InProgress,
+                toolName = name, inputJson = input, isReasoning = reasoning)
+            return RunActionFormatter.forRun(RunActionFormatter.RunActionStatus.Working, null, listOf(op))?.sentence
+        }
+        assertEquals("Editing internet-and-web.md", action("Write", """{"file_path":"/work/internet-and-web.md","content":"private body"}"""))
+        assertEquals("Reading README.md", action("Read", """{"file_path":"/work/README.md"}"""))
+        assertEquals("Listing workspace", action("Bash", """{"command":"ls -l"}"""))
+        assertEquals("Thinking through the task", action("thinking", "{}", reasoning = true))
+    }
     @Test fun realToolSupersedesStaleRespondingSnapshotButNotANewerCanonicalUpdate() {
         val activity = kotlinx.serialization.json.Json.parseToJsonElement(
             """{"state":"working","kind":"responding","sourceSeq":10,"runId":"run-a"}"""

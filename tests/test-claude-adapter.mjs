@@ -207,6 +207,19 @@ assert.equal(multiBlockEvents[1].content, 'part.');
 assert.equal(multiBlockEvents[3].content, 'After tool.');
 assert.deepEqual(multiBlockEvents.filter(e => e.type === 'message').map(e => e.providerContentBlockIndex), [0, 1, 3]);
 
+// A relay can omit thinking from the final snapshot while retaining its
+// original index in streaming events. Both paths must identify the same row.
+const filteredBlocks = createClaudeAdapter();
+filteredBlocks.parseLine(JSON.stringify({ type: 'stream_event', event: { type: 'message_start', message: { id: 'msg-filtered' } } }));
+const streamed = filteredBlocks.parseLine(JSON.stringify({ type: 'stream_event', event: {
+  type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'Done' },
+} }));
+const finalized = filteredBlocks.parseLine(JSON.stringify({ type: 'assistant', message: {
+  id: 'msg-filtered', content: [{ type: 'text', text: 'Done' }],
+} }));
+assert.equal(streamed[0].messageBlockIndex, 1);
+assert.equal(finalized[0].providerContentBlockIndex, 1);
+
 const userToolResultEvents = adapter.parseLine(JSON.stringify({
   type: 'user',
   message: {

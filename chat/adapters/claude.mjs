@@ -194,6 +194,7 @@ export function createClaudeAdapter() {
   let completedTurn = false;
   let streamingMessageId = '';
   let streamingDeltaOrdinal = 0;
+  let streamingTextBlockIndexes = [];
   // Upstream-reported model for the current turn (assistant/message_start
   // frames carry it).  Gateways remap tier aliases — the requested model and
   // the served model can differ (observed: glm-5.2 requested, glm-4.7
@@ -295,12 +296,19 @@ export function createClaudeAdapter() {
             }
             let textParts = [];
             let textBlockOrdinal = 0;
+            let textOrdinal = 0;
             const flushTextParts = () => {
               if (textParts.length === 0) return;
               const text = textParts.join('');
               textParts = [];
               if (!text) return;
-              const contentBlockIndex = textBlockOrdinal;
+              // Some Claude-compatible relays omit thinking blocks from the
+              // final snapshot while retaining their indexes in the stream.
+              // Bind each text snapshot to the corresponding streamed block.
+              const contentBlockIndex = providerMessageId && providerMessageId === streamingMessageId
+                ? (streamingTextBlockIndexes[textOrdinal] ?? textBlockOrdinal)
+                : textBlockOrdinal;
+              textOrdinal += 1;
               textBlockOrdinal += 1;
               events.push(messageEvent('assistant', text, undefined, frameProviderFields({
                 ...(providerMessageId ? { providerMessageId } : {}),
@@ -505,6 +513,7 @@ export function createClaudeAdapter() {
           if (evt.type === 'message_start') {
             streamingMessageId = typeof evt.message?.id === 'string' ? evt.message.id : '';
             streamingDeltaOrdinal = 0;
+            streamingTextBlockIndexes = [];
           }
           if (evt.type === 'message_start' && typeof evt.message?.model === 'string' && evt.message.model.trim()) {
             upstreamModel = evt.message.model.trim();
@@ -512,6 +521,7 @@ export function createClaudeAdapter() {
           if (evt.type === 'content_block_delta') {
             if (evt.delta?.type === 'text_delta') {
               const blockIndex = Number.isInteger(evt.index) ? evt.index : 0;
+              if (!streamingTextBlockIndexes.includes(blockIndex)) streamingTextBlockIndexes.push(blockIndex);
               streamingDeltaOrdinal += 1;
               events.push(textDeltaEvent(blockIndex, evt.delta.text || '', frameProviderFields({
                 ...(streamingMessageId ? { providerMessageId: streamingMessageId } : {}),

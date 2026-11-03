@@ -176,6 +176,7 @@ class LiveTimelineProjector {
     private fun upsertRenderedEvent(event: SessionEventDto, renderSeq: Long) {
         if (event.source == "context_compaction_handoff" || event.type == "context_barrier") return
         event.terminalRunState()?.let { state ->
+            event.runId?.takeIf(String::isNotBlank)?.let(terminalRunIds::add)
             messageStates.entries.toList().forEach { (id, message) ->
                 val inScope = if (!event.runId.isNullOrBlank()) message.runId == event.runId
                     else !event.requestId.isNullOrBlank() && message.requestId == event.requestId
@@ -319,7 +320,7 @@ class LiveTimelineProjector {
         val revision = event.revision ?: maxOf(renderSeq, revisionClock + 1L)
         revisionClock = maxOf(revisionClock, revision)
 
-        val toolName = event.toolName ?: previous?.toolName ?: event.title
+        val toolName = event.toolName?.takeIf { it.isNotBlank() } ?: previous?.toolName ?: event.kind ?: event.title
         val inputJson = event.toolInputText() ?: previous?.inputJson
         val preview = event.outputPreview as? JsonObject
         val previewLines = listOf("head", "tail").flatMap { key ->
@@ -357,14 +358,15 @@ class LiveTimelineProjector {
             )
         }.ifEmpty { previous?.attachments.orEmpty() }
 
+        val normalizedToolName = toolName.orEmpty().lowercase()
         val operationKind = when {
             isReasoning -> TimelineOperationKind.Tool
             isFileChange -> TimelineOperationKind.Diff
             isToolUse || isToolResult -> when {
-                event.kind == "command" || toolName?.contains("command") == true || toolName?.contains("exec") == true || toolName?.contains("bash") == true -> TimelineOperationKind.Command
-                toolName?.contains("edit") == true || toolName?.contains("write") == true || toolName?.contains("replace") == true -> TimelineOperationKind.FileEdit
-                toolName?.contains("diff") == true || toolName?.contains("file") == true -> TimelineOperationKind.Diff
-                toolName?.contains("agent") == true -> TimelineOperationKind.SubAgent
+                event.kind in setOf("command", "execute") || normalizedToolName.contains("command") || normalizedToolName.contains("exec") || normalizedToolName.contains("bash") -> TimelineOperationKind.Command
+                event.kind in setOf("file_edit", "edit", "write") || normalizedToolName.contains("edit") || normalizedToolName.contains("write") || normalizedToolName.contains("replace") -> TimelineOperationKind.FileEdit
+                normalizedToolName.contains("diff") || normalizedToolName.contains("file") -> TimelineOperationKind.Diff
+                normalizedToolName.contains("agent") -> TimelineOperationKind.SubAgent
                 else -> TimelineOperationKind.Tool
             }
             type.contains("command") -> TimelineOperationKind.Command

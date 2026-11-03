@@ -14,6 +14,14 @@ import org.junit.Test
 class TimelineChronologyUiTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun claudeFileActivityDisplaysItsFilename() {
+        val op = TimelineItem.Operation("write", 2, TimelineOperationKind.Tool, "Write", "", TimelineOperationStatus.InProgress,
+            toolName = "Write", inputJson = """{"file_path":"/work/internet-and-web.md"}""")
+        val action = RunActionFormatter.forRun(RunActionFormatter.RunActionStatus.Working, null, listOf(op))
+        rule.setContent { AgentocTheme { ActiveRunActionBar(com.andysagent.agentoc.core.agentui.AgentRunStatus.Working, action?.sentence) } }
+        rule.onNodeWithText("Editing internet-and-web.md").assertIsDisplayed()
+    }
+
     @Test fun thinkingExpandsAndToolRecordsStayHidden() {
         val items = listOf(
             TimelineItem.Message("u", 1, TimelineRole.User, "Inspect the file", true),
