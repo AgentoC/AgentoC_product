@@ -196,7 +196,8 @@ void DrawRoundedOutline(Gdiplus::Graphics& graphics, const Gdiplus::RectF& rect,
 }
 
 void DrawText(Gdiplus::Graphics& graphics, const std::wstring& value, float x, float y, float width,
-              float size, Gdiplus::Color color, bool semibold = false, Gdiplus::StringAlignment alignment = Gdiplus::StringAlignmentNear) {
+              float size, Gdiplus::Color color, bool semibold = false, Gdiplus::StringAlignment alignment = Gdiplus::StringAlignmentNear,
+              float maxLines = 3.0f) {
     Gdiplus::FontFamily family(L"Segoe UI");
     Gdiplus::Font font(&family, size, semibold ? Gdiplus::FontStyleBold : Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
     Gdiplus::SolidBrush brush(color);
@@ -206,7 +207,7 @@ void DrawText(Gdiplus::Graphics& graphics, const std::wstring& value, float x, f
     format.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
     format.SetFormatFlags(Gdiplus::StringFormatFlagsLineLimit);
     graphics.DrawString(value.c_str(), static_cast<INT>(value.size()), &font,
-        Gdiplus::RectF(x, y, width, size * 3.0f), &format, &brush);
+        Gdiplus::RectF(x, y, width, size * maxLines), &format, &brush);
 }
 
 RECT ClientRect(HWND window) {
@@ -434,7 +435,8 @@ void DrawBrandPanel(Gdiplus::Graphics& graphics, const RECT& client, float width
     graphics.FillRectangle(&divider, static_cast<Gdiplus::REAL>(Px(43)), static_cast<Gdiplus::REAL>(Px(286)), width - Px(86), static_cast<Gdiplus::REAL>(Px(1)));
     DrawText(graphics, Text(L"Private by design", L"为私有而设计"), Px(43), Px(315), width - Px(76), Px(13), Color(49, 57, 73), true);
     DrawText(graphics, Text(L"Manage models, devices, and local runtimes in one place.", L"在一个地方管理模型、设备和本地运行环境。"),
-        Px(43), Px(342), width - Px(80), Px(13), Color(104, 113, 130));
+        Px(43), Px(365), width - Px(80), Px(12), Color(104, 113, 130), false,
+        Gdiplus::StringAlignmentNear, 5.0f);
     DrawText(graphics, L"AGENTOC  ·  WINDOWS", Px(43), client.bottom - Px(38), width - Px(72), Px(10), Color(135, 143, 158), true);
 }
 
