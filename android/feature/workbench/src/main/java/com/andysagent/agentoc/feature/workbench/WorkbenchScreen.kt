@@ -4930,7 +4930,7 @@ private fun BrokerPhoneEnrollmentDialog(
 
     androidx.compose.runtime.LaunchedEffect(targetInstanceId) { refreshChallenge() }
 
-    androidx.compose.material3.AlertDialog(
+    com.andysagent.agentoc.core.designsystem.AgentoAlertDialog(
         onDismissRequest = { if (!completing) onDismiss() },
         title = { Text(stringResource(R.string.windows_broker_enrollment_title)) },
         text = {

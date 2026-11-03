@@ -346,11 +346,16 @@ private fun CapturePickerSheet(panel: CapturePanel, state: CaptureUiState, onEve
     val localizedConfiguration = LocalConfiguration.current
     val localizedDensity = LocalDensity.current
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = colors.canvas, contentColor = colors.primaryContent, shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)) {
+        containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = colors.primaryContent,
+        dragHandle = null, shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)) {
         CompositionLocalProvider(LocalContext provides localizedContext, LocalConfiguration provides localizedConfiguration,
             LocalDensity provides localizedDensity) {
+            com.andysagent.agentoc.core.designsystem.AgentoCapsuleGlassBox(
+                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)) {
             Column(Modifier.fillMaxWidth().heightIn(max = 680.dp).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 12.dp)
+                    .size(width = 36.dp, height = 4.dp).clip(RoundedCornerShape(50)).background(colors.secondaryContent.copy(alpha = 0.32f)))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(when (panel) { CapturePanel.MATERIAL -> R.string.api_capture_source
                         CapturePanel.COMPUTER -> R.string.api_capture_computer; CapturePanel.RUNTIME -> R.string.share_execution }),
@@ -414,6 +419,7 @@ private fun CapturePickerSheet(panel: CapturePanel, state: CaptureUiState, onEve
                     }
                 }
                 Spacer(Modifier.height(20.dp))
+            }
             }
         }
     }

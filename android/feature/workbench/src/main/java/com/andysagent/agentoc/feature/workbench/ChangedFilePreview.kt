@@ -5,7 +5,7 @@ import android.graphics.Color as AndroidColor
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -25,6 +25,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.andysagent.agentoc.core.agentui.AgentMarkdown
 import com.andysagent.agentoc.core.designsystem.LocalAgentocColors
+import com.andysagent.agentoc.core.designsystem.AgentoBackdropTone
+import com.andysagent.agentoc.core.designsystem.AgentoFrostedGlassBox
+import com.andysagent.agentoc.core.designsystem.AgentoGlassMaterial
+import com.andysagent.agentoc.core.designsystem.AgentoGlassSurface
+import com.andysagent.agentoc.core.designsystem.AgentoModalBackgroundDim
+import com.andysagent.agentoc.core.designsystem.theme.AgentoFrostedTokens
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -63,7 +69,17 @@ internal fun ChangedFilePreview(path: String, state: WebParityUiState, onDismiss
         }
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Column(Modifier.fillMaxWidth(0.94f).fillMaxHeight(0.9f).background(colors.canvas).padding(16.dp)) {
+        val isDark = colors.canvas.red < 0.5f
+        AgentoModalBackgroundDim(amount = if (isDark) 0.20f else 0.16f)
+        AgentoFrostedGlassBox(
+            modifier = Modifier.fillMaxWidth(0.94f).fillMaxHeight(0.9f),
+            shape = RoundedCornerShape(28.dp), surface = AgentoGlassSurface.Neutral,
+            blurRadius = AgentoFrostedTokens.BlurNavigation, showTopHairline = true,
+            material = AgentoGlassMaterial.LiquidClear, backdropTone = AgentoBackdropTone.QuietHeader,
+            specularBrush = if (isDark) AgentoFrostedTokens.SpecularBorderDark else AgentoFrostedTokens.SpecularBorderLight,
+            hasShadow = false,
+        ) {
+        Column(Modifier.fillMaxSize().padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(path.substringAfterLast('/').substringAfterLast('\\'), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.changed_file_close)) }
@@ -90,6 +106,7 @@ internal fun ChangedFilePreview(path: String, state: WebParityUiState, onDismiss
                 }
                 else -> Text(stringResource(R.string.changed_file_unavailable))
             }
+        }
         }
     }
 }

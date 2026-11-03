@@ -610,12 +610,14 @@ fun DiffViewerModal(
                     )
                 },
             shape = androidx.compose.ui.graphics.RectangleShape,
-            surface = AgentoGlassSurface.BrushOverlay(if (isDark) AgentoFrostedTokens.DarkDockGlassBrush else AgentoFrostedTokens.LightDockGlassBrush),
+            surface = AgentoGlassSurface.Neutral,
             blurRadius = AgentoFrostedTokens.BlurNavigation,
             showTopHairline = true,
             backdropLayer = backdropLayer,
             backdropOffset = backdropOffset,
             material = AgentoGlassMaterial.LiquidClear,
+            backdropTone = com.andysagent.agentoc.core.designsystem.AgentoBackdropTone.QuietHeader,
+            specularBrush = if (isDark) AgentoFrostedTokens.SpecularBorderDark else AgentoFrostedTokens.SpecularBorderLight,
             hasShadow = false,
         ) {
             Column(modifier = Modifier.fillMaxSize()) {

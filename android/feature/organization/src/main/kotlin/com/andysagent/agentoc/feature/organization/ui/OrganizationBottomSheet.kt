@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.andysagent.agentoc.core.designsystem.AgentoButton
+import com.andysagent.agentoc.core.designsystem.AgentoCapsuleGlassBox
 import com.andysagent.agentoc.core.designsystem.AgentoColors
 import com.andysagent.agentoc.core.designsystem.AgentoConversationTypography
 import com.andysagent.agentoc.core.designsystem.AgentoShapes
@@ -51,10 +52,12 @@ fun OrganizationBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = if (isDark) Color(0xFF262626).copy(alpha = 0.88f) else Color.White.copy(alpha = 0.82f),
+        containerColor = Color.Transparent,
+        dragHandle = null,
         shape = AgentoShapes.BottomSheetShape,
         scrimColor = colors.glassScrim.copy(alpha = if (isDark) 0.22f else 0.18f),
     ) {
+        AgentoCapsuleGlassBox(modifier = Modifier.fillMaxWidth(), shape = AgentoShapes.BottomSheetShape) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -62,6 +65,8 @@ fun OrganizationBottomSheet(
                 .navigationBarsPadding()
                 .padding(bottom = AgentoSpacing.md),
         ) {
+            Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 12.dp, bottom = 16.dp)
+                .size(width = 36.dp, height = 4.dp).clip(CircleShape).background(colors.secondaryContent.copy(alpha = 0.32f)))
             // Header: Name + Status badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -167,6 +172,7 @@ fun OrganizationBottomSheet(
                     secondary = node.isRootLeader,
                 )
             }
+        }
         }
     }
 }

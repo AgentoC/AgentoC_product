@@ -537,16 +537,15 @@ fun AgentoFrostedModalBottomSheet(
                         )
                     },
                 shape = shape,
-                surface = AgentoGlassSurface.BrushOverlay(if (isDark) AgentoFrostedTokens.DarkDockGlassBrush else AgentoFrostedTokens.LightDockGlassBrush),
+                surface = AgentoGlassSurface.Neutral,
                 blurRadius = AgentoFrostedTokens.BlurNavigation,
                 showTopHairline = true,
                 backdropLayer = backdropLayer,
                 backdropOffset = backdropOffset,
-                material = AgentoGlassMaterial.ModalMilky,
-                hasShadow = true,
-                shadowElevation = 16.dp,
-                shadowAlpha = if (isDark) 0.16f else 0.08f,
-                shadowSpotAlpha = if (isDark) 0.14f else 0.05f,
+                material = AgentoGlassMaterial.LiquidClear,
+                backdropTone = AgentoBackdropTone.QuietHeader,
+                specularBrush = if (isDark) AgentoFrostedTokens.SpecularBorderDark else AgentoFrostedTokens.SpecularBorderLight,
+                hasShadow = false,
             ) {
                 Column(
                     modifier = Modifier
@@ -1698,6 +1697,8 @@ fun AgentoDialog(
 ) {
     val colors = LocalAgentocColors.current
     val pageBackdropOrigin = LocalAgentoPageBackdropOrigin.current
+    val localizedContext = androidx.compose.ui.platform.LocalContext.current
+    val localizedConfiguration = androidx.compose.ui.platform.LocalConfiguration.current
     var backdropOffset by remember(backdropLayer) { mutableStateOf(IntOffset.Zero) }
     Dialog(
         onDismissRequest = onDismissRequest,
@@ -1765,18 +1766,16 @@ fun AgentoDialog(
                         )
                     },
                 shape = dialogShape,
-                // Sheets need more separation than the translucent dock, but
-                // not a white Material card. A single cool milky fill keeps
-                // the page context visible without allowing background text
-                // to read through the form.
-                surface = AgentoGlassSurface.BrushOverlay(if (isDark) AgentoFrostedTokens.DarkDockGlassBrush else AgentoFrostedTokens.LightDockGlassBrush),
+                // Use the same neutral glass treatment as the chat capsule.
+                surface = AgentoGlassSurface.Neutral,
                 blurRadius = AgentoFrostedTokens.BlurNavigation,
                 showTopHairline = true,
                 backdropLayer = backdropLayer,
                 backdropOffset = backdropOffset,
                 material = AgentoGlassMaterial.LiquidClear,
-                hasShadow = true,
-                shadowElevation = 24.dp,
+                backdropTone = AgentoBackdropTone.QuietHeader,
+                specularBrush = if (isDark) AgentoFrostedTokens.SpecularBorderDark else AgentoFrostedTokens.SpecularBorderLight,
+                hasShadow = false,
             ) {
                 Column(
                     Modifier.padding(
@@ -1835,6 +1834,8 @@ fun AgentoDialog(
                     ) {
                         CompositionLocalProvider(
                             LocalContentColor provides colors.primaryContent,
+                            androidx.compose.ui.platform.LocalContext provides localizedContext,
+                            androidx.compose.ui.platform.LocalConfiguration provides localizedConfiguration,
                         ) {
                             content()
                         }

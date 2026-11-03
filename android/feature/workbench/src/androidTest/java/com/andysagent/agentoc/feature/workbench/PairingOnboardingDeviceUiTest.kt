@@ -5,13 +5,28 @@ import android.graphics.Bitmap
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import com.andysagent.agentoc.core.designsystem.AgentoAlertDialog
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -122,13 +137,59 @@ class PairingOnboardingDeviceUiTest {
 
     @Test fun scanGuideExplainsDesktopSetupAndOpensScanner() {
         var scanned = false
+        var locale by mutableStateOf(Locale.SIMPLIFIED_CHINESE)
+        rule.activityRule.scenario.onActivity { it.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
         rule.setContent {
-            AgentocTheme { PairingScanGuideDialog(onScan = { scanned = true }, onDismiss = {}) }
+            key(locale) {
+                val configuration = Configuration(rule.activity.resources.configuration).apply { setLocale(locale) }
+                val localized = rule.activity.createConfigurationContext(configuration)
+                CompositionLocalProvider(LocalContext provides localized, LocalConfiguration provides configuration) {
+                    AgentocTheme {
+                        Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFFB9D5FF), Color(0xFFFFD7BC)))))
+                        PairingScanGuideDialog(onScan = { scanned = true }, onDismiss = {})
+                    }
+                }
+            }
         }
-        val resources = rule.activity.resources
-        rule.onNodeWithText(resources.getString(R.string.pairing_setup_guide_install)).assertIsDisplayed()
-        rule.onNodeWithText("https://www.agentoncloud.com/download.html").assertIsDisplayed()
-        rule.onNodeWithText(resources.getString(R.string.pairing_setup_guide_scan)).performClick()
+        val languages = listOf(Locale.ENGLISH, Locale.SIMPLIFIED_CHINESE, Locale.TRADITIONAL_CHINESE,
+            Locale.JAPANESE, Locale.KOREAN, Locale.FRENCH, Locale("es"))
+        for (language in languages) {
+            rule.runOnIdle { locale = language }
+            val configuration = Configuration(rule.activity.resources.configuration).apply { setLocale(language) }
+            val resources = rule.activity.createConfigurationContext(configuration).resources
+            rule.onNodeWithText(resources.getString(R.string.pairing_setup_guide_title)).assertIsDisplayed()
+            rule.onNodeWithText(resources.getString(R.string.pairing_setup_guide_install)).assertIsDisplayed()
+            rule.onNodeWithText("https://www.agentoncloud.com/download.html").assertIsDisplayed()
+            rule.onNodeWithText(resources.getString(R.string.pairing_setup_guide_scan)).assertIsDisplayed().assertHasClickAction()
+            capture("scan-guide-${language.toLanguageTag()}-top.png")
+            rule.onNodeWithText(resources.getString(R.string.pairing_setup_guide_desktop)).performScrollTo().assertIsDisplayed()
+            rule.onNodeWithText(resources.getString(R.string.pairing_setup_guide_scan_help)).performScrollTo().assertIsDisplayed()
+            capture("scan-guide-${language.toLanguageTag()}-bottom.png")
+        }
+        val spanish = rule.activity.createConfigurationContext(Configuration(rule.activity.resources.configuration).apply { setLocale(Locale("es")) }).resources
+        rule.onNodeWithText(spanish.getString(R.string.pairing_setup_guide_scan)).performClick()
         assertTrue(scanned)
+    }
+
+    @Test fun sharedAlertUsesReadableGlassInBothThemes() {
+        var dark by mutableStateOf(false)
+        var confirmed = false
+        rule.activityRule.scenario.onActivity { it.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+        rule.setContent {
+            AgentocTheme(darkTheme = dark) {
+                Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFFB9D5FF), Color(0xFFFFD7BC)))))
+                AgentoAlertDialog(onDismissRequest = {}, title = { Text("Glass dialog") },
+                    text = { Text("Readable content") }, confirmButton = { TextButton(onClick = { confirmed = true }) { Text("Confirm") } })
+            }
+        }
+        for (mode in listOf(false, true)) {
+            rule.runOnIdle { dark = mode }
+            rule.onNodeWithText("Glass dialog").assertIsDisplayed()
+            rule.onNodeWithText("Readable content").assertIsDisplayed()
+            rule.onNodeWithText("Confirm").assertIsDisplayed().assertHasClickAction()
+            capture(if (mode) "glass-alert-dark.png" else "glass-alert-light.png")
+        }
+        rule.onNodeWithText("Confirm").performClick()
+        assertTrue(confirmed)
     }
 }

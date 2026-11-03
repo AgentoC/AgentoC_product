@@ -25,7 +25,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.material3.AlertDialog
+import com.andysagent.agentoc.core.designsystem.AgentoAlertDialog as AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -1888,7 +1888,6 @@ private fun BrowserSignInWaitingOverlay(
         dismissButton = {
             TextButton(onClick = onCancel) { Text("Cancel") }
         },
-        containerColor = colors.quietSurface,
         titleContentColor = colors.primaryContent,
         textContentColor = colors.secondaryContent,
     )
