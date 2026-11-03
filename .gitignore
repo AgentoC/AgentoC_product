@@ -18,6 +18,7 @@ tests/test-notification-containers-visual.mjs
 tests/live-*
 tests/windows-medium-*
 tests/results/
+/artifacts/
 scripts/windows-a0-smoke.mjs
 /automation/instance-factory/manifests/
 /automation/instance-factory/profiles/
