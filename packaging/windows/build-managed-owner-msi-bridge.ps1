@@ -2,7 +2,7 @@
 param([Parameter(Mandatory=$true)][string]$OutputPath)
 $ErrorActionPreference='Stop'
 $root=$PSScriptRoot;$null=New-Item -ItemType Directory -Force -Path ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($OutputPath)))
-$resources=@('read-owner-bootstrap-discovery.ps1','prepare-owner-services.ps1','prepare-owner-service-data.ps1','managed-owner-msi.ps1','initialize-owner-service-identity.ps1','prepare-owner-install-policy.ps1','prepare-owner-msi-policy.ps1','prepare-owner-msi-upgrade.ps1','remove-owner-msi-policy.ps1','rollback-owner-msi-uninstall.ps1','check-owner-msi-upgrade.ps1','check-owner-msi-activation.ps1','owner-activation-service-read.cs','owner-service-activation-trial.cs','owner-service-activation-transaction.cs','AgentoC.ServiceHost.cs')|ForEach-Object {('/resource:'+(Join-Path $root $_)+','+$_)}
+$resources=@('read-owner-bootstrap-discovery.ps1','prepare-owner-services.ps1','prepare-owner-service-data.ps1','managed-owner-msi.ps1','initialize-owner-service-identity.ps1','prepare-owner-install-policy.ps1','prepare-owner-msi-policy.ps1','prepare-owner-msi-upgrade.ps1','remove-owner-msi-policy.ps1','rollback-owner-msi-uninstall.ps1','prevalidate-owner-msi.ps1','check-owner-msi-upgrade.ps1','check-owner-msi-activation.ps1','owner-activation-service-read.cs','owner-service-activation-trial.cs','owner-service-activation-transaction.cs','AgentoC.ServiceHost.cs')|ForEach-Object {('/resource:'+(Join-Path $root $_)+','+$_)}
 # MSI launches this helper directly. A console-subsystem executable can flash
 # a terminal window during interactive installation or removal; a GUI
 # subsystem still supports explicitly redirected stdout/stderr for diagnostics.

@@ -12,6 +12,7 @@
   <?ifndef MsiUpgradeLane?><?define MsiUpgradeLane = "major"?><?endif?>
   <?ifndef MsiUpgradeStrategy?><?define MsiUpgradeStrategy = "majorUpgrade"?><?endif?>
   <?ifndef ExperimentalMajorUpgrade?><?define ExperimentalMajorUpgrade = "0"?><?endif?>
+  <?ifndef EarlyServiceQuiescence?><?define EarlyServiceQuiescence = "0"?><?endif?>
   <!-- WiX 5+ otherwise supplies a default major upgrade, including RemoveExistingProducts. -->
   <Package Name="AgentoC" Manufacturer="AgentoC" Version="$(var.MsiProductVersion)" ProductCode="$(var.ProductCode)" UpgradeCode="2D1D9C6B-5BA7-4C70-9A7A-7E7A55E3A001" UpgradeStrategy="$(var.MsiUpgradeStrategy)" Scope="perMachine">
     <?if $(var.MsiUpgradeLane) = "major" ?>
@@ -79,6 +80,11 @@
     <CustomAction Id="ManagedCloseDesktop" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="close-desktop &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedCloseDesktopForMajorUpdate" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="close-desktop &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedCloseDesktopForUpdate" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="close-desktop &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
+    <?if $(var.EarlyServiceQuiescence) = "1" ?>
+    <CustomAction Id="ManagedPreValidationRollback" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="prevalidate-rollback $(var.ProductVersion) $(var.BrokerSha256) &quot;[INSTALLFOLDER].&quot;" Execute="rollback" Impersonate="no" Return="ignore" />
+    <CustomAction Id="ManagedPreValidationStop" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="prevalidate-stop $(var.ProductVersion) $(var.BrokerSha256) &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
+    <CustomAction Id="ManagedPreValidationCommit" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="prevalidate-commit &quot;[INSTALLFOLDER].&quot;" Execute="commit" Impersonate="no" Return="check" />
+    <?endif?>
     <CustomAction Id="ManagedConfigureBrokerServiceTrust" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="configure-broker-service $(var.ProductVersion) $(var.BrokerSha256) &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedConfigureBrokerServiceTrustUpgrade" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="configure-broker-service $(var.ProductVersion) $(var.BrokerSha256) &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedBrokerOwnerReset" FileRef="PrivilegedBrokerBinary" ExeCommand="admin owner-reset" Execute="deferred" Impersonate="no" Return="check" />
@@ -142,7 +148,11 @@
       <!-- Rollback is registered before old-product removal, so it runs after
            the predecessor MSI has recreated its Broker service. -->
       <Custom Action="ManagedMajorBrokerRollback" After="ManagedCloseDesktopForMajorUpdate" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
+      <?if $(var.EarlyServiceQuiescence) = "1" ?>
+      <InstallExecuteAgain After="ManagedMajorBrokerRollback" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
+      <?else?>
       <InstallExecute After="ManagedMajorBrokerRollback" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
+      <?endif?>
       <Custom Action="ManagedUpgradeRollback" After="RemoveExistingProducts" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
       <Custom Action="ManagedUpgradeBegin" After="ManagedUpgradeRollback" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
       <?else?>
@@ -152,6 +162,12 @@
       <Custom Action="ManagedFreshGuard" Before="InstallValidate" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
       <Custom Action="ManagedRemoveGuard" Before="InstallValidate" Condition="Installed AND REMOVE = &quot;ALL&quot;" />
       <Custom Action="ManagedCloseDesktopBeforeValidation" After="ManagedRemoveGuard" Condition="Installed AND REMOVE = &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <?if $(var.EarlyServiceQuiescence) = "1" ?>
+      <Custom Action="ManagedPreValidationRollback" Before="ManagedPreValidationStop" Condition="Installed AND REMOVE = &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="ManagedPreValidationStop" Before="InstallExecute" Condition="Installed AND REMOVE = &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <InstallExecute Before="InstallValidate" Condition="(Installed AND REMOVE = &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE) OR (WIX_UPGRADE_DETECTED AND NOT Installed)" />
+      <Custom Action="ManagedPreValidationCommit" Before="InstallFinalize" Condition="Installed AND REMOVE = &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <?endif?>
       <Custom Action="ManagedCloseDesktop" Before="ManagedRemoveRollback" Condition="Installed AND REMOVE = &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
       <Custom Action="ManagedRemoveRollback" Before="ManagedBrokerOwnerReset" Condition="Installed AND REMOVE = &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
       <Custom Action="ManagedBrokerOwnerReset" Before="StopServices" Condition="Installed AND REMOVE = &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />

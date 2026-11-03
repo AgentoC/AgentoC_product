@@ -432,6 +432,40 @@ static class ManagedOwnerMsiBridge {
   int result=Run("UpgradeCommit",null);if(result!=0)return result;
   Console.WriteLine("OMI_RECOVERY_COMMITTED");return 0;
  }
+ static bool PrevalidationMarker(){
+  string path=Path.Combine(Product,"owner-msi.prevalidation-lock");
+  if(!Present(path))return false;
+  ValidateProductRoot();
+  using(var stream=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read)){
+   ServiceDirectoryPin.VerifyFile(stream.SafeFileHandle,path);Acl(path,false,false);
+   Need(stream.Length>0&&stream.Length<=128,"OMI_PREVALIDATION_MARKER_INVALID");
+   using(var reader=new StreamReader(stream,new UTF8Encoding(false,true)))Need(reader.ReadToEnd()=="agentoc-msi-prevalidation-v1\n","OMI_PREVALIDATION_MARKER_INVALID");
+  }
+  return true;
+ }
+ static int PrevalidationRollback(string version,string expectedSha256){
+  Need(WindowsIdentity.GetCurrent().User.Value=="S-1-5-18","OMI_PREVALIDATION_SYSTEM_REQUIRED");
+  if(!PrevalidationMarker())return 0;
+  int result=RemoveRollback(version,expectedSha256);if(result!=0)return result;
+  string path=Path.Combine(Product,"owner-msi.prevalidation-lock");
+  Need(PrevalidationMarker(),"OMI_PREVALIDATION_MARKER_INVALID");File.Delete(path);
+  Need(!Present(path),"OMI_PREVALIDATION_MARKER_CLEANUP_FAILED");return 0;
+ }
+ static int PrevalidationStop(string version,string expectedSha256){
+  Need(WindowsIdentity.GetCurrent().User.Value=="S-1-5-18","OMI_PREVALIDATION_SYSTEM_REQUIRED");
+  // A previous interrupted transaction can leave a protected marker. Restore
+  // its services first; Windows Installer serializes execute transactions.
+  if(PrevalidationMarker()){int restored=PrevalidationRollback(version,expectedSha256);if(restored!=0)return restored;}
+  if(!ActiveLayout())return 0;
+  ActiveAdmission();int admission=Run("ActiveRemoveCheck",null);if(admission!=0)return admission;
+  return Run("PrevalidateStop",null);
+ }
+ static int PrevalidationCommit(){
+  Need(WindowsIdentity.GetCurrent().User.Value=="S-1-5-18","OMI_PREVALIDATION_SYSTEM_REQUIRED");
+  if(!PrevalidationMarker())return 0;
+  string path=Path.Combine(Product,"owner-msi.prevalidation-lock");File.Delete(path);
+  Need(!Present(path),"OMI_PREVALIDATION_MARKER_CLEANUP_FAILED");return 0;
+ }
  static int RemoveRollback(string version,string expectedSha256){
   Need(WindowsIdentity.GetCurrent().User.Value=="S-1-5-18","OMI_REMOVE_ROLLBACK_SYSTEM_REQUIRED");
   bool marker=Present(Path.Combine(Product,"owner-msi.removed.json"));
@@ -487,13 +521,14 @@ static class ManagedOwnerMsiBridge {
    Marshal.Copy(bytes,0,sd,bytes.Length);var attr=new Attributes{size=Marshal.SizeOf(typeof(Attributes)),sd=sd,inherit=false};Need(CreateDirectory(root,ref attr),"OMI_TEMP_CREATE_REFUSED");owned=true;
    pins.Add(ServiceDirectoryPin.Directory(root));Acl(root,true,false);Need(Directory.GetAccessControl(root).AreAccessRulesProtected,"OMI_TEMP_ACL_REFUSED");
    var assembly=Assembly.GetExecutingAssembly();
-   foreach(string name in new[]{"read-owner-bootstrap-discovery.ps1","prepare-owner-services.ps1","prepare-owner-service-data.ps1","managed-owner-msi.ps1","initialize-owner-service-identity.ps1","prepare-owner-install-policy.ps1","prepare-owner-msi-policy.ps1","prepare-owner-msi-upgrade.ps1","remove-owner-msi-policy.ps1","rollback-owner-msi-uninstall.ps1","check-owner-msi-upgrade.ps1","check-owner-msi-activation.ps1","owner-activation-service-read.cs","owner-service-activation-trial.cs","owner-service-activation-transaction.cs","AgentoC.ServiceHost.cs"}){
+   foreach(string name in new[]{"read-owner-bootstrap-discovery.ps1","prepare-owner-services.ps1","prepare-owner-service-data.ps1","managed-owner-msi.ps1","initialize-owner-service-identity.ps1","prepare-owner-install-policy.ps1","prepare-owner-msi-policy.ps1","prepare-owner-msi-upgrade.ps1","remove-owner-msi-policy.ps1","rollback-owner-msi-uninstall.ps1","prevalidate-owner-msi.ps1","check-owner-msi-upgrade.ps1","check-owner-msi-activation.ps1","owner-activation-service-read.cs","owner-service-activation-trial.cs","owner-service-activation-transaction.cs","AgentoC.ServiceHost.cs"}){
     using(var input=assembly.GetManifestResourceStream(name)){Need(input!=null,"OMI_RESOURCE_MISSING");using(var output=new FileStream(Path.Combine(root,name),FileMode.CreateNew,FileAccess.Write,FileShare.Read)){input.CopyTo(output);output.Flush(true);}}
     pins.Add(new FileStream(Path.Combine(root,name),FileMode.Open,FileAccess.Read,FileShare.Read));
    }
-   string script=action=="RemoveRollback"?"rollback-owner-msi-uninstall.ps1":action=="UpgradeAdmission"?"check-owner-msi-upgrade.ps1":action.StartsWith("Upgrade",StringComparison.Ordinal)&&action!="UpgradeActivationCheck"&&action!="UpgradeActivate"?"prepare-owner-msi-upgrade.ps1":action=="ActivationCheck"||action=="Activate"||action=="UpgradeActivationCheck"||action=="UpgradeActivate"?"check-owner-msi-activation.ps1":action.StartsWith("PolicyRemove",StringComparison.Ordinal)||action.StartsWith("ActiveRemove",StringComparison.Ordinal)?"remove-owner-msi-policy.ps1":action=="Policy"?"prepare-owner-msi-policy.ps1":action=="Initialize"?"initialize-owner-service-identity.ps1":"managed-owner-msi.ps1";
+   string script=action=="PrevalidateStop"?"prevalidate-owner-msi.ps1":action=="RemoveRollback"?"rollback-owner-msi-uninstall.ps1":action=="UpgradeAdmission"?"check-owner-msi-upgrade.ps1":action.StartsWith("Upgrade",StringComparison.Ordinal)&&action!="UpgradeActivationCheck"&&action!="UpgradeActivate"?"prepare-owner-msi-upgrade.ps1":action=="ActivationCheck"||action=="Activate"||action=="UpgradeActivationCheck"||action=="UpgradeActivate"?"check-owner-msi-activation.ps1":action.StartsWith("PolicyRemove",StringComparison.Ordinal)||action.StartsWith("ActiveRemove",StringComparison.Ordinal)?"remove-owner-msi-policy.ps1":action=="Policy"?"prepare-owner-msi-policy.ps1":action=="Initialize"?"initialize-owner-service-identity.ps1":"managed-owner-msi.ps1";
    string scriptArguments="";
-   if(action=="UpgradeAdmission")scriptArguments="";
+   if(action=="PrevalidateStop")scriptArguments=" -Action Stop";
+   else if(action=="UpgradeAdmission")scriptArguments="";
    else if(action=="UpgradeActivationCheck")scriptArguments=" -Action Check -PreserveExistingIdentity";
    else if(action=="UpgradeActivate")scriptArguments=" -Action Activate -PreserveExistingIdentity";
    else if(action.StartsWith("Upgrade",StringComparison.Ordinal))scriptArguments=" -Action "+action.Substring("Upgrade".Length);
@@ -623,6 +658,9 @@ static class ManagedOwnerMsiBridge {
    if(args.Length==1&&args[0]=="upgrade-activate"){return Run("UpgradeActivate",null);}
    if(args.Length==1&&args[0]=="upgrade-rollback"){return Run("UpgradeRollback",null);}
    if(args.Length==1&&args[0]=="upgrade-commit"){return Run("UpgradeCommit",null);}
+   if(args.Length==3&&args[0]=="prevalidate-stop")return PrevalidationStop(args[1],args[2]);
+   if(args.Length==3&&args[0]=="prevalidate-rollback")return PrevalidationRollback(args[1],args[2]);
+   if(args.Length==1&&args[0]=="prevalidate-commit")return PrevalidationCommit();
    if(args.Length==3&&args[0]=="remove-rollback")return RemoveRollback(args[1],args[2]);
    if(args.Length==1&&args[0]=="install-rollback")return InstallRollback();
    if(args.Length==1&&args[0]=="install-commit")return InstallCommit();

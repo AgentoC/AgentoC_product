@@ -67,6 +67,16 @@ public sealed class OwnerServiceActivationTrial:IDisposable {
   if(process!=IntPtr.Zero)Need(WaitForSingleObject(process,15000)==0,"OAT_PROCESS_DRAIN_TIMEOUT");
   VerifyConfig();Need(State().state==1,"OAT_DRAIN_UNCONFIRMED");Configure(4);Need(State().state==1,"OAT_RESTORE_STATE_CHANGED");changed=false;drained=true;
  }
+ // Retain the validated SCM and process handles while stopping an active
+ // service. Leave its automatic start mode intact so a system restart after
+ // an interrupted MSI transaction can still recover the installation.
+ public void QuiesceForRemoval(){
+  Need(removal&&mutating&&changed&&mode==2,"OAT_QUIESCE_STATE_REFUSED");VerifyConfig();var s=State();
+  Need(s.state==4&&startIssued&&process!=IntPtr.Zero,"OAT_QUIESCE_STATE_REFUSED");Pin(s);
+  Status after;Need(ControlService(handle,1,out after),"OAT_STOP_REFUSED");var clock=Stopwatch.StartNew();
+  while(clock.ElapsedMilliseconds<60000){VerifyConfig();s=State();if(s.state==1)break;Need(s.state==3,"OAT_UNEXPECTED_STOP_STATE");Thread.Sleep(100);}
+  Need(s.state==1&&WaitForSingleObject(process,15000)==0,"OAT_PROCESS_DRAIN_TIMEOUT");VerifyConfig();Need(State().state==1,"OAT_DRAIN_UNCONFIRMED");
+ }
  public void VerifyRemoval(){Need(removal,"OAT_REMOVAL_LEASE_REQUIRED");VerifyConfig();var s=State();if(s.state==4){Need(process!=IntPtr.Zero,"OAT_UNKNOWN_RUNNING_PROCESS");Pin(s);}else{Need(s.state==1,"OAT_REMOVAL_STATE_REFUSED");if(process!=IntPtr.Zero)Need(WaitForSingleObject(process,0)==0,"OAT_PROCESS_DRAIN_UNCONFIRMED");}}
  public void RemoveDrained(){Need(removal&&mutating&&drained&&!changed&&mode==4,"OAT_REMOVAL_DRAIN_REQUIRED");VerifyRemoval();Need(State().state==1,"OAT_DRAIN_UNCONFIRMED");Need(DeleteService(handle),"OAT_DELETE_REFUSED");}
  // Disposal only releases retained handles. It cannot silently repair/stop an

@@ -25,6 +25,7 @@ const upgradeAdmission=await readFile(resolve('packaging/windows/check-owner-msi
 const upgradePreparation=await readFile(resolve('packaging/windows/prepare-owner-msi-upgrade.ps1'),'utf8');
 const removal=await readFile(resolve('packaging/windows/remove-owner-msi-policy.ps1'),'utf8');
 const removeRollback=await readFile(resolve('packaging/windows/rollback-owner-msi-uninstall.ps1'),'utf8');
+const prevalidation=await readFile(resolve('packaging/windows/prevalidate-owner-msi.ps1'),'utf8');
 const chatServer=await readFile(resolve('chat-server.mjs'),'utf8');
 const rollbackTest=await readFile(resolve('tests/windows-activated-owner-msi-rollback.ps1'),'utf8');
 assert.match(bridge,/SetProductRoot\(args\[args\.Length-1\]\);args=args\.Take\(args\.Length-1\)\.ToArray\(\)/,'MSI actions must pass the selected install root into the trusted helper');
@@ -111,6 +112,11 @@ assert.doesNotMatch(activatedWix,/<util:CloseApplication[^>]+Target="AgentoC\.ex
 assert.match(activatedWix,/<Custom Action="ManagedRemoveRollback" Before="ManagedBrokerOwnerReset"/,'uninstall rollback must be registered before irreversible owner reset');
 assert.equal((activatedWix.match(/<PermissionEx Sddl="O:SYG:SYD:\(A;;GA;;;SY\)\(A;;GA;;;BA\)\(A;;CCLCSWLOCRRC;;;IU\)\(A;;CCLCSWLOCRRC;;;SU\)"\s*\/>/g)||[]).length,2,'both Owner service objects must grant SYSTEM service configuration rights without granting ordinary users mutations');
 assert.match(bridge,/RemoveRollback\(string version,string expectedSha256\)/,'uninstall rollback must verify the fixed Broker package identity');
+assert.match(bridge,/PrevalidationRollback[\s\S]*?PrevalidationMarker\(\)[\s\S]*?RemoveRollback\(version,expectedSha256\)/,'early rollback must verify its protected marker and restore the validated installation');
+assert.match(prevalidation,/FileMode\]::CreateNew[\s\S]*?Flush\(\$true\)[\s\S]*?QuiesceForRemoval\(\)/,'write the recovery marker before stopping services');
+assert.match(activationTrialSource,/QuiesceForRemoval\(\)[\s\S]*?ControlService\(handle,1/,'early service shutdown must retain a validated SCM handle');
+assert.match(msiBuilder,/ExperimentalEarlyQuiesce[\s\S]*?MSI_EARLY_SEQUENCE_COLLISION/,'early sequence rewriting must remain opt-in and reject collisions');
+assert.match(activatedWix,/<CustomAction Id="ManagedPreValidationRollback"[^>]*Execute="rollback"/,'early shutdown must register an MSI rollback action');
 assert.match(bridge,/if\(marker\)RemovedAdmission\(\)/,'uninstall rollback must validate a completed removal marker before clearing it');
 assert.match(bridge,/if\(marker\)RemovedAdmission\(\);else ActiveAdmission\(true\)/,'rollback must admit an authenticated in-progress removal');
 assert.match(bridge,/OMI_REMOVAL_LOCK_INVALID/,'rollback must only accept the exact authenticated removal lock');

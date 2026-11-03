@@ -11,6 +11,7 @@ param(
     [switch]$InjectPostActivationFailure,
     [switch]$InjectPostRemovalFailure,
     [switch]$ExperimentalMajorUpgrade,
+    [switch]$ExperimentalEarlyQuiesce,
     [ValidateSet('major','minor')] [string]$MsiUpgradeLane = 'major',
     [string]$ProductCode = '*',
     [string]$MsiProductVersion = '',
@@ -28,6 +29,7 @@ if(@(@($ManagedOwnerPreparation.IsPresent,$ManagedOwnerActivation.IsPresent,$Leg
 $fullOwnerActivation=$ManagedOwnerActivation.IsPresent -or (-not $ManagedOwnerPreparation.IsPresent -and -not $LegacySystemPreview.IsPresent)
 if($MsiUpgradeLane -eq 'minor' -and -not $fullOwnerActivation){throw 'MSI_MINOR_UPGRADE_REQUIRES_ACTIVATED_OWNER'}
 if($ExperimentalMajorUpgrade -and ($MsiUpgradeLane -ne 'major' -or -not $fullOwnerActivation)){throw 'MSI_EXPERIMENTAL_MAJOR_LANE_REQUIRED'}
+if($ExperimentalEarlyQuiesce -and ($MsiUpgradeLane -ne 'major' -or -not $fullOwnerActivation)){throw 'MSI_EARLY_QUIESCE_MAJOR_LANE_REQUIRED'}
 if($InjectPostActivationFailure -and -not $fullOwnerActivation){throw 'MSI_ROLLBACK_INJECTION_REQUIRES_ACTIVATION_LANE'}
 if($InjectPostRemovalFailure -and -not $fullOwnerActivation){throw 'MSI_REMOVAL_ROLLBACK_INJECTION_REQUIRES_ACTIVATION_LANE'}
 if (-not (Get-Command wix.exe -ErrorAction SilentlyContinue)) { throw 'Pinned WiX 7 wix.exe is required to build the AgentoC MSI.' }
@@ -270,6 +272,8 @@ try {
             # builds as well as the explicit legacy test switch.
             $experimentalMajor = if($MsiUpgradeLane -eq 'major'){'1'}else{'0'}
             $wixArguments += @('-d',"ExperimentalMajorUpgrade=$experimentalMajor")
+            $earlyQuiesce = if($ExperimentalEarlyQuiesce){'1'}else{'0'}
+            $wixArguments += @('-d',"EarlyServiceQuiescence=$earlyQuiesce")
             $wixArguments += @('-d',"IncludeMingwUiRuntime=$includeMingwUiRuntime",'-bindpath',"InstallUi=$installerUiRoot")
             $wixArguments += @('-bindpath',"PrivilegedBroker=$brokerBuildRoot")
             $wixArguments += @('-d',"BrokerSha256=$brokerSha256")
@@ -284,6 +288,38 @@ try {
         & wix.exe --acceptEula wix7 build -arch x64 (Join-Path $installScriptRoot 'AgentoC.wxs') $payloadWxs -d "ProductVersion=$Version" -d "MsiProductVersion=$MsiProductVersion" -d "SourceDir=$payloadDir" -d "IncludeMingwUiRuntime=$includeMingwUiRuntime" -bindpath "ServiceHost=$serviceHostDir" -bindpath "InstallScript=$installScriptRoot" -bindpath "OwnerInstallGuard=$staging" -bindpath "BrandAsset=$brandRoot" -bindpath "InstallUi=$installerUiRoot" -ext 'WixToolset.UI.wixext/7.0.0' -ext 'WixToolset.Util.wixext/7.0.0' -o $OutputPath
     }
     if ($LASTEXITCODE -ne 0) { throw 'WiX MSI build failed.' }
+    if($ExperimentalEarlyQuiesce){
+        # WiX fixes standard-action sequence numbers. The isolated fixture
+        # verifies that moving initialization ahead of InstallValidate keeps
+        # service quiescence transactional. Restrict this rewrite to the
+        # explicitly selected experimental lane and verify every row.
+        $installer=$null;$database=$null;$view=$null;$record=$null
+        $sequences=[ordered]@{
+            InstallInitialize=1300;ManagedFreshGuard=1310;ManagedRemoveGuard=1320;
+            ManagedCloseDesktopBeforeValidation=1330;ManagedMaintenanceRefused=1340;
+            ManagedPreValidationRollback=1350;ManagedPreValidationStop=1360;InstallExecute=1370;
+            ManagedUpgradeGuard=1501;ManagedCloseDesktopForMajorUpdate=1502;ManagedMajorBrokerRollback=1503;
+            InstallExecuteAgain=1504;RemoveExistingProducts=1505;ManagedUpgradeRollback=1506;ManagedUpgradeBegin=1507
+        }
+        try{
+            $installer=New-Object -ComObject WindowsInstaller.Installer
+            $database=$installer.OpenDatabase([IO.Path]::GetFullPath($OutputPath),1)
+            $view=$database.OpenView('SELECT `Action`,`Sequence` FROM `InstallExecuteSequence`');$view.Execute()
+            while($record=$view.Fetch()){
+                $action=$record.StringData(1);$number=$record.IntegerData(2)
+                if($action -notin $sequences.Keys -and $number -in $sequences.Values){throw 'MSI_EARLY_SEQUENCE_COLLISION'}
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($record);$record=$null
+            }
+            $view.Close();[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($view);$view=$null
+            foreach($action in $sequences.Keys){
+                $check=$database.OpenView("SELECT ``Action`` FROM ``InstallExecuteSequence`` WHERE ``Action``='$action'");$check.Execute();$row=$check.Fetch()
+                try{if(-not $row){throw ('MSI_EARLY_ACTION_MISSING_'+$action)}}finally{if($row){[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($row)};$check.Close();[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($check)}
+                $view=$database.OpenView("UPDATE ``InstallExecuteSequence`` SET ``Sequence``=$($sequences[$action]) WHERE ``Action``='$action'")
+                $view.Execute();$view.Close();[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($view);$view=$null
+            }
+            $database.Commit()
+        }finally{foreach($com in @($record,$view,$database,$installer)){if($com -and [Runtime.InteropServices.Marshal]::IsComObject($com)){[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($com)}}}
+    }
     if($MsiUpgradeLane -eq 'minor'){
         & (Join-Path $scriptRoot 'assert-minor-component-compat.ps1') -PreviousMsiPath $PreviousMsiPath -CandidateMsiPath $OutputPath -PreviousMsiSha256 $PreviousMsiSha256 -PreviousMsiProductVersion $PreviousMsiProductVersion -CandidateMsiProductVersion $MsiProductVersion -ReportPath ($OutputPath+'.component-tree.json')
         $installer=$null;$database=$null;$tablesView=$null;$tableRecord=$null;$upgradeView=$null;$upgradeRecord=$null;$sequenceView=$null;$sequenceRecord=$null;$propertyView=$null;$propertyRecord=$null;$versionView=$null;$versionRecord=$null;$modeView=$null;$modeRecord=$null;$modeSequenceView=$null;$modeSequenceRecord=$null;$costView=$null;$costRecord=$null
