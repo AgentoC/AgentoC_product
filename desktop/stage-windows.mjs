@@ -8,7 +8,7 @@ const desktopRoot = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(process.argv[5] || resolve(desktopRoot, '..'));
 const destination = resolve(process.argv[2] || '');
 const brandRoot = resolve(process.argv[3] || '');
-const version = String(process.argv[4] || '0.3.12.0');
+const version = String(process.argv[4] || '0.0.1.0');
 if (destination === desktopRoot || destination === repositoryRoot || brandRoot === desktopRoot || brandRoot === repositoryRoot) {
   throw new Error('Expected separate MSI staging and brand directories.');
 }

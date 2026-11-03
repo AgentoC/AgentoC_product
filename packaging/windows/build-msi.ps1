@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory = $true)] [string]$SourceRoot,
     [Parameter(Mandatory = $true)] [string]$OutputPath,
-    [string]$Version = '0.1.0.0',
+    [string]$Version = '0.0.1.0',
     [string]$SignedOwnerBootstrapPath = '',
     [string]$OwnerBootstrapPublisherSha256 = '',
     [switch]$ManagedOwnerPreparation,
