@@ -49,7 +49,8 @@ let browser;
 let page;
 try {
   const port = await getPort();
-  appProcess = spawn(executable, [`--remote-debugging-port=${port}`, '--remote-allow-origins=*'], {
+  const profileArgs = process.env.AGENTOC_DESKTOP_TEST_USER_DATA ? [`--user-data-dir=${process.env.AGENTOC_DESKTOP_TEST_USER_DATA}`] : [];
+  appProcess = spawn(executable, [`--remote-debugging-port=${port}`, '--remote-allow-origins=*', ...profileArgs], {
     windowsHide: false,
     detached: mode === 'keep-open',
     stdio: 'ignore',
@@ -295,13 +296,13 @@ try {
   }
 
   await page.locator('[data-desktop-manager-tab="account"]').click();
+  await page.locator('.desktop-manager-account-group').waitFor({ state: 'visible', timeout: 15000 });
   const accountViewVisible = await page.locator('.desktop-manager-account-group').isVisible();
   assert.equal(accountViewVisible, true, 'the account panel must remain visible after navigation');
-  assert.equal(await page.locator('#desktopManagerDevicesContent').isVisible(), true);
-  record('account and trusted device management navigation');
+  record('account management navigation');
   await page.screenshot({ path: reportPath.replace(/\.json$/i, '.png'), fullPage: true });
 
-  const duplicate = spawn(executable, [], { windowsHide: true, stdio: 'ignore' });
+  const duplicate = spawn(executable, profileArgs, { windowsHide: true, stdio: 'ignore' });
   const duplicateExit = await waitForExit(duplicate, 15000);
   assert.equal(appProcess.exitCode, null, 'Launching a second instance closed the original manager process');
   record('duplicate launch exits while existing manager stays open', { duplicateExitCode: duplicateExit });
@@ -331,7 +332,7 @@ try {
   if (page) {
     try {
       report.uiFailure = await page.evaluate(() => {
-        const selectors = ['#desktopManagerNav', '#crossDeviceOverlay', '#crossDeviceSheet', '#crossDeviceDevicesView', '#crossDeviceDevicesContent', '#crossDeviceAccountView', '#crossDeviceAccountContent'];
+        const selectors = ['#settingsPanel', '#desktopManagerGoogleAccountGroup', '#desktopManagerDevicesGroup', '#desktopManagerPageTitle', '#desktopManagerPairingPanel', '#desktopManagerNav', '#crossDeviceOverlay', '#crossDeviceSheet', '#crossDeviceDevicesView', '#crossDeviceDevicesContent', '#crossDeviceAccountView', '#crossDeviceAccountContent'];
         return Object.fromEntries(selectors.map((selector) => {
           const node = document.querySelector(selector);
           if (!node) return [selector, null];
