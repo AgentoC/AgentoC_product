@@ -102,8 +102,15 @@ fun settleLatestTurnMessages(items: List<TimelineItem>, terminal: Boolean): List
     if (start < 0) return items
     val runId = (items[start] as TimelineItem.Message).runId?.takeIf(String::isNotBlank) ?: return items
     return items.mapIndexed { index, item ->
-        if (index > start && item is TimelineItem.Message && item.role == TimelineRole.Agent &&
-            item.runId == runId && !item.completed) item.copy(completed = true, messageState = "completed") else item
+        when {
+            index <= start -> item
+            item is TimelineItem.Message && item.role == TimelineRole.Agent && item.runId == runId && !item.completed ->
+                item.copy(completed = true, messageState = "completed")
+            item is TimelineItem.Operation && item.isReasoning && item.runId == runId &&
+                item.status in setOf(TimelineOperationStatus.Pending, TimelineOperationStatus.InProgress) ->
+                item.copy(status = TimelineOperationStatus.Completed)
+            else -> item
+        }
     }
 }
 

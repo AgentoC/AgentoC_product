@@ -195,6 +195,7 @@ export function createClaudeAdapter() {
   let streamingMessageId = '';
   let streamingDeltaOrdinal = 0;
   let streamingTextBlockIndexes = [];
+  let streamingThinkingBlocks = new Map();
   // Upstream-reported model for the current turn (assistant/message_start
   // frames carry it).  Gateways remap tier aliases — the requested model and
   // the served model can differ (observed: glm-5.2 requested, glm-4.7
@@ -343,6 +344,8 @@ export function createClaudeAdapter() {
                 if (block.thinking) {
                   events.push(reasoningEvent(block.thinking, frameProviderFields({
                     ...(providerMessageId ? { providerMessageId } : {}),
+                    providerBlockId: `thinking:${contentIndex}`,
+                    blockIndex: contentIndex,
                     providerLifecycle: 'completed',
                     reasoningLifecycle: 'completed',
                     state: 'completed',
@@ -514,6 +517,7 @@ export function createClaudeAdapter() {
             streamingMessageId = typeof evt.message?.id === 'string' ? evt.message.id : '';
             streamingDeltaOrdinal = 0;
             streamingTextBlockIndexes = [];
+            streamingThinkingBlocks = new Map();
           }
           if (evt.type === 'message_start' && typeof evt.message?.model === 'string' && evt.message.model.trim()) {
             upstreamModel = evt.message.model.trim();
@@ -532,7 +536,9 @@ export function createClaudeAdapter() {
               const blockIndex = Number.isInteger(evt.index) ? evt.index : 0;
               const thinking = typeof evt.delta.thinking === 'string' ? evt.delta.thinking : '';
               if (thinking) {
+                streamingThinkingBlocks.set(blockIndex, (streamingThinkingBlocks.get(blockIndex) || '') + thinking);
                 events.push(reasoningEvent(thinking, frameProviderFields({
+                  ...(streamingMessageId ? { providerMessageId: streamingMessageId } : {}),
                   providerBlockId: `thinking:${blockIndex}`,
                   blockIndex,
                   providerLifecycle: 'delta',
@@ -542,6 +548,20 @@ export function createClaudeAdapter() {
                 })));
               }
             }
+          }
+          if (evt.type === 'content_block_stop' && streamingThinkingBlocks.has(evt.index)) {
+            const blockIndex = evt.index;
+            const thinking = streamingThinkingBlocks.get(blockIndex);
+            streamingThinkingBlocks.delete(blockIndex);
+            events.push(reasoningEvent(thinking, frameProviderFields({
+              ...(streamingMessageId ? { providerMessageId: streamingMessageId } : {}),
+              providerBlockId: `thinking:${blockIndex}`,
+              blockIndex,
+              providerLifecycle: 'completed',
+              reasoningLifecycle: 'completed',
+              operationLifecycle: 'completed',
+              state: 'completed',
+            })));
           }
           break;
         }

@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.SemanticsProperties
 import com.andysagent.agentoc.core.designsystem.AgentocTheme
 import com.andysagent.agentoc.core.timeline.*
 import org.junit.Assert.*
@@ -20,6 +22,24 @@ class TimelineChronologyUiTest {
         val action = RunActionFormatter.forRun(RunActionFormatter.RunActionStatus.Working, null, listOf(op))
         rule.setContent { AgentocTheme { ActiveRunActionBar(com.andysagent.agentoc.core.agentui.AgentRunStatus.Working, action?.sentence) } }
         rule.onNodeWithText("Editing internet-and-web.md").assertIsDisplayed()
+    }
+
+    @Test fun liveThinkingExpandsScrollsAndCollapsesWhenFinished() {
+        var op by mutableStateOf(TimelineItem.Operation("thinking", 1, TimelineOperationKind.Tool, "Thinking", "Starting", TimelineOperationStatus.InProgress, isReasoning = true))
+        rule.setContent { AgentocTheme { ThinkingRow(op) } }
+        rule.onNodeWithText("Starting").assertIsDisplayed()
+        rule.runOnIdle { op = op.copy(detail = (1..80).joinToString("\n") { "Thought line $it" }) }
+        rule.waitForIdle()
+        val bounds = rule.onNodeWithTag("thinking-content").getUnclippedBoundsInRoot()
+        assertTrue(bounds.bottom - bounds.top <= 220.dp)
+        val scroll = rule.onNodeWithTag("thinking-content").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
+        assertTrue("Thinking content should scroll", scroll.maxValue() > 0f)
+        rule.waitUntil(5_000) { scroll.value() >= scroll.maxValue() }
+        rule.runOnIdle { op = op.copy(status = TimelineOperationStatus.Completed) }
+        rule.waitForIdle()
+        rule.onNodeWithTag("thinking-content").assertDoesNotExist()
+        rule.onNodeWithContentDescription(rule.activity.getString(R.string.timeline_details_show)).performClick()
+        rule.onNodeWithTag("thinking-content").assertExists()
     }
 
     @Test fun thinkingExpandsAndToolRecordsStayHidden() {

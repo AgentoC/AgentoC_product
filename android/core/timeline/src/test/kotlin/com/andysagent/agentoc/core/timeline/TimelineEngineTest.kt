@@ -11,6 +11,27 @@ import com.andysagent.agentoc.core.protocol.SessionEventDto
 import com.andysagent.agentoc.core.model.Message
 
 class TimelineEngineTest {
+    @Test fun reasoningStreamUpdatesAndSettlesAtBlockCompletion() {
+        val projector = LiveTimelineProjector()
+        projector.apply(listOf(SessionEventDto(seq = 1, type = "reasoning", runId = "run-1", state = "running", content = JsonPrimitive("First "))))
+        val next = projector.apply(listOf(SessionEventDto(seq = 2, type = "reasoning", runId = "run-1", state = "running", content = JsonPrimitive("second"))))
+        val live = assertIs<TimelineItem.Operation>(TimelineProjector.project(emptyList(), next.events).single())
+        assertEquals("First second", live.detail)
+        assertEquals(TimelineOperationStatus.InProgress, live.status)
+        val stop = projector.apply(listOf(SessionEventDto(seq = 3, type = "reasoning", runId = "run-1", state = "completed", content = JsonPrimitive("First second"))))
+        val done = assertIs<TimelineItem.Operation>(TimelineProjector.project(emptyList(), stop.events).single())
+        assertEquals("First second", done.detail)
+        assertEquals(TimelineOperationStatus.Completed, done.status)
+    }
+    @Test fun distinctClaudeThinkingBlocksDoNotSuppressEachOther() {
+        val projector = LiveTimelineProjector()
+        projector.apply(listOf(SessionEventDto(seq = 1, type = "reasoning", runId = "r", providerMessageId = "m1", providerBlockId = "thinking:0", state = "completed", content = JsonPrimitive("first"))))
+        val next = projector.apply(listOf(SessionEventDto(seq = 2, type = "reasoning", runId = "r", providerMessageId = "m2", providerBlockId = "thinking:0", state = "running", content = JsonPrimitive("second"))))
+        val rows = TimelineProjector.project(emptyList(), next.events).filterIsInstance<TimelineItem.Operation>()
+        assertEquals(2, rows.size)
+        assertEquals("second", rows.last().detail)
+        assertEquals(TimelineOperationStatus.InProgress, rows.last().status)
+    }
     @Test fun canonicalClaudeOperationsRetainStructuredInputForTheActionLine() {
         fun action(json: String): String? {
             val dto = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.decodeFromString<SessionEventDto>(json)
@@ -26,12 +47,14 @@ class TimelineEngineTest {
         val prompt = TimelineItem.Message("user", 2, TimelineRole.User, "request", true, runId = "run-1")
         val answer = TimelineItem.Message("live", 3, TimelineRole.Agent, "answer", false, runId = "run-1")
         val other = TimelineItem.Message("other", 4, TimelineRole.Agent, "other", false, runId = "run-2")
-        val items = listOf(old, prompt, answer, other)
+        val thinking = TimelineItem.Operation("thinking", 5, TimelineOperationKind.Tool, "Thinking", "reason", TimelineOperationStatus.InProgress, runId = "run-1", isReasoning = true)
+        val items = listOf(old, prompt, answer, other, thinking)
         assertEquals(items, settleLatestTurnMessages(items, false))
         val settled = settleLatestTurnMessages(items, true)
         assertTrue((settled[2] as TimelineItem.Message).completed)
         assertEquals(false, (settled[0] as TimelineItem.Message).completed)
         assertEquals(false, (settled[3] as TimelineItem.Message).completed)
+        assertEquals(TimelineOperationStatus.Completed, (settled[4] as TimelineItem.Operation).status)
     }
     @Test fun liveTerminalEventSettlesTheRunAndRejectsLateUnsequencedTokens() {
         val projector = LiveTimelineProjector()

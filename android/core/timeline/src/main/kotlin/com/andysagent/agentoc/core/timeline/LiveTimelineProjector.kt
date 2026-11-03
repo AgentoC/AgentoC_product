@@ -225,7 +225,8 @@ class LiveTimelineProjector {
 
     private fun applyEvent(event: SessionEventDto, renderSeq: Long, previous: TimelineEvent?): TimelineEvent {
         val type = event.type.orEmpty().lowercase()
-        val rawEntityId = event.entityId ?: event.messageId ?: event.operationId ?: event.requestKey()
+        val rawEntityId = if (type == "reasoning" || type == "thinking_block") reasoningEntityKey(event)
+            else event.entityId ?: event.messageId ?: event.operationId ?: event.requestKey()
         val isPlan = type == "plan" || event.planId != null || event.artifactId != null
         val planId = (event.planId ?: event.artifactId ?: rawEntityId).takeIf { it.isNotBlank() }
         val text = event.textContent() ?: event.detail ?: event.command
@@ -438,6 +439,12 @@ class LiveTimelineProjector {
 
     fun snapshotEvents(): List<TimelineEvent> = renderedEvents.values.sortedWith(compareBy<TimelineEvent> { it.seq }.thenBy { it.id })
 
+    private fun reasoningEntityKey(event: SessionEventDto): String {
+        val block = event.providerBlockId?.takeIf(String::isNotBlank)
+        return if (block != null) listOfNotNull(event.runId, event.providerMessageId, block).joinToString(":")
+            else event.entityId ?: event.messageId ?: event.requestKey()
+    }
+
     private fun renderKey(event: SessionEventDto): String {
         val type = event.type.orEmpty().lowercase()
         if (type == "plan" || event.planId != null || event.artifactId != null) {
@@ -445,7 +452,7 @@ class LiveTimelineProjector {
         }
         val isReasoning = type == "reasoning" || type == "thinking_block"
         if (isReasoning) {
-            val rawEntityId = event.entityId ?: event.messageId ?: event.requestKey()
+            val rawEntityId = reasoningEntityKey(event)
             return "thinking:$rawEntityId"
         }
         val isAttachment = type == "attachment_delivery" || event.attachments.isNotEmpty() || event.images.isNotEmpty()

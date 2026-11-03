@@ -11,6 +11,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -35,12 +37,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -89,6 +93,7 @@ import com.andysagent.agentoc.core.timeline.FileChangeItem
 import com.andysagent.agentoc.core.timeline.PlanStepItem
 import com.andysagent.agentoc.core.timeline.TimelineItem
 import com.andysagent.agentoc.core.timeline.TimelineOperationStatus
+import kotlinx.coroutines.flow.collectLatest
 
 /**
  * Renders a full turn in the Task Canvas (Layer B).
@@ -384,10 +389,20 @@ fun AgentProgressBlock(
 }
 
 @Composable
-private fun ThinkingRow(operation: TimelineItem.Operation) {
+internal fun ThinkingRow(operation: TimelineItem.Operation) {
     val colors = LocalAgentocColors.current
-    var expanded by rememberSaveable(operation.id) { mutableStateOf(false) }
     val hasDetail = operation.detail.isNotBlank()
+    val active = operation.status == TimelineOperationStatus.InProgress || operation.status == TimelineOperationStatus.Pending
+    var expanded by rememberSaveable(operation.id) { mutableStateOf(active && hasDetail) }
+    val scrollState = rememberScrollState()
+    LaunchedEffect(operation.id, active, hasDetail) {
+        expanded = active && hasDetail
+    }
+    LaunchedEffect(operation.id, active, expanded) {
+        if (active && expanded) snapshotFlow { scrollState.maxValue }.collectLatest { max ->
+            scrollState.animateScrollTo(max)
+        }
+    }
     val toggleLabel = stringResource(if (expanded) R.string.timeline_details_hide else R.string.timeline_details_show)
     Column(Modifier.fillMaxWidth().testTag("thinking-row")) {
         Row(
@@ -404,7 +419,7 @@ private fun ThinkingRow(operation: TimelineItem.Operation) {
                 modifier = Modifier.size(14.dp).rotate(if (expanded) 180f else 0f), tint = colors.secondaryContent)
         }
         AnimatedVisibility(expanded && hasDetail) {
-            SelectionContainer {
+            SelectionContainer(Modifier.heightIn(max = 220.dp).verticalScroll(scrollState).testTag("thinking-content")) {
                 Text(operation.detail, modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
                     style = MaterialTheme.typography.bodySmall, color = colors.secondaryContent)
             }

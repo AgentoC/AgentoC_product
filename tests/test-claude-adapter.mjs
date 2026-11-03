@@ -100,6 +100,14 @@ assert.equal(thinkingDeltaEvents[0].content, 'Inspect');
 assert.equal(thinkingDeltaEvents[0].providerBlockId, 'thinking:0');
 assert.equal(thinkingDeltaEvents[0].reasoningLifecycle, 'delta');
 assert.equal(thinkingDeltaEvents[0].state, 'running');
+adapter.parseLine(JSON.stringify({ type: 'stream_event', event: {
+  type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: ' files.' },
+} }));
+const thinkingStopEvents = adapter.parseLine(JSON.stringify({ type: 'stream_event', event: { type: 'content_block_stop', index: 0 } }));
+assert.equal(thinkingStopEvents.length, 1);
+assert.equal(thinkingStopEvents[0].providerBlockId, 'thinking:0');
+assert.equal(thinkingStopEvents[0].content, 'Inspect files.');
+assert.equal(thinkingStopEvents[0].state, 'completed');
 
 const textDeltaEvents = adapter.parseLine(JSON.stringify({
   type: 'stream_event',
