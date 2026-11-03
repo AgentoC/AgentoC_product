@@ -78,7 +78,7 @@ fi
 printf '%s\\n' 'https://accounts.google.com/o/oauth2/auth?state=agy-test' >&2
 IFS= read -r credential
 target="\${AGY_HOME:-\$HOME}"
-if [ "$credential" = "browser-credential" ]; then
+if [ "$credential" = "https://example.test/callback?text=browser-credential&state=preserve" ]; then
   mkdir -p "$target/.gemini/antigravity-cli"
   printf '%s\\n' 'agy-token' > "$target/.gemini/antigravity-cli/antigravity-oauth-token"
   exit 0
@@ -262,8 +262,9 @@ assert.match(agyReady.url, /^https:\/\/accounts\.google\.com\/o\/oauth2\/auth\?/
 assert.equal(Object.hasOwn(agyReady, 'raw'), false);
 const agyArgs = await readFile(agyArgsFile, 'utf8');
 assert.match(agyArgs, /arg1=--print\narg2=Sign in to AgentoC in your browser\./, 'AgY OAuth must use print mode so the CLI emits its browser URL');
-const agyInput = await management.sendNativeOAuthLoginInput(agy.id, 'browser-credential');
+const agyInput = await management.sendNativeOAuthLoginInput(agy.id, 'https://example.test/callback?text=browser-credential&state=preserve');
 assert.equal(agyInput.inputSubmitted, true);
+assert.equal(agyInput.requiresInput, false);
 const agyDone = await waitForJob(agy.id, (job) => job.state === 'completed');
 assert.equal(agyDone.profile.credentialStored, true);
 assert.equal((await management.getAgyOfficialProviderProfile({ checkCommand: false, ...context })), null);

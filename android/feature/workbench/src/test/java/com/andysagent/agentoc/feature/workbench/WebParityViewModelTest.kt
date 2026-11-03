@@ -23,6 +23,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.assertNotNull
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -281,12 +282,14 @@ class WebParityViewModelTest {
     @Test
     fun `provider OAuth credential is submitted to the active job`() = runTest {
         val transport = RecordingParityTransport()
-        WebParityRepository(transport).submitProviderOAuthCredential("job_1", "secret-value")
+        val pasted = "https://example.test/auth?text=secret%2Bvalue&state=abc"
+        WebParityRepository(transport).submitProviderOAuthCredential("job_1", pasted)
 
         val request = transport.requests.single()
         assertEquals("POST", request.method)
         assertEquals("/api/native-provider-oauth/jobs/job_1/input", request.path)
-        assertTrue(request.body!!.contains("secret-value"))
+        val body = Json.parseToJsonElement(request.body!!).jsonObject
+        assertEquals(pasted, body["credential"]!!.jsonPrimitive.content)
     }
 
     @Test

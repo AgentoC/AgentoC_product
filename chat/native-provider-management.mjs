@@ -404,7 +404,7 @@ function safeJob(job) {
     baselineAuthSignature,
     ...publicJob
   } = job;
-  return { ...publicJob };
+  return { ...publicJob, requiresInput: publicJob.requiresInput && !publicJob.inputSubmitted && publicJob.state === 'awaiting-input' };
 }
 
 async function ensureLoginRoot() {
@@ -1790,7 +1790,13 @@ export async function startNativeOAuthLogin({
     const scriptCommand = await resolveToolCommandPathAsync('script').catch(() => null);
     if (scriptCommand) {
       const launcherCommand = buildAgyRuntimeShellCommand({ command, args });
-      spawnSpec = buildPlatformSpawnSpec(scriptCommand, ['-q', '-f', '-c', launcherCommand, '/dev/null'], { env });
+      // The PTY is necessary for the CLI's interactive input, but its
+      // default echo would copy the authorization text into captured output.
+      const terminalCommand = `stty -echo || exit 1; exec ${launcherCommand}`;
+      const scriptArgs = process.platform === 'darwin'
+        ? ['-q', '/dev/null', 'sh', '-c', terminalCommand]
+        : ['-q', '-e', '-f', '-c', terminalCommand, '/dev/null'];
+      spawnSpec = buildPlatformSpawnSpec(scriptCommand, scriptArgs, { env });
     }
   }
   if (!spawnSpec) {
@@ -1911,25 +1917,34 @@ export function getNativeOAuthLoginJob(id) {
   return safeJob(loginJobs.get(trim(id)));
 }
 
-export async function sendNativeOAuthLoginInput(id, rawInput) {
-  const job = loginJobs.get(trim(id));
-  if (!job) return null;
-  if (job.agentType !== 'agy') throw new Error('Only agy login accepts browser credential input');
-  if (!['pending', 'awaiting-input'].includes(job.state)) throw new Error('agy login is no longer accepting credential input');
+export function normalizeAgyLoginInput(rawInput) {
   const input = trim(rawInput);
   if (!input) throw new Error('credential is required');
   if (/[\r\n]/.test(input)) throw new Error('credential must be a single line');
   if (input.length > 64 * 1024) throw new Error('credential is too large');
+  return input;
+}
+
+export async function sendNativeOAuthLoginInput(id, rawInput) {
+  const job = loginJobs.get(trim(id));
+  if (!job) return null;
+  if (job.agentType !== 'agy') throw new Error('Only agy login accepts browser credential input');
+  if (job.state !== 'awaiting-input') throw new Error('agy login is not ready to accept credential input');
+  const input = normalizeAgyLoginInput(rawInput);
   if (!job.child?.stdin?.writable) throw new Error('agy login terminal is no longer available');
+  // Reserve the job before awaiting I/O so concurrent submissions cannot
+  // deliver the same (or conflicting) credential twice.
+  job.state = 'authenticating';
+  job.phase = 'authenticating';
   try {
-    job.child.stdin.write(`${input}\n`);
+    await new Promise((resolve, reject) => {
+      job.child.stdin.write(`${input}\n`, (error) => error ? reject(error) : resolve());
+    });
   } catch (error) {
     terminateLoginProcess(job.child);
     throw new Error(`agy login input could not be delivered: ${error?.message || String(error)}`);
   }
   job.inputSubmitted = true;
-  job.state = 'authenticating';
-  job.phase = 'authenticating';
   return safeJob(job);
 }
 

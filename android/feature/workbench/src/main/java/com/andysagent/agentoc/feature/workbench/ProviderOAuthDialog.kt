@@ -10,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +32,7 @@ internal fun ProviderOAuthDialog(state: WebParityUiState, onEvent: (WebParityEve
     val job = state.providerOAuthJob ?: return
     val clipboard = LocalClipboardManager.current
     var credential by remember(job.id) { mutableStateOf("") }
+    LaunchedEffect(job.requiresInput) { if (!job.requiresInput) credential = "" }
     AgentoDialog(
         title = stringResource(R.string.provider_oauth_title),
         confirmLabel = stringResource(if (job.terminal) R.string.provider_oauth_close else R.string.provider_oauth_check),
@@ -49,17 +51,17 @@ internal fun ProviderOAuthDialog(state: WebParityUiState, onEvent: (WebParityEve
                 "failed" -> R.string.provider_oauth_failed
                 "cancelled" -> R.string.provider_oauth_cancelled
                 "finalizing" -> R.string.provider_oauth_saving
-                else -> if (job.code.isBlank()) R.string.provider_oauth_generating else R.string.provider_oauth_waiting
+                else -> if (job.agentType == "agy") R.string.provider_oauth_agy_instructions else if (job.code.isBlank()) R.string.provider_oauth_generating else R.string.provider_oauth_waiting
             }))
             if (job.code.isNotBlank()) {
                 SelectionContainer { Text(job.code, style = MaterialTheme.typography.headlineSmall) }
                 AgentoButton(stringResource(R.string.provider_oauth_copy), { clipboard.setText(AnnotatedString(job.code)) }, secondary = true)
             }
             if (job.canOpenBrowser) AgentoButton(stringResource(R.string.provider_oauth_open), { onEvent(WebParityEvent.OpenProviderOAuth) }, secondary = true)
-            if (job.requiresInput && !job.terminal) {
+            if (job.requiresInput && job.state == "awaiting-input") {
                 AgentoTextField(credential, { credential = it }, stringResource(R.string.provider_oauth_credential), Modifier.fillMaxWidth(), singleLine = false)
                 AgentoButton(stringResource(R.string.provider_oauth_submit), {
-                    onEvent(WebParityEvent.SubmitProviderOAuthCredential(credential)); credential = ""
+                    onEvent(WebParityEvent.SubmitProviderOAuthCredential(credential))
                 }, enabled = credential.isNotBlank() && !state.actionInProgress)
             }
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
