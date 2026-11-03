@@ -94,6 +94,7 @@ import {
   serializeClaudeBidiMessage,
 } from './claude-bidi-protocol.mjs';
 import { CHAT_PORT } from '../lib/config.mjs';
+import { isManagedLearningProfileWrite } from './managed-memory-gate.mjs';
 import { hasProviderCapability } from './provider-contract.mjs';
 import {
   PRIVILEGED_GATE_DECISION,
@@ -2480,6 +2481,9 @@ function decideRunGate(approval, state) {
   const gated = riskMode === 'safe' || riskMode === 'recommended'
     || isGatedPermissionMode(state?.permissionMode || '');
   if (gated) {
+    if (isManagedLearningProfileWrite(approval)) {
+      return { decision: PRIVILEGED_GATE_DECISION.AUTO_ALLOW, reason: 'managed learning profile write' };
+    }
     return decideRiskGate(approval, {
       riskMode: riskMode === 'safe' || riskMode === 'recommended' ? riskMode : 'recommended',
       cwd: state.cwd,
@@ -2725,8 +2729,7 @@ async function trackClaudeBidiApprovalRequest(runId, state, parsed, proc) {
     // not stall every read/edit/ordinary command. Zero extra latency, no
     // pollution of user-visible approval state.
     const message = buildClaudeBidiApprovalResponseMessage(approval, 'approve');
-    if (message && proc) {
-      writeClaudeBidiMessage(proc, message);
+    if (message && writeClaudeBidiMessage(proc, message)) {
       const event = {
         type: 'agentoc.approval_response',
         approvalId: approval.approvalId,
@@ -2742,6 +2745,8 @@ async function trackClaudeBidiApprovalRequest(runId, state, parsed, proc) {
       // DS-14: `line = JSON.stringify(json)` is a pure duplicate (readers
       // prefer `json`); normalizeSpoolRecord drops it anyway, so don't build it.
       await appendRunSpoolRecord(runId, { ts: nowIso(), stream: 'stdout', json: event });
+    } else {
+      throw new Error('Unable to send Claude automatic approval response');
     }
     // Still track it so the flush path can find the pending approval if needed.
     const record = markApprovalRecordAutoResponded(
