@@ -252,7 +252,6 @@ class AndroidRuntimeGraph internal constructor(
     @Volatile private var pendingFcmToken: String? = null
     @Volatile private var foreground = false
     @Volatile private var retainUiConnections = false
-    private var backgroundReleaseJob: Job? = null
     @Volatile private var maximumConcurrentAccountConnections = 1
     @Volatile private var accountCapacityRefreshNeeded = true
     @Volatile private var accountCapacityLastSuccessMs: Long? = null
@@ -1182,8 +1181,6 @@ class AndroidRuntimeGraph internal constructor(
     }
 
     override fun onStart(owner: LifecycleOwner) {
-        backgroundReleaseJob?.cancel()
-        backgroundReleaseJob = null
         foreground = true
         retainUiConnections = true
         scope.launch {
@@ -1544,19 +1541,8 @@ class AndroidRuntimeGraph internal constructor(
         uiBackgroundTargetIds = emptySet()
         mutableBackgroundTargetSummaries.value = emptyMap()
         targetRuntimes.values.forEach { it.sessions.stopLiveSync() }
-        // Brief activity switches (for example, an authorization screen) must
-        // not tear down an in-flight rendezvous or disconnect every computer.
-        // Lifecycle callbacks and the expiry decision share the main thread.
-        backgroundReleaseJob?.cancel()
-        backgroundReleaseJob = scope.launch {
-            delay(5_000L)
-            withContext(Dispatchers.Main.immediate) {
-                if (!foreground && !stopped) {
-                    retainUiConnections = false
-                    scope.launch { initialized.await(); synchronizeDirectory() }
-                }
-            }
-        }
+        // Keep the selected carriers leased while the process is alive. A
+        // background transition must not disconnect an ongoing connection.
     }
 
     internal suspend fun awaitLifecycleUpdate() { initialized.await(); synchronizeDirectory() }

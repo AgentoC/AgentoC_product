@@ -148,7 +148,7 @@ class AppApiRuntimeGraphTest {
         catch (error: AppApiException) { assertEquals(code, error.error.code) }
     }
 
-    @Test fun briefBackgroundKeepsCarrierButSustainedBackgroundReleasesIt() = runBlocking {
+    @Test fun backgroundKeepsCarrierBeyondPreviousReleaseTimeout() = runBlocking {
         computers()
         val graph = graph()
         withContext(Dispatchers.Main) { graph.onStart(owner) }
@@ -167,7 +167,9 @@ class AppApiRuntimeGraphTest {
         assertEquals(0, carrier.closes.get())
         withContext(Dispatchers.Main) { graph.onStop(owner) }
         delay(5_250)
-        until { carrier.closes.get() == 1 }
+        graph.awaitLifecycleUpdate()
+        assertEquals(1, carrier.starts.get())
+        assertEquals(0, carrier.closes.get())
     }
 
     @Test fun demoAutoConnectDoesNotRestartAnExistingControllerButExplicitRetryDoes() = runBlocking {
