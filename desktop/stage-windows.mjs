@@ -23,7 +23,7 @@ await rename(originalExe, brandedExe);
 const appRoot = join(destination, 'resources', 'app');
 const assetsRoot = join(appRoot, 'assets');
 await mkdir(assetsRoot, { recursive: true });
-for (const name of ['main.cjs', 'preload.cjs', 'wait.html']) {
+for (const name of ['main.cjs', 'preload.cjs', 'update-check.cjs', 'wait.html']) {
   await cp(join(desktopRoot, name), join(appRoot, name));
 }
 await cp(join(repositoryRoot, 'static', 'desktop', 'agentoc-android-logo.png'), join(assetsRoot, 'agentoc-android-logo.png'));

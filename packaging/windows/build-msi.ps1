@@ -36,6 +36,7 @@ if (-not (Test-Path (Join-Path $SourceRoot 'chat-server.mjs'))) { throw 'SourceR
 if (-not (Test-Path (Join-Path $SourceRoot 'desktop\package.json'))) { throw 'SourceRoot must include the pinned desktop Electron project.' }
 if ($Version -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw 'Version must be a four-part numeric application version.' }
 $applicationVersionParts=@($Version.Split('.')|ForEach-Object {[int]::Parse($_)})
+$displayVersion=if($applicationVersionParts[3] -eq 0){$applicationVersionParts[0..2] -join '.'}else{$applicationVersionParts -join '.'}
 if(-not $MsiProductVersion){
     if($MsiUpgradeLane -eq 'minor'){throw 'MSI_MINOR_EFFECTIVE_VERSION_REQUIRED'}
     $MsiProductVersion=($applicationVersionParts[0..2] -join '.')
@@ -93,7 +94,7 @@ try {
     # the three desktop shell files, not npm or its build-only dependencies.
     $desktopBuildRoot = Join-Path $staging 'desktop-build'
     New-Item -ItemType Directory -Force $desktopBuildRoot | Out-Null
-    foreach ($desktopInput in @('package.json', 'package-lock.json', 'main.cjs', 'preload.cjs', 'wait.html', 'stage-windows.mjs')) {
+    foreach ($desktopInput in @('package.json', 'package-lock.json', 'main.cjs', 'preload.cjs', 'update-check.cjs', 'wait.html', 'stage-windows.mjs')) {
         Copy-Item -LiteralPath (Join-Path $SourceRoot ('desktop\' + $desktopInput)) -Destination (Join-Path $desktopBuildRoot $desktopInput)
     }
     if (-not (Get-Command npm.cmd -ErrorAction SilentlyContinue)) { throw 'npm.cmd is required to stage the pinned Electron desktop manager.' }
@@ -264,7 +265,7 @@ try {
     if($ManagedOwnerPreparation -or $fullOwnerActivation){
         & (Join-Path $installScriptRoot 'build-managed-owner-msi-bridge.ps1') -OutputPath (Join-Path $staging 'AgentoC.ManagedOwnerMsiBridge.exe')
         $managedWxs = if($fullOwnerActivation){Join-Path $installScriptRoot 'AgentoC.ActivatedOwner.wxs'}else{Join-Path $installScriptRoot 'AgentoC.ManagedOwner.wxs'}
-        $wixArguments = @('--acceptEula','wix7','build','-arch','x64',$managedWxs,$payloadWxs,'-d',"ProductVersion=$Version",'-d',"MsiProductVersion=$MsiProductVersion",'-d',"ProductCode=$ProductCode",'-d',"MsiUpgradeLane=$MsiUpgradeLane",'-d',"MsiUpgradeStrategy=$msiUpgradeStrategy",'-d',"SourceDir=$payloadDir",'-bindpath',"ServiceHost=$serviceHostDir",'-bindpath',"ManagedBridge=$staging",'-bindpath',"BrandAsset=$brandRoot",'-ext','WixToolset.UI.wixext/7.0.0','-ext','WixToolset.Util.wixext/7.0.0','-o',$OutputPath)
+        $wixArguments = @('--acceptEula','wix7','build','-arch','x64',$managedWxs,$payloadWxs,'-d',"ProductVersion=$Version",'-d',"DisplayVersion=$displayVersion",'-d',"MsiProductVersion=$MsiProductVersion",'-d',"ProductCode=$ProductCode",'-d',"MsiUpgradeLane=$MsiUpgradeLane",'-d',"MsiUpgradeStrategy=$msiUpgradeStrategy",'-d',"SourceDir=$payloadDir",'-bindpath',"ServiceHost=$serviceHostDir",'-bindpath',"ManagedBridge=$staging",'-bindpath',"BrandAsset=$brandRoot",'-ext','WixToolset.UI.wixext/7.0.0','-ext','WixToolset.Util.wixext/7.0.0','-o',$OutputPath)
         if($fullOwnerActivation){
             # The guarded major-upgrade transaction has passed real upgrade
             # and injected rollback verification. Use it for ordinary Owner

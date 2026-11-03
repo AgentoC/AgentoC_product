@@ -134,6 +134,9 @@
     <?endif?>
 
     <InstallExecuteSequence>
+      <!-- PublishProduct writes its internal MSI version to ARP. Apply the
+           public package version afterwards as a rollback-aware registry component. -->
+      <WriteRegistryValues Sequence="6450" />
       <Custom Action="SetSelectedInstallFolder" After="CostFinalize" Condition="AGENTOC_INSTALLFOLDER AND NOT Installed AND NOT (REMOVE = &quot;ALL&quot;)" />
       <Custom Action="SetAgentoCLaunchTarget" After="InstallFinalize" Condition="AGENTOC_LAUNCH = &quot;1&quot; AND NOT Installed" />
       <Custom Action="LaunchAgentoC" After="SetAgentoCLaunchTarget" Condition="AGENTOC_LAUNCH = &quot;1&quot; AND NOT Installed" />
@@ -242,6 +245,7 @@
       <ComponentRef Id="ManagedServiceHost" />
       <ComponentRef Id="ManagedStartMenuShortcut" />
       <ComponentRef Id="ManagedEventSource" />
+      <ComponentRef Id="ManagedPublicDisplayVersion" />
       <ComponentRef Id="PrivilegedBrokerService" />
       <ComponentGroupRef Id="PayloadGroup" />
     </Feature>
@@ -259,6 +263,10 @@
       <Shortcut Id="AgentoCStartMenuShortcut" Name="AgentoC" Target="[INSTALLFOLDER]payload\Desktop\AgentoC.exe" WorkingDirectory="INSTALLFOLDER" Icon="AgentoCIcon" IconIndex="0" Advertise="no" />
       <RemoveFolder Id="RemoveAgentoCProgramMenuFolder" On="uninstall" />
       <RegistryValue Root="HKCU" Key="Software\AgentoC\DesktopManager" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Component Id="ManagedPublicDisplayVersion" Directory="INSTALLFOLDER" Guid="*">
+      <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\[ProductCode]" Name="DisplayVersion" Type="string" Value="$(var.DisplayVersion)" KeyPath="yes" />
     </Component>
 
     <Component Id="ManagedEventSource" Directory="INSTALLFOLDER" Guid="*">

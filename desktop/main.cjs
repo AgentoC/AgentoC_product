@@ -3,6 +3,8 @@
 const { app, BrowserWindow, ipcMain, nativeImage, shell } = require("electron");
 const http = require("node:http");
 const path = require("node:path");
+const fs = require("node:fs/promises");
+const updateCheck = require("./update-check.cjs");
 
 const SERVICE_ORIGIN = "http://127.0.0.1:7690";
 const MANAGER_URL = `${SERVICE_ORIGIN}/?desktop=manager`;
@@ -17,6 +19,25 @@ let mainWindow = null;
 let pollTimer = null;
 let pollInProgress = false;
 let managerLoaded = false;
+let updateState = { status: "checking" };
+let updatePending = null;
+let updateTimer = null;
+
+async function refreshUpdate() {
+  if (updatePending) return updatePending;
+  updatePending = (async () => {
+    let currentVersion;
+    try {
+      currentVersion = (await fs.readFile(path.resolve(app.getAppPath(), "../../../.agentoc-package-version"), "utf8")).trim();
+      updateState = { status: "ready", ...(await updateCheck.check(currentVersion)) };
+    } catch {
+      updateState = { status: "error", ...(currentVersion ? { currentVersion } : {}) };
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("desktop:update-state", updateState);
+    return updateState;
+  })().finally(() => { updatePending = null; });
+  return updatePending;
+}
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -31,6 +52,8 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     app.setAppUserModelId("com.agentoc.desktop-manager");
     createMainWindow();
+    void refreshUpdate();
+    updateTimer = setInterval(() => void refreshUpdate(), 6 * 60 * 60 * 1000);
   });
 
   app.on("window-all-closed", () => app.quit());
@@ -144,9 +167,16 @@ function createMainWindow() {
   mainWindow.on("closed", () => {
     mainWindow = null;
     clearInterval(pollTimer);
+    clearInterval(updateTimer);
     pollTimer = null;
   });
 
+  ipcMain.handle("desktop:update-get", (event) => event.sender === mainWindow?.webContents ? updateState : { status: "error" });
+  ipcMain.handle("desktop:update-check", (event) => event.sender === mainWindow?.webContents ? refreshUpdate() : { status: "error" });
+  ipcMain.handle("desktop:update-open", async (event) => {
+    if (event.sender !== mainWindow?.webContents || !updateState.updateAvailable || !updateCheck.windowsAsset({ name: "agentoc-x64.msi", browser_download_url: updateState.downloadUrl })) return false;
+    try { await shell.openExternal(updateState.downloadUrl); return true; } catch { return false; }
+  });
   ipcMain.handle("desktop:write-text", (event, value) => {
     if (event.sender !== mainWindow?.webContents || typeof value !== "string") return false;
     if (Buffer.byteLength(value, "utf8") > 4096) return false;

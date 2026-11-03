@@ -190,3 +190,7 @@ await exec(ps,['-NoProfile','-NonInteractive','-Command','. ./packaging/windows/
 try{await exec(ps,['-NoProfile','-NonInteractive','-File','packaging/windows/managed-owner-msi.ps1','-Action','Prepare','-OwnerSid','S-1-5-21-1-2-3-1001'],{windowsHide:true,timeout:30000,maxBuffer:16384});assert.fail('Installed preparation accepted');}
 catch(e){assert.equal(e.code,1);const refusal=JSON.parse(e.stdout);assert.equal(refusal.ok,false);assert.match(refusal.code,/^(OMI|OBD|ODP|OSP)_[A-Z_]+$/);assert.equal(refusal.servicesActivated,false);}
 await writeFile(join(root,'verified.json'),JSON.stringify({pass:true,nativeBridgeCompiled:true,nativePreparedHandlesCompiled:true,localRefusals:count,servicesCreated:false,authorityIssued:false},null,2)+'\n');console.log(JSON.stringify({pass:true,nativeBridgeCompiled:true,nativePreparedHandlesCompiled:true,localRefusals:count,servicesCreated:false}));
+
+assert.match(activatedWix, /<WriteRegistryValues Sequence="6450"\s*\/>/, 'public display version must be written after MSI product publication');
+assert.match(activatedWix, /Name="DisplayVersion" Type="string" Value="\$\(var\.DisplayVersion\)"/, 'ARP must show the public package version');
+assert.match(msiBuilder, /DisplayVersion=\$displayVersion/, 'build passes the public version into WiX');

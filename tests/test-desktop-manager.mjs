@@ -95,6 +95,13 @@ try {
   }
   await page.evaluate(() => {
     window.__activeTab = 'settings';
+    window.__updateOpens = 0;
+    window.agentocDesktop = {
+      getUpdateState: async () => ({ status: 'ready', currentVersion: '1.0.0', latestVersion: 'v1.1.0', updateAvailable: true }),
+      checkForUpdates: async () => ({ status: 'ready', currentVersion: '1.0.0', latestVersion: 'v1.1.0', updateAvailable: true }),
+      openUpdate: async () => { window.__updateOpens++; return true; },
+      onUpdateState: (fn) => { window.__updateListener = fn; },
+    };
     window.__openedViews = [];
   window.__managerRefreshes = 0;
     window.switchTab = (tab) => {
@@ -122,7 +129,16 @@ try {
   assert.equal(await page.locator('#desktopManagerPageHeading').evaluate((node) => getComputedStyle(node).display), 'flex');
   assert.equal(await page.locator('#desktopManagerPageTitle').innerText(), 'Accounts & permissions');
 
+  await page.locator('[data-desktop-manager-tab="about"]').click();
+  assert.equal(await page.locator('#desktopManagerCurrentVersion').innerText(), '1.0.0');
+  assert.equal(await page.locator('#desktopManagerLatestVersion').innerText(), 'v1.1.0');
+  await page.locator('#desktopManagerCheckUpdateBtn').click();
+  await page.locator('#desktopManagerUpdateBtn').click();
+  assert.equal(await page.evaluate(() => window.__updateOpens), 1);
+  await page.evaluate(() => window.__updateListener({ status: 'ready', currentVersion: '1.1.0', latestVersion: 'v1.1.0', updateAvailable: false }));
+  assert.equal(await page.locator('#desktopManagerUpdateBtn').isVisible(), false);
   await page.locator('[data-desktop-manager-tab="harnesses"]').click();
+  assert.equal(await page.locator('#desktopManagerAboutPanel').isVisible(), false);
   assert.equal(await page.evaluate(() => window.__activeTab), 'harnesses');
   assert.equal(await page.locator('#desktopManagerPageTitle').innerText(), 'Harness management');
   await page.locator('[data-desktop-manager-tab="providers"]').click();

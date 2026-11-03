@@ -102,6 +102,7 @@
           <strong>AgentoC</strong>
           <span data-i18n="desktopManager.subtitle">Desktop manager</span>
         </div>
+        <button class="settings-row-button settings-row-button-primary desktop-manager-update" id="desktopManagerUpdateBtn" type="button" hidden data-i18n="desktopManager.update">Update available</button>
       </header>
       <nav class="desktop-manager-nav" id="desktopManagerNav" aria-label="AgentoC management" hidden>
         <button type="button" data-desktop-manager-tab="account" aria-current="page">
@@ -115,6 +116,9 @@
         </button>
         <button type="button" data-desktop-manager-tab="pairing">
           <span data-icon="monitor" aria-hidden="true"></span><span data-i18n="desktopManager.pairing">Phone pairing</span>
+        </button>
+        <button type="button" data-desktop-manager-tab="about">
+          <span data-icon="gear" aria-hidden="true"></span><span data-i18n="desktopManager.about">About</span>
         </button>
       </nav>
       <header class="desktop-manager-page-heading" id="desktopManagerPageHeading" hidden>
@@ -301,6 +305,20 @@
             <p class="cross-device-helper" data-i18n="desktopManager.pairingCardFootnote">Pairing codes expire automatically and can only be used once.</p>
           </div>
         </article>
+      </div>
+      <div class="settings-panel" id="desktopManagerAboutPanel" hidden>
+        <section class="settings-group">
+          <div class="settings-group-card">
+            <div class="settings-row settings-row-action">
+              <div class="settings-row-copy">
+                <div class="settings-row-title" data-i18n="desktopManager.currentVersion">Current version</div>
+                <div class="settings-row-note" id="desktopManagerCurrentVersion">—</div>
+              </div>
+              <button class="settings-row-button" id="desktopManagerCheckUpdateBtn" type="button" data-i18n="desktopManager.checkUpdate">Check for updates</button>
+            </div>
+            <div class="settings-row"><div class="settings-row-copy"><div class="settings-row-title" data-i18n="desktopManager.latestVersion">Latest version</div><div class="settings-row-note" id="desktopManagerLatestVersion">—</div><div class="settings-row-note" id="desktopManagerUpdateStatus" role="status" aria-live="polite"></div></div></div>
+          </div>
+        </section>
       </div>
       <div class="settings-panel model-providers-panel" id="modelProvidersPanel" hidden>
         <section class="settings-group" aria-labelledby="modelProvidersPageTitle">

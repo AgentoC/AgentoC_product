@@ -536,3 +536,6 @@ body.desktop-manager .settings-row-button { border-radius: 9px; }
   body.desktop-manager .cross-device-card-header { padding: 18px 16px 12px; }
   body.desktop-manager .cross-device-card-body { padding: 0 16px 16px; }
 }
+
+body.desktop-manager .desktop-manager-update:not([hidden]) { margin-left: auto; }
+body.desktop-manager .desktop-manager-nav { flex-wrap: wrap; }

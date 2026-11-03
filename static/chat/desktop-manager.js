@@ -12,6 +12,12 @@
   const headingDescription = doc.getElementById("desktopManagerPageDescription");
   const subpageHeader = doc.getElementById("sidebarSubpageHeader");
   const backButton = doc.getElementById("sidebarSubpageCloseBtn");
+  const aboutPanel = doc.getElementById("desktopManagerAboutPanel");
+  const updateButton = doc.getElementById("desktopManagerUpdateBtn");
+  const checkButton = doc.getElementById("desktopManagerCheckUpdateBtn");
+  const currentVersion = doc.getElementById("desktopManagerCurrentVersion");
+  const latestVersion = doc.getElementById("desktopManagerLatestVersion");
+  const updateStatus = doc.getElementById("desktopManagerUpdateStatus");
   const pairingPanel = doc.getElementById("desktopManagerPairingPanel");
   const pairingButton = doc.getElementById("desktopManagerStartPairingBtn");
   const externalStatus = doc.getElementById("desktopManagerExternalStatus");
@@ -22,6 +28,7 @@
     "accountPolicyPanel",
   ].map((id) => doc.getElementById(id)).filter(Boolean);
   const pageCopy = {
+    about: ["desktopManager.page.about.title", "desktopManager.page.about.description", "About", "Version information and updates for AgentoC."],
     account: [
       "desktopManager.page.account.title",
       "desktopManager.page.account.description",
@@ -74,7 +81,15 @@
     if (subpageHeader) subpageHeader.hidden = true;
   }
 
+  function hideCustomPanels() {
+    for (const panel of [pairingPanel, aboutPanel]) if (panel) {
+      panel.hidden = true;
+      panel.classList.remove("visible");
+    }
+  }
+
   function switchTo(tab, managerName) {
+    hideCustomPanels();
     if (pairingPanel) {
       pairingPanel.hidden = true;
       pairingPanel.classList.remove("visible");
@@ -87,6 +102,7 @@
   }
 
   function showPairingPage() {
+    hideCustomPanels();
     if (typeof root.switchTab === "function") root.switchTab("settings", { animate: false });
     for (const panel of settingsPanels) {
       panel.hidden = true;
@@ -100,6 +116,39 @@
     select("pairing");
     updatePageHeading("pairing");
   }
+
+  function showAbout() {
+    hideCustomPanels();
+    root.switchTab?.("settings", { animate: false });
+    for (const panel of settingsPanels) { panel.hidden = true; panel.classList.remove("visible"); }
+    if (aboutPanel) { aboutPanel.hidden = false; aboutPanel.classList.add("visible"); }
+    hideSubpageHeader(); select("about"); updatePageHeading("about");
+  }
+
+  function renderUpdate(state) {
+    if (!state) return;
+    if (currentVersion) currentVersion.textContent = state.currentVersion || "—";
+    if (latestVersion) latestVersion.textContent = state.latestVersion || "—";
+    if (updateButton) updateButton.hidden = !state.updateAvailable;
+    if (checkButton) checkButton.disabled = state.status === "checking";
+    if (updateStatus) {
+      const key = state.status === "checking" ? "checking" : state.status === "error" ? "error" : state.updateAvailable ? "available" : "current";
+      const fallback = { checking: "Checking for updates…", error: "Could not check for updates. Please try again.", available: "A new version is available.", current: "You are up to date." };
+      updateStatus.textContent = translate(`desktopManager.updateStatus.${key}`, fallback[key]);
+    }
+  }
+  root.agentocDesktop?.onUpdateState?.(renderUpdate);
+  root.agentocDesktop?.getUpdateState?.().then(renderUpdate).catch(() => renderUpdate({ status: "error" }));
+  checkButton?.addEventListener("click", async () => {
+    renderUpdate({ status: "checking" });
+    try { renderUpdate(await root.agentocDesktop.checkForUpdates()); } catch { renderUpdate({ status: "error" }); }
+  });
+  updateButton?.addEventListener("click", async () => {
+    try { if (await root.agentocDesktop.openUpdate()) return; } catch {}
+    const message = translate("desktopManager.updateOpenFailed", "Could not open the download in your browser.");
+    if (updateStatus) updateStatus.textContent = message;
+    if (externalStatus) { externalStatus.textContent = message; externalStatus.hidden = false; }
+  });
 
   function showAccount() {
     switchTo("settings", "account");
@@ -133,6 +182,7 @@
       case "harnesses": switchTo("harnesses", "harnesses"); break;
       case "providers": switchTo("model-providers", "providers"); break;
       case "pairing": showPairingPage(); break;
+      case "about": showAbout(); break;
     }
   });
 
