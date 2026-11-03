@@ -28,6 +28,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.core.view.ViewCompat
@@ -166,6 +167,7 @@ class PairingOnboardingDeviceUiTest {
             rule.onNodeWithText(resources.getString(R.string.pairing_setup_guide_title)).assertIsDisplayed()
             rule.onNodeWithText(resources.getString(R.string.pairing_setup_guide_install)).assertIsDisplayed()
             rule.onNodeWithText("https://www.agentoncloud.com/download.html").assertIsDisplayed()
+            rule.onNodeWithContentDescription(resources.getString(R.string.pairing_setup_guide_copy)).assertIsDisplayed().assertHasClickAction()
             rule.onNodeWithText(resources.getString(R.string.pairing_setup_guide_scan)).assertIsDisplayed().assertHasClickAction()
             capture("scan-guide-${language.toLanguageTag()}-top.png")
             rule.onNodeWithText(resources.getString(R.string.pairing_setup_guide_desktop)).performScrollTo().assertIsDisplayed()

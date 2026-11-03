@@ -1,10 +1,10 @@
 <resources>
     <string name="pairing_setup_guide_title">Configurer votre ordinateur</string>
-    <string name="pairing_setup_guide_install">1. Sur votre ordinateur, ouvrez la page de téléchargement AgentoC et installez l’application Windows.</string>
+    <string name="pairing_setup_guide_install">Sur votre ordinateur, ouvrez la page de téléchargement AgentoC et installez l’application Windows.</string>
     <string name="pairing_setup_guide_open">Ouvrir les téléchargements</string>
     <string name="pairing_setup_guide_copy">Copier l’adresse</string>
-    <string name="pairing_setup_guide_desktop">2. Ouvrez AgentoC sur l’ordinateur. Trouvez le code dans Comptes et autorisations, ou créez-en un dans Association du téléphone. Sans connexion au compte, choisissez l’association temporaire.</string>
-    <string name="pairing_setup_guide_scan_help">3. Scannez le code avec ce téléphone et suivez les instructions sur les deux appareils.</string>
+    <string name="pairing_setup_guide_desktop">Ouvrez AgentoC sur l’ordinateur. Trouvez le code dans Comptes et autorisations, ou créez-en un dans Association du téléphone. Sans connexion au compte, choisissez l’association temporaire.</string>
+    <string name="pairing_setup_guide_scan_help">Scannez le code avec ce téléphone et suivez les instructions sur les deux appareils.</string>
     <string name="pairing_setup_guide_scan">Scanner le code</string>
     <string name="pairing_setup_guide_add_another">Ajouter un ordinateur</string>
 </resources>

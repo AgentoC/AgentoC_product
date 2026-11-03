@@ -1,10 +1,10 @@
 <resources>
     <string name="pairing_setup_guide_title">コンピュータを設定</string>
-    <string name="pairing_setup_guide_install">1. コンピュータで AgentoC のダウンロードページを開き、Windows アプリをインストールします。</string>
+    <string name="pairing_setup_guide_install">コンピュータで AgentoC のダウンロードページを開き、Windows アプリをインストールします。</string>
     <string name="pairing_setup_guide_open">ダウンロードページを開く</string>
     <string name="pairing_setup_guide_copy">アドレスをコピー</string>
-    <string name="pairing_setup_guide_desktop">2. コンピュータで AgentoC を開き、アカウントと権限のコードを表示するか、電話のペアリングでコードを作成します。ログインしない場合は一時ペアリングを選びます。</string>
-    <string name="pairing_setup_guide_scan_help">3. このスマートフォンでコードをスキャンし、両方の画面の案内に従います。</string>
+    <string name="pairing_setup_guide_desktop">コンピュータで AgentoC を開き、アカウントと権限のコードを表示するか、電話のペアリングでコードを作成します。ログインしない場合は一時ペアリングを選びます。</string>
+    <string name="pairing_setup_guide_scan_help">このスマートフォンでコードをスキャンし、両方の画面の案内に従います。</string>
     <string name="pairing_setup_guide_scan">コードをスキャン</string>
     <string name="pairing_setup_guide_add_another">別のコンピュータを追加</string>
 </resources>
