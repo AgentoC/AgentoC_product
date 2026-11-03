@@ -54,6 +54,8 @@ internal static class AgentoCSetup {
 
     // Windows command line escaping for CommandLineToArgvW / MSI arguments.
     private static string Quote(string value) {
+        // msiexec parses switches itself and does not accept quoted switches.
+        if (value.Length > 0 && value.IndexOfAny(new char[] { ' ', '\t', '\n', '\v', '"' }) < 0) return value;
         StringBuilder text = new StringBuilder("\"");
         int slashes = 0;
         foreach (char c in value) {
