@@ -1344,6 +1344,7 @@ class RoomSessionRepository(
                         result.cursor.lastAppliedSeq,
                         durableMessages.associate { it.id to it.content },
                         durableMessages.filter { it.completed }.mapTo(mutableSetOf()) { it.id },
+                        page.events.filter { it.terminalRunState() != null }.mapNotNullTo(mutableSetOf()) { it.runId?.takeIf(String::isNotBlank) },
                     )
                     liveTimelineState.value = liveTimelineState.value + (sessionId to projector.snapshotEvents())
                 } }
@@ -1422,6 +1423,7 @@ class RoomSessionRepository(
         (page.runActivity as? JsonObject)?.let { activity ->
             runActivityState.update { it + (sessionId to activity) }
         }
+        recoverVisiblePendingApproval(sessionId, page)
         if (page.resetRequired) {
             timelinePagingState.value = timelinePagingState.value + (sessionId to TimelinePagingState(error = page.reason))
             return RefreshResult.ResetRequired(page.reason)
@@ -1446,6 +1448,42 @@ class RoomSessionRepository(
             latestSeq = latestSeq,
         ))
         return RefreshResult.Applied(events.size, latestSeq)
+    }
+
+    // A history migration can advance the durable cursor without materializing
+    // old approval rows. Recover only the exact request the server identifies
+    // as currently waiting; never reopen a locally resolved request.
+    private suspend fun recoverVisiblePendingApproval(sessionId: String, page: SessionEventsPageDto) {
+        if (page.resetRequired || page.sessionId != sessionId) return
+        val activity = page.runActivity as? JsonObject ?: return
+        if ((activity["actionRequired"] as? JsonPrimitive)?.booleanOrNull != true ||
+            (activity["kind"] as? JsonPrimitive)?.contentOrNull != "approval") return
+        val sourceSeq = (activity["sourceSeq"] as? JsonPrimitive)?.contentOrNull?.toLongOrNull() ?: return
+        fun findRequest(events: List<SessionEventDto>) = events.firstOrNull {
+            it.type == "approval_request" && it.boundarySeq() == sourceSeq &&
+                !it.approvalId.isNullOrBlank() && !it.runId.isNullOrBlank() &&
+                it.status.orEmpty().lowercase() !in setOf("approved", "denied", "declined", "cancelled", "canceled", "resolved")
+        }
+        // The visible projection may fold an approval into an operation, or
+        // the request may be outside its page. Fetch the durable source event.
+        val request = findRequest(page.events) ?: run {
+            val response = requestDurableEventPage(eventPagePath(sessionId, sourceSeq - 1, waitForEvents = false))
+            val durable = codec.decode(serializer<SessionEventsPageDto>(), response.body)
+            if (durable.resetRequired || durable.sessionId != sessionId) return
+            val activityResponse = execute(ApiRequest("GET", visibleEventPagePath(sessionId, null)))
+            val activityPage = codec.decode(serializer<SessionEventsPageDto>(), activityResponse.body)
+            val current = activityPage.runActivity as? JsonObject ?: return
+            if (activityPage.resetRequired || activityPage.sessionId != sessionId ||
+                (current["actionRequired"] as? JsonPrimitive)?.booleanOrNull != true ||
+                (current["kind"] as? JsonPrimitive)?.contentOrNull != "approval" ||
+                (current["sourceSeq"] as? JsonPrimitive)?.contentOrNull?.toLongOrNull() != sourceSeq) return
+            findRequest(durable.events) ?: return
+        }
+        database.withTransaction {
+            if (dao.getApproval(sessionId, request.approvalId!!) == null) {
+                RoomEventSink(database, dao).apply(sessionId, request)
+            }
+        }
     }
 
     private fun updateVisibleTimelineProjection(sessionId: String, events: List<SessionEventDto>) {

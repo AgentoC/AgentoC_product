@@ -274,7 +274,7 @@ sealed interface WebParityEvent {
     data class DisconnectConnector(val id: String) : WebParityEvent
     data class RevokeDevice(val id: String) : WebParityEvent
     data class RenameDevice(val id: String, val name: String) : WebParityEvent
-    data class OpenFile(val path: String) : WebParityEvent
+    data class OpenFile(val path: String, val sessionId: String? = null) : WebParityEvent
     data class OpenDirectory(val path: String) : WebParityEvent
     data object ParentDirectory : WebParityEvent
     data object CloseFile : WebParityEvent
@@ -485,8 +485,10 @@ class WebParityRepository(private val transport: AgentoCTransport) {
         request("POST", route)
     }
 
-    suspend fun loadFile(path: String): WebFilePayload {
-        val response = transport.execute(ApiRequest("GET", "/api/workspace-files/content?workspace=~&path=${path(path)}"))
+    suspend fun loadFile(path: String, sessionId: String? = null): WebFilePayload {
+        val scope = sessionId?.takeIf(String::isNotBlank)?.let { "sessionId=${path(it)}" } ?: "workspace=~"
+        val response = transport.execute(ApiRequest("GET", "/api/workspace-files/content?$scope&path=${path(path)}"))
+        if (!response.isSuccessful) error("File could not be opened")
         val bytes = response.bodyBytes ?: response.body.toByteArray(Charsets.UTF_8)
         val mimeType = response.headers.entries.firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }
             ?.value?.substringBefore(';')?.trim().orEmpty().ifBlank { "application/octet-stream" }
@@ -911,7 +913,7 @@ class WebParityViewModel(
                 fileReadJob = viewModelScope.launch {
                     mutableState.update { it.copy(fileReadInProgress = true, selectedFile = event.path, filePayload = null, fileContent = null, error = null) }
                     try {
-                        val payload = repository.loadFile(event.path)
+                        val payload = repository.loadFile(event.path, event.sessionId)
                         currentCoroutineContext().ensureActive()
                         if (generation == fileReadGeneration) mutableState.update {
                             it.copy(fileReadInProgress = false, filePayload = payload,

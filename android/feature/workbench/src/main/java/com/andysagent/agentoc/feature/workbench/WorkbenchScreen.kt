@@ -21,6 +21,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -32,6 +36,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -82,6 +87,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -616,7 +622,11 @@ fun WorkbenchScreen(
                     runSheetOpen = runSheetOpen,
                     onSetRunSheetOpen = { runSheetOpen = it },
                     selectedDiffFile = selectedDiffFile,
-                    onSetSelectedDiffFile = { selectedDiffFile = it },
+                    onSetSelectedDiffFile = { file ->
+                        selectedDiffFile = file
+                        if (file == null) parityEvent(WebParityEvent.CloseFile)
+                        else parityEvent(WebParityEvent.OpenFile(file.path, state.sessionId))
+                    },
                     planMode = planMode,
                     onSetPlanMode = { planMode = it },
                 )
@@ -667,7 +677,11 @@ fun WorkbenchScreen(
                         runSheetOpen = runSheetOpen,
                         onSetRunSheetOpen = { runSheetOpen = it },
                         selectedDiffFile = selectedDiffFile,
-                        onSetSelectedDiffFile = { selectedDiffFile = it },
+                        onSetSelectedDiffFile = { file ->
+                        selectedDiffFile = file
+                        if (file == null) parityEvent(WebParityEvent.CloseFile)
+                        else parityEvent(WebParityEvent.OpenFile(file.path, state.sessionId))
+                    },
                         planMode = planMode,
                         onSetPlanMode = { planMode = it },
                     )
@@ -743,7 +757,7 @@ fun WorkbenchScreen(
                 WorkbenchBackLayer.SubscriptionInfo -> onCloseSubscriptionInfo()
                 WorkbenchBackLayer.GoogleSignInSuccess -> onGoogleSignInSuccessBack()
                 WorkbenchBackLayer.PairingSignIn -> onPairingOnboardingEvent(PairingOnboardingEvent.BackToWelcome)
-                WorkbenchBackLayer.DiffViewer -> selectedDiffFile = null
+                WorkbenchBackLayer.DiffViewer -> { selectedDiffFile = null; parityEvent(WebParityEvent.CloseFile) }
                 WorkbenchBackLayer.RunSheet -> runSheetOpen = false
                 WorkbenchBackLayer.AgentPanel -> agentPanelOpen = false
                 WorkbenchBackLayer.ConnectorPanel -> connectorPanelOpen = false
@@ -3185,10 +3199,10 @@ private fun ChatSurface(
 
 
         selectedDiffFile?.let { diffFile ->
-            DiffViewerModal(
-                diffFile = diffFile,
+            ChangedFilePreview(
+                path = diffFile.path,
+                state = parityState,
                 onDismiss = { onSetSelectedDiffFile(null) },
-                backdropLayer = chatModalBackdrop,
             )
         }
 
@@ -3397,6 +3411,18 @@ internal fun ActiveRunActionBar(
         status == AgentRunStatus.WaitingApproval -> stringResource(R.string.workbench_status_awaiting_approval)
         else -> stringResource(R.string.workbench_status_processing)
     }
+    val shimmer by rememberInfiniteTransition(label = "run-action-shimmer").animateFloat(
+        initialValue = -1f, targetValue = 2f,
+        animationSpec = infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "run-action-shimmer-position",
+    )
+    var textWidth by remember { mutableIntStateOf(1) }
+    val base = colors.secondaryContent
+    val highlight = androidx.compose.ui.graphics.lerp(base, colors.primaryContent, 0.7f)
+    val shimmerBrush = Brush.horizontalGradient(
+        colors = listOf(base, highlight, base),
+        startX = (shimmer - 0.35f) * textWidth,
+        endX = (shimmer + 0.35f) * textWidth,
+    )
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -3408,38 +3434,30 @@ internal fun ActiveRunActionBar(
             },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AgentoFrostedGlassBox(
-            shape = RoundedCornerShape(12.dp),
-            surface = AgentoGlassSurface.Neutral,
-            blurRadius = AgentoFrostedTokens.BlurSubtle,
-            showTopHairline = true,
-            hasShadow = true,
-            shadowElevation = 4.dp,
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                com.andysagent.agentoc.core.designsystem.AgentoBreathingDot(
-                    color = if (status == AgentRunStatus.WaitingApproval) colors.stateWarning else colors.stateRunning,
-                    size = 6.dp,
-                )
-                Text(
-                    text = sentence,
-                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.5.sp),
-                    color = colors.secondaryContent,
+        AnimatedContent(
+            targetState = sentence,
+            modifier = Modifier.weight(1f, fill = false),
+            transitionSpec = {
+                (expandHorizontally(expandFrom = Alignment.Start, animationSpec = tween(280, easing = FastOutSlowInEasing)) +
+                    fadeIn(animationSpec = tween(220))) togetherWith fadeOut(animationSpec = tween(120))
+            },
+            label = "run-action-content",
+        ) { current ->
+                BasicText(
+                    text = current,
+                    modifier = Modifier.onSizeChanged { textWidth = it.width.coerceAtLeast(1) },
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.5.sp, brush = shimmerBrush),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (sinceMillis != null) {
-                    Text(
-                        text = if (elapsedSeconds < 60) "${elapsedSeconds}s" else "${elapsedSeconds / 60}m ${elapsedSeconds % 60}s",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.secondaryContent,
-                    )
-                }
-            }
+        }
+        if (sinceMillis != null) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = if (elapsedSeconds < 60) "${elapsedSeconds}s" else "${elapsedSeconds / 60}m ${elapsedSeconds % 60}s",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.secondaryContent,
+            )
         }
     }
 }
@@ -4498,6 +4516,7 @@ internal fun PairingOnboardingDialog(
                                 )
                             }
                         }
+                        AgentoButton(stringResource(R.string.pairing_setup_guide_add_another), onScanPairing, secondary = true)
                     }
                     PairingOnboardingStep.Verifying -> {
                         AgentoProgress(modifier = Modifier.size(AgentocSizes.Icon))

@@ -241,7 +241,7 @@
     <string name="welcome_try_direct_connection">직접 연결 시도</string>
     <string name="pairing_dialog_title">컴퓨터 연결</string>
     <string name="pairing_link_computer">컴퓨터 연결하기</string>
-    <string name="pairing_account_claim_guidance">이 Google 계정에 연결된 컴퓨터가 없습니다. AgentoC에 표시된 일회용 연결 코드를 스캔하세요. 다음부터는 다시 스캔할 필요가 없습니다.</string>
+    <string name="pairing_account_claim_guidance">컴퓨터의 일회용 코드를 스캔하여 연결하세요. 다음 화면에서 AgentoC 설치 방법과 코드 위치를 안내합니다.</string>
     <string name="pairing_connect_selected">선택한 기기 연결</string>
     <string name="pairing_connecting">연결 중…</string>
     <string name="pairing_continue">계속</string>

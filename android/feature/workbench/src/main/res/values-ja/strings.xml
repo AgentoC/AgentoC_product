@@ -241,7 +241,7 @@
     <string name="welcome_try_direct_connection">直接接続を試す</string>
     <string name="pairing_dialog_title">コンピュータに接続</string>
     <string name="pairing_link_computer">コンピュータをリンク</string>
-    <string name="pairing_account_claim_guidance">この Google アカウントにはコンピュータがリンクされていません。AgentoC に表示された一時リンクコードをスキャンしてください。次回からスキャンは不要です。</string>
+    <string name="pairing_account_claim_guidance">コンピュータのワンタイムコードをスキャンして接続します。次の画面で AgentoC のインストール方法とコードの場所を説明します。</string>
     <string name="pairing_connect_selected">選択したデバイスに接続</string>
     <string name="pairing_connecting">接続中…</string>
     <string name="pairing_continue">続ける</string>

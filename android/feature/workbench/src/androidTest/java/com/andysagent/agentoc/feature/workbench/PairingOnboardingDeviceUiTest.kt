@@ -119,4 +119,16 @@ class PairingOnboardingDeviceUiTest {
         rule.onNodeWithText("关联电脑").assertIsDisplayed().assertHasClickAction()
         capture("keyboard-zh-CN.png")
     }
+
+    @Test fun scanGuideExplainsDesktopSetupAndOpensScanner() {
+        var scanned = false
+        rule.setContent {
+            AgentocTheme { PairingScanGuideDialog(onScan = { scanned = true }, onDismiss = {}) }
+        }
+        val resources = rule.activity.resources
+        rule.onNodeWithText(resources.getString(R.string.pairing_setup_guide_install)).assertIsDisplayed()
+        rule.onNodeWithText("https://www.agentoncloud.com/download.html").assertIsDisplayed()
+        rule.onNodeWithText(resources.getString(R.string.pairing_setup_guide_scan)).performClick()
+        assertTrue(scanned)
+    }
 }

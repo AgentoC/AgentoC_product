@@ -46,7 +46,7 @@ class ChatActionVisibilityUiTest {
         val copy = resources.getString(com.andysagent.agentoc.core.agentui.R.string.agentui_copy_message)
         val branch = resources.getString(com.andysagent.agentoc.core.agentui.R.string.agentui_branch_from_message)
         rule.setContent { AgentocTheme {
-            TurnTimelineView(turn, true, if (allowBranch) ({}) else null, {}, {}, { _, _ -> }, {}, {}, onReport = {}, showMessageActions = showActions)
+            TurnTimelineView(turn, true, if (allowBranch) ({ _, _ -> }) else null, {}, {}, { _, _ -> }, {}, {}, onReport = {}, showMessageActions = showActions)
         } }
         rule.onNodeWithText("Readable commentary").assertIsDisplayed()
         rule.onAllNodesWithContentDescription(copy).assertCountEquals(0)

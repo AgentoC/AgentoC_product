@@ -243,7 +243,7 @@
     <string name="welcome_try_direct_connection">Essayer la connexion directe</string>
     <string name="pairing_dialog_title">Connecter votre ordinateur</string>
     <string name="pairing_link_computer">Lier un ordinateur</string>
-    <string name="pairing_account_claim_guidance">Aucun ordinateur n’est associé à ce compte Google. Scannez le code de liaison à usage unique affiché dans AgentoC sur cet ordinateur. Les prochaines connexions ne nécessiteront plus de scan.</string>
+    <string name="pairing_account_claim_guidance">Scannez le code à usage unique de l’ordinateur pour le connecter. L’écran suivant explique comment installer AgentoC et trouver le code.</string>
     <string name="pairing_connect_selected">Connecter la sélection</string>
     <string name="pairing_connecting">Connexion…</string>
     <string name="pairing_continue">Continuer</string>

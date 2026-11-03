@@ -37,6 +37,7 @@ import com.andysagent.agentoc.core.navigation.AgentoDestination
 import com.andysagent.agentoc.core.timeline.TimelineItem
 import com.andysagent.agentoc.core.timeline.TimelineOperationKind
 import com.andysagent.agentoc.core.timeline.TimelineOperationStatus
+import com.andysagent.agentoc.core.timeline.TimelineRole
 import com.andysagent.agentoc.core.timeline.RunActionFormatter
 import com.andysagent.agentoc.core.timeline.RunActionUiState
 import kotlinx.serialization.json.JsonObject
@@ -1968,8 +1969,9 @@ class ChatViewModel(
         val traces = mutableListOf<StepTraceItem>()
         val files = mutableListOf<FileDiffDetail>()
         var stepIndex = 1
+        val currentTurnStart = items.indexOfLast { it is TimelineItem.Message && it.role == TimelineRole.User }.coerceAtLeast(0)
 
-        for (item in items) {
+        for ((index, item) in items.withIndex()) {
             if (item is TimelineItem.Operation) {
                 traces.add(
                     StepTraceItem(
@@ -1980,7 +1982,9 @@ class ChatViewModel(
                         status = item.status.name.lowercase(),
                     )
                 )
-                if (item.kind == TimelineOperationKind.FileEdit || item.kind == TimelineOperationKind.Diff) {
+                if (index >= currentTurnStart && (item.kind == TimelineOperationKind.FileEdit || item.kind == TimelineOperationKind.Diff) &&
+                    item.status == com.andysagent.agentoc.core.timeline.TimelineOperationStatus.Completed &&
+                    !item.requiresApproval && (item.exitCode == null || item.exitCode == 0)) {
                     val explicitChanges = item.fileChanges.filter { it.path.isNotBlank() }
                     if (explicitChanges.isNotEmpty()) {
                         files += explicitChanges.map { change ->
@@ -1991,14 +1995,6 @@ class ChatViewModel(
                                 diffContent = item.detail.ifBlank { change.diffSummary },
                             )
                         }
-                    } else if (item.detail.isNotBlank()) {
-                        val lines = item.detail.lines()
-                        files += FileDiffDetail(
-                            path = item.title,
-                            additions = lines.count { it.startsWith("+") && !it.startsWith("+++") },
-                            deletions = lines.count { it.startsWith("-") && !it.startsWith("---") },
-                            diffContent = item.detail,
-                        )
                     }
                 }
             }
@@ -2007,14 +2003,17 @@ class ChatViewModel(
         artifactProjectionRepository = fixed
         artifactProjectionTimeline = items
         cachedStepTraces = traces
-        cachedChangedFiles = files
-        traces to files
+        cachedChangedFiles = files.distinctBy { it.path }
+        traces to cachedChangedFiles
     }
 
     /** Live text deltas normally replace only the final assistant message. */
     private fun onlyNonOperationTailChanged(items: List<TimelineItem>): Boolean {
         val previous = artifactProjectionTimeline
         if (previous.isEmpty() || items.isEmpty()) return false
+        val previousTurn = previous.lastOrNull { it is TimelineItem.Message && it.role == TimelineRole.User }?.id
+        val currentTurn = items.lastOrNull { it is TimelineItem.Message && it.role == TimelineRole.User }?.id
+        if (previousTurn != currentTurn) return false
         val sharedCount = minOf(previous.size, items.size)
         var changedAt = sharedCount
         for (index in 0 until sharedCount) {

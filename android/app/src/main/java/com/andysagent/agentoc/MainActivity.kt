@@ -289,6 +289,7 @@ class MainActivity : ComponentActivity() {
     private var welcomeSuppressedBySignIn by mutableStateOf(false)
     private var subscriptionInfoOpen by mutableStateOf(false)
     private var googleSignInError by mutableStateOf<String?>(null)
+    private var pendingPairingScanFromWelcome by mutableStateOf<Boolean?>(null)
     private var computerConnectionError by mutableStateOf<ConnectionErrorCopy?>(null)
     private var pendingSessionNavigation by mutableStateOf<SessionNavigationRequest?>(null)
     private var sessionNavigationError by mutableStateOf<ApiErrorCode?>(null)
@@ -1314,10 +1315,10 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onScanPairing = {
-                        startPairingScan(pairingOnboarding, returnToWelcomeOnFailure = false)
+                        pendingPairingScanFromWelcome = false
                     },
                     onScanPairingFromWelcome = {
-                        startPairingScan(pairingOnboarding, returnToWelcomeOnFailure = true)
+                        pendingPairingScanFromWelcome = true
                     },
                     onOpenSubscription = {
                         subscriptionInfoOpen = true
@@ -1623,6 +1624,15 @@ class MainActivity : ComponentActivity() {
 
                 }
 
+                pendingPairingScanFromWelcome?.let { fromWelcome ->
+                    com.andysagent.agentoc.feature.workbench.PairingScanGuideDialog(
+                        onScan = {
+                            pendingPairingScanFromWelcome = null
+                            startPairingScan(pairingOnboarding, returnToWelcomeOnFailure = fromWelcome)
+                        },
+                        onDismiss = { pendingPairingScanFromWelcome = null },
+                    )
+                }
                 com.andysagent.agentoc.feature.workbench.ContentReportHost(contentReports)
                 com.andysagent.agentoc.feature.workbench.accounts.DemoSignInDialog(
                     state = demoSignInState,

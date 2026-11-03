@@ -1,5 +1,5 @@
 import { WORKBENCH_EXECUTION_POLICY, workbenchToolAllowed, filterWorkbenchModels } from '../lib/workbench-execution-policy.mjs';
-import { mkdir, readFile, readdir, stat } from 'fs/promises';
+import { mkdir, readFile, readdir, realpath, stat } from 'fs/promises';
 import { homedir } from 'os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'path';
 
@@ -2578,19 +2578,28 @@ export async function handleControlRoutes({
     });
     if (!resolved) return true;
 
-    const relativePath = normalizeWorkspaceRelativePath(parsedUrl.query?.path);
-    if (!relativePath) {
+    const requestedPath = typeof parsedUrl.query?.path === 'string' ? parsedUrl.query.path.trim() : '';
+    if (!requestedPath) {
       writeJson(res, 400, { error: 'path is required' });
       return true;
     }
-    const filepath = resolve(resolved.rootPath, relativePath);
+    // Runtime tools often report absolute paths. Only accept them when they
+    // remain inside the authenticated workspace/session root.
+    const filepath = isAbsolute(requestedPath)
+      ? resolve(requestedPath)
+      : resolve(resolved.rootPath, normalizeWorkspaceRelativePath(requestedPath));
     if (!isPathInsideRoot(resolved.rootPath, filepath) || !isWorkspaceReadableFile(filepath)) {
       writeJson(res, 400, { error: 'File is not readable from this workspace' });
       return true;
     }
 
     try {
-      const fileStats = await stat(filepath);
+      const [realRoot, realFile] = await Promise.all([realpath(resolved.rootPath), realpath(filepath)]);
+      if (!isPathInsideRoot(realRoot, realFile)) {
+        writeJson(res, 403, { error: 'File is outside this workspace' });
+        return true;
+      }
+      const fileStats = await stat(realFile);
       if (!fileStats.isFile()) {
         writeJson(res, 404, { error: 'File not found' });
         return true;
@@ -2601,7 +2610,7 @@ export async function handleControlRoutes({
         return true;
       }
       const downloadRequested = String(parsedUrl?.query?.download || '') === '1';
-      streamResponse(res, filepath, {
+      streamResponse(res, realFile, {
         'Content-Type': workspaceReadableFileTypes[extension] || 'application/octet-stream',
         'Content-Disposition': buildAttachmentContentDisposition(basename(filepath), { attachment: downloadRequested }),
         'Cache-Control': 'private, no-store, max-age=0, must-revalidate',

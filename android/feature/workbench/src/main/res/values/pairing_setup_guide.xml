@@ -1,0 +1,10 @@
+<resources>
+    <string name="pairing_setup_guide_title">Set up your computer</string>
+    <string name="pairing_setup_guide_install">1. On your computer, open the AgentoC download page and install the Windows app.</string>
+    <string name="pairing_setup_guide_open">Open download page</string>
+    <string name="pairing_setup_guide_copy">Copy download address</string>
+    <string name="pairing_setup_guide_desktop">2. Open AgentoC on the computer. Find the code under Accounts &amp; permissions, or create one in Phone pairing. For access without signing in, select temporary pairing.</string>
+    <string name="pairing_setup_guide_scan_help">3. Scan the code with this phone and follow the prompts on both devices.</string>
+    <string name="pairing_setup_guide_scan">Scan code</string>
+    <string name="pairing_setup_guide_add_another">Add another computer</string>
+</resources>

@@ -143,7 +143,6 @@ fun TurnTimelineView(
                     is TimelineItem.Plan -> PlanBlock(item, onPlanAction)
                     is TimelineItem.Operation -> {
                         if (item.isReasoning) ThinkingRow(item)
-                        if (item.fileChanges.isNotEmpty()) TimelineArtifactBlock(item.fileChanges, onOpenFileDiff)
                     }
                     is TimelineItem.Notice -> if (item.text.isNotBlank()) Text(item.text)
                 }
@@ -166,14 +165,6 @@ fun TurnTimelineView(
 
         // Thinking remains available; tool-call records are omitted from chat.
         turn.operationSummary?.operations?.filter { it.isReasoning }?.forEach { ThinkingRow(it) }
-
-        // 5. Timeline Artifact Block (File changes, test outcomes on solid Surface)
-        if (turn.fileChanges.isNotEmpty()) {
-            TimelineArtifactBlock(
-                files = turn.fileChanges,
-                onOpenFileDiff = onOpenFileDiff,
-            )
-        }
 
         // 6. Keep every distinct assistant message, including progress before
         // a final reply. Only an update to the same entity replaces its text.
@@ -494,7 +485,6 @@ fun OperationGroup(
                     summary.operations.forEach { op ->
                         OperationItemRow(op, showTitle = summary.operations.size != 1 || op.title != summary.summaryText,
                             showStatus = summary.operations.size != 1 || summary.failedCount == 0)
-                        if (op.fileChanges.isNotEmpty()) TimelineArtifactBlock(op.fileChanges, onOpenFileDiff)
                     }
                 }
             }

@@ -12,6 +12,37 @@ import com.andysagent.agentoc.core.model.Message
 
 class TimelineEngineTest {
     @Test
+    fun durableRunCompletionRetiresMismatchedLiveBlockAndIgnoresLateDeltas() {
+        val projector = LiveTimelineProjector()
+        projector.apply(listOf(SessionEventDto(id = "delta", type = "text_delta", entityId = "block-1", runId = "run-1", text = "answer")))
+        projector.reconcileDurableCursor(15, mapOf("block-0" to "answer"), setOf("block-0"), setOf("run-1"))
+        assertTrue(projector.snapshotEvents().isEmpty())
+        val late = projector.apply(listOf(SessionEventDto(id = "late", type = "text_delta", entityId = "block-1", runId = "run-1", text = "stale")))
+        assertTrue(late.events.isEmpty())
+        val nextRun = projector.apply(listOf(SessionEventDto(id = "new", type = "text_delta", entityId = "block-2", runId = "run-2", text = "new")))
+        assertEquals("new", nextRun.events.single().text)
+    }
+    @Test
+    fun canonicalFileOperationWaitsForApprovalBeforeCompleting() {
+        val projector = LiveTimelineProjector()
+        val change = com.andysagent.agentoc.core.protocol.FileChangeDto(filePath = "/workspace/report.md", changeType = "modify", added = 3)
+        val waiting = projector.apply(listOf(SessionEventDto(
+            seq = 1, eventId = "op-1", type = "operation", operationId = "op-1",
+            state = "waiting_approval", fileChanges = listOf(change),
+        )))
+        val pending = assertIs<TimelineItem.Operation>(TimelineProjector.project(emptyList(), waiting.events).single())
+        assertEquals(TimelineOperationStatus.Pending, pending.status)
+        assertTrue(pending.requiresApproval)
+        assertEquals("/workspace/report.md", pending.fileChanges.single().path)
+        val completed = projector.apply(listOf(SessionEventDto(
+            seq = 2, eventId = "op-2", type = "operation", operationId = "op-1",
+            state = "completed", fileChanges = listOf(change),
+        )))
+        val result = assertIs<TimelineItem.Operation>(TimelineProjector.project(emptyList(), completed.events).single())
+        assertEquals(TimelineOperationStatus.Completed, result.status)
+        assertEquals(false, result.requiresApproval)
+    }
+    @Test
     fun planArtifactUpdatesFoldByPlanIdAndPreserveStepState() {
         val projector = LiveTimelineProjector()
         val first = projector.apply(listOf(

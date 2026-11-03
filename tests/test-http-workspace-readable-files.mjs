@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 import assert from 'assert/strict';
-import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { chmodSync, mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import http from 'http';
+import { createHmac } from 'crypto';
 import { spawn } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = dirname(__dirname);
 const cookie = 'session_token=test-session';
+const sessionSecret = 'workspace-readable-test-session-secret';
 
 function randomPort() {
   return 43000 + Math.floor(Math.random() * 2000);
@@ -86,7 +88,7 @@ function setupTempHome() {
   writeFileSync(
     join(configDir, 'auth-sessions.json'),
     JSON.stringify({
-      'test-session': { expiry: Date.now() + 60 * 60 * 1000, role: 'owner' },
+      [`s${createHmac('sha256', sessionSecret).update('test-session').digest('hex')}`]: { expiry: Date.now() + 60 * 60 * 1000, role: 'owner' },
     }, null, 2),
     'utf8',
   );
@@ -125,6 +127,7 @@ async function startServer({ home, configDir, localBin, port }) {
       CHAT_PORT: String(port),
       AGENTOC_INSTANCE_ROOT: '',
       AGENTOC_CONFIG_DIR: configDir,
+      AGENTOC_AUTH_SESSION_SECRET: sessionSecret,
       AGENTOC_MEMORY_DIR: join(home, '.agentoc', 'memory'),
       AGENTOC_WORK_ROOT_DIR: join(home, '.agentoc', 'workspace'),
       AGENTOC_DISABLE_SYSTEMD_DETACHED_RUNNER: '1',
@@ -209,6 +212,10 @@ try {
   assert.match(markdownRes.headers['content-disposition'] || '', /^inline;/u, 'markdown preview should default to inline disposition');
   assert.equal(markdownRes.text, '# Workspace\n\nReadable markdown.', 'markdown content should match the workspace file');
 
+  const absoluteRes = await request(port, 'GET', `/api/workspace-files/content?sessionId=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(join(workspaceDir, 'README.md'))}`);
+  assert.equal(absoluteRes.status, 200, 'absolute files within the session workspace should stream');
+  assert.equal(absoluteRes.text, markdownRes.text);
+
   const pdfRes = await request(port, 'GET', `/api/workspace-files/content?sessionId=${encodeURIComponent(sessionId)}&path=${encodeURIComponent('docs/index.pdf')}`);
   assert.equal(pdfRes.status, 200, 'PDF content should stream');
   assert.match(pdfRes.headers['content-type'] || '', /^application\/pdf/u, 'PDF content should use PDF content type');
@@ -220,6 +227,18 @@ try {
 
   const escapeRes = await request(port, 'GET', `/api/workspace-files/content?workspace=${encodeURIComponent(workspaceDir)}&path=${encodeURIComponent('../.config/agentoc/auth.json')}`);
   assert.equal(escapeRes.status, 400, 'workspace file reader should reject paths outside the workspace folder');
+
+  writeFileSync(join(home, 'outside.md'), 'outside workspace');
+  let symlinkAvailable = true;
+  try { symlinkSync(join(home, 'outside.md'), join(workspaceDir, 'link.md'), 'file'); }
+  catch (error) {
+    if (!['EPERM', 'EACCES'].includes(error.code)) throw error;
+    symlinkAvailable = false;
+  }
+  if (symlinkAvailable) {
+    const linkRes = await request(port, 'GET', `/api/workspace-files/content?sessionId=${encodeURIComponent(sessionId)}&path=link.md`);
+    assert.equal(linkRes.status, 403, 'workspace file reader should reject links outside the workspace');
+  }
 
   console.log('test-http-workspace-readable-files: ok');
 } finally {

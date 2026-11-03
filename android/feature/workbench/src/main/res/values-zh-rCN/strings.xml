@@ -274,7 +274,7 @@
     <string name="welcome_try_direct_connection">尝试直接连接</string>
     <string name="pairing_dialog_title">连接电脑</string>
     <string name="pairing_link_computer">关联电脑</string>
-    <string name="pairing_account_claim_guidance">此 Google 帐号尚未关联电脑。请扫描电脑端 AgentoC 显示的一次性关联码；之后连接无需再扫码。</string>
+    <string name="pairing_account_claim_guidance">扫描电脑上的一次性二维码即可关联。下一步会说明如何安装 AgentoC 并找到二维码。</string>
     <string name="pairing_connect_selected">连接所选设备</string>
     <string name="pairing_connecting">正在连接…</string>
     <string name="pairing_continue">继续</string>
@@ -466,4 +466,10 @@
     <string name="runtime_provider_none_title">没有可用模型</string>
     <string name="runtime_provider_none_detail">请在设置中添加服务提供方并配置可用模型。</string>
     <string name="runtime_provider_none_settings">前往服务提供方设置</string>
+    <string name="changed_file_close">关闭</string>
+    <string name="changed_file_loading">正在加载文件…</string>
+    <string name="changed_file_unavailable">无法预览此文件。</string>
+    <string name="changed_file_pdf_page">第 %1$d / %2$d 页</string>
+    <string name="changed_file_previous">上一页</string>
+    <string name="changed_file_next">下一页</string>
 </resources>

@@ -243,7 +243,7 @@
     <string name="welcome_try_direct_connection">Probar conexión directa</string>
     <string name="pairing_dialog_title">Conectar tu equipo</string>
     <string name="pairing_link_computer">Vincular un equipo</string>
-    <string name="pairing_account_claim_guidance">No hay ningún equipo vinculado a esta cuenta de Google. Escanea el código de vinculación de un solo uso que aparece en AgentoC en ese equipo. Las próximas conexiones no necesitarán otro escaneo.</string>
+    <string name="pairing_account_claim_guidance">Escanea el código de un solo uso del equipo para conectarlo. En la siguiente pantalla verás cómo instalar AgentoC y encontrar el código.</string>
     <string name="pairing_connect_selected">Conectar selección</string>
     <string name="pairing_connecting">Conectando…</string>
     <string name="pairing_continue">Continuar</string>

@@ -288,7 +288,7 @@
     <string name="welcome_try_direct_connection">Try direct connection</string>
     <string name="pairing_dialog_title">Connect your computer</string>
     <string name="pairing_link_computer">Link a computer</string>
-    <string name="pairing_account_claim_guidance">No computer is linked to this Google account. Scan that computer’s one-time account-link code in AgentoC. Future connections won’t need another scan.</string>
+    <string name="pairing_account_claim_guidance">Connect a computer by scanning its one-time code. The next screen explains how to install AgentoC and find the code.</string>
     <string name="pairing_connect_selected">Connect selected</string>
     <string name="pairing_connecting">Connecting…</string>
     <string name="pairing_continue">Continue</string>
@@ -476,4 +476,10 @@
     <string name="runtime_provider_none_title">No usable model</string>
     <string name="runtime_provider_none_detail">Add a provider and configure an available model in settings.</string>
     <string name="runtime_provider_none_settings">Open provider settings</string>
+    <string name="changed_file_close">Close</string>
+    <string name="changed_file_loading">Loading file…</string>
+    <string name="changed_file_unavailable">File preview is unavailable.</string>
+    <string name="changed_file_pdf_page">Page %1$d / %2$d</string>
+    <string name="changed_file_previous">Previous</string>
+    <string name="changed_file_next">Next</string>
 </resources>

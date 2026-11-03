@@ -42,6 +42,7 @@ class LiveTimelineProjector {
     /** Latest renderable event per entity. Protocol events remain deduped in seenKeys. */
     private val renderedEvents = linkedMapOf<String, TimelineEvent>()
     private val ephemeralRenderKeys = mutableSetOf<String>()
+    private val terminalRunIds = mutableSetOf<String>()
     private val accumulator = StreamingAccumulator()
     private val messageStates = linkedMapOf<String, ProjectedMessage>()
     private var durableSeq = 0L
@@ -53,8 +54,16 @@ class LiveTimelineProjector {
         durableSeq: Long,
         durableMessages: Map<String, String> = emptyMap(),
         completedEntityIds: Set<String> = emptySet(),
+        completedRunIds: Set<String> = emptySet(),
     ) {
         if (durableSeq < this.durableSeq) return
+        terminalRunIds.addAll(completedRunIds)
+        // Live deltas may use a different provider block identity than the
+        // finalized durable snapshot. Once its terminal event is durable, the
+        // snapshot is authoritative and the ephemeral overlay must retire.
+        renderedEvents.entries.removeIf { (key, event) ->
+            key in ephemeralRenderKeys && event.runId in completedRunIds && event.messageState != null
+        }
         val durableChanged = durableSeq > this.durableSeq
             || durableMessages != durableBaseline
             || completedEntityIds != durableCompletedBaseline
@@ -102,6 +111,7 @@ class LiveTimelineProjector {
 
     fun apply(events: Iterable<SessionEventDto>): LiveTimelineResult {
         for (event in events) {
+            if (event.boundarySeq() == 0L && event.runId in terminalRunIds && event.isTimelineMessage()) continue
             val start = event.startingSeq()
             val boundary = event.boundarySeq()
             val key = event.dedupeKey() ?: "fingerprint:${event.sessionEventFingerprint()}"
@@ -229,7 +239,7 @@ class LiveTimelineProjector {
             || (isReasoning && event.state == "completed")
             || type == "tool_result"
 
-        val operationState = event.status ?: event.state
+        val operationState = event.status ?: event.state ?: event.operationLifecycle
         val isToolUse = type == "tool_use" || type == "tool_call" || (type == "operation" && operationState in setOf("in_progress", "running", "started"))
         val isToolResult = type == "tool_result" || (type == "operation" && operationState in setOf("completed", "failed", "error"))
         val isFileChange = type == "file_change" || event.fileChanges.isNotEmpty()
@@ -320,14 +330,16 @@ class LiveTimelineProjector {
         val fileChanges = if (event.fileChanges.isNotEmpty()) {
             event.fileChanges.map {
                 FileChangeItem(
-                    path = it.path,
-                    name = it.name ?: it.path.substringAfterLast('/'),
-                    type = it.type,
-                    additions = it.additions,
-                    deletions = it.deletions,
+                    path = it.filePath?.takeIf(String::isNotBlank) ?: it.path,
+                    name = it.name ?: (it.filePath?.takeIf(String::isNotBlank) ?: it.path).substringAfterLast('/'),
+                    type = it.changeType ?: it.type,
+                    additions = it.added ?: it.additions,
+                    deletions = it.removed ?: it.deletions,
                     diffSummary = it.diffSummary,
                 )
             }
+        } else if (type == "file_change" && !event.filePath.isNullOrBlank()) {
+            listOf(FileChangeItem(path = event.filePath!!, type = event.changeType ?: "modify", additions = event.added ?: 0, deletions = event.removed ?: 0))
         } else {
             previous?.fileChanges.orEmpty()
         }
@@ -365,6 +377,8 @@ class LiveTimelineProjector {
 
         val operationStatus = when {
             isReasoning -> if (isComplete || lateDelta) TimelineOperationStatus.Completed else TimelineOperationStatus.InProgress
+            operationState in setOf("waiting_approval", "waiting_user", "approval_requested", "pending") -> TimelineOperationStatus.Pending
+            operationState in setOf("started", "running", "in_progress") -> TimelineOperationStatus.InProgress
             isToolResult -> if ((exitCode != null && exitCode != 0) || operationState == "failed" || operationState == "error") TimelineOperationStatus.Failed else TimelineOperationStatus.Completed
             isToolUse -> TimelineOperationStatus.InProgress
             isFileChange -> TimelineOperationStatus.Completed
@@ -383,7 +397,7 @@ class LiveTimelineProjector {
 
         val options = event.options.ifEmpty { event.choices }.ifEmpty { previous?.options.orEmpty() }
         val isMultiSelect = event.isMultiSelect ?: previous?.isMultiSelect ?: false
-        val requiresApproval = type.contains("approval") || type.contains("confirmation") || (previous?.requiresApproval == true && !isComplete && !isToolResult)
+        val requiresApproval = operationState in setOf("waiting_approval", "waiting_user", "approval_requested") || type.contains("approval") || type.contains("confirmation") || (previous?.requiresApproval == true && !isComplete && !isToolResult)
 
         return TimelineEvent(
             id = event.dedupeKey() ?: "live:${event.boundarySeq()}",

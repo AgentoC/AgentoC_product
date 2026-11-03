@@ -353,6 +353,9 @@ class ChatModernizationParityTest {
                     title = "src/main/Database.kt",
                     detail = "@@ -1,5 +1,8 @@\n-class OldDb\n+class ModernRoomDb\n+fun setup()",
                     status = TimelineOperationStatus.Completed,
+                    fileChanges = listOf(com.andysagent.agentoc.core.timeline.FileChangeItem(
+                        path = "src/main/Database.kt", additions = 2, deletions = 1,
+                    )),
                 ),
             )
             val repository = TestSessionRepository(
@@ -442,6 +445,7 @@ class ChatModernizationParityTest {
             // Switch back to Session 1, draft should be restored
             viewModel.onEvent(ChatEvent.SelectSession("s1"))
             assertEquals("Draft text for session 1", viewModel.state.value.composerText)
+            advanceUntilIdle() // Wait for the selected session's runtime before sending.
 
             // Send message in Session 1, draft should be cleared
             viewModel.onEvent(ChatEvent.SendMessage)

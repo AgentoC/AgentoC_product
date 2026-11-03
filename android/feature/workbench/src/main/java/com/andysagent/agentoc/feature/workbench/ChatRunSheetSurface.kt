@@ -455,26 +455,6 @@ private fun ChangedFilesSection(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        if (file.additions > 0) {
-                            Text(
-                                text = "+${file.additions}",
-                                style = com.andysagent.agentoc.core.designsystem.AgentoConversationTypography.Code.copy(
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF34C759),
-                                ),
-                            )
-                        }
-                        if (file.deletions > 0) {
-                            Text(
-                                text = "-${file.deletions}",
-                                style = com.andysagent.agentoc.core.designsystem.AgentoConversationTypography.Code.copy(
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFEF4444),
-                                ),
-                            )
-                        }
                         AgentoWebIcon(
                             glyph = AgentoWebGlyph.ChevronRight,
                             contentDescription = null,

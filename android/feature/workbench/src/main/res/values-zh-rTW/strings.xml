@@ -241,7 +241,7 @@
     <string name="welcome_try_direct_connection">嘗試直接連線</string>
     <string name="pairing_dialog_title">連線至電腦</string>
     <string name="pairing_link_computer">連結電腦</string>
-    <string name="pairing_account_claim_guidance">此 Google 帳號尚未連結電腦。請掃描電腦端 AgentoC 顯示的一次性連結碼；之後連線無需再次掃碼。</string>
+    <string name="pairing_account_claim_guidance">掃描電腦上的一次性二維碼即可連結。下一步會說明如何安裝 AgentoC 並找到二維碼。</string>
     <string name="pairing_connect_selected">連線至所選裝置</string>
     <string name="pairing_connecting">正在連線…</string>
     <string name="pairing_continue">繼續</string>

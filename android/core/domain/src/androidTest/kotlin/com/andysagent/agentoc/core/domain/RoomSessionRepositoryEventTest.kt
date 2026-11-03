@@ -8,6 +8,7 @@ import com.andysagent.agentoc.core.database.AgentoCDatabase
 import com.andysagent.agentoc.core.database.ApprovalEntity
 import com.andysagent.agentoc.core.database.PendingOperationEntity
 import com.andysagent.agentoc.core.database.SessionEntity
+import com.andysagent.agentoc.core.database.SyncCursorEntity
 import com.andysagent.agentoc.core.model.RuntimeConnectionState
 import com.andysagent.agentoc.core.model.SessionStatus
 import com.andysagent.agentoc.core.network.AgentoCTransport
@@ -38,6 +39,22 @@ import org.junit.Assert.assertTrue
 
 @RunWith(AndroidJUnit4::class)
 class RoomSessionRepositoryEventTest {
+    @Test fun restoresPendingApprovalWhenCursorAlreadyPassedItsEvent() = runBlocking {
+        database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 10, 0)))
+        database.dao().upsertCursor(SyncCursorEntity("session-1", 10, null, updatedAt = 0))
+        val activity = """{"actionRequired":true,"kind":"approval","sourceSeq":10}"""
+        val transport = QueuedTransport(listOf(
+            """{"sessionId":"session-1","events":[],"latestSeq":10}""",
+            """{"sessionId":"session-1","events":[],"latestSeq":10,"runActivity":$activity}""",
+            """{"sessionId":"session-1","events":[{"seq":10,"type":"approval_request","approvalId":"claude:1","runId":"run-1","title":"Write","status":"pending"}],"latestSeq":10,"runActivity":$activity}""",
+            """{"sessionId":"session-1","events":[],"latestSeq":10,"runActivity":$activity}""",
+        ))
+        val repository = RoomSessionRepository(database, transport)
+        repository.refreshTimeline("session-1")
+        assertEquals("claude:1", repository.observePendingApprovals("session-1").first().single().id)
+        assertTrue(transport.requests.any { it.path.contains("afterSeq=9") })
+        repository.close()
+    }
     @Test fun pinUpdatesUseServerValuesAndUnpinHandlesOmittedFlags() = runBlocking {
         val transport = QueuedTransport(listOf(
             "{}", """{"sessions":[{"id":"s","name":"Chat","pinned":true}]}""",
