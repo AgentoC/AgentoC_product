@@ -562,6 +562,7 @@ class AndroidRuntimeGraph internal constructor(
 
     private suspend fun stopAccountProfileRuntimesLocked() {
         otherDeviceProjectionEpoch++
+        if (targetFactoryOverride == null && configOverride == null) ComputerConnectionService.stop(application)
         accountCapacityRetry.cancel()
         appApiCallerGrants.revokeAll(appApiOwner)
         assistantDelegations.revokeAll(appApiOwner)
@@ -1152,6 +1153,10 @@ class AndroidRuntimeGraph internal constructor(
         val uiTargets = if (foreground || retainUiConnections) (listOfNotNull(recoveryPlan.primaryInstanceId) +
             recoveryPlan.backgroundInstanceIds).toSet() else emptySet()
         connectionUses.setOwnerTargets("foreground-ui", uiTargets)
+        if (targetFactoryOverride == null && configOverride == null) {
+            if (uiTargets.isEmpty()) ComputerConnectionService.stop(application)
+            else if (foreground) ComputerConnectionService.startWhileVisible(application)
+        }
         (uiBackgroundTargetIds - previousBackgroundIds).forEach { id ->
             targetRuntimes[id]?.takeIf { it.transport.connectionState.value == RuntimeConnectionState.Connected }?.let {
                 scope.launch { refreshBackgroundSummary(it) }
@@ -1707,6 +1712,7 @@ class AndroidRuntimeGraph internal constructor(
     /** Application shutdown/test teardown; normal UI exit only releases its owner set. */
     internal suspend fun close() {
         stopped = true
+        if (targetFactoryOverride == null && configOverride == null) ComputerConnectionService.stop(application)
         targetPairingCommits.close()
         accountRestoreJob?.cancel()
         withContext(Dispatchers.Main) { ProcessLifecycleOwner.get().lifecycle.removeObserver(this@AndroidRuntimeGraph) }

@@ -1,0 +1,5 @@
+<resources>
+    <string name="computer_connection_channel">电脑连接</string>
+    <string name="computer_connection_title">AgentoC 电脑连接</string>
+    <string name="computer_connection_description">在使用其他应用时保持电脑连接。</string>
+</resources>
