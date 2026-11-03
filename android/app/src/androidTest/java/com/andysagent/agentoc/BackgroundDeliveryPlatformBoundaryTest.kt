@@ -6,7 +6,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -24,18 +23,9 @@ class BackgroundDeliveryPlatformBoundaryTest {
             .requestedPermissions.orEmpty().toSet()
         assertFalse("Unused Android14 FGS data-sync permission is still declared",
             "android.permission.FOREGROUND_SERVICE_DATA_SYNC" in permissions)
-        assertTrue("Computer connection service needs the base FGS permission", Manifest.permission.FOREGROUND_SERVICE in permissions)
-        if (Build.VERSION.SDK_INT >= 34) {
-            assertTrue("Connected-device FGS permission missing", "android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" in permissions)
-        }
-        val computerService = context.packageManager.getServiceInfo(
-            ComponentName(context, ComputerConnectionService::class.java), 0)
-        assertFalse(computerService.exported)
-        assertTrue(computerService.enabled)
-        assertTrue("Connected-device prerequisite missing", Manifest.permission.CHANGE_NETWORK_STATE in permissions)
-        if (Build.VERSION.SDK_INT >= 29) {
-            assertTrue(computerService.foregroundServiceType and ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE != 0)
-        }
+        assertTrue("Legacy delivery needs the base FGS permission", Manifest.permission.FOREGROUND_SERVICE in permissions)
+        assertFalse("Computer connection should not require a connected-device FGS permission",
+            "android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" in permissions)
         val info = context.packageManager.getServiceInfo(
             ComponentName(context, BackgroundDeliveryForegroundService::class.java), PackageManager.MATCH_DISABLED_COMPONENTS)
         assertFalse(info.exported)

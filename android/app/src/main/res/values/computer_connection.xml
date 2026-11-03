@@ -1,5 +1,0 @@
-<resources>
-    <string name="computer_connection_channel">Computer connection</string>
-    <string name="computer_connection_title">AgentoC computer connection</string>
-    <string name="computer_connection_description">Keeping your computer connection available while you use other apps.</string>
-</resources>
