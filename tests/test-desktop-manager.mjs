@@ -130,6 +130,9 @@ try {
   assert.equal(await page.locator('#desktopManagerPageTitle').innerText(), 'Accounts & permissions');
 
   await page.locator('[data-desktop-manager-tab="about"]').click();
+  await page.locator('[data-desktop-manager-tab="account"]').click();
+  assert.equal(await page.locator('#settingsPanel').isVisible(), true, 'account settings return after About');
+  await page.locator('[data-desktop-manager-tab="about"]').click();
   assert.equal(await page.locator('#desktopManagerCurrentVersion').innerText(), '1.0.0');
   assert.equal(await page.locator('#desktopManagerLatestVersion').innerText(), 'v1.1.0');
   await page.locator('#desktopManagerCheckUpdateBtn').click();
@@ -153,7 +156,7 @@ try {
   await page.locator('[data-desktop-manager-tab="account"]').click();
   assert.equal(await page.locator('#settingsPanel').evaluate((node) => getComputedStyle(node).display), 'block');
   assert.equal(await page.locator('#desktopManagerPairingPanel').isVisible(), false);
-  assert.equal(await page.evaluate(() => window.__managerRefreshes), 2, 'account view should refresh Google and trusted-device data on entry');
+  assert.equal(await page.evaluate(() => window.__managerRefreshes), 3, 'account view should refresh Google and trusted-device data on entry');
 
   await page.evaluate(() => window.switchTab('account-policy'));
   assert.notEqual(await page.locator('#sidebarSubpageHeader').evaluate((node) => getComputedStyle(node).display), 'none');

@@ -90,11 +90,11 @@
 
   function switchTo(tab, managerName) {
     hideCustomPanels();
-    if (pairingPanel) {
-      pairingPanel.hidden = true;
-      pairingPanel.classList.remove("visible");
-    }
     if (typeof root.switchTab === "function") root.switchTab(tab, { animate: false });
+    if (managerName === "account") {
+      const settingsPanel = doc.getElementById("settingsPanel");
+      if (settingsPanel) settingsPanel.hidden = false;
+    }
     hideSubpageHeader();
     select(managerName);
     updatePageHeading(managerName);
