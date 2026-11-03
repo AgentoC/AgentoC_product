@@ -15,7 +15,8 @@ if (-not $OutputDirectory.StartsWith($tempPrefix, [StringComparison]::OrdinalIgn
 
 $source = Join-Path $PSScriptRoot 'agentoc-installer-embedded-ui.cpp'
 $logo = Join-Path $BrandAssetDirectory 'agentoc-android-logo.png'
-if (-not (Test-Path -LiteralPath $source -PathType Leaf) -or -not (Test-Path -LiteralPath $logo -PathType Leaf)) {
+$icon = Join-Path $BrandAssetDirectory 'agentoc.ico'
+if (-not (Test-Path -LiteralPath $source -PathType Leaf) -or -not (Test-Path -LiteralPath $logo -PathType Leaf) -or -not (Test-Path -LiteralPath $icon -PathType Leaf)) {
     throw 'The custom installer UI source and Android-matched AgentoC logo are required.'
 }
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
@@ -60,6 +61,7 @@ if ($minGW) {
 }
 
 Copy-Item -LiteralPath $logo -Destination (Join-Path $OutputDirectory 'agentoc-android-logo.png') -Force
+Copy-Item -LiteralPath $icon -Destination (Join-Path $OutputDirectory 'agentoc.ico') -Force
 @{
     includeMingwRuntime = $includeMingwRuntime -eq '1'
     uiBinary = $output

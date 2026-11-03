@@ -411,36 +411,39 @@ bool NormalizeInstallPath(std::wstring value, std::wstring& normalized, std::wst
 
 void DrawBrandPanel(Gdiplus::Graphics& graphics, const RECT& client, float width) {
     Gdiplus::RectF panel(0, 0, width, static_cast<float>(client.bottom));
-    Gdiplus::LinearGradientBrush background(panel, Color(19, 38, 58), Color(35, 65, 91), Gdiplus::LinearGradientModeVertical);
+    Gdiplus::LinearGradientBrush background(panel, Color(243, 245, 251), Color(233, 237, 247), Gdiplus::LinearGradientModeVertical);
     graphics.FillRectangle(&background, panel);
 
-    Gdiplus::SolidBrush glow(AlphaColor(17, 255, 255, 255));
-    graphics.FillEllipse(&glow, -width * 0.48f, 35.0f, width * 1.32f, width * 1.32f);
-    Gdiplus::SolidBrush accent(AlphaColor(45, 105, 218, 206));
-    graphics.FillEllipse(&accent, width * 0.48f, 180.0f, width * 0.9f, width * 0.9f);
+    // Soft tonal layers keep the installer visually aligned with the app's
+    // quiet glass surfaces without obscuring the readable content.
+    Gdiplus::SolidBrush glow(AlphaColor(72, 255, 255, 255));
+    graphics.FillEllipse(&glow, -width * 0.6f, static_cast<float>(Px(315)), width * 1.65f, width * 1.65f);
+    Gdiplus::SolidBrush wash(AlphaColor(30, 142, 168, 255));
+    graphics.FillEllipse(&wash, width * 0.18f, static_cast<float>(Px(400)), width * 1.1f, width * 1.1f);
 
+    Gdiplus::RectF logoCard(Px(42), Px(54), Px(104), Px(104));
+    Gdiplus::SolidBrush logoBackground(Color(255, 255, 255));
+    FillRounded(graphics, logoCard, Px(24), logoBackground);
     if (g.logo && g.logo->GetLastStatus() == Gdiplus::Ok) {
-        const float logoSize = Px(108);
-        graphics.DrawImage(g.logo, Gdiplus::RectF(Px(44), Px(60), logoSize, logoSize));
+        graphics.DrawImage(g.logo, Gdiplus::RectF(Px(51), Px(63), Px(86), Px(86)));
     }
-    DrawText(graphics, L"AgentoC", Px(42), Px(190), width - Px(72), Px(30), Color(250, 252, 255), true);
-    DrawText(graphics, Text(L"Your local AI workbench", L"你的本地 AI 工作台"), Px(44), Px(236), width - Px(76), Px(16), Color(193, 211, 224));
+    DrawText(graphics, L"AgentoC", Px(42), Px(190), width - Px(72), Px(29), Color(28, 32, 42), true);
+    DrawText(graphics, Text(L"Your local AI workbench", L"你的本地 AI 工作台"), Px(43), Px(234), width - Px(76), Px(15), Color(96, 104, 121));
 
-    Gdiplus::SolidBrush divider(AlphaColor(48, 255, 255, 255));
-    graphics.FillRectangle(&divider, static_cast<Gdiplus::REAL>(Px(44)), static_cast<Gdiplus::REAL>(Px(292)), width - Px(88), static_cast<Gdiplus::REAL>(Px(1)));
-    DrawText(graphics, Text(L"Private by design", L"为私有而设计"), Px(44), Px(318), width - Px(76), Px(14), Color(222, 233, 241), true);
+    Gdiplus::SolidBrush divider(AlphaColor(30, 64, 74, 96));
+    graphics.FillRectangle(&divider, static_cast<Gdiplus::REAL>(Px(43)), static_cast<Gdiplus::REAL>(Px(286)), width - Px(86), static_cast<Gdiplus::REAL>(Px(1)));
+    DrawText(graphics, Text(L"Private by design", L"为私有而设计"), Px(43), Px(315), width - Px(76), Px(13), Color(49, 57, 73), true);
     DrawText(graphics, Text(L"Manage models, devices, and local runtimes in one place.", L"在一个地方管理模型、设备和本地运行环境。"),
-        Px(44), Px(344), width - Px(80), Px(13), Color(177, 198, 214));
-
-    DrawText(graphics, Text(L"AGENTOC  ·  WINDOWS", L"AGENTOC  ·  WINDOWS"), Px(44), client.bottom - Px(38), width - Px(72), Px(10), Color(149, 177, 197), true);
+        Px(43), Px(342), width - Px(80), Px(13), Color(104, 113, 130));
+    DrawText(graphics, L"AGENTOC  ·  WINDOWS", Px(43), client.bottom - Px(38), width - Px(72), Px(10), Color(135, 143, 158), true);
 }
 
 void DrawMainContent(Gdiplus::Graphics& graphics, const RECT& client, float left) {
     const float x = left + Px(42);
     const float width = client.right - x - Px(42);
-    const Gdiplus::Color ink = Color(30, 38, 50);
-    const Gdiplus::Color muted = Color(105, 116, 130);
-    const Gdiplus::Color accent = Color(53, 96, 230);
+    const Gdiplus::Color ink = Color(29, 31, 38);
+    const Gdiplus::Color muted = Color(107, 111, 123);
+    const Gdiplus::Color accent = Color(22, 105, 199);
     const float y = Px(44);
 
     std::wstring eyebrow = Text(L"AGENTOC SETUP", L"AGENTOC 安装程序");
@@ -460,9 +463,9 @@ void DrawMainContent(Gdiplus::Graphics& graphics, const RECT& client, float left
         DrawText(graphics, Text(L"A calm, secure place to manage your local AI workbench.", L"在这里轻松、安全地管理本地 AI 工作台。"),
             x, y + Px(98), width, Px(15), muted);
 
-        Gdiplus::SolidBrush cardFill(Color(246, 248, 251));
-        FillRounded(graphics, Gdiplus::RectF(x, y + Px(158), width, Px(116)), Px(12), cardFill);
-        Gdiplus::SolidBrush iconFill(Color(229, 238, 255));
+        Gdiplus::SolidBrush cardFill(Color(239, 242, 248));
+        FillRounded(graphics, Gdiplus::RectF(x, y + Px(158), width, Px(116)), Px(18), cardFill);
+        Gdiplus::SolidBrush iconFill(Color(220, 233, 250));
         FillRounded(graphics, Gdiplus::RectF(x + Px(18), y + Px(180), Px(38), Px(38)), Px(11), iconFill);
         DrawText(graphics, L"✓", x + Px(18), y + Px(187), Px(38), Px(20), accent, true, Gdiplus::StringAlignmentCenter);
         DrawText(graphics, Text(L"Your services keep running in the background", L"管理窗口关闭后，后台服务仍会运行"),
@@ -482,7 +485,7 @@ void DrawMainContent(Gdiplus::Graphics& graphics, const RECT& client, float left
             x, y + Px(122), width, Px(13), muted);
         DrawText(graphics, Text(L"Installation folder", L"安装文件夹"), x, y + Px(202), width, Px(12), ink, true);
 
-        Gdiplus::SolidBrush noteFill(Color(246, 248, 251));
+        Gdiplus::SolidBrush noteFill(Color(239, 242, 248));
         FillRounded(graphics, Gdiplus::RectF(x, y + Px(319), width, Px(50)), Px(9), noteFill);
         const std::wstring note = g.errorDetail.empty()
             ? Text(L"Protected service data remains in C:\\ProgramData\\AgentoC.", L"受保护的服务数据仍保存在 C:\\ProgramData\\AgentoC。")
@@ -602,18 +605,18 @@ void DrawOwnerButton(const DRAWITEMSTRUCT* item) {
     }
     Gdiplus::RectF button(static_cast<float>(rect.left + Px(1)), static_cast<float>(rect.top + Px(1)),
         static_cast<float>(rect.right - rect.left - Px(2)), static_cast<float>(rect.bottom - rect.top - Px(2)));
-    Gdiplus::Color fill = primary ? Color(48, 91, 224) : Color(240, 243, 247);
+    Gdiplus::Color fill = primary ? Color(22, 105, 199) : Color(233, 236, 242);
     Gdiplus::Color foreground = primary ? Color(255, 255, 255) : Color(47, 57, 71);
     if (disabled) { fill = Color(230, 233, 238); foreground = Color(147, 155, 166); }
-    else if (pressed) { fill = primary ? Color(35, 72, 195) : Color(222, 228, 236); }
-    else if (hot) { fill = primary ? Color(39, 79, 211) : Color(230, 235, 242); }
+    else if (pressed) { fill = primary ? Color(17, 85, 166) : Color(222, 226, 235); }
+    else if (hot) { fill = primary ? Color(20, 95, 185) : Color(226, 230, 238); }
     if (cancel && g.page == Page::Installing) { fill = Color(255, 255, 255); foreground = Color(91, 102, 118); }
     Gdiplus::SolidBrush brush(fill);
-    FillRounded(graphics, button, Px(9), brush);
+    FillRounded(graphics, button, button.Height / 2.0f, brush);
     if (focused) {
         Gdiplus::Pen focus(Color(80, 117, 235), static_cast<float>(Px(1.5f)));
         Gdiplus::RectF focusRect(button.X + Px(3), button.Y + Px(3), button.Width - Px(6), button.Height - Px(6));
-        DrawRoundedOutline(graphics, focusRect, Px(7), focus);
+        DrawRoundedOutline(graphics, focusRect, focusRect.Height / 2.0f, focus);
     }
     wchar_t label[96]{};
     GetWindowTextW(item->hwndItem, label, static_cast<int>(std::size(label)));
@@ -814,7 +817,7 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
             Gdiplus::Graphics graphics(&frame);
             graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
             graphics.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
-            Gdiplus::SolidBrush background(Color(255, 255, 255));
+            Gdiplus::SolidBrush background(Color(249, 249, 251));
             graphics.FillRectangle(&background, 0, 0, width, height);
             const float left = Px(274);
             DrawBrandPanel(graphics, client, left);
@@ -825,7 +828,7 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
             Gdiplus::Graphics graphics(dc);
             graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
             graphics.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
-            Gdiplus::SolidBrush background(Color(255, 255, 255));
+            Gdiplus::SolidBrush background(Color(249, 249, 251));
             graphics.FillRectangle(&background, 0, 0, width, height);
             const float left = Px(274);
             DrawBrandPanel(graphics, client, left);
@@ -873,7 +876,10 @@ unsigned int __stdcall UiThreadMain(void*) {
     cls.lpfnWndProc = WindowProc;
     cls.hInstance = gModule;
     cls.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    cls.hIcon = LoadIconW(gModule, MAKEINTRESOURCEW(1));
+    const std::filesystem::path iconPath = std::filesystem::path(gResourceDirectory) / L"agentoc.ico";
+    HICON icon = static_cast<HICON>(LoadImageW(nullptr, iconPath.c_str(), IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE));
+    cls.hIcon = icon;
+    cls.hIconSm = icon;
     cls.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
     cls.lpszClassName = kWindowClass;
     RegisterClassExW(&cls);
@@ -908,6 +914,8 @@ unsigned int __stdcall UiThreadMain(void*) {
         TranslateMessage(&message);
         DispatchMessageW(&message);
     }
+    UnregisterClassW(kWindowClass, gModule);
+    if (icon) DestroyIcon(icon);
     if (gGdiPlusToken) { Gdiplus::GdiplusShutdown(gGdiPlusToken); gGdiPlusToken = 0; }
     CoUninitialize();
     return 0;

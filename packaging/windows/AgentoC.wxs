@@ -15,6 +15,7 @@
     <UI>
       <EmbeddedUI Id="AgentoCMsiEmbeddedUI" SourceFile="!(bindpath.InstallUi)\AgentoC.MsiEmbeddedUI.dll" SupportBasicUI="yes">
         <EmbeddedUIResource Id="AgentoCEmbeddedLogo" Name="agentoc-android-logo.png" SourceFile="!(bindpath.InstallUi)\agentoc-android-logo.png" />
+        <EmbeddedUIResource Id="AgentoCEmbeddedIcon" Name="agentoc.ico" SourceFile="!(bindpath.InstallUi)\agentoc.ico" />
         <?if $(var.IncludeMingwUiRuntime) = 1 ?>
           <EmbeddedUIResource Id="AgentoCMingwThreadRuntime" Name="libwinpthread-1.dll" SourceFile="!(bindpath.InstallUi)\libwinpthread-1.dll" />
         <?endif ?>
