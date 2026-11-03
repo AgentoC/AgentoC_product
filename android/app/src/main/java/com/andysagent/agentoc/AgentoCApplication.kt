@@ -467,7 +467,10 @@ class AndroidRuntimeGraph internal constructor(
                 controlWorkbench = workbench
                 transport.switchTo(workbench.transport); sessions.switchTo(workbench.sessions)
                 mutableTemporaryControlActive.value = true
-                if (foreground) workbench.sessions.startLiveSync()
+                if (foreground) {
+                    workbench.sessions.startLiveSync()
+                    if (targetFactoryOverride == null && configOverride == null) ComputerConnectionService.startWhileVisible(application)
+                }
             }
         } catch (error: Throwable) {
             withContext(NonCancellable) {
@@ -1135,7 +1138,10 @@ class AndroidRuntimeGraph internal constructor(
             p2pSecretStore.clear(id)
         }
         controlWorkbench?.let { control ->
-            if (foreground) control.sessions.startLiveSync() else control.sessions.stopLiveSync()
+            if (foreground) {
+                control.sessions.startLiveSync()
+                if (targetFactoryOverride == null && configOverride == null) ComputerConnectionService.startWhileVisible(application)
+            } else control.sessions.stopLiveSync()
             return@withLock
         }
         if (activeInstanceId != selected?.instanceId) activeTargetRuntime()?.sessions?.stopLiveSync()
