@@ -42,7 +42,12 @@ jobs:
           $installer = (Get-ChildItem (Join-Path $env:RUNNER_TEMP 'agentoc-installer') -Filter '*.exe' -File).FullName
           $log = Join-Path $env:RUNNER_TEMP 'agentoc-msi.log'
           $installStarted = (Get-Date).AddSeconds(-5)
-          $p = Start-Process -FilePath $installer -ArgumentList @('/qn', '/norestart', '/l*v', ('"' + $log + '"')) -Wait -PassThru
+          $p = Start-Process -FilePath $installer -ArgumentList @('/qn', '/norestart', '/l*v', ('"' + $log + '"')) -PassThru
+          if (-not $p.WaitForExit(300000)) {
+            Get-Process -Name msiexec,AgentoC* -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,Responding,MainWindowTitle | Format-Table
+            if (Test-Path $log) { Get-Content $log -Tail 35 } else { Write-Host 'MSI log was not created.' }
+            throw 'Installer timed out after five minutes'
+          }
           if ($p.ExitCode -ne 0) {
             Select-String -Path $log -Pattern 'Return value 3' -Context 20,5 | ForEach-Object { $_.ToString() }
             $diagnostic = 'C:\ProgramData\AgentoC\instances\owner\runtime\owner-msi-activation-failure.json'
