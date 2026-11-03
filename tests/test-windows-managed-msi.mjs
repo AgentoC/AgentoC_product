@@ -115,7 +115,7 @@ assert.match(bridge,/RemoveRollback\(string version,string expectedSha256\)/,'un
 assert.match(bridge,/PrevalidationRollback[\s\S]*?PrevalidationMarker\(\)[\s\S]*?RemoveRollback\(version,expectedSha256\)/,'early rollback must verify its protected marker and restore the validated installation');
 assert.match(prevalidation,/FileMode\]::CreateNew[\s\S]*?Flush\(\$true\)[\s\S]*?QuiesceForRemoval\(\)/,'write the recovery marker before stopping services');
 assert.match(activationTrialSource,/QuiesceForRemoval\(\)[\s\S]*?ControlService\(handle,1/,'early service shutdown must retain a validated SCM handle');
-assert.match(msiBuilder,/ExperimentalEarlyQuiesce[\s\S]*?MSI_EARLY_SEQUENCE_COLLISION/,'early sequence rewriting must remain opt-in and reject collisions');
+assert.match(msiBuilder,/useEarlyQuiescence[\s\S]*?MSI_EARLY_SEQUENCE_COLLISION/,'early sequence rewriting must apply only to the activated-owner major lane and reject collisions');
 assert.match(activatedWix,/<CustomAction Id="ManagedPreValidationRollback"[^>]*Execute="rollback"/,'early shutdown must register an MSI rollback action');
 assert.match(bridge,/if\(marker\)RemovedAdmission\(\)/,'uninstall rollback must validate a completed removal marker before clearing it');
 assert.match(bridge,/if\(marker\)RemovedAdmission\(\);else ActiveAdmission\(true\)/,'rollback must admit an authenticated in-progress removal');
@@ -167,6 +167,11 @@ assert.match(serviceHostSource,/ProcessSynchronize=0x00100000/);assert.match(ser
 assert.match(rollbackTest,/actual error code 93/);assert.match(rollbackTest,/AOMR_SESSION_SECRET_NOT_RETAINED/);assert.ok(rollbackTest.includes('Target=injected-failure(?:\\s+"[^"]+")?,'));
 for(const [args,code] of [[['remove',missingRoot],'OMI_INSTALL_ROOT_MISSING'],[['remove-check','--force'],'OMI_ARGUMENTS_REFUSED'],[['ActiveRemove'],'OMI_ARGUMENTS_REFUSED'],[['remove-admission','--skip-verify'],'OMI_ARGUMENTS_REFUSED'],[['activate','--force'],'OMI_ARGUMENTS_REFUSED'],[['activation-check',missingRoot],'OMI_INSTALL_ROOT_MISSING'],[['activation-check','--skip-signature'],'OMI_ARGUMENTS_REFUSED'],[['fresh','S-1-5-21-1-2-3-1001','C:\\'],'OMI_INSTALL_ROOT_REFUSED'],[['fresh','S-1-5-18'],'OMI_OWNER_SID_REQUIRED'],[['recovery-source-check','S-1-5-18',missingRoot],'OMI_OWNER_SID_REQUIRED'],[['prepare','S-1-5-18'],'OMI_ARGUMENTS_REFUSED'],[['prepare','S-1-5-21-1-2-3-1001','extra'],'OMI_ARGUMENTS_REFUSED'],[['prepare','S-1-5-21-1-2-3-1001" -Action Remove'],'OMI_ARGUMENTS_REFUSED']]){
  try{await exec(exe,args,{windowsHide:true,timeout:15000,maxBuffer:16384});assert.fail('Unsafe invocation accepted');}catch(e){assert.equal(e.code,1);assert.equal(e.stderr.trim(),code);}count++;
+}
+for(const action of ['prevalidate-stop','prevalidate-rollback','prevalidate-commit']){
+ const args=action==='prevalidate-commit'?[action,missingRoot]:[action,'0.0.1.0','a'.repeat(64),missingRoot];
+ try{await exec(exe,args,{windowsHide:true,timeout:15000,maxBuffer:16384});assert.fail('Prevalidation action accepted a non-SYSTEM caller');}
+ catch(e){assert.equal(e.code,1);assert.equal(e.stderr.trim(),'OMI_PREVALIDATION_SYSTEM_REQUIRED');}count++;
 }
 try{const result=await exec(exe,['fresh'],{windowsHide:true,timeout:15000,maxBuffer:16384});assert.match(result.stdout,/OMI_FRESH/);}
 catch(e){assert.equal(e.code,1);assert.ok(['OMI_EXISTING_SERVICE_REFUSED','OMI_EXISTING_INSTALL_REFUSED','OMI_INPUT_OWNER_REFUSED'].includes(e.stderr.trim()),`Unexpected safe fresh refusal: ${e.stderr.trim()}`);}

@@ -11,7 +11,6 @@ param(
     [switch]$InjectPostActivationFailure,
     [switch]$InjectPostRemovalFailure,
     [switch]$ExperimentalMajorUpgrade,
-    [switch]$ExperimentalEarlyQuiesce,
     [ValidateSet('major','minor')] [string]$MsiUpgradeLane = 'major',
     [string]$ProductCode = '*',
     [string]$MsiProductVersion = '',
@@ -29,7 +28,7 @@ if(@(@($ManagedOwnerPreparation.IsPresent,$ManagedOwnerActivation.IsPresent,$Leg
 $fullOwnerActivation=$ManagedOwnerActivation.IsPresent -or (-not $ManagedOwnerPreparation.IsPresent -and -not $LegacySystemPreview.IsPresent)
 if($MsiUpgradeLane -eq 'minor' -and -not $fullOwnerActivation){throw 'MSI_MINOR_UPGRADE_REQUIRES_ACTIVATED_OWNER'}
 if($ExperimentalMajorUpgrade -and ($MsiUpgradeLane -ne 'major' -or -not $fullOwnerActivation)){throw 'MSI_EXPERIMENTAL_MAJOR_LANE_REQUIRED'}
-if($ExperimentalEarlyQuiesce -and ($MsiUpgradeLane -ne 'major' -or -not $fullOwnerActivation)){throw 'MSI_EARLY_QUIESCE_MAJOR_LANE_REQUIRED'}
+$useEarlyQuiescence=$fullOwnerActivation -and $MsiUpgradeLane -eq 'major'
 if($InjectPostActivationFailure -and -not $fullOwnerActivation){throw 'MSI_ROLLBACK_INJECTION_REQUIRES_ACTIVATION_LANE'}
 if($InjectPostRemovalFailure -and -not $fullOwnerActivation){throw 'MSI_REMOVAL_ROLLBACK_INJECTION_REQUIRES_ACTIVATION_LANE'}
 if (-not (Get-Command wix.exe -ErrorAction SilentlyContinue)) { throw 'Pinned WiX 7 wix.exe is required to build the AgentoC MSI.' }
@@ -272,7 +271,7 @@ try {
             # builds as well as the explicit legacy test switch.
             $experimentalMajor = if($MsiUpgradeLane -eq 'major'){'1'}else{'0'}
             $wixArguments += @('-d',"ExperimentalMajorUpgrade=$experimentalMajor")
-            $earlyQuiesce = if($ExperimentalEarlyQuiesce){'1'}else{'0'}
+            $earlyQuiesce = if($useEarlyQuiescence){'1'}else{'0'}
             $wixArguments += @('-d',"EarlyServiceQuiescence=$earlyQuiesce")
             $wixArguments += @('-d',"IncludeMingwUiRuntime=$includeMingwUiRuntime",'-bindpath',"InstallUi=$installerUiRoot")
             $wixArguments += @('-bindpath',"PrivilegedBroker=$brokerBuildRoot")
@@ -288,11 +287,11 @@ try {
         & wix.exe --acceptEula wix7 build -arch x64 (Join-Path $installScriptRoot 'AgentoC.wxs') $payloadWxs -d "ProductVersion=$Version" -d "MsiProductVersion=$MsiProductVersion" -d "SourceDir=$payloadDir" -d "IncludeMingwUiRuntime=$includeMingwUiRuntime" -bindpath "ServiceHost=$serviceHostDir" -bindpath "InstallScript=$installScriptRoot" -bindpath "OwnerInstallGuard=$staging" -bindpath "BrandAsset=$brandRoot" -bindpath "InstallUi=$installerUiRoot" -ext 'WixToolset.UI.wixext/7.0.0' -ext 'WixToolset.Util.wixext/7.0.0' -o $OutputPath
     }
     if ($LASTEXITCODE -ne 0) { throw 'WiX MSI build failed.' }
-    if($ExperimentalEarlyQuiesce){
+    if($useEarlyQuiescence){
         # WiX fixes standard-action sequence numbers. The isolated fixture
         # verifies that moving initialization ahead of InstallValidate keeps
-        # service quiescence transactional. Restrict this rewrite to the
-        # explicitly selected experimental lane and verify every row.
+        # service quiescence transactional. Apply this only to the validated
+        # activated-owner major lane and verify every row.
         $installer=$null;$database=$null;$view=$null;$record=$null
         $sequences=[ordered]@{
             InstallInitialize=1300;ManagedFreshGuard=1310;ManagedRemoveGuard=1320;

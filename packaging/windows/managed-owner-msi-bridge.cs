@@ -543,7 +543,7 @@ static class ManagedOwnerMsiBridge {
     child.OutputDataReceived+=(s,e)=>{if(e.Data==null){outputDone.Set();return;}lock(output){if(output.Length+e.Data.Length>65536)System.Threading.Interlocked.Exchange(ref overflow,1);else output.AppendLine(e.Data);}};
     child.ErrorDataReceived+=(s,e)=>{if(e.Data==null){errorDone.Set();return;}if(System.Threading.Interlocked.Add(ref errorBytes,e.Data.Length)>65536)System.Threading.Interlocked.Exchange(ref overflow,1);};
     Need(child.Start(),"OMI_CHILD_START_FAILED");child.BeginOutputReadLine();child.BeginErrorReadLine();
-    if(!child.WaitForExit(action=="Activate"||action=="UpgradeActivate"||action=="ActiveRemove"?240000:120000)){
+    if(!child.WaitForExit(action=="Activate"||action=="UpgradeActivate"||action=="ActiveRemove"||action=="PrevalidateStop"||action=="RemoveRollback"?240000:120000)){
      using(var killer=Process.Start(new ProcessStartInfo{FileName=@"C:\Windows\System32\taskkill.exe",Arguments="/PID "+child.Id+" /T /F",UseShellExecute=false,CreateNoWindow=true}))killer.WaitForExit(15000);
      throw new InvalidOperationException("OMI_CHILD_TIMEOUT");
     }
