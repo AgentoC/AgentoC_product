@@ -76,7 +76,7 @@ assert.match(acceptance, /Get-Content -LiteralPath \$stdout \| Out-Host/, 'manag
 assert.match(acceptance, /smokeExitCode = \[int\]\$process\.ExitCode/, 'manager smoke process exit code must be retained in Windows acceptance evidence');
 assert.match(await readFile(new URL('tests/windows-desktop-manager-live.mjs', root), 'utf8'), /browser\._connection\.close\(\)/, 'the live MSI uninstall check must close only the CDP transport');
 assert.match(await readFile(new URL('tests/windows-desktop-manager-live.mjs', root), 'utf8'), /mode === 'keep-open'[\s\S]*?process\.exit\(0\)/, 'the detached-window smoke must exit after its report is durable');
-assert.match(await readFile(new URL('tests/windows-desktop-manager-live.mjs', root), 'utf8'), /accountViewVisible = await accountView\.isVisible\(\)[\s\S]*?assert\.equal\(accountViewVisible, true/, 'account navigation must assert the live account panel stays visible');
+assert.match(await readFile(new URL('tests/windows-desktop-manager-live.mjs', root), 'utf8'), /accountViewVisible = await page\.locator\([^\n]+\)\.isVisible\(\)[\s\S]*?assert\.equal\(accountViewVisible, true/, 'account navigation must assert the live account panel stays visible');
 assert.match(await readFile(new URL('tests/windows-desktop-manager-live.mjs', root), 'utf8'), /detached: mode === 'keep-open'/, 'the Electron window must survive its short-lived smoke launcher on Windows');
 
 const managerMarkup = template

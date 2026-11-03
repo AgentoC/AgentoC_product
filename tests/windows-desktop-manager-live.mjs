@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { chromium } from '@playwright/test';
 
 const [executable, reportPath, mode = 'close'] = process.argv.slice(2);
@@ -93,7 +94,12 @@ try {
   assert.equal(await page.locator('body').evaluate((node) => node.classList.contains('desktop-manager')), true);
   assert.equal(await page.locator('.chat-area').evaluate((node) => getComputedStyle(node).display), 'none');
   assert.equal(await page.locator('.header').evaluate((node) => getComputedStyle(node).display), 'none');
-  assert.equal(await page.locator('[data-desktop-manager-tab]').count(), 4);
+  assert.equal(await page.locator('#desktopManagerNav [data-desktop-manager-tab]').count(), 5);
+  await page.locator('[data-desktop-manager-tab="about"]').click();
+  await page.waitForFunction(() => document.querySelector('#desktopManagerCurrentVersion')?.textContent.trim() !== '—', null, { timeout: 30000 });
+  assert.equal((await page.locator('#desktopManagerCurrentVersion').innerText()).trim(), (await readFile(resolve(dirname(executable), '..', '.agentoc-package-version'), 'utf8')).trim());
+  assert.equal(await page.locator('#desktopManagerAboutPanel').isVisible(), true);
+  record('public version and About page');
   const healthz = await fetch('http://127.0.0.1:7690/healthz');
   const health = await healthz.json().catch(() => null);
   record('installed manager route and chat-free layout', {
@@ -128,7 +134,7 @@ try {
     upgradeAction: 'supported',
     compatibilityStatus: 'compatible',
   });
-  await page.route('**/api/harnesses*', async (route) => {
+  await page.route('**/api/harnesses**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const operation = url.pathname.match(/\/api\/harnesses\/[^/]+\/(install|upgrade|uninstall)$/)?.[1];
@@ -218,7 +224,7 @@ try {
   assert.equal(fixtureHarnessInstalled, false);
   assert.deepEqual(harnessOperations, ['install', 'upgrade', 'upgrade', 'uninstall']);
   record('Harness uninstall action and refreshed uninstalled state', { operations: harnessOperations });
-  await page.unroute('**/api/harnesses*');
+  await page.unroute('**/api/harnesses**');
 
   if (mode === 'keep-open') {
     const piCard = page.locator('#harnessesList [data-harness-id="pi"]');
@@ -278,57 +284,21 @@ try {
   assert.equal(await page.locator('#modelProvidersPanel').evaluate((node) => node.classList.contains('visible') && !node.hidden), true);
   record('Provider navigation');
 
-  await page.locator('[data-desktop-manager-tab="pairing"]').click();
-  const devicesView = page.locator('#crossDeviceDevicesView');
-  await devicesView.waitFor({ state: 'visible', timeout: 15000 });
-  const devicesViewLayout = await devicesView.evaluate((node) => {
-    const rect = node.getBoundingClientRect();
-    const overlay = document.querySelector('#crossDeviceOverlay');
-    return {
-      viewHidden: node.hidden,
-      viewDisplay: getComputedStyle(node).display,
-      viewWidth: rect.width,
-      viewHeight: rect.height,
-      overlayHidden: overlay?.hidden ?? null,
-      overlayDisplay: overlay ? getComputedStyle(overlay).display : null,
-    };
-  });
-  record('phone pairing and device list navigation', devicesViewLayout);
+  const pairingNav = page.locator('#desktopManagerNav [data-desktop-manager-tab="pairing"]');
+  if (await pairingNav.isVisible()) {
+    await pairingNav.click();
+    assert.equal(await page.locator('#desktopManagerPairingPanel').isVisible(), true);
+    assert.equal(await page.locator('#desktopManagerStartPairingBtn').isVisible(), true);
+    record('phone pairing navigation');
+  } else {
+    record('phone pairing entry hidden for bound account');
+  }
 
-  await page.locator('#crossDeviceClose').click();
   await page.locator('[data-desktop-manager-tab="account"]').click();
-  await page.locator('#desktopManagerAccountBtn').click();
-  const crossDeviceOverlay = page.locator('#crossDeviceOverlay');
-  const accountView = page.locator('#crossDeviceAccountView');
-  const accountSummary = page.locator('#crossDeviceAccountContent .cross-device-summary');
-  await crossDeviceOverlay.waitFor({ state: 'visible', timeout: 15000 });
-  await accountView.waitFor({ state: 'visible', timeout: 15000 });
-  // The account view is opened before its status request has rendered. While
-  // that request is pending the flex sheet can temporarily collapse the view
-  // to zero height, so wait for real account content and its final layout.
-  await accountSummary.waitFor({ state: 'visible', timeout: 15000 });
-  await page.waitForFunction(() => {
-    const overlay = document.querySelector('#crossDeviceOverlay');
-    const panel = document.querySelector('#crossDeviceAccountView');
-    const summary = document.querySelector('#crossDeviceAccountContent .cross-device-summary');
-    const panelRect = panel?.getBoundingClientRect();
-    const summaryRect = summary?.getBoundingClientRect();
-    return Boolean(
-      overlay && !overlay.hidden
-      && panel && !panel.hidden && getComputedStyle(panel).display !== 'none'
-      && summary && panelRect?.width > 0 && panelRect?.height > 0
-      && summaryRect?.width > 0 && summaryRect?.height > 0
-    );
-  }, null, { timeout: 15000 });
-  const accountViewVisible = await accountView.isVisible();
-  assert.equal(accountViewVisible, true, 'the account panel must remain visible after the account view finishes rendering');
-  record('account management navigation', {
-    overlayVisible: await crossDeviceOverlay.isVisible(),
-    accountViewVisible,
-    accountSummary: await accountSummary.innerText(),
-  });
-  await page.screenshot({ path: reportPath.replace(/\.json$/i, '.account.png'), fullPage: true });
-  await page.locator('#crossDeviceClose').click();
+  const accountViewVisible = await page.locator('.desktop-manager-account-group').isVisible();
+  assert.equal(accountViewVisible, true, 'the account panel must remain visible after navigation');
+  assert.equal(await page.locator('#desktopManagerDevicesContent').isVisible(), true);
+  record('account and trusted device management navigation');
   await page.screenshot({ path: reportPath.replace(/\.json$/i, '.png'), fullPage: true });
 
   const duplicate = spawn(executable, [], { windowsHide: true, stdio: 'ignore' });
