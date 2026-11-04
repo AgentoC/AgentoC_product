@@ -22,6 +22,10 @@ check('POSIX prefix sibling is outside protected root', !isWithinProtectedRoot('
 check('Windows drive root preserves root semantics', isWithinProtectedRoot('C:\\', 'C:\\Agentoc\\config', 'win32'));
 check('Windows path comparison is case-insensitive', isWithinProtectedRoot('C:\\Agentoc', 'c:\\agentoc\\config', 'win32'));
 check('Windows prefix sibling is outside protected root', !isWithinProtectedRoot('C:\\Agentoc', 'C:\\Agentoc-evil', 'win32'));
+check('Windows two-dot descendant is protected', isWithinProtectedRoot('C:\\Agentoc', 'C:\\Agentoc\\..metadata\\secret', 'win32'));
+check('POSIX two-dot descendant is protected', isWithinProtectedRoot('/var/lib/agentoc', '/var/lib/agentoc/..metadata/secret', 'linux'));
+check('Windows parent escape is outside protected root', !isWithinProtectedRoot('C:\\Agentoc', 'C:\\other\\secret', 'win32'));
+check('POSIX parent escape is outside protected root', !isWithinProtectedRoot('/var/lib/agentoc', '/var/lib/other/secret', 'linux'));
 
 eq('unmatched target is computed and not protected', computeSelfProtectionFacts({
   canonicalPaths: ['/work/project/file.txt'],
@@ -44,6 +48,18 @@ eq('protected target is matched', computeSelfProtectionFacts({
   computed: true,
   matched: true,
   workspaceRecommended: false,
+  boundary: 'agentoc-service',
+});
+
+eq('two-dot descendant retains the self-protection ceiling', computeSelfProtectionFacts({
+  canonicalPaths: ['C:\\Agentoc\\..metadata\\auth.json'],
+  protectedRoots: [{ label: 'config', path: 'C:\\Agentoc' }],
+  workspaceRoot: 'C:\\Agentoc',
+  platform: 'win32',
+}), {
+  computed: true,
+  matched: true,
+  workspaceRecommended: true,
   boundary: 'agentoc-service',
 });
 

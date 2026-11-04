@@ -298,7 +298,7 @@ function pathInsideRoot(target, root, platform = process.platform) {
   const rootResolved = pathApi.resolve(root);
   const targetResolved = pathApi.resolve(target);
   const rel = pathApi.relative(rootResolved, targetResolved);
-  return rel === '' || (!!rel && !rel.startsWith('..') && !pathApi.isAbsolute(rel));
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${pathApi.sep}`) && !pathApi.isAbsolute(rel));
 }
 
 function riskRootPaths(value) {

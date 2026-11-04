@@ -32,11 +32,10 @@ function isWithin(root, candidate, platform) {
   const parent = normalize(root, platform);
   const child = normalize(candidate, platform);
   if (!parent || !child) return false;
-  const relative = platform === 'win32'
-    ? path.win32.relative(parent, child)
-    : path.posix.relative(parent, child);
-  return relative === '' || (!relative.startsWith('..')
-    && !(platform === 'win32' ? path.win32.isAbsolute(relative) : path.posix.isAbsolute(relative)));
+  const paths = platform === 'win32' ? path.win32 : path.posix;
+  const relative = paths.relative(parent, child);
+  return relative === '' || (relative !== '..' && !relative.startsWith(`..${paths.sep}`)
+    && !paths.isAbsolute(relative));
 }
 
 export function deriveAgentoCSelfProtectionRoots({ platform = process.platform } = {}) {

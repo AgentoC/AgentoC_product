@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import assert from 'assert/strict';
+import { parseCommandFacts } from '../chat/command-parser.mjs';
+import { classifyRisk } from '../chat/risk-classifier.mjs';
 
 import {
   codeForReason,
@@ -95,6 +97,31 @@ eq('Windows trusted workspace', classifyRiskTargetScope(
   'C:\\work\\project\\src\\main.js',
   { riskContext: winScope },
 ), RISK_TARGET_SCOPE.TRUSTED_WORKSPACE);
+eq('Windows protected descendant with two leading dots', classifyRiskTargetScope(
+  'C:\\work\\project\\.agentoc-control\\..metadata\\secret',
+  { riskContext: winScope },
+), RISK_TARGET_SCOPE.PROTECTED_CONTROL);
+eq('Windows workspace descendant with two leading dots', classifyRiskTargetScope(
+  'C:\\work\\project\\..notes\\file.txt',
+  { riskContext: winScope },
+), RISK_TARGET_SCOPE.TRUSTED_WORKSPACE);
+eq('Windows sibling with common prefix remains outside', classifyRiskTargetScope(
+  'C:\\work\\project-other\\file.txt',
+  { riskContext: winScope },
+), RISK_TARGET_SCOPE.OUTSIDE_WORKSPACE);
+const dotContext = { ...winScope, cwd: 'C:\\work\\project' };
+eq('protected Edit remains dangerous below two-dot directory', classifyRisk({
+  toolName: 'Edit', toolInput: { file_path: 'C:\\work\\project\\.agentoc-control\\..metadata\\secret' },
+  cwd: dotContext.cwd, projectRoot: dotContext.trustedWorkspaceRoot, riskContext: dotContext,
+}).tier, 'danger');
+check('command parser recognizes two-dot workspace directory', parseCommandFacts(
+  'mkdir C:\\work\\project\\..notes',
+  { cwd: dotContext.cwd, projectRoot: dotContext.trustedWorkspaceRoot, riskContext: dotContext },
+).targetScopes.includes('inside-project'));
+eq('POSIX protected descendant with two leading dots', classifyRiskTargetScope(
+  '/var/lib/agentoc/workspace/.agentoc-control/..metadata/secret',
+  { riskContext: linuxScope },
+), RISK_TARGET_SCOPE.PROTECTED_CONTROL);
 eq('Windows system root', classifyRiskTargetScope(
   'C:\\Windows\\System32\\drivers\\etc\\hosts',
   { riskContext: winScope },
@@ -105,5 +132,6 @@ eq('Windows outside workspace', classifyRiskTargetScope(
 ), RISK_TARGET_SCOPE.OUTSIDE_WORKSPACE);
 check('Windows platform roots include host-provided roots',
   systemPathRootsForPlatform('win32', { SystemRoot: 'D:\\Windows' }).includes('D:\\Windows'));
+assert.ok(systemPathRootsForPlatform('win32', { SystemRoot: 'D:\\Windows', ProgramFiles: 'E:\\Apps (x86)', ProgramW6432: 'E:\\Apps' }).includes('E:\\Apps'));
 
 console.log(`risk-policy: ${passed} checks passed`);
