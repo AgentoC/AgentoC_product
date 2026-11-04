@@ -18,7 +18,8 @@ param(
     [string]$PreviousMsiPath = '',
     [string]$PreviousMsiSha256 = '',
     [string]$WingetClientPackagePath = '',
-    [string]$PowerShellRuntimeArchivePath = ''
+    [string]$PowerShellRuntimeArchivePath = '',
+    [switch]$CommittedTree
 )
 
 $ErrorActionPreference = 'Stop'
@@ -63,13 +64,39 @@ $msiUpgradeStrategy=if($MsiUpgradeLane -eq 'minor'){'none'}else{'majorUpgrade'}
 $qrcodeTerminalVersion = '0.12.0'
 $qrcodeTerminalSha256 = '3a6260c4e0d80bd527a3f930e90ea2348c03646621f25aa0bd960ee205a0a706'
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$buildInputRoot = $SourceRoot
+$frozenRevision = ''
 $staging = Join-Path ([IO.Path]::GetTempPath()) ('agentoc-msi-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force $staging | Out-Null
 try {
     $payloadRoot = Join-Path $staging 'payload'
     New-Item -ItemType Directory -Force $payloadRoot | Out-Null
+    $node = Get-Command node.exe -ErrorAction SilentlyContinue
+    if (-not $node -or -not (Test-Path -LiteralPath $node.Source -PathType Leaf)) {
+        throw 'node.exe is required to create the self-contained Windows runtime payload.'
+    }
+    if ($CommittedTree) {
+        if ([IO.Path]::GetFullPath($scriptRoot).TrimEnd('\') -ine [IO.Path]::GetFullPath((Join-Path $SourceRoot 'packaging\windows')).TrimEnd('\')) { throw 'Committed builds must start from the specified source tree.' }
+        $frozenRevision = (& git -C $SourceRoot rev-parse HEAD).Trim()
+        if ($LASTEXITCODE -ne 0 -or $frozenRevision -cnotmatch '^(?:[a-f0-9]{40}|[a-f0-9]{64})$') { throw 'Cannot determine committed build revision.' }
+        # The small bootstrap that stages Git objects must itself match the
+        # frozen commit; all subsequent build inputs come from that snapshot.
+        foreach ($bootstrap in @('packaging/windows/build-msi.ps1', 'scripts/stage-runtime-payload.mjs', 'scripts/verify-runtime-payload.mjs')) {
+            $expected = (& git -C $SourceRoot rev-parse ("${frozenRevision}:$bootstrap")).Trim()
+            if ($LASTEXITCODE -ne 0) { throw "Committed bootstrap is missing: $bootstrap" }
+            $actual = (& git -C $SourceRoot hash-object "--path=$bootstrap" (Join-Path $SourceRoot $bootstrap)).Trim()
+            if ($LASTEXITCODE -ne 0 -or $actual -cne $expected) { throw "Committed bootstrap differs from the frozen commit: $bootstrap" }
+        }
+        $buildInputRoot = Join-Path $staging 'windows-build-inputs'
+        & $node.Source (Join-Path $SourceRoot 'scripts\stage-runtime-payload.mjs') --source $SourceRoot --destination $payloadRoot --profile desktop --source-mode git-objects --windows-build-destination $buildInputRoot
+        if ($LASTEXITCODE -ne 0) { throw 'Committed Windows runtime and build input staging failed.' }
+        $runtimeSource = Get-Content -LiteralPath (Join-Path $payloadRoot 'runtime-payload-manifest.json') -Raw | ConvertFrom-Json
+        $buildSource = Get-Content -LiteralPath (Join-Path $buildInputRoot 'windows-build-inputs-manifest.json') -Raw | ConvertFrom-Json
+        if ($runtimeSource.sourceRevision -cne $frozenRevision -or $buildSource.sourceRevision -cne $frozenRevision -or (& git -C $SourceRoot rev-parse HEAD).Trim() -cne $frozenRevision) { throw 'Committed source changed during Windows staging.' }
+        $scriptRoot = Join-Path $payloadRoot 'packaging\windows'
+    }
     $brandRoot = Join-Path $staging ('brand-' + [guid]::NewGuid().ToString('N'))
-    & (Join-Path $scriptRoot 'generate-brand-assets.ps1') -SourceRoot $SourceRoot -OutputDirectory $brandRoot
+    & (Join-Path $scriptRoot 'generate-brand-assets.ps1') -SourceRoot $buildInputRoot -OutputDirectory $brandRoot
     $installerUiRoot = ''
     $includeMingwUiRuntime = '0'
     if (-not $ManagedOwnerPreparation) {
@@ -81,14 +108,12 @@ try {
         $uiMetadata = Get-Content -LiteralPath (Join-Path $installerUiRoot 'installer-ui-build.json') -Raw | ConvertFrom-Json
         if ($uiMetadata.includeMingwRuntime) { $includeMingwUiRuntime = '1' }
     }
-    $node = Get-Command node.exe -ErrorAction SilentlyContinue
-    if (-not $node -or -not (Test-Path -LiteralPath $node.Source -PathType Leaf)) {
-        throw 'node.exe is required to create the self-contained Windows runtime payload.'
-    }
     # Never recursively copy a developer checkout. Use committed runtime inputs.
-    $runtimeStager = Join-Path $SourceRoot 'scripts\stage-runtime-payload.mjs'
-    & $node.Source $runtimeStager --source $SourceRoot --destination $payloadRoot --profile desktop
-    if ($LASTEXITCODE -ne 0) { throw 'Clean allowlisted Windows runtime staging failed.' }
+    if (-not $CommittedTree) {
+        $runtimeStager = Join-Path $SourceRoot 'scripts\stage-runtime-payload.mjs'
+        & $node.Source $runtimeStager --source $SourceRoot --destination $payloadRoot --profile desktop
+        if ($LASTEXITCODE -ne 0) { throw 'Clean allowlisted Windows runtime staging failed.' }
+    }
     & $node.Source (Join-Path $payloadRoot 'scripts\verify-windows-approval-payload.mjs') $payloadRoot
     if ($LASTEXITCODE -ne 0) { throw 'Windows approval payload inputs are incomplete.' }
     & (Join-Path $payloadRoot 'packaging\windows\build-safe-delete.ps1') -SourceRoot $payloadRoot -OutputPath (Join-Path $payloadRoot 'bin\agentoc-safe-delete.exe')
@@ -101,7 +126,7 @@ try {
     $desktopBuildRoot = Join-Path $staging 'desktop-build'
     New-Item -ItemType Directory -Force $desktopBuildRoot | Out-Null
     foreach ($desktopInput in @('package.json', 'package-lock.json', 'main.cjs', 'preload.cjs', 'update-check.cjs', 'wait.html', 'stage-windows.mjs')) {
-        Copy-Item -LiteralPath (Join-Path $SourceRoot ('desktop\' + $desktopInput)) -Destination (Join-Path $desktopBuildRoot $desktopInput)
+        Copy-Item -LiteralPath (Join-Path $buildInputRoot ('desktop\' + $desktopInput)) -Destination (Join-Path $desktopBuildRoot $desktopInput)
     }
     if (-not (Get-Command npm.cmd -ErrorAction SilentlyContinue)) { throw 'npm.cmd is required to stage the pinned Electron desktop manager.' }
     Push-Location $desktopBuildRoot
@@ -110,7 +135,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Locked Electron desktop dependencies could not be staged.' }
     } finally { Pop-Location }
     $desktopPayloadRoot = Join-Path $payloadRoot 'Desktop'
-    & $node.Source (Join-Path $desktopBuildRoot 'stage-windows.mjs') $desktopPayloadRoot $brandRoot $Version $SourceRoot
+    & $node.Source (Join-Path $desktopBuildRoot 'stage-windows.mjs') $desktopPayloadRoot $brandRoot $Version $buildInputRoot
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $desktopPayloadRoot 'AgentoC.exe') -PathType Leaf)) {
         throw 'Branded, unelevated Electron runtime staging failed.'
     }
@@ -134,7 +159,11 @@ try {
     }
     # npm ci prunes packages absent from the app lock, including npm/corepack.
     # Stage the self-contained installer toolchain after ci, then smoke-test it.
-    & (Join-Path $SourceRoot 'packaging\windows\stage-node-toolchain.ps1') -NodePath $node.Source -PayloadRoot $payloadRoot
+    if ($CommittedTree) {
+        & (Join-Path $scriptRoot 'stage-node-toolchain.ps1') -NodePath $node.Source -PayloadRoot $payloadRoot
+    } else {
+        & (Join-Path $SourceRoot 'packaging\windows\stage-node-toolchain.ps1') -NodePath $node.Source -PayloadRoot $payloadRoot
+    }
     # Keep the Windows CLI feature-parity surface self-contained. The source
     # package intentionally does not carry qrcode-terminal in package.json;
     # Debian stages this same pinned tarball, so Windows must use the same
@@ -244,7 +273,8 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Staged Node tool failed after declaration pruning: $entrypoint" }
     }
     # Scan the assembled payload, including npm/corepack and installed deps.
-    & $node.Source (Join-Path $SourceRoot 'scripts\verify-runtime-payload.mjs') $payloadRoot
+    $runtimeVerifierRoot = if ($CommittedTree) { $payloadRoot } else { $SourceRoot }
+    & $node.Source (Join-Path $runtimeVerifierRoot 'scripts\verify-runtime-payload.mjs') $payloadRoot
     if ($LASTEXITCODE -ne 0) { throw 'Final Windows runtime secret/state verification failed.' }
     # Preserve the established uncompressed installer ceiling. The Electron
     # renderer is counted inside this payload; declaration pruning above keeps

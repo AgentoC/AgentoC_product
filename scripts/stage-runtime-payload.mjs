@@ -9,6 +9,11 @@ import { scanRuntimePayload } from './verify-runtime-payload.mjs';
 
 const exec = promisify(execFile);
 const manifestPath = new URL('../packaging/runtime-payload.json', import.meta.url);
+const windowsBuildInputs = [
+  'android/app/src/main/res/drawable-nodpi/adaptive_foreground_png.png',
+  'static/desktop/agentoc-android-logo.png',
+  ...['package.json', 'package-lock.json', 'main.cjs', 'preload.cjs', 'update-check.cjs', 'wait.html', 'stage-windows.mjs'].map(name => `desktop/${name}`),
+];
 
 // Read immutable blobs from a single commit without a second checkout. The
 // batch protocol keeps binary assets exact and bounds memory to one blob.
@@ -73,8 +78,11 @@ export function selectedBy(profile, name) {
   return (profile.files.includes(name) || profile.prefixes.some((prefix) => name.startsWith(prefix)))
     && !profile.exclude.some((excluded) => name === excluded || (excluded.endsWith('/') && name.startsWith(excluded)));
 }
-export async function stageRuntimePayload({ source, destination, profile: profileName, manifest = manifestPath, sourceMode = 'checkout' }) {
+export async function stageRuntimePayload({ source, destination, profile: profileName, manifest = manifestPath, sourceMode = 'checkout', windowsBuildDestination }) {
   if (!['checkout', 'git-objects'].includes(sourceMode)) throw new Error('Unknown runtime source mode');
+  if (windowsBuildDestination && (sourceMode !== 'git-objects' || profileName !== 'desktop')) {
+    throw new Error('Windows build inputs require committed desktop staging');
+  }
   source = await realpath(resolve(source));
   destination = resolve(destination);
   const git = async (...args) => (await exec('git', ['--no-optional-locks', ...args],
@@ -152,6 +160,30 @@ export async function stageRuntimePayload({ source, destination, profile: profil
       if (createHash('sha256').update(copied).digest('hex') !== sha256) throw new Error(`Input changed while staging: ${name}`);
       files.push({ path: targetName, sha256, bytes: copied.length });
     }
+    if (windowsBuildDestination) {
+      let buildRoot = resolve(windowsBuildDestination);
+      await mkdir(buildRoot, { recursive: true });
+      if ((await lstat(buildRoot)).isSymbolicLink()) throw new Error('Windows build destination must not be a symlink/reparse point');
+      buildRoot = await realpath(buildRoot);
+      const overlaps = (a, b) => { const rel = relative(a, b); return !rel || (!rel.startsWith('..') && !isAbsolute(rel)); };
+      if (overlaps(buildRoot, source) || overlaps(source, buildRoot) || overlaps(buildRoot, destination) || overlaps(destination, buildRoot)) {
+        throw new Error('Windows build destination must be separate from source and runtime payload');
+      }
+      if ((await readdir(buildRoot)).length) throw new Error('Windows build destination must be empty');
+      const buildFiles = [];
+      for (const name of windowsBuildInputs) {
+        const committed = tree.get(name);
+        if (!committed || committed.type !== 'blob' || !['100644', '100755'].includes(committed.mode)) {
+          throw new Error(`Windows build input must be a committed regular file: ${name}`);
+        }
+        const bytes = await reader.read(committed.oid);
+        const target = join(buildRoot, safeName(name));
+        await mkdir(dirname(target), { recursive: true });
+        await writeFile(target, bytes, { flag: 'wx' });
+        buildFiles.push({ path: name, sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length });
+      }
+      await writeFile(join(buildRoot, 'windows-build-inputs-manifest.json'), `${JSON.stringify({ schemaVersion: 1, sourceRevision: head, files: buildFiles }, null, 2)}\n`, { flag: 'wx' });
+    }
     if ((await git('rev-parse', 'HEAD')).trim() !== head
       || (sourceMode === 'checkout' && await git('status', '--porcelain=v1', '--untracked-files=all'))) {
       throw new Error('Source changed while staging; discard this candidate');
@@ -180,6 +212,7 @@ async function main() {
     else if (key === '--destination') options.destination = value;
     else if (key === '--profile') options.profile = value;
     else if (key === '--source-mode') options.sourceMode = value;
+    else if (key === '--windows-build-destination') options.windowsBuildDestination = value;
     else throw new Error(`Unknown option: ${key}`);
   }
   if (!options.source || !options.destination || !options.profile) throw new Error('Usage: stage-runtime-payload.mjs --source <git-repository> --destination <empty-dir> --profile <desktop|accounts> [--source-mode checkout|git-objects]');
