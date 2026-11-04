@@ -8,7 +8,7 @@ const FILE_COMMANDS = new Map([
   ['get-content', 'read'], ['get-item', 'read'], ['get-childitem', 'read'], ['get-filehash', 'read'], ['test-path', 'read'], ['resolve-path', 'read'],
   ['set-content', 'write'], ['add-content', 'write'], ['clear-content', 'write'], ['new-item', 'write'], ['out-file', 'write'], ['remove-item', 'delete'],
   ['mkdir', 'write'],
-  ['copy-item', 'copy'], ['move-item', 'move'],
+  ['copy-item', 'copy'], ['move-item', 'move'], ['rename-item', 'rename'],
 ]);
 const BUILTIN_ALIASES = new Map([
   ['cat', 'get-content'], ['gc', 'get-content'], ['type', 'get-content'],
@@ -16,6 +16,7 @@ const BUILTIN_ALIASES = new Map([
   ['ls', 'get-childitem'], ['dir', 'get-childitem'], ['gci', 'get-childitem'],
   ['cp', 'copy-item'], ['copy', 'copy-item'], ['cpi', 'copy-item'],
   ['mv', 'move-item'], ['move', 'move-item'], ['mi', 'move-item'],
+  ['ren', 'rename-item'], ['rni', 'rename-item'],
   ['rm', 'remove-item'], ['del', 'remove-item'], ['ri', 'remove-item'],
   ['echo', 'write-output'], ['write', 'write-output'], ['sort', 'sort-object'],
 ]);
@@ -30,6 +31,8 @@ const OUT_FILE_PARAMS = new Set(['filepath', 'literalpath', 'append', 'force', '
 const OUT_FILE_SWITCHES = new Set(['append', 'force', 'noclobber', 'nonewline']);
 const MKDIR_PARAMS = new Set(['path', 'force']);
 const MKDIR_SWITCHES = new Set(['force']);
+const RENAME_PARAMS = new Set(['path', 'literalpath', 'newname', 'force', 'passthru']);
+const RENAME_SWITCHES = new Set(['force', 'passthru']);
 const SENSITIVE_COMPONENT = /^(?:\.git|\.ssh|\.gnupg|\.aws|\.azure|\.kube|\.agentoc|\.env(?:\..*)?|system volume information|\$recycle\.bin)$/i;
 // Credential stores are sensitive for every Windows profile, not just the
 // account running AgentoC. Match the Windows profile structure while leaving
@@ -216,13 +219,17 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
     // The built-in mkdir function binds pipeline input and can accept multiple
     // paths. Only a single explicit literal target is statically bound here.
     if (program === 'mkdir' && (ast.commands.length !== 1 || expressions.length || entry.redirections)) return { complete: false, actions, reason: 'mkdir pipeline or redirection needs review' };
-    const args = parseArguments(entry.elements, program === 'mkdir' ? MKDIR_PARAMS : program === 'out-file' ? OUT_FILE_PARAMS : program === 'get-childitem' ? CHILD_ITEM_PARAMS : FILE_PARAMS,
-      program === 'mkdir' ? MKDIR_SWITCHES : program === 'out-file' ? OUT_FILE_SWITCHES : program === 'get-childitem' ? CHILD_ITEM_SWITCHES : SWITCHES);
+    // Rename-Item can bind paths from the pipeline. Restrict this adapter to a
+    // single explicit source and destination, so input cannot add targets.
+    if (program === 'rename-item' && (ast.commands.length !== 1 || expressions.length || entry.redirections)) return { complete: false, actions, reason: 'rename pipeline or redirection needs review' };
+    const args = parseArguments(entry.elements, program === 'mkdir' ? MKDIR_PARAMS : program === 'out-file' ? OUT_FILE_PARAMS : program === 'get-childitem' ? CHILD_ITEM_PARAMS : program === 'rename-item' ? RENAME_PARAMS : FILE_PARAMS,
+      program === 'mkdir' ? MKDIR_SWITCHES : program === 'out-file' ? OUT_FILE_SWITCHES : program === 'get-childitem' ? CHILD_ITEM_SWITCHES : program === 'rename-item' ? RENAME_SWITCHES : SWITCHES);
     if (!args) return { complete: false, actions, reason: 'unsupported or ambiguous file arguments' };
     const namedPath = args.named.get('literalpath') || args.named.get('filepath') || args.named.get('path');
     let source = namedPath || args.positional[0] || (program === 'get-childitem' ? '.' : '');
-    const destination = args.named.get('destination') || ((kind === 'copy' || kind === 'move') ? args.positional[namedPath ? 0 : 1] : '');
-    const maxPositionals = kind === 'copy' || kind === 'move' ? (namedPath ? (args.named.has('destination') ? 0 : 1) : (args.named.has('destination') ? 1 : 2))
+    const destinationKey = kind === 'rename' ? 'newname' : 'destination';
+    const destination = args.named.get(destinationKey) || ((kind === 'copy' || kind === 'move' || kind === 'rename') ? args.positional[namedPath ? 0 : 1] : '');
+    const maxPositionals = kind === 'copy' || kind === 'move' || kind === 'rename' ? (namedPath ? (args.named.has(destinationKey) ? 0 : 1) : (args.named.has(destinationKey) ? 1 : 2))
       : ['set-content', 'add-content'].includes(program) ? (namedPath ? 1 : 2) : (namedPath ? 0 : 1);
     if (args.positional.length > maxPositionals || ['path', 'literalpath', 'filepath'].filter((key) => args.named.has(key)).length > 1) return { complete: false, actions, reason: 'ambiguous file targets' };
     // Listing can be evaluated against the full literal root: filters only
@@ -239,7 +246,8 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
         source = win.join(source || '.', name);
       }
     }
-    if (lacksAttestedAbsolutePath(source, context) || (destination && lacksAttestedAbsolutePath(destination, context))) return { complete: false, actions, reason: 'working directory is not attested' };
+    if (kind === 'rename' && (!destination || destination === '.' || destination === '..' || /[\\/]/.test(destination) || win.basename(destination) !== destination)) return { complete: false, actions, reason: 'rename destination is not a literal file name' };
+    if (lacksAttestedAbsolutePath(source, context) || (destination && kind !== 'rename' && lacksAttestedAbsolutePath(destination, context))) return { complete: false, actions, reason: 'working directory is not attested' };
     // A standalone trailing * means the immediate children of a literal
     // directory. Inspect every child (including hidden ones) and their full
     // subtrees; never approximate arbitrary PowerShell wildcard patterns.
@@ -276,10 +284,12 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
       protected: isProtected(target, context), workspace: inside(target.lexical, context.trustedWorkspaceRoot) && inside(target.actual, context.trustedWorkspaceRoot),
       workspaceRoot: Boolean(context.trustedWorkspaceRoot) && win.resolve(target.actual).toLowerCase() === win.resolve(context.trustedWorkspaceRoot).toLowerCase(),
       recursive: args.named.has('recurse') || (program === 'get-childitem' && args.named.has('depth')) });
-    if (kind === 'copy' || kind === 'move') {
-      const destTarget = await resolveCopyDestination(destination, source, context, fsApi);
+    if (kind === 'copy' || kind === 'move' || kind === 'rename') {
+      const destTarget = kind === 'rename'
+        ? await resolveTarget(win.join(win.dirname(sourceTarget.lexical), destination), context.cwd, fsApi, context)
+        : await resolveCopyDestination(destination, source, context, fsApi);
       if (!destTarget) return { complete: false, actions, reason: 'destination cannot be resolved' };
-      add(kind === 'move' ? 'delete' : 'read', sourceTarget); add('write', destTarget);
+      add(kind === 'copy' ? 'read' : 'delete', sourceTarget); add('write', destTarget);
     } else add(kind, sourceTarget);
     if ((args.named.has('recurse') || (program === 'get-childitem' && args.named.has('depth'))) && (kind === 'read' || kind === 'copy')) {
       // Read and copy may traverse protected descendants even when their root
@@ -288,8 +298,8 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
       for (const action of recursiveActions) action.recursiveVerified = await inspectRecursiveTarget(action.target, context, fsApi,
         { allowWorkspaceRoot: true, requireWorkspace: false });
     }
-    if (kind === 'delete' || kind === 'move') {
-      const action = actions[actions.length - (kind === 'move' ? 2 : 1)];
+    if (kind === 'delete' || kind === 'move' || kind === 'rename') {
+      const action = actions[actions.length - (kind === 'move' || kind === 'rename' ? 2 : 1)];
       try {
         const info = await fsApi.lstat(sourceTarget.actual);
         action.regularFile = info.isFile() && !info.isSymbolicLink();
@@ -300,8 +310,8 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
         if (error?.code !== 'ENOENT') return { complete: false, actions, reason: 'delete target cannot be inspected' };
       }
     }
-    if (kind === 'delete' || kind === 'move') {
-      const action = actions[actions.length - (kind === 'move' ? 2 : 1)];
+    if (kind === 'delete' || kind === 'move' || kind === 'rename') {
+      const action = actions[actions.length - (kind === 'move' || kind === 'rename' ? 2 : 1)];
       if (action.recursive && !action.regularFile) {
         action.recursiveVerified = action.workspace && await inspectRecursiveTarget(action.target, context, fsApi, { checkHardLinks: false });
       }

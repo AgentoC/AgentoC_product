@@ -113,11 +113,25 @@ assert.equal(result.decision, 'allow');
 assert.deepEqual(result.actions.map((a) => a.kind), ['read', 'write']);
 assert.equal((await inspect('Copy-Item -Path readme.txt -Destination linked-dest')).decision, 'review');
 assert.equal((await inspect('Move-Item -Path readme.txt -Destination linked-dest')).decision, 'review');
+result = await inspect('Rename-Item -LiteralPath readme.txt -NewName renamed.txt');
+assert.equal(result.decision, 'allow');
+assert.deepEqual(result.actions.map((action) => action.kind), ['delete', 'write']);
+assert.equal(path.win32.basename(result.actions[1].target.actual), 'renamed.txt');
+assert.equal((await inspect('ren readme.txt renamed.txt')).decision, 'allow');
+assert.equal((await inspect('rni -Path readme.txt -NewName .env')).decision, 'review');
+assert.equal((await inspect('Rename-Item -Path readme.txt -NewName ..\\outside.txt')).decision, 'review');
+assert.equal((await inspect('Rename-Item -Path readme.txt -NewName *.txt')).decision, 'review');
+assert.equal((await inspect('Get-ChildItem | Rename-Item -Path readme.txt -NewName renamed.txt')).decision, 'review');
+assert.equal((await inspect('Rename-Item -Path folder -NewName renamed-folder')).decision, 'review');
+assert.equal((await inspect('Rename-Item -Path ..\\protected\\result.txt -NewName other.txt')).decision, 'review');
+assert.equal((await inspect('Rename-Item -Path readme.txt -NewName ordinary-link')).decision, 'review');
 for (const riskMode of ['recommended', 'full-auto']) {
   const approval = (script) => ({ kind: 'command', params: { command: [resolveWindowsSystemPaths().powershell, '-NoProfile', '-Command', script] } });
   const state = { riskMode, cwd: workspace, riskContext: context };
   assert.equal((await decideWindowsApproval(approval('Clear-Content -LiteralPath ..\\ordinary.txt'), state)).decision, 'auto-allow', `${riskMode}: ordinary outside file`);
   assert.equal((await decideWindowsApproval(approval('Clear-Content -LiteralPath ..\\protected\\result.txt'), state)).decision, 'prompt', `${riskMode}: protected file`);
+  assert.equal((await decideWindowsApproval(approval('Rename-Item -LiteralPath ..\\ordinary.txt -NewName renamed.txt'), state)).decision, 'auto-allow', `${riskMode}: rename ordinary outside file`);
+  assert.equal((await decideWindowsApproval(approval('Rename-Item -LiteralPath ..\\ordinary.txt -NewName .env'), state)).decision, 'prompt', `${riskMode}: sensitive rename destination`);
   assert.equal((await decideWindowsApproval(approval('Copy-Item readme.txt -Destination linked-dest'), state)).decision, 'prompt');
   assert.equal((await decideWindowsApproval(approval('Copy-Item readme.txt -Destination ordinary-output.txt'), state)).decision, 'auto-allow');
   for (const script of [
