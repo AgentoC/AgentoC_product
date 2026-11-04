@@ -1560,22 +1560,26 @@ private fun ChatSurface(
         )
     }
     val latestTurnGroups = rememberUpdatedState(turnGroups)
-    val durationTurnKey = turnGroups.lastOrNull()?.requestId ?: turnGroups.lastOrNull()?.userPrompt?.id
     val statusActive = state.pendingTurn?.state == PendingTurnState.Sending ||
         state.runStatus == AgentRunStatus.Working || state.runStatus == AgentRunStatus.WaitingApproval
-    var observedActive by remember(state.sessionId, durationTurnKey) { mutableStateOf(false) }
-    LaunchedEffect(statusActive) { if (statusActive) observedActive = true }
-    val terminalStatus = state.runStatus in setOf(AgentRunStatus.Completed, AgentRunStatus.Failed, AgentRunStatus.Cancelled)
-    val showActiveRunAction = statusActive ||
-        (observedActive && state.connection != AgentConnectionStatus.Connected && !terminalStatus)
-    var runStartedElapsed by remember(state.sessionId, durationTurnKey) { mutableLongStateOf(Long.MAX_VALUE) }
-    var runElapsedSeconds by remember(state.sessionId, durationTurnKey) { mutableLongStateOf(-1L) }
-    val lastUserIndex = state.timelineItems.indexOfLast { it is TimelineItem.Message && it.role == com.andysagent.agentoc.core.timeline.TimelineRole.User }
-    val currentRunId = (state.timelineItems.getOrNull(lastUserIndex) as? TimelineItem.Message)?.runId
-        ?: state.timelineItems.drop(lastUserIndex.coerceAtLeast(0))
-            .filterIsInstance<TimelineItem.Operation>().lastOrNull { !it.runId.isNullOrBlank() }?.runId
     val activityRunId = (state.serverRunActivity?.get("runId") as? kotlinx.serialization.json.JsonPrimitive)?.content
     val activityRequestId = (state.serverRunActivity?.get("requestId") as? kotlinx.serialization.json.JsonPrimitive)?.content
+    val activeTurnIndex = if (statusActive || state.connection != AgentConnectionStatus.Connected) {
+        activeRunTurnIndex(turnGroups, activityRunId, activityRequestId)
+    } else turnGroups.lastIndex
+    val activeTurn = turnGroups.getOrNull(activeTurnIndex)
+    val durationTurnKey = activeTurn?.requestId ?: activeTurn?.userPrompt?.id
+    var observedActive by remember(state.sessionId, durationTurnKey) { mutableStateOf(false) }
+    val terminalStatus = state.runStatus in setOf(AgentRunStatus.Completed, AgentRunStatus.Failed, AgentRunStatus.Cancelled)
+    LaunchedEffect(statusActive, terminalStatus, state.connection) {
+        if (statusActive) observedActive = true
+        else if (terminalStatus && state.connection == AgentConnectionStatus.Connected) observedActive = false
+    }
+    val showActiveRunAction = statusActive ||
+        (observedActive && state.connection != AgentConnectionStatus.Connected)
+    var runStartedElapsed by remember(state.sessionId, durationTurnKey) { mutableLongStateOf(Long.MAX_VALUE) }
+    var runElapsedSeconds by remember(state.sessionId, durationTurnKey) { mutableLongStateOf(-1L) }
+    val currentRunId = activeTurn?.runId ?: activityRunId?.takeIf { activityRequestId != null && activityRequestId == activeTurn?.requestId }
     val activityMatchesTurn = (currentRunId != null && activityRunId == currentRunId) ||
         (durationTurnKey != null && activityRequestId == durationTurnKey)
     val serverElapsed = (state.serverRunActivity?.get("runElapsedMs") as? kotlinx.serialization.json.JsonPrimitive)
@@ -2339,7 +2343,7 @@ private fun ChatSurface(
             val isOffline = state.connection == AgentConnectionStatus.Disconnected || isTransportFailure
             val activeSummary = when {
                 state.pendingTurn?.state == PendingTurnState.Sending -> stringResource(R.string.workbench_status_sending)
-                state.currentAction != null -> state.currentAction?.sentence
+                state.currentAction != null -> state.currentAction?.let { presentRunAction(it) }
                 state.runStatus == AgentRunStatus.Working -> stringResource(R.string.workbench_status_processing)
                 else -> null
             }
@@ -2688,6 +2692,7 @@ private fun ChatSurface(
                     contentType = { _, turn -> if (turn.userPrompt?.isPending == true) "PendingTurn" else "TurnGroup" },
                 ) { index, turn ->
                     val isLastTurn = index == turnGroups.lastIndex
+                    val isRunTurn = index == activeTurnIndex
                     val canMessageAction = canShowMessageActions(state.runStatus, historyTransitioning, state.pendingTurn, state.acceptedTurns.isNotEmpty())
                     val rowMotion = motionPolicy()
 
@@ -2725,25 +2730,26 @@ private fun ChatSurface(
                             onOpenFileDiff = { diff -> onSetSelectedDiffFile(diff) },
                             onReport = { text -> onEvent(WorkbenchEvent.ReportAgentContent(text)) },
                             showMessageActions = canMessageAction,
-                            runDuration = if (turn.runId?.let(state.runDurations::containsKey) == true || (isLastTurn && (showActiveRunAction || runElapsedSeconds >= 0L ||
+                            runDuration = if (turn.runId?.let(state.runDurations::containsKey) == true || (isRunTurn && (showActiveRunAction || runElapsedSeconds >= 0L ||
                                 (currentRunId != null && currentRunId == state.runMetrics.runId && state.runMetrics.durationFormatted != "N/A")))) {{
-                                val seconds = if (isLastTurn && showActiveRunAction) runElapsedSeconds else
-                                    turn.runId?.let(state.runDurations::get)?.div(1_000) ?: if (isLastTurn) runElapsedSeconds else -1L
+                                val seconds = if (isRunTurn && showActiveRunAction) runElapsedSeconds else
+                                    turn.runId?.let(state.runDurations::get)?.div(1_000) ?: if (isRunTurn) runElapsedSeconds else -1L
                                 val duration = if (seconds >= 0) {
                                     if (seconds < 60) stringResource(R.string.workbench_duration_seconds, seconds)
                                     else stringResource(R.string.workbench_duration_minutes_seconds, seconds / 60, seconds % 60)
-                                } else if (isLastTurn && currentRunId == state.runMetrics.runId && state.runMetrics.durationFormatted != "N/A") state.runMetrics.durationFormatted else ""
+                                } else if (isRunTurn && currentRunId == state.runMetrics.runId && state.runMetrics.durationFormatted != "N/A") state.runMetrics.durationFormatted else ""
                                 val label = if (duration.isEmpty()) stringResource(R.string.workbench_status_processing) else
-                                    stringResource(if (isLastTurn && showActiveRunAction) R.string.workbench_run_elapsed else R.string.workbench_run_finished, duration)
+                                    stringResource(if (isRunTurn && showActiveRunAction) R.string.workbench_run_elapsed else R.string.workbench_run_finished, duration)
                                 Text(label,
                                     style = MaterialTheme.typography.labelSmall, color = colors.secondaryContent,
                                     modifier = Modifier.testTag("run-elapsed"))
                             }} else null,
-                            runActive = isLastTurn && showActiveRunAction,
-                            activeAction = if (isLastTurn && showActiveRunAction) {{
+                            runActive = isRunTurn && showActiveRunAction,
+                            activeAction = if (isRunTurn && showActiveRunAction) {{
                                 ActiveRunActionBar(status = state.runStatus,
                                     actionSummary = state.currentAction?.sentence,
-                                    sending = state.pendingTurn?.state == PendingTurnState.Sending)
+                                    sending = state.pendingTurn?.state == PendingTurnState.Sending,
+                                    actionState = state.currentAction)
                             }} else null,
                         )
                     }
@@ -2974,7 +2980,7 @@ private fun ChatSurface(
             modifier = Modifier.graphicsLayer { alpha = chatWritingContextAlpha(composerFullscreenProgress) }
                 .then(if (composerFullscreenActive) Modifier.clearAndSetSemantics { } else Modifier),
             expanded = runIslandExpanded,
-            activitySummary = state.currentAction?.sentence,
+            activitySummary = state.currentAction?.let { presentRunAction(it) },
             pendingRequest = pendingIslandRequest,
             onOpenRequest = {
                 // Navigate to the existing request; never approve or answer
@@ -3433,10 +3439,12 @@ internal fun ActiveRunActionBar(
     actionSummary: String? = null,
     sending: Boolean = false,
     modifier: Modifier = Modifier,
+    actionState: com.andysagent.agentoc.core.timeline.RunActionUiState? = null,
 ) {
     val colors = LocalAgentocColors.current
     val sentence = when {
         sending -> stringResource(R.string.workbench_status_sending)
+        actionState != null -> presentRunAction(actionState)
         !actionSummary.isNullOrBlank() -> actionSummary
         status == AgentRunStatus.WaitingApproval -> stringResource(R.string.workbench_status_awaiting_approval)
         else -> stringResource(R.string.workbench_status_processing)

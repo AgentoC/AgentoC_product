@@ -233,7 +233,13 @@ fun TurnTimelineView(
 private fun ProcessOperationRow(operation: TimelineItem.Operation) {
     val state = com.andysagent.agentoc.core.timeline.RunActionFormatter.forRun(
         com.andysagent.agentoc.core.timeline.RunActionFormatter.RunActionStatus.Working, null, listOf(operation))
-    val text = state?.sentence ?: return
+    val text = state?.let {
+        when (operation.status) {
+            TimelineOperationStatus.Completed -> presentCompletedAction(it)
+            TimelineOperationStatus.Failed -> stringResource(R.string.run_action_failed, presentRunAction(it))
+            else -> presentRunAction(it)
+        }
+    } ?: return
     Text(text, style = MaterialTheme.typography.bodySmall,
         color = LocalAgentocColors.current.secondaryContent, modifier = Modifier.testTag("process-operation"))
 }

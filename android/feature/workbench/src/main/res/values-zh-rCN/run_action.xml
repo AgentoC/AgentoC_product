@@ -1,0 +1,30 @@
+<resources>
+    <string name="run_action_read">正在读取 %1$s</string>
+    <string name="run_action_list">正在列出 %1$s</string>
+    <string name="run_action_search">正在搜索 %1$s</string>
+    <string name="run_action_inspect">正在检查 %1$s</string>
+    <string name="run_action_edit">正在编辑 %1$s</string>
+    <string name="run_action_execute">正在运行 %1$s</string>
+    <string name="run_action_delegate">正在委派 %1$s</string>
+    <string name="run_action_tool">正在使用 %1$s</string>
+    <string name="run_action_working">正在处理任务</string>
+    <string name="run_action_thinking">正在思考任务</string>
+    <string name="run_action_planning">正在规划下一步</string>
+    <string name="run_action_starting">正在开始运行</string>
+    <string name="run_action_approval">等待批准</string>
+    <string name="run_action_done_read">读取了 %1$s</string>
+    <string name="run_action_done_list">列出了 %1$s</string>
+    <string name="run_action_done_search">搜索了 %1$s</string>
+    <string name="run_action_done_inspect">检查了 %1$s</string>
+    <string name="run_action_done_edit">编辑了 %1$s</string>
+    <string name="run_action_done_execute">运行了 %1$s</string>
+    <string name="run_action_done_delegate">委派了 %1$s</string>
+    <string name="run_action_done_tool">使用了 %1$s</string>
+    <string name="run_action_done_generic">完成了一项操作</string>
+    <string name="run_action_failed">失败：%1$s</string>
+    <string name="run_subject_command">命令</string>
+    <string name="run_subject_workspace">工作区</string>
+    <string name="run_subject_file">文件</string>
+    <string name="run_subject_task">任务</string>
+    <string name="run_subject_changes">工作区改动</string>
+</resources>

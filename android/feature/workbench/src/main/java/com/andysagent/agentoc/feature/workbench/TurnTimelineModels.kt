@@ -76,6 +76,14 @@ internal fun splitTurnEntries(entries: List<TimelineItem>): Pair<List<TimelineIt
     return entries.take(finalIndex) to entries.drop(finalIndex)
 }
 
+internal fun activeRunTurnIndex(turns: List<TurnGroup>, runId: String?, requestId: String?): Int {
+    val match = turns.indexOfLast { turn ->
+        (!runId.isNullOrBlank() && turn.runId == runId) ||
+            (!requestId.isNullOrBlank() && turn.requestId == requestId)
+    }
+    return if (match >= 0) match else turns.lastIndex
+}
+
 /**
  * Projector that groups sequential timeline items and pending turns into
  * cohesive, well-ordered TurnGroups by requestId/runId.

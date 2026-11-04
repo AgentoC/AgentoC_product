@@ -1,0 +1,30 @@
+<resources>
+    <string name="run_action_read">Reading %1$s</string>
+    <string name="run_action_list">Listing %1$s</string>
+    <string name="run_action_search">Searching %1$s</string>
+    <string name="run_action_inspect">Inspecting %1$s</string>
+    <string name="run_action_edit">Editing %1$s</string>
+    <string name="run_action_execute">Running %1$s</string>
+    <string name="run_action_delegate">Delegating %1$s</string>
+    <string name="run_action_tool">Using %1$s</string>
+    <string name="run_action_working">Working on the task</string>
+    <string name="run_action_thinking">Thinking through the task</string>
+    <string name="run_action_planning">Planning the next step</string>
+    <string name="run_action_starting">Starting the run</string>
+    <string name="run_action_approval">Waiting for approval</string>
+    <string name="run_action_done_read">Read %1$s</string>
+    <string name="run_action_done_list">Listed %1$s</string>
+    <string name="run_action_done_search">Searched %1$s</string>
+    <string name="run_action_done_inspect">Inspected %1$s</string>
+    <string name="run_action_done_edit">Edited %1$s</string>
+    <string name="run_action_done_execute">Ran %1$s</string>
+    <string name="run_action_done_delegate">Delegated %1$s</string>
+    <string name="run_action_done_tool">Used %1$s</string>
+    <string name="run_action_done_generic">Completed an action</string>
+    <string name="run_action_failed">Failed: %1$s</string>
+    <string name="run_subject_command">command</string>
+    <string name="run_subject_workspace">workspace</string>
+    <string name="run_subject_file">file</string>
+    <string name="run_subject_task">the task</string>
+    <string name="run_subject_changes">workspace changes</string>
+</resources>

@@ -2737,9 +2737,8 @@ class ChatViewModel(
     private fun ChatUiState.projectCurrentAction(): ChatUiState {
         // Run metrics may still describe the previous turn until the first
         // tool projection arrives. Bind activity to the current turn instead.
-        val currentRunId = timelineItems.filterIsInstance<TimelineItem.Message>()
+        val currentRunId = serverRunActivity?.stringValue("runId") ?: timelineItems.filterIsInstance<TimelineItem.Message>()
             .lastOrNull { it.role == com.andysagent.agentoc.core.timeline.TimelineRole.User }?.runId
-            ?: serverRunActivity?.stringValue("runId")
         return copy(
             currentAction = RunActionFormatter.project(
                 status = when (runStatus) {

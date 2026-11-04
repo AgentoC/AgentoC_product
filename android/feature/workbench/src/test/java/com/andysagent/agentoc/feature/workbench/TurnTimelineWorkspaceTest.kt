@@ -16,6 +16,13 @@ import org.junit.Test
 
 class TurnTimelineWorkspaceTest {
 
+    @Test fun `active run stays attached to its own turn when another request is queued`() {
+        val turns = listOf(TurnGroup("one", requestId = "req-one", runId = "run-one"),
+            TurnGroup("two", requestId = "req-two"))
+        assertEquals(0, activeRunTurnIndex(turns, "run-one", "req-one"))
+        assertEquals(1, activeRunTurnIndex(turns, null, null))
+    }
+
     @Test fun `only explicitly marked final content is separated from ordered process`() {
         val progress = TimelineItem.Message("progress", 1, TimelineRole.Agent, "Checking", true, messagePhase = "commentary")
         val thought = TimelineItem.Operation("thought", 2, TimelineOperationKind.Tool, "Thinking", "Detail", TimelineOperationStatus.Completed, isReasoning = true)

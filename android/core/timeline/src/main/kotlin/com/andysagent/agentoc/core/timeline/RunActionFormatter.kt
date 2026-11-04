@@ -17,6 +17,9 @@ data class RunActionUiState(
     val operationId: String? = null,
     val groupedCount: Int = 1,
     val sinceMillis: Long? = null,
+    /** Set only for deterministic templates; provider prose stays untouched. */
+    val presentationVerb: String? = null,
+    val presentationSubject: String = "",
 )
 
 object RunActionFormatter {
@@ -96,8 +99,16 @@ object RunActionFormatter {
             "Working on the task"
         } else listOf(action, subject.takeUnless { groupedExploration }.orEmpty()).filter { it.isNotBlank() }.joinToString(" ")) +
             if (waiting) " · waiting for provider output" else ""
+        val localizable = modelDescription == null && !waiting && !groupedExploration &&
+            lifecycle in setOf("running", "working", "started", "in_progress")
+        val presentationVerb = if (!localizable) null else if (isGenericTool) "working" else if (subject.isBlank() && kind !in setOf("command", "execute", "execute_composite")) null else when (kind) {
+            "command", "execute", "execute_composite" -> "execute"
+            "file_edit", "edit" -> "edit"
+            "read", "list", "inspect", "search" -> kind
+            else -> null
+        }
         return RunActionUiState(kind, sentence.safeDisplay(), detail.safeDisplay(), value("operationId").takeIf { it.isNotBlank() }, count,
-            value("since").toLongOrNull()?.takeIf { it > 0 })
+            value("since").toLongOrNull()?.takeIf { it > 0 }, presentationVerb, subject.safeDisplay())
     }
 
     fun fromProgressPlan(items: List<TimelineItem>, runId: String?): RunActionUiState? {
@@ -132,6 +143,7 @@ object RunActionFormatter {
                 sentence = "Waiting for approval",
                 detail = action?.sentence.orEmpty(),
                 operationId = action?.operationId,
+                presentationVerb = "approval",
             )
         }
         if (action != null) {
@@ -143,6 +155,12 @@ object RunActionFormatter {
         return RunActionUiState(
             kind = "working",
             sentence = phaseSentence(phase),
+            presentationVerb = when (phase?.lowercase()) {
+                "planning", "plan" -> "planning"
+                "awaiting_provider_output", "thinking", "reasoning" -> "thinking"
+                "starting", "booting" -> "starting"
+                else -> "working"
+            },
         )
     }
 
@@ -150,7 +168,7 @@ object RunActionFormatter {
     enum class RunActionStatus { Working, WaitingApproval, Other }
 
     private fun fromOperation(operation: TimelineItem.Operation): RunActionUiState {
-        if (operation.isReasoning) return RunActionUiState("thinking", "Thinking through the task", operationId = operation.id)
+        if (operation.isReasoning) return RunActionUiState("thinking", "Thinking through the task", operationId = operation.id, presentationVerb = "thinking")
         val command = operation.commandText()
         val semantic = command?.let(::parseCommand)
         val tool = operation.toolName.orEmpty().trim().lowercase().substringAfterLast("__")
@@ -181,7 +199,8 @@ object RunActionFormatter {
             "thinking" -> "Thinking through the task"
             else -> "Working on $subject"
         }
-        return RunActionUiState(kind, sentence.safeDisplay(), operation.detail.compact().safeDisplay(), operation.id)
+        return RunActionUiState(kind, sentence.safeDisplay(), operation.detail.compact().safeDisplay(), operation.id,
+            presentationVerb = kind, presentationSubject = subject.safeDisplay())
     }
 
     private fun TimelineItem.Operation.commandText(): String? {
