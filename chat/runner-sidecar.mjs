@@ -851,6 +851,9 @@ async function terminateAfterProviderTerminal(runId, terminateManagedProcess, ma
     return;
   }
   if (typeof terminateManagedProcess === 'function') {
+    // Mark only cleanup initiated after a structured provider terminal frame.
+    // Windows Job termination reports an exit code rather than SIGTERM.
+    if (managedProcess) managedProcess.__agentocTerminalCleanupRequested = true;
     try { await terminateManagedProcess(); } catch {}
   }
 }
@@ -5718,6 +5721,7 @@ async function main() {
       const completedAt = nowIso();
       await appendFileChangeStatsSummarySafely(runId, fileChangeStatsTracker);
       await appendCodexContextMetricsSafely(runId, { supportsExternalUsageProjection });
+      const controlledWindowsTerminalCleanup = Boolean(windowsJob && proc.__agentocTerminalCleanupRequested === true && terminalCode === 0xC0DE);
       const providerFailureReason = current.cancelRequested === true
         ? ''
         : fallbackFailureReason || (
@@ -5738,18 +5742,18 @@ async function main() {
               : providerNeedsTerminalEvidence && !providerTerminalSeen
                 ? (providerProtocolErrorPreview
                   || describeStructuredRuntimeExit(runtimeFamily, providerErrorPreview))
-                : (terminalCode !== 0 ? providerErrorPreview : '')
+                : (terminalCode !== 0 && !controlledWindowsTerminalCleanup ? providerErrorPreview : '')
           );
       const rawExitCode = terminalCode ?? 1;
       const effectiveExitCode = providerFailureReason
         ? 1
-        : (appServerState?.terminalSeen && !appServerState?.hadError && (terminalCode === 0 || terminalSignal === 'SIGTERM'))
+        : (appServerState?.terminalSeen && !appServerState?.hadError && (terminalCode === 0 || terminalSignal === 'SIGTERM' || controlledWindowsTerminalCleanup))
           || (claudeBidiState?.terminalSeen
             && !claudeBidiState?.hadError
-            && (current.cancelRequested === true || terminalCode === 0 || terminalSignal === 'SIGTERM'))
+            && (current.cancelRequested === true || terminalCode === 0 || terminalSignal === 'SIGTERM' || controlledWindowsTerminalCleanup))
           || (providerNeedsTerminalEvidence
             && providerTerminalSeen
-            && terminalCode === 0)
+            && (terminalCode === 0 || controlledWindowsTerminalCleanup))
           || (fallbackUsed && terminalCode === 0)
           ? 0
           : rawExitCode;

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import assert from 'assert/strict';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import http from 'http';
 import { createServer as createNetServer } from 'net';
 import { spawn } from 'child_process';
@@ -113,7 +113,7 @@ function setupTempHome() {
       {
         id: 'fake-codex-app-server',
         name: 'Fake Codex App Server',
-        command: join(localBin, 'fake-codex-app-server'),
+        command: join(localBin, process.platform === 'win32' ? 'fake-codex-app-server.cmd' : 'fake-codex-app-server'),
         runtimeFamily: 'codex-app-server-json',
         models: [
           { id: 'fake-model', label: 'Fake Model' },
@@ -131,7 +131,9 @@ function setupTempHome() {
     join(localBin, 'fake-codex-app-server'),
     `#!/usr/bin/env node
 const fs = require('fs');
+${process.platform === 'win32' ? `Object.assign(process.env, JSON.parse(fs.readFileSync(${JSON.stringify(join(home, 'fixture-env.json'))}, 'utf8')));` : ''}
 const crypto = require('crypto');
+const path = require('path');
 const readline = require('readline');
 const recordPath = process.env.FAKE_CODEX_APP_SERVER_RECORD;
 const messages = [];
@@ -141,6 +143,7 @@ let recoveredThread = false;
 let pendingApproval = null;
 let longTurnId = '';
 let mcpReadySent = false;
+let fixtureHookTrusted = false;
 let mcpMode = process.env.FAKE_CODEX_APP_SERVER_MCP_MODE || '';
 const delayedTurnStartMs = Number(process.env.FAKE_CODEX_APP_SERVER_TURN_START_DELAY_MS || '0');
 function record(message) {
@@ -157,6 +160,9 @@ function managedMcpServerName() {
     .update(process.env.AGENTOC_RUN_ID || 'run', 'utf8')
     .digest('hex')
     .slice(0, 16);
+}
+function managedBrokerServerName() {
+  return 'agentoc_broker_' + crypto.createHash('sha256').update((process.env.AGENTOC_RUN_ID || 'run') + ':broker', 'utf8').digest('hex').slice(0, 16);
 }
 function threadPayload(id) {
   return {
@@ -212,6 +218,24 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     send({ id: message.id, result: { userAgent: 'fake', platformFamily: 'linux', platformOs: 'linux' } });
     return;
   }
+  if (message.method === 'hooks/list') {
+    const sourcePath = path.join(process.env.CODEX_HOME || '', 'hooks.json');
+    let hook = null;
+    try {
+      const entries = JSON.parse(fs.readFileSync(sourcePath, 'utf8')).hooks?.PreToolUse || [];
+      const entry = entries.find((value) => value.matcher === '^Bash$' && value.hooks?.[0]?.type === 'command');
+      if (entry) hook = { source: 'user', isManaged: false, enabled: true, eventName: 'preToolUse', handlerType: 'command', matcher: '^Bash$',
+        command: entry.hooks[0].command, sourcePath, key: sourcePath + ':pre_tool_use:0', currentHash: 'sha256:' + 'a'.repeat(64),
+        trustStatus: fixtureHookTrusted ? 'trusted' : 'untrusted' };
+    } catch {}
+    send({ id: message.id, result: { data: [{ hooks: hook ? [hook] : [] }] } });
+    return;
+  }
+  if (message.method === 'config/batchWrite') {
+    fixtureHookTrusted = true;
+    send({ id: message.id, result: {} });
+    return;
+  }
   if (message.method === 'thread/start') {
     if (message.params?.model === 'fake-thread-error') {
       send({
@@ -263,6 +287,7 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
       // initial status/list response has drained. The sidecar must discard
       // that pre-ready snapshot and issue a verified refresh.
       send({ method: 'mcpServer/startupStatus/updated', params: { name: managedMcpServerName(), status: 'ready', threadId } });
+      if (process.platform === 'win32') send({ method: 'mcpServer/startupStatus/updated', params: { name: managedBrokerServerName(), status: 'ready', threadId } });
       mcpReadySent = true;
       if (mcpMode === 'inventory-blocked') return;
       send({
@@ -294,7 +319,10 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
           }),
           resources: [],
           resourceTemplates: [],
-        }],
+        }, ...(process.platform === 'win32' ? [{ name: managedBrokerServerName(), tools: {
+          agentoc_restart_qa_service: { name: 'agentoc_restart_qa_service', inputSchema: { type: 'object', properties: {} } },
+          agentoc_restart_qa_service_status: { name: 'agentoc_restart_qa_service_status', inputSchema: { type: 'object', properties: {} } },
+        }, resources: [], resourceTemplates: [] }] : [])],
       },
     });
     return;
@@ -500,6 +528,7 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
 	          serverName: managedMcpServerName(),
 	          threadId,
 	          turnId,
+	          mode: 'form', _meta: { codex_approval_kind: 'mcp_tool_call' }, requestedSchema: { type: 'object', properties: {} },
 	          request: { message: 'Continue with the managed action.' },
 	        },
 	      });
@@ -528,6 +557,7 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
 	          serverName: managedMcpServerName(),
 	          threadId,
 	          turnId: 'stale-turn',
+	          mode: 'form', _meta: { codex_approval_kind: 'mcp_tool_call' }, requestedSchema: { type: 'object', properties: {} },
 	          request: { message: 'Stale turn must require approval.' },
 	        },
 	      });
@@ -558,6 +588,9 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     'utf8',
   );
   chmodSync(join(localBin, 'fake-codex-app-server'), 0o755);
+  if (process.platform === 'win32') {
+    writeFileSync(join(localBin, 'fake-codex-app-server.cmd'), `@"${process.execPath}" "${join(localBin, 'fake-codex-app-server')}" %*\r\n`, 'utf8');
+  }
   return { home, configDir, memoryDir, workDir, providerHomesDir, recordPath };
 }
 
@@ -585,20 +618,29 @@ async function startServer({
 }) {
   let stdout = '';
   let stderr = '';
+  let supervisorOutput = '';
   let lastAuthResponse = null;
-  const child = spawn(process.execPath, ['chat-server.mjs'], {
-    cwd: repoRoot,
-    env: {
+  if (process.platform === 'win32') {
+    const fixtureEnv = { FAKE_CODEX_APP_SERVER_RECORD: recordPath, FAKE_CODEX_APP_SERVER_STALE_RESUME: staleResumeRecovery ? '1' : '0',
+      FAKE_CODEX_APP_SERVER_EXIT_AFTER_STALE_RESUME: exitAfterStaleResume ? '1' : '0', FAKE_CODEX_APP_SERVER_MCP_MODE: mcpMode,
+      FAKE_CODEX_APP_SERVER_TURN_START_DELAY_MS: String(turnStartDelayMs) };
+    writeFileSync(join(home, 'fixture-env.json'), JSON.stringify(fixtureEnv), 'utf8');
+  }
+  const supervisorPipe = process.platform === 'win32' ? `\\\\.\\pipe\\agentoc-test-codex-${randomBytes(12).toString('hex')}` : '';
+  const childEnv = {
       ...process.env,
       HOME: home,
       USERPROFILE: home,
+      LOCALAPPDATA: join(home, 'local-appdata'),
+      APPDATA: join(home, 'roaming-appdata'),
       AGENTOC_INSTANCE_ROOT: home,
       AGENTOC_ALLOW_EXTERNAL_TEST_INSTANCE_OVERRIDES: '1',
       AGENTOC_CONFIG_DIR: configDir,
       AGENTOC_MEMORY_DIR: memoryDir,
       AGENTOC_WORK_ROOT_DIR: workDir,
+      AGENTOC_RUN_SPOOL_DIR: join(home, '.agentoc', 'data', 'chat-runs'),
       AGENTOC_DISABLE_SYSTEMD_DETACHED_RUNNER: '1',
-      AGENTOC_RUNNER_SUPERVISOR_SOCKET: '',
+      AGENTOC_RUNNER_SUPERVISOR_SOCKET: supervisorPipe,
       AGENTOC_RUNNER_LIFECYCLE_SOCKET: '',
       // This protocol fixture intentionally keeps several fake turns open.
       // Admission-controller behavior has separate tests; host load must not
@@ -632,14 +674,31 @@ async function startServer({
       ...(codexStartupTimeoutMs ? { AGENTOC_CODEX_APP_SERVER_STARTUP_TIMEOUT_MS: String(codexStartupTimeoutMs) } : {}),
       ...(stdoutQueueMaxLines ? { AGENTOC_RUN_STDOUT_QUEUE_MAX_LINES: String(stdoutQueueMaxLines) } : {}),
       ...(stdoutQueueMaxBytes ? { AGENTOC_RUN_STDOUT_QUEUE_MAX_BYTES: String(stdoutQueueMaxBytes) } : {}),
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
+    };
+  const supervisorFixture = join(home, 'supervisor-fixture.mjs');
+  if (supervisorPipe) writeFileSync(supervisorFixture, `import {spawn} from 'node:child_process';
+import {createRunnerSupervisorServer,spawnSupervisedRunner} from ${JSON.stringify(pathToFileURL(join(repoRoot, 'chat/runner-supervisor-daemon.mjs')).href)};
+const s=await createRunnerSupervisorServer({spawnRunner:id=>spawnSupervisedRunner(id,{spawnImpl:(file,args,options)=>{const child=spawn(file,args,{...options,stdio:['ignore','pipe','pipe']});child.stdout.pipe(process.stdout);child.stderr.pipe(process.stderr);return child}})});
+console.log('[runner-supervisor] listening');process.on('SIGTERM',()=>s.close().finally(()=>process.exit(0)));
+`, 'utf8');
+  const supervisor = supervisorPipe ? spawn(process.execPath, [supervisorFixture], { cwd: repoRoot, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] }) : null;
+  if (supervisor) {
+    supervisor.stdout.on('data', (chunk) => { supervisorOutput += chunk.toString('utf8'); });
+    supervisor.stderr.on('data', (chunk) => { supervisorOutput += chunk.toString('utf8'); });
+  }
+  const serverFixture = join(home, 'server-fixture.mjs');
+  if (process.platform === 'win32') writeFileSync(serverFixture, `process.on('message', message => { if (message === 'test-stop') process.emit('SIGTERM'); });\nawait import(${JSON.stringify(pathToFileURL(join(repoRoot, 'chat-server.mjs')).href)});\n`, 'utf8');
+  const child = spawn(process.execPath, [process.platform === 'win32' ? serverFixture : 'chat-server.mjs'], {
+    cwd: repoRoot,
+    env: childEnv,
+    stdio: ['ignore', 'pipe', 'pipe', ...(process.platform === 'win32' ? ['ipc'] : [])],
   });
 
   child.stdout.on('data', (chunk) => { stdout += chunk.toString('utf8'); });
   child.stderr.on('data', (chunk) => { stderr += chunk.toString('utf8'); });
 
   try {
+    if (supervisor) await waitFor(() => supervisorOutput.includes('[runner-supervisor] listening'), 'supervisor startup');
     await waitFor(async () => {
       if (child.exitCode !== null) {
         throw new Error(`server exited before startup (code=${child.exitCode}, signal=${child.signalCode || 'none'})`);
@@ -655,19 +714,28 @@ async function startServer({
     }, 'server startup');
   } catch (error) {
     child.kill('SIGTERM');
+    supervisor?.kill();
     throw new Error(`${error.message}\nlast auth response: ${lastAuthResponse || 'none'}\nstdout:\n${stdout || '(empty)'}\nstderr:\n${stderr || '(empty)'}`);
   }
 
   return {
     child,
-    getOutput: () => ({ stdout, stderr }),
+    supervisor,
+    getOutput: () => ({ stdout, stderr, supervisorOutput }),
   };
 }
 
 async function stopServer(server) {
-  if (!server?.child || server.child.exitCode !== null || server.child.signalCode !== null) return;
-  server.child.kill('SIGTERM');
-  await waitFor(() => server.child.exitCode !== null || server.child.signalCode !== null, 'server shutdown');
+  if (!server?.child) return;
+  if (server.child.exitCode === null && server.child.signalCode === null) {
+    if (process.platform === 'win32' && server.child.connected) server.child.send('test-stop');
+    else server.child.kill('SIGTERM');
+    await waitFor(() => server.child.exitCode !== null || server.child.signalCode !== null, 'server shutdown');
+  }
+  if (server.supervisor && server.supervisor.exitCode === null && server.supervisor.signalCode === null) {
+    server.supervisor.kill();
+    await waitFor(() => server.supervisor.exitCode !== null || server.supervisor.signalCode !== null, 'supervisor shutdown');
+  }
   // A detached fixture runner can retain the old controller's inherited pipe
   // descriptors after exit. The parent must release its own read handles.
   server.child.stdout?.destroy();
@@ -805,13 +873,18 @@ try {
   assert.equal(planRun.providerCapabilities?.supportsSteer, true);
   assert.equal(planRun.providerCapabilities?.supportsInterrupt, true);
   assert.equal(planRun.providerCapabilities?.supportsExternalUsageProjection, false);
-  assert.equal(planRun.permissionMode, 'on-request-danger-full-access');
+  assert.equal(planRun.permissionMode, process.platform === 'win32' ? 'untrusted-danger-full-access' : 'on-request-danger-full-access');
   let approvalRequest;
   try {
     approvalRequest = await waitForApprovalRequest(port, session.id);
   } catch (error) {
     const output = server.getOutput?.() || {};
-    console.error(`sidecar test server output:\n${output.stdout || '(no stdout)'}\n${output.stderr || '(no stderr)'}`);
+    console.error(`sidecar test server output:\n${output.stdout || '(no stdout)'}\n${output.stderr || '(no stderr)'}\n${output.supervisorOutput || '(no supervisor output)'}`);
+    try {
+      const spool = readFileSync(join(home, '.agentoc', 'data', 'chat-runs', planRun.id, 'spool.jsonl'), 'utf8');
+      const lines = spool.split('\n').filter((line) => /mcpServer|fixture MCP|codexMcp|stderr/.test(line));
+      console.error(`fixture MCP spool:\n${lines.map((line) => line.slice(0, 1200)).join('\n')}`);
+    } catch {}
     try {
       const runRes = await request(port, 'GET', `/api/runs/${planRun.id}`);
       console.error(`plan run state:\n${JSON.stringify(runRes.json?.run, null, 2)}`);
@@ -832,7 +905,7 @@ try {
   assert.equal(approvalRequest.runtimeFamily, 'codex-app-server-json');
   assert.equal(approvalRequest.providerCapabilities?.supportsSteer, true);
   assert.equal(approvalRequest.providerCapabilities?.supportsInterrupt, true);
-  assert.equal(approvalRequest.permissionMode, 'on-request-danger-full-access');
+  assert.equal(approvalRequest.permissionMode, process.platform === 'win32' ? 'untrusted-danger-full-access' : 'on-request-danger-full-access');
   const approvalRes = await request(
     port,
     'POST',
@@ -847,14 +920,14 @@ try {
   assert.equal(approvalRes.json.run.runtimeFamily, 'codex-app-server-json');
   assert.equal(approvalRes.json.run.providerCapabilities?.supportsSteer, true);
   assert.equal(approvalRes.json.run.providerCapabilities?.supportsInterrupt, true);
-  assert.equal(approvalRes.json.run.permissionMode, 'on-request-danger-full-access');
+  assert.equal(approvalRes.json.run.permissionMode, process.platform === 'win32' ? 'untrusted-danger-full-access' : 'on-request-danger-full-access');
   const approvalResponse = await waitForApprovalResponse(port, session.id, approvalRequest.approvalId);
   assert.equal(approvalResponse.decision, 'approved');
   assert.equal(approvalResponse.provider, 'codex');
   assert.equal(approvalResponse.runtimeFamily, 'codex-app-server-json');
   assert.equal(approvalResponse.providerCapabilities?.supportsSteer, true);
   assert.equal(approvalResponse.providerCapabilities?.supportsInterrupt, true);
-  assert.equal(approvalResponse.permissionMode, 'on-request-danger-full-access');
+  assert.equal(approvalResponse.permissionMode, process.platform === 'win32' ? 'untrusted-danger-full-access' : 'on-request-danger-full-access');
   const terminalPlan = await waitForRunTerminal(port, planRun.id);
   assert.equal(terminalPlan.state, 'completed');
   assert.equal(terminalPlan.codexThreadId, 'thread-fake-plan');
@@ -862,7 +935,7 @@ try {
   assert.equal(terminalPlan.runtimeFamily, 'codex-app-server-json');
   assert.equal(terminalPlan.providerCapabilities?.supportsSteer, true);
   assert.equal(terminalPlan.providerCapabilities?.supportsInterrupt, true);
-  assert.equal(terminalPlan.permissionMode, 'on-request-danger-full-access');
+  assert.equal(terminalPlan.permissionMode, process.platform === 'win32' ? 'untrusted-danger-full-access' : 'on-request-danger-full-access');
   const terminalPlanWithTurn = await waitForRunAppServerTurn(port, planRun.id, 'turn-req-app-server-plan');
   assert.equal(terminalPlanWithTurn.appServerTurnId, 'turn-req-app-server-plan');
   await waitForSessionCodexThread(port, session.id, 'thread-fake-plan');
@@ -1064,7 +1137,7 @@ try {
   assert.ok(
     terminalThreadError.result?.providerExitCode === 0
       || terminalThreadError.result?.signal === 'SIGTERM',
-    'startup provider errors should retain the raw exit code or the sidecar termination signal',
+    `startup provider errors should retain the raw exit code or the sidecar termination signal: ${JSON.stringify(terminalThreadError.result)}`,
   );
   assert.equal(terminalThreadError.result?.providerStage, 'failed');
   assert.match(
@@ -1141,7 +1214,8 @@ try {
 	    tool: 'fake-codex-app-server',
 	    model: 'fake-model',
 	  });
-	  await sleep(1150);
+	  await waitForRunAppServerTurn(port, staleTurnRun.id, 'turn-req-app-server-stale-turn');
+	  await sleep(200);
 	  const activeAfterStaleTurn = await request(port, 'GET', `/api/runs/${staleTurnRun.id}`);
 	  assert.equal(activeAfterStaleTurn.status, 200);
 	  assert.equal(
@@ -1193,7 +1267,8 @@ try {
     'a structured provider completion candidate must not synthesize success while sidecar cleanup is pending',
   );
   const heldTerminal = await waitForRunTerminal(port, heldTerminalRun.id);
-  assert.equal(heldTerminal.state, 'completed');
+  if (heldTerminal.state !== 'completed') console.error(`held-terminal failure: ${JSON.stringify(heldTerminal.result)}`);
+  assert.equal(heldTerminal.state, 'completed', JSON.stringify(heldTerminal.result));
   assert.notEqual(heldTerminal.result?.synthesized, true, 'structured provider result must come from sidecar terminalization');
 
   const burstSession = await createSession(port);
@@ -1310,7 +1385,7 @@ try {
   assert.equal(appServerPlanEvent.runtimeFamily, 'codex-app-server-json');
   assert.equal(appServerPlanEvent.providerCapabilities?.supportsSteer, true);
   assert.equal(appServerPlanEvent.providerCapabilities?.supportsInterrupt, true);
-  assert.equal(appServerPlanEvent.permissionMode, 'on-request-danger-full-access');
+  assert.equal(appServerPlanEvent.permissionMode, process.platform === 'win32' ? 'untrusted-danger-full-access' : 'on-request-danger-full-access');
 
   await stopServer(server);
   server = await startServer({
@@ -1539,7 +1614,7 @@ try {
     recordPath,
     mcpMode: 'ready',
     runnerLaunchMode: 'detached-process',
-    providerHomesDir: join(home, 'missing-provider-homes'),
+    providerHomesDir: join(home, '.agentoc', 'missing-provider-homes'),
   });
   const overlayFailureSession = await createSession(port, 'recommended');
   const overlayFailureRun = await submitMessage(port, overlayFailureSession.id, {
