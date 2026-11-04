@@ -316,6 +316,17 @@ func snapshotWindowsServiceImages(name string, config mgr.Config) ([]serviceImag
 		return nil, "", err
 	}
 	images := []serviceImageSnapshot{image}
+	dependencies, err := serviceCommandFileDependencies(arguments)
+	if err != nil {
+		return nil, "", err
+	}
+	for _, dependency := range dependencies {
+		file, err := snapshotWindowsServiceImage(dependency)
+		if err != nil {
+			return nil, "", err
+		}
+		images = append(images, file)
+	}
 	if config.ServiceType&windows.SERVICE_WIN32_SHARE_PROCESS != 0 {
 		key, err := registry.OpenKey(registry.LOCAL_MACHINE, `SYSTEM\CurrentControlSet\Services\`+name+`\Parameters`, registry.QUERY_VALUE|windows.READ_CONTROL)
 		if err != nil {
@@ -338,4 +349,42 @@ func snapshotWindowsServiceImages(name string, config mgr.Config) ([]serviceImag
 		return images, sd.String(), nil
 	}
 	return images, "", nil
+}
+
+// PowerShell can execute code from a file independent of its executable. Bind
+// that file too. Inline and encoded commands have no separately pinnable
+// target; they require a different execution boundary.
+func serviceCommandFileDependencies(arguments []string) ([]string, error) {
+	if len(arguments) == 0 {
+		return nil, errors.New("service image command is invalid")
+	}
+	switch strings.ToLower(filepath.Base(arguments[0])) {
+	case "powershell.exe", "pwsh.exe":
+		for i := 1; i < len(arguments); i++ {
+			option := strings.ToLower(arguments[i])
+			switch option {
+			case "-nologo", "-noprofile", "-noninteractive":
+			case "-executionpolicy", "-windowstyle":
+				i++
+				if i >= len(arguments) || arguments[i] == "" || strings.HasPrefix(arguments[i], "-") {
+					return nil, errors.New("service host option is invalid")
+				}
+			case "-file":
+				i++
+				if i >= len(arguments) {
+					return nil, errors.New("service script is missing")
+				}
+				expanded, err := registry.ExpandString(arguments[i])
+				if err != nil || !filepath.IsAbs(expanded) || !strings.EqualFold(filepath.Ext(expanded), ".ps1") {
+					return nil, errors.New("service script must be an absolute PowerShell file")
+				}
+				return []string{arguments[i]}, nil
+			default:
+				return nil, errors.New("service host command is not a verifiable PowerShell file")
+			}
+		}
+		return nil, errors.New("service host command has no verifiable PowerShell file")
+	default:
+		return nil, nil
+	}
 }
