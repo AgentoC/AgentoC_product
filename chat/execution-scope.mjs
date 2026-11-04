@@ -107,7 +107,7 @@ export function isUnresolvableRootError(error) {
 
 function isContained(realRoot, realCandidate, paths) {
   const rel = paths.relative(realRoot, realCandidate);
-  return rel === '' || (!rel.startsWith('..') && !paths.isAbsolute(rel));
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${paths.sep}`) && !paths.isAbsolute(rel));
 }
 
 async function realRootOf(value, platform) {

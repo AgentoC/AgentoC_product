@@ -70,7 +70,7 @@ function writeEscape(message, details = {}) {
 
 function isContained(realRoot, realCandidate, paths) {
   const rel = paths.relative(realRoot, realCandidate);
-  return rel === '' || (!rel.startsWith('..') && !paths.isAbsolute(rel));
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${paths.sep}`) && !paths.isAbsolute(rel));
 }
 
 // realpath the deepest existing ancestor, then re-append the missing tail.
