@@ -26,6 +26,8 @@ const {
   buildRunRiskContext,
 } = await import('../chat/run-admission.mjs');
 const { computeExecutionScopeDigest } = await import('../chat/execution-scope.mjs');
+const { resolveRunRiskContext } = await import('../chat/runner-sidecar.mjs');
+const { decideWindowsApproval } = await import('../chat/windows-approval-gate.mjs');
 
 const createdDirs = [];
 function makeDir(prefix) {
@@ -83,6 +85,21 @@ try {
   assert.equal(first.executionScopeDigest, first.manifest.executionScopeDigest, 'digest should be attached to the manifest');
   assert.equal(first.manifest.executionScope, first.executionScope, 'manifest should carry the same snapshot object');
   assert.equal(first.manifest.legacyExecutionScope, false);
+  if (process.platform === 'win32') {
+    const binding = resolveRunRiskContext(first.manifest);
+    assert.equal(binding.valid, true, `the sidecar must accept the actual admitted snapshot: ${binding.reason}`);
+    for (const riskMode of ['recommended', 'full-auto']) {
+      const state = { riskMode, cwd: rootA, riskContext: binding.riskContext, riskContextValid: binding.valid };
+      const ordinary = await decideWindowsApproval({ providerMethod: 'can_use_tool', params: {
+        tool_name: 'Write', input: { file_path: join(rootA, 'report.md') },
+      } }, state);
+      assert.equal(ordinary.decision, 'auto-allow', `${riskMode} should approve an ordinary write`);
+      const protectedWrite = await decideWindowsApproval({ providerMethod: 'can_use_tool', params: {
+        tool_name: 'Write', input: { file_path: join(configDir, 'protected.md') },
+      } }, state);
+      assert.equal(protectedWrite.decision, 'prompt', `${riskMode} should review a protected write`);
+    }
+  }
 
   // Run admission no longer takes a workspace lease (mutation-scoped lease
   // redesign): no lease field, no workspaceLeaseId on the manifest. Runs can
