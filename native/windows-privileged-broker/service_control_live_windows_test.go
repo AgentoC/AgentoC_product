@@ -288,7 +288,34 @@ func TestWindowsServiceControlIsolatedLiveSCM(t *testing.T) {
 			Proposal: brokerRequest{Version: protocolVersion, Type: "service.propose", ServiceControl: &crossGrant, Signature: crossSignature},
 			Approval: brokerRequest{Version: protocolVersion, Type: "service.approve", RequestID: crossGrant.RequestID, DeviceID: deviceID,
 				DeviceSignature: signApprovalMessage(t, deviceKey, serviceControlOwnerSigningBytes(crossGrant))}}
+		if os.Getenv("AGENTOC_BROKER_LIVE_JS_CONTROL_PLANE") == "1" {
+			// Fresh test-only keys authorize only this disposable broker and
+			// randomly named fixture service; they never come from an install.
+			signerDER, err := x509.MarshalPKCS8PrivateKey(private)
+			if err != nil {
+				t.Fatal(err)
+			}
+			deviceDER, err := x509.MarshalPKCS8PrivateKey(deviceKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			payload.HealthPipe = base + ".Health"
+			payload.TestSignerKey = base64.StdEncoding.EncodeToString(signerDER)
+			payload.TestDeviceKey = base64.StdEncoding.EncodeToString(deviceDER)
+		}
 		writeLivePipeJSON(t, filepath.Join(crossDir, "ready.json"), payload)
+		if payload.TestSignerKey != "" {
+			t.Cleanup(func() {
+				payload.TestSignerKey, payload.TestDeviceKey = "", ""
+				redacted, err := json.Marshal(payload)
+				if err == nil {
+					err = os.WriteFile(filepath.Join(crossDir, "ready.json"), redacted, 0600)
+				}
+				if err != nil {
+					t.Errorf("redact disposable fixture keys: %v", err)
+				}
+			})
+		}
 		var result liveServicePipeResult
 		readLivePipeJSON(t, filepath.Join(crossDir, "result.json"), &result)
 		if !result.Success {
@@ -303,9 +330,12 @@ func TestWindowsServiceControlIsolatedLiveSCM(t *testing.T) {
 }
 
 type liveServicePipeCase struct {
-	Pipe     string        `json:"pipe"`
-	Proposal brokerRequest `json:"proposal"`
-	Approval brokerRequest `json:"approval"`
+	Pipe          string        `json:"pipe"`
+	Proposal      brokerRequest `json:"proposal"`
+	Approval      brokerRequest `json:"approval"`
+	HealthPipe    string        `json:"healthPipe,omitempty"`
+	TestSignerKey string        `json:"testSignerKey,omitempty"`
+	TestDeviceKey string        `json:"testDeviceKey,omitempty"`
 }
 type liveServicePipeResult struct {
 	Success bool   `json:"success"`
