@@ -35,6 +35,7 @@ type brokerIPCServer struct {
 	autoInstaller   autoInstaller
 	ownerInstaller  func(context.Context, string, string, string) ownerInstallResult
 	ownerPolicy     func() (ownerInstallPolicy, error)
+	ownerAvailable  func(string) bool
 	executionCtx    context.Context
 	controlPlaneSID *windows.SID
 	testPipeOwner   *windows.SID
@@ -89,6 +90,7 @@ func newBrokerIPCServerForPipeNamesAndAdmin(store *brokerStore, controlPlaneSID 
 		autoInstaller:   windowsAutoInstaller{},
 		ownerInstaller:  runInstalledOwnerInstall,
 		ownerPolicy:     readInstalledOwnerPolicy,
+		ownerAvailable:  func(sid string) bool { _, err := discoverOwnerSession(sid); return err == nil },
 		controlPlaneSID: controlPlaneSID,
 		healthPipeName:  healthName,
 		requestPipeName: requestName,
@@ -774,7 +776,7 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 		return response
 	}
 	if request.Type == "owner_install.identity" {
-		if s.ownerPolicy == nil {
+		if s.ownerPolicy == nil || s.ownerAvailable == nil {
 			return newErrorResponse("OWNER_INSTALL_POLICY_UNAVAILABLE")
 		}
 		policy, err := s.ownerPolicy()
@@ -782,7 +784,7 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 			return newErrorResponse("OWNER_INSTALL_POLICY_UNAVAILABLE")
 		}
 		state := s.store.Snapshot()
-		if state.AutoInstallSigner == nil || state.AutoInstallSigner.KeyID != policy.InstanceID {
+		if state.AutoInstallSigner == nil || state.AutoInstallSigner.KeyID != policy.InstanceID || !s.ownerAvailable(policy.OwnerSID) {
 			return newErrorResponse("OWNER_INSTALL_POLICY_UNAVAILABLE")
 		}
 		response := newResponse("owner_install_identity")

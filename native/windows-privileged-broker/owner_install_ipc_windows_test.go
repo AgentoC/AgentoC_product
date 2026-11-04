@@ -46,7 +46,7 @@ func TestOwnerInstallIPCClaimsOnceAndReportsStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	var calls atomic.Int32
-	server := &brokerIPCServer{store: store, ownerPolicy: func() (ownerInstallPolicy, error) { return policy, nil },
+	server := &brokerIPCServer{store: store, ownerPolicy: func() (ownerInstallPolicy, error) { return policy, nil }, ownerAvailable: func(string) bool { return true },
 		ownerInstaller: func(_ context.Context, sid, id, version string) ownerInstallResult {
 			calls.Add(1)
 			if sid != policy.OwnerSID || id != grant.PackageID || version != grant.PackageVersion {
