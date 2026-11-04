@@ -25,6 +25,10 @@ const SAFE_FILTER_PARAMS = new Set(['first', 'last', 'skip', 'unique', 'property
 const SAFE_FILTER_SWITCHES = new Set(['unique', 'descending', 'noenumerate', 'all', 'listimported', 'includeusername']);
 const FILE_PARAMS = new Set(['path', 'literalpath', 'destination', 'value', 'itemtype', 'name', 'recurse', 'force', 'raw', 'encoding', 'filter', 'include', 'exclude']);
 const SWITCHES = new Set(['recurse', 'force', 'raw']);
+const CONTENT_READ_PARAMS = new Set([...FILE_PARAMS, 'totalcount', 'tail', 'readcount', 'delimiter', 'asbytestream']);
+const CONTENT_READ_SWITCHES = new Set([...SWITCHES, 'asbytestream']);
+const CONTENT_WRITE_PARAMS = new Set([...FILE_PARAMS, 'nonewline', 'asbytestream']);
+const CONTENT_WRITE_SWITCHES = new Set([...SWITCHES, 'nonewline', 'asbytestream']);
 const CHILD_ITEM_PARAMS = new Set([...FILE_PARAMS, 'file', 'directory', 'hidden', 'readonly', 'system', 'attributes', 'depth']);
 const CHILD_ITEM_SWITCHES = new Set([...SWITCHES, 'name', 'file', 'directory', 'hidden', 'readonly', 'system']);
 const OUT_FILE_PARAMS = new Set(['filepath', 'literalpath', 'append', 'force', 'noclobber', 'nonewline', 'width', 'encoding', 'inputobject']);
@@ -222,9 +226,12 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
     // Rename-Item can bind paths from the pipeline. Restrict this adapter to a
     // single explicit source and destination, so input cannot add targets.
     if (program === 'rename-item' && (ast.commands.length !== 1 || expressions.length || entry.redirections)) return { complete: false, actions, reason: 'rename pipeline or redirection needs review' };
-    const args = parseArguments(entry.elements, program === 'mkdir' ? MKDIR_PARAMS : program === 'out-file' ? OUT_FILE_PARAMS : program === 'get-childitem' ? CHILD_ITEM_PARAMS : program === 'rename-item' ? RENAME_PARAMS : FILE_PARAMS,
-      program === 'mkdir' ? MKDIR_SWITCHES : program === 'out-file' ? OUT_FILE_SWITCHES : program === 'get-childitem' ? CHILD_ITEM_SWITCHES : program === 'rename-item' ? RENAME_SWITCHES : SWITCHES);
+    const args = parseArguments(entry.elements, program === 'mkdir' ? MKDIR_PARAMS : program === 'out-file' ? OUT_FILE_PARAMS : program === 'get-childitem' ? CHILD_ITEM_PARAMS : program === 'rename-item' ? RENAME_PARAMS : program === 'get-content' ? CONTENT_READ_PARAMS : ['set-content', 'add-content'].includes(program) ? CONTENT_WRITE_PARAMS : FILE_PARAMS,
+      program === 'mkdir' ? MKDIR_SWITCHES : program === 'out-file' ? OUT_FILE_SWITCHES : program === 'get-childitem' ? CHILD_ITEM_SWITCHES : program === 'rename-item' ? RENAME_SWITCHES : program === 'get-content' ? CONTENT_READ_SWITCHES : ['set-content', 'add-content'].includes(program) ? CONTENT_WRITE_SWITCHES : SWITCHES);
     if (!args) return { complete: false, actions, reason: 'unsupported or ambiguous file arguments' };
+    if (['totalcount', 'tail', 'readcount'].some(key => args.named.has(key) && !/^\d{1,10}$/.test(args.named.get(key)))) {
+      return { complete: false, actions, reason: 'content read limit is not a literal nonnegative integer' };
+    }
     const namedPath = args.named.get('literalpath') || args.named.get('filepath') || args.named.get('path');
     let source = namedPath || args.positional[0] || (program === 'get-childitem' ? '.' : '');
     const destinationKey = kind === 'rename' ? 'newname' : 'destination';

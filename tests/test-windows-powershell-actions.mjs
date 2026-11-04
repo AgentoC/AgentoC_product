@@ -67,6 +67,11 @@ assert.equal((await inspect('Get-Command -Name Get-Content; Remove-Item . -Recur
 result = await inspect('Set-Content -Path result.txt -Value hello');
 assert.equal(result.decision, 'allow');
 assert.equal(result.actions[0].kind, 'write');
+assert.equal((await inspect('Set-Content -LiteralPath result.txt -Value hello -Encoding utf8 -NoNewline')).decision, 'allow');
+assert.equal((await inspect('Add-Content -LiteralPath result.txt -Value hello -NoNewline')).decision, 'allow');
+assert.equal((await inspect('Get-Content -LiteralPath readme.txt -Tail 3 -ReadCount 2')).decision, 'allow');
+assert.equal((await inspect('Get-Content -LiteralPath readme.txt -TotalCount $env:COUNT')).decision, 'review');
+assert.equal((await inspect('Set-Content -LiteralPath result.txt -Value hello -Stream hidden')).decision, 'review');
 result = await inspect('Clear-Content -LiteralPath readme.txt -Force');
 assert.equal(result.decision, 'allow');
 assert.equal(result.actions[0].kind, 'write');
@@ -128,6 +133,10 @@ assert.equal((await inspect('Rename-Item -Path readme.txt -NewName ordinary-link
 for (const riskMode of ['recommended', 'full-auto']) {
   const approval = (script) => ({ kind: 'command', params: { command: [resolveWindowsSystemPaths().powershell, '-NoProfile', '-Command', script] } });
   const state = { riskMode, cwd: workspace, riskContext: context };
+  const outside = path.join(root, 'ordinary.txt').replace(/'/g, "''");
+  assert.equal((await decideWindowsApproval(approval(`Get-Content -LiteralPath '${outside}' -Tail 1`), state)).decision, 'auto-allow');
+  assert.equal((await decideWindowsApproval(approval(`Set-Content -LiteralPath '${outside}' -Value hello -Encoding utf8 -NoNewline`), state)).decision, 'auto-allow');
+  assert.equal((await decideWindowsApproval(approval(`Set-Content -LiteralPath '${outside}' -Value hello -Stream hidden`), state)).decision, 'prompt');
   assert.equal((await decideWindowsApproval(approval('Clear-Content -LiteralPath ..\\ordinary.txt'), state)).decision, 'auto-allow', `${riskMode}: ordinary outside file`);
   assert.equal((await decideWindowsApproval(approval('Clear-Content -LiteralPath ..\\protected\\result.txt'), state)).decision, 'prompt', `${riskMode}: protected file`);
   assert.equal((await decideWindowsApproval(approval('Rename-Item -LiteralPath ..\\ordinary.txt -NewName renamed.txt'), state)).decision, 'auto-allow', `${riskMode}: rename ordinary outside file`);
