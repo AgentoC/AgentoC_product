@@ -16,6 +16,7 @@ export const WINDOWS_BROKER_MAX_FRAME_BYTES = 64 * 1024;
 export const WINDOWS_BROKER_TARGET_ID = 'AgentoC-Broker-QA-Target';
 export const WINDOWS_BROKER_REQUESTS_PATH = '/api/windows-privileged-broker/requests';
 export const WINDOWS_BROKER_ENROLLMENTS_PATH = '/api/windows-privileged-broker/enrollments';
+export const WINDOWS_BROKER_SERVICE_REQUESTS_PATH = '/api/windows-privileged-broker/service-requests';
 
 // The first Broker operation is never predelegated. Autonomous profiles may
 // propose it, but an enrolled device must sign every exact restart challenge.
@@ -555,15 +556,69 @@ export async function handleWindowsPrivilegedBrokerRoutes({
   brokerClient = defaultWindowsBrokerClient,
 }) {
   const pendingPath = pathname === `${BASE_PATH}/pending`;
+  const servicePendingPath = pathname === `${WINDOWS_BROKER_SERVICE_REQUESTS_PATH}/pending`;
+  const serviceDecisionMatch = pathname.match(/^\/api\/windows-privileged-broker\/service-requests\/([^/]+)\/decision$/);
   const pendingEnrollmentPath = pathname === `${WINDOWS_BROKER_ENROLLMENTS_PATH}/pending`;
   const statusMatch = pendingPath ? null : pathname.match(/^\/api\/windows-privileged-broker\/requests\/([^/]+)$/);
   const decisionMatch = pathname.match(/^\/api\/windows-privileged-broker\/requests\/([^/]+)\/decision$/);
   const completeEnrollmentMatch = pathname.match(/^\/api\/windows-privileged-broker\/enrollments\/([^/]+)\/complete$/);
-  if (pathname !== BASE_PATH && !statusMatch && !decisionMatch && !pendingPath && !pendingEnrollmentPath && !completeEnrollmentMatch) return false;
+  if (pathname !== BASE_PATH && !statusMatch && !decisionMatch && !pendingPath && !servicePendingPath && !serviceDecisionMatch && !pendingEnrollmentPath && !completeEnrollmentMatch) return false;
   res.setHeader?.('Cache-Control', 'private, no-store');
   if (!isOwner(authSession)) {
     req.resume?.();
     writeJson(res, 403, { code: 'OWNER_ACCESS_REQUIRED', error: 'Owner access required' });
+    return true;
+  }
+
+  if (servicePendingPath && req.method === 'GET') {
+    try {
+      const query = new URL(req.url, 'http://localhost').searchParams;
+      const devices = query.getAll('deviceId'), cursors = query.getAll('cursor');
+      if (devices.length !== 1 || !DEVICE_ID_PATTERN.test(devices[0]) || cursors.length > 1 ||
+          (cursors.length && !validId(cursors[0])) || [...query.keys()].some(key => !['deviceId', 'cursor'].includes(key))) {
+        throw brokerError('BROKER_REQUEST_INVALID');
+      }
+      const response = await brokerClient.pendingServiceControls({ deviceId: devices[0], ...(cursors.length ? { cursor: cursors[0] } : {}) });
+      writeJson(res, 200, { type: 'service_pending', ...response });
+    } catch (error) { writeUnavailable(writeJson, res, error); }
+    return true;
+  }
+
+  if (serviceDecisionMatch && req.method === 'POST') {
+    const requestId = decodeRequestId(serviceDecisionMatch[1]);
+    try {
+      if (!requestId) throw brokerError('BROKER_REQUEST_INVALID');
+      const body = await readJsonBody(req);
+      if (!hasOnlyKeys(body, ['deviceId', 'choice', 'deviceSignature']) || !DEVICE_ID_PATTERN.test(body.deviceId || '') ||
+          !['approve', 'deny'].includes(body.choice) || typeof body.deviceSignature !== 'string' ||
+          !body.deviceSignature || body.deviceSignature.length > 1024 || !SIGNATURE_PATTERN.test(body.deviceSignature)) {
+        throw brokerError('BROKER_REQUEST_INVALID');
+      }
+      const current = await brokerClient.status(requestId);
+      const grant = current?.serviceControl;
+      if (current?.type !== 'result' || !grant || grant.requestId !== requestId || !validId(grant.sessionId)) {
+        writeJson(res, 409, { code: 'BROKER_CHALLENGE_UNAVAILABLE', error: 'No Windows service request is available' });
+        return true;
+      }
+      if (requireSessionAccess && !await requireSessionAccess(res, authSession, grant.sessionId)) return true;
+      if (body.choice === 'approve') {
+        if (typeof getSession !== 'function' || typeof resolveSessionRiskMode !== 'function') {
+          writeJson(res, 503, { code: 'BROKER_SESSION_POLICY_UNAVAILABLE', error: 'Broker session policy is unavailable' });
+          return true;
+        }
+        const session = await getSession(grant.sessionId);
+        const riskMode = session && resolveSessionRiskMode(session);
+        // Autonomous modes reject operations that require a human decision.
+        if (!['safe', 'recommended'].includes(riskMode)) {
+          writeJson(res, 403, { code: 'BROKER_PERMISSION_PROFILE_DENIED', error: 'Broker policy denied this operation' });
+          return true;
+        }
+      }
+      const payload = { requestId, deviceId: body.deviceId, deviceSignature: body.deviceSignature };
+      const response = await (body.choice === 'approve' ? brokerClient.approveServiceControl(payload) : brokerClient.denyServiceControl(payload));
+      publishWindowsBrokerApprovalInvalidation(response, { action: 'decision', requestId });
+      writeJson(res, 200, response);
+    } catch (error) { writeUnavailable(writeJson, res, error); }
     return true;
   }
 

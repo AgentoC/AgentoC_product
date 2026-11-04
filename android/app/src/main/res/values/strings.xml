@@ -2,6 +2,9 @@
 <resources>
     <string name="share_route_system_target">AgentoC · Share</string>
     <string name="windows_broker_restart_service">Restart the approved Windows test service</string>
+    <string name="windows_broker_start_service">Start Windows service</string>
+    <string name="windows_broker_stop_service">Stop Windows service</string>
+    <string name="windows_broker_restart_named_service">Restart Windows service</string>
     <string name="windows_broker_request_reason">Computer: %1$s · target: %2$s · request: %3$s · target configuration: %4$s</string>
     <string name="windows_broker_outcome_unknown">Decision outcome unknown. Do not submit it again. Check the original request on the computer.</string>
     <string name="windows_broker_decision_denied">The Windows Broker denied this request.</string>

@@ -2,6 +2,9 @@
     <string name="share_route_system_target">AgentoC · 分享</string>
     <string name="temporary_control_computer">临时控制电脑 · 10 分钟</string>
     <string name="windows_broker_restart_service">重启已批准的 Windows 测试服务</string>
+    <string name="windows_broker_start_service">启动 Windows 服务</string>
+    <string name="windows_broker_stop_service">停止 Windows 服务</string>
+    <string name="windows_broker_restart_named_service">重启 Windows 服务</string>
     <string name="windows_broker_request_reason">电脑：%1$s · 目标：%2$s · 请求：%3$s · 目标配置：%4$s</string>
 
     <string name="computer_connection_unsuccessful">连接电脑失败</string>

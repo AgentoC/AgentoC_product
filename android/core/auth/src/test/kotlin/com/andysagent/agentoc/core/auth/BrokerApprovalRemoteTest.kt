@@ -15,6 +15,20 @@ import kotlin.test.assertFailsWith
 
 class BrokerApprovalRemoteTest {
     @Test
+    fun serviceApprovalPageAndDecisionUseDeviceBoundEndpoints() = runBlocking {
+        val deviceId = "a".repeat(64)
+        val pageTransport = RecordingTransport(ApiResponse(200,
+            """{"type":"service_pending","hasMore":false,"items":[{"brokerPublicKey":"key","brokerSignature":"sig","grant":{"version":1,"keyId":"key","brokerInstallationId":"broker","policyGeneration":3,"requestId":"request","sessionId":"session","runId":"run","turnId":"turn","actionId":"action","nonce":"0123456789abcdefghijklmn","serviceName":"Example Service","action":"restart-service","definitionHash":"${"a".repeat(64)}","authorization":"owner","issuedMs":1800000000000,"expiresMs":1800000060000}}]}"""))
+        val page = BrokerApprovalRemote(pageTransport).pendingServiceControls(deviceId, "cursor")
+        assertEquals("Example Service", page.requests.single().grant.serviceName)
+        assertEquals("/api/windows-privileged-broker/service-requests/pending?deviceId=$deviceId&cursor=cursor", pageTransport.requests.single().path)
+        val decisionTransport = RecordingTransport(ApiResponse(200, """{"type":"result","requestId":"request","status":"denied"}"""))
+        assertEquals("denied", BrokerApprovalRemote(decisionTransport).decideServiceControl("request", deviceId, "deny", "MEUCIQ==").status)
+        assertEquals("""{"deviceId":"$deviceId","choice":"deny","deviceSignature":"MEUCIQ=="}""", decisionTransport.requests.single().body)
+        assertEquals("/api/windows-privileged-broker/service-requests/request/decision", decisionTransport.requests.single().path)
+    }
+
+    @Test
     fun pendingPreservesServerRateLimitWhenAResponseIsReturnedDirectly() = runBlocking {
         val transport = RecordingTransport(ApiResponse(
             429,

@@ -36,6 +36,18 @@ data class BrokerDecisionResult(
     val code: String?,
 )
 
+data class WindowsServicePendingApproval(
+    val grant: WindowsServiceControlGrant,
+    val brokerPublicKey: String,
+    val brokerSignature: String,
+)
+
+data class WindowsServicePendingPage(
+    val requests: List<WindowsServicePendingApproval>,
+    val nextCursor: String?,
+    val hasMore: Boolean,
+)
+
 data class BrokerPendingEnrollment(
     val challenge: BrokerEnrollmentChallenge,
     val brokerPublicKey: String,
@@ -55,6 +67,44 @@ data class BrokerEnrollmentResult(
 /** Relays Broker-signed challenges and device-signed decisions over the paired computer transport. */
 class BrokerApprovalRemote(private val executeRequest: suspend (ApiRequest) -> com.andysagent.agentoc.core.network.ApiResponse) {
     constructor(transport: AgentoCTransport) : this(transport::execute)
+
+    suspend fun pendingServiceControls(deviceId: String, cursor: String? = null): WindowsServicePendingPage {
+        require(deviceId.matches(Regex("^[a-f0-9]{64}$"))) { "Invalid approval device ID" }
+        cursor?.let { require(it.matches(Regex("^[A-Za-z0-9._:-]{1,128}$"))) { "Invalid Broker cursor" } }
+        val query = "deviceId=$deviceId" + (cursor?.let { "&cursor=${encode(it)}" } ?: "")
+        val root = request("GET", "/api/windows-privileged-broker/service-requests/pending?$query")
+        require(root.string("type") == "service_pending") { "Invalid service approval response" }
+        val requests = root.array("items").map { itemValue ->
+            val item = itemValue.jsonObject
+            val value = item["grant"]?.jsonObject ?: error("Service grant is missing")
+            val grant = WindowsServiceControlGrant(
+                value.requiredLong("version"), value.requiredString("keyId"), value.requiredString("brokerInstallationId"),
+                value.requiredLong("policyGeneration"), value.requiredString("requestId"), value.requiredString("sessionId"),
+                value.requiredString("runId"), value.requiredString("turnId"), value.requiredString("actionId"),
+                value.requiredString("nonce"), value.requiredString("serviceName"), value.requiredString("action"),
+                value.requiredString("definitionHash"), value.requiredString("authorization"),
+                value.requiredLong("issuedMs"), value.requiredLong("expiresMs"),
+            )
+            WindowsServicePendingApproval(grant, item.requiredString("brokerPublicKey"), item.requiredString("brokerSignature"))
+        }
+        require(requests.size <= 16) { "Service approval page is too large" }
+        val hasMore = root.boolean("hasMore")
+        val nextCursor = root.string("nextCursor")?.takeIf(String::isNotBlank)
+        require(!hasMore || nextCursor?.matches(Regex("^[A-Za-z0-9._:-]{1,128}$")) == true) { "Service approval cursor is missing" }
+        return WindowsServicePendingPage(requests, nextCursor, hasMore)
+    }
+
+    suspend fun decideServiceControl(requestId: String, deviceId: String, choice: String, signature: String): BrokerDecisionResult {
+        require(requestId.matches(Regex("^[A-Za-z0-9._:-]{1,128}$"))) { "Invalid Broker request ID" }
+        require(deviceId.matches(Regex("^[a-f0-9]{64}$"))) { "Invalid approval device ID" }
+        require(choice == "approve" || choice == "deny") { "Invalid Broker decision" }
+        require(signature.isNotEmpty() && signature.length <= 1024 &&
+            signature.matches(Regex("^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"))) { "Invalid Broker signature" }
+        val body = """{"deviceId":"$deviceId","choice":"$choice","deviceSignature":"$signature"}"""
+        val root = request("POST", "/api/windows-privileged-broker/service-requests/${encode(requestId)}/decision", body)
+        require(root.string("type") == "result" && root.string("requestId") == requestId) { "Invalid Broker decision response" }
+        return BrokerDecisionResult(requestId, root.string("status") ?: "unknown", root.string("code"))
+    }
 
     suspend fun pending(
         deviceId: String,

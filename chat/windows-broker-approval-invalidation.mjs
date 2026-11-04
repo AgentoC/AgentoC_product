@@ -60,7 +60,7 @@ function advanceRevision() {
 export function publishWindowsBrokerApprovalInvalidation(response, { action, requestId, broadcast = broadcastOwners } = {}) {
   if (response?.type !== 'result') return false;
   if (action === 'propose' && response.status !== 'awaiting_device') return false;
-  if (action === 'decision' && !TERMINAL_STATUSES.has(response.status)) return false;
+  if (action === 'decision' && response.status !== 'executing' && !TERMINAL_STATUSES.has(response.status)) return false;
   if (action === 'status') {
     if (response.status !== 'expired' || !requestId || expiredNotified.has(requestId)) return false;
   } else if (action !== 'propose' && action !== 'decision') return false;

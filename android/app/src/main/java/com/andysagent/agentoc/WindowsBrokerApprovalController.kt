@@ -14,6 +14,9 @@ import com.andysagent.agentoc.core.auth.BrokerApprovalRemote
 import com.andysagent.agentoc.core.auth.BrokerEnrollmentMaterial
 import com.andysagent.agentoc.core.auth.BrokerPendingEnrollment
 import com.andysagent.agentoc.core.auth.BrokerPendingApproval
+import com.andysagent.agentoc.core.auth.WindowsServiceControlApproval
+import com.andysagent.agentoc.core.auth.WindowsServiceControlGrant
+import com.andysagent.agentoc.core.auth.WindowsServicePendingApproval
 import com.andysagent.agentoc.core.model.Approval
 import com.andysagent.agentoc.core.model.AttentionReducer
 import com.andysagent.agentoc.core.model.RuntimeConnectionState
@@ -135,7 +138,7 @@ internal class WindowsBrokerApprovalController(
             pendingRetryGate.defer(target.instanceId, BROKER_APPROVAL_CARRIER_RECONCILE_MS)
         }
         val label = target.label.ifBlank { target.instanceId }
-        return snapshot.requests.mapNotNull { request ->
+        val legacy = snapshot.requests.mapNotNull { request ->
             if (!isAuthentic(request, pinnedFingerprint)) return@mapNotNull null
             val challenge = request.challenge
             val localDecision = preferences.getString(decisionKey(target.instanceId, request), null)
@@ -166,6 +169,37 @@ internal class WindowsBrokerApprovalController(
                 brokerDecisionUncertain = uncertain,
             )
         }
+        val serviceRequests = try {
+            readAllServicePending(remote, deviceId)
+        } catch (error: ApiException) {
+            // Older hosts and installations without the optional service adapter
+            // must still be able to use the existing approval feed.
+            if (error.statusCode in setOf(404, 501, 503)) emptyList() else throw error
+        }
+        val services = serviceRequests.mapNotNull { request ->
+            val grant = request.grant
+            if (!isAuthenticService(request, pinnedFingerprint)) return@mapNotNull null
+            val digest = runCatching { serviceDigest(grant) }.getOrNull() ?: return@mapNotNull null
+            val localDecision = preferences.getString(brokerDecisionJournalKey(target.instanceId, grant.requestId, digest), null)
+            if (localDecision in setOf("executing", "succeeded", "denied", "failed", "expired")) return@mapNotNull null
+            val uncertain = localDecision != null
+            Approval(
+                id = grant.requestId, sessionId = grant.sessionId, runId = grant.runId,
+                title = if (uncertain) appContext.getString(R.string.windows_broker_outcome_unknown) else appContext.getString(when (grant.action) {
+                    "start-service" -> R.string.windows_broker_start_service
+                    "stop-service" -> R.string.windows_broker_stop_service
+                    else -> R.string.windows_broker_restart_named_service
+                }),
+                status = "pending", kind = AttentionReducer.WINDOWS_BROKER_APPROVAL_KIND,
+                channel = SERVICE_CONTROL_CHANNEL,
+                reason = (if (uncertain) appContext.getString(R.string.windows_broker_outcome_unknown) + "\n" else "") +
+                    appContext.getString(R.string.windows_broker_request_reason, label, grant.serviceName, grant.requestId, grant.definitionHash),
+                riskLevel = "privileged", passkeyRequired = false,
+                expiresAt = Instant.ofEpochMilli(grant.expiresMs).toString(),
+                brokerTargetInstanceId = target.instanceId, brokerChallengeDigest = digest, brokerDecisionUncertain = uncertain,
+            )
+        }
+        return legacy + services
     }
 
     override suspend fun resolve(approval: Approval, approve: Boolean) {
@@ -183,6 +217,10 @@ internal class WindowsBrokerApprovalController(
             ?: error("The Windows Broker identity is not trusted on this phone.")
         val deviceId = BrokerApprovalProtocol.deviceIdForPublicKey(identity.brokerPublicKey())
         val remote = BrokerApprovalRemote { request -> app.runtime.executeOnTarget(target.instanceId, request) }
+        if (approval.channel == SERVICE_CONTROL_CHANNEL) {
+            resolveServiceControl(approval, approve, target.instanceId, pinnedFingerprint, deviceId, remote)
+            return
+        }
         val request = readAllPending(remote, deviceId, afterRevision = null).requests
             .firstOrNull { it.requestId == approval.id }
             ?: error("This Windows request is no longer pending. Refresh the approval list.")
@@ -322,6 +360,58 @@ internal class WindowsBrokerApprovalController(
             }.getOrDefault(false)
     }
 
+    private fun isAuthenticService(request: WindowsServicePendingApproval, pinnedFingerprint: String): Boolean =
+        WindowsServiceControlApproval.verifyBrokerReview(request.grant, request.brokerPublicKey, request.brokerSignature, pinnedFingerprint)
+
+    private fun serviceDigest(grant: WindowsServiceControlGrant): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(WindowsServiceControlApproval.brokerReviewSigningBytes(grant))
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+
+    private suspend fun readAllServicePending(remote: BrokerApprovalRemote, deviceId: String): List<WindowsServicePendingApproval> {
+        val requests = mutableListOf<WindowsServicePendingApproval>()
+        var cursor: String? = null
+        var pages = 0
+        do {
+            val page = remote.pendingServiceControls(deviceId, cursor)
+            requests += page.requests
+            cursor = page.nextCursor
+            pages++
+        } while (page.hasMore && pages < MAX_PAGES)
+        return requests
+    }
+
+    private suspend fun resolveServiceControl(approval: Approval, approve: Boolean, targetId: String, pinnedFingerprint: String,
+        deviceId: String, remote: BrokerApprovalRemote) {
+        val request = readAllServicePending(remote, deviceId).firstOrNull { it.grant.requestId == approval.id }
+            ?: error("This Windows service request is no longer pending. Refresh the approval list.")
+        val grant = request.grant
+        require(isAuthenticService(request, pinnedFingerprint)) { "The Windows Broker identity or signature could not be verified." }
+        require(grant.sessionId == approval.sessionId && grant.runId == approval.runId && serviceDigest(grant) == approval.brokerChallengeDigest) {
+            "This Windows service request changed. Refresh the approval list."
+        }
+        val key = brokerDecisionJournalKey(targetId, grant.requestId, serviceDigest(grant))
+        val choice = if (approve) "approve" else "deny"
+        val bytes = if (approve) WindowsServiceControlApproval.ownerSigningBytes(grant) else WindowsServiceControlApproval.ownerDenialSigningBytes(grant)
+        val signature = identity.signBrokerBytes(bytes)
+        val result = try {
+            decisionJournal.submitOnce(key) { remote.decideServiceControl(grant.requestId, deviceId, choice, signature) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: BrokerDecisionNotRecordedException) {
+            throw error
+        } catch (error: Exception) {
+            decisionUpdates.tryEmit(targetId)
+            throw BrokerApprovalOutcomeUnknownException(appContext.getString(R.string.windows_broker_outcome_unknown), error)
+        }
+        if ((approve && result.status !in setOf("executing", "succeeded")) || (!approve && result.status != "denied")) {
+            decisionUpdates.tryEmit(targetId)
+            throw BrokerApprovalOutcomeUnknownException(appContext.getString(R.string.windows_broker_outcome_unknown))
+        }
+        decisionJournal.complete(key, result.status)
+        decisionUpdates.tryEmit(targetId)
+    }
+
     private data class PendingSnapshot(val requests: List<BrokerPendingApproval>, val revision: String?)
 
     private suspend fun readAllPending(
@@ -378,5 +468,6 @@ internal class WindowsBrokerApprovalController(
         const val BROKER_APPROVAL_RECONCILE_MS = 15_000L
         const val BROKER_APPROVAL_DEFAULT_RATE_LIMIT_MS = 30_000L
         const val BROKER_APPROVAL_INVALIDATION = "windows_broker_approvals_invalidated"
+        const val SERVICE_CONTROL_CHANNEL = "windows_service_control"
     }
 }
