@@ -42,8 +42,8 @@ function splitOptions(args, supported, longOptions = {}) {
     if (options && arg === '--') { options = false; continue; }
     if (options && arg.startsWith('-') && arg !== '-') {
       if (Object.hasOwn(longOptions, arg)) { flags.add(longOptions[arg]); continue; }
-      if (!/^-[A-Za-z]+$/.test(arg) || [...arg.slice(1)].some((flag) => !supported.includes(flag))) return null;
-      for (const flag of arg.slice(1)) flags.add(flag.toLowerCase());
+      if (!/^-[A-Za-z1]+$/.test(arg) || [...arg.slice(1)].some((flag) => !supported.includes(flag))) return null;
+      for (const flag of arg.slice(1)) flags.add(flag);
     } else operands.push(arg);
   }
   return { operands, flags };
@@ -124,12 +124,15 @@ export async function analyzeWindowsBash(command, context = {}, { analyzeFiles =
     return analyzeFiles([...targets.map(target => ({ path: target, kind: 'read' })), ...outputEntry], context);
   }
   const spec = {
-    cat: ['read', ''], ls: ['read', 'alR'], mkdir: ['write', 'p'], touch: ['write', ''],
+    cat: ['read', 'AbEensTtuv'], ls: ['read', 'aAlh1tSrdFisR'], mkdir: ['write', 'p'], touch: ['write', ''],
     rm: ['delete', 'rRf'], rmdir: ['delete', ''], cp: ['copy', 'rR'], mv: ['move', ''],
   }[program];
   if (!spec) return { complete: false, actions: [], reason: 'Bash command is not yet supported' };
   const longOptions = program === 'rm' ? { '--recursive': 'r', '--force': 'f' }
-    : program === 'cp' || program === 'ls' ? { '--recursive': 'r' } : program === 'mkdir' ? { '--parents': 'p' } : {};
+    : program === 'cp' ? { '--recursive': 'r' }
+      : program === 'ls' ? { '--recursive': 'R', '--reverse': 'r', '--all': 'a', '--almost-all': 'A', '--human-readable': 'h' }
+        : program === 'cat' ? { '--number': 'n', '--number-nonblank': 'b', '--show-all': 'A', '--show-ends': 'E', '--show-tabs': 'T', '--show-nonprinting': 'v', '--squeeze-blank': 's' }
+          : program === 'mkdir' ? { '--parents': 'p' } : {};
   const parsed = splitOptions(words.slice(1), spec[1], longOptions);
   if (!parsed) return { complete: false, actions: [], reason: 'Bash command has unsupported options' };
   const { operands, flags } = parsed;
@@ -139,8 +142,11 @@ export async function analyzeWindowsBash(command, context = {}, { analyzeFiles =
   }
   const targets = operands.map(gitBashPath);
   if (targets.some((item) => !item)) return { complete: false, actions: [], reason: 'Bash path cannot be resolved' };
+  // ls -r reverses sort order; only uppercase -R is recursive. Other
+  // supported tools use either -r or -R for recursion.
+  const recursive = flags.has('R') || (program !== 'ls' && flags.has('r'));
   const entries = spec[0] === 'copy' || spec[0] === 'move'
-    ? [{ path: targets[0], kind: spec[0] === 'move' ? 'delete' : 'read', recursive: flags.has('r') }, { path: targets[1], kind: 'write', recursive: flags.has('r'), copySource: targets[0] }]
-    : targets.map((target) => ({ path: target, kind: spec[0], recursive: flags.has('r') }));
+    ? [{ path: targets[0], kind: spec[0] === 'move' ? 'delete' : 'read', recursive }, { path: targets[1], kind: 'write', recursive, copySource: targets[0] }]
+    : targets.map((target) => ({ path: target, kind: spec[0], recursive }));
   return analyzeFiles([...entries, ...outputEntry], context);
 }

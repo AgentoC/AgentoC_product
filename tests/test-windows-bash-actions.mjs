@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { link, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { analyzeWindowsBash, parseLiteralBashWords } from '../chat/windows-bash-actions.mjs';
 import { decideWindowsPowerShellActions } from '../chat/windows-powershell-actions.mjs';
+import { decideWindowsApproval } from '../chat/windows-approval-gate.mjs';
 
 assert.deepEqual(parseLiteralBashWords("cat '中文 文件.md'"), ['cat', '中文 文件.md']);
 for (const command of ['cat x; rm -rf /', 'cat "$(rm x)"', 'cat $HOME/a', 'cat x > out', 'cat *.txt', 'cat x # comment', 'cat `whoami`']) {
@@ -24,6 +26,12 @@ if (process.platform === 'win32') {
   const context = { cwd: workspace, trustedWorkspaceRoot: workspace };
   const inspect = async (command, conservative = false) => decideWindowsPowerShellActions(await analyzeWindowsBash(command, context), { conservative });
   assert.equal((await inspect("cat '中文 文件.md'")).decision, 'allow');
+  for (const command of ["cat -n '中文 文件.md'", "cat --number '中文 文件.md'", 'ls -lah ordinary', 'ls -1 ordinary', 'ls -r secret', 'ls --reverse secret']) {
+    assert.equal((await inspect(command)).decision, 'allow', command);
+  }
+  assert.equal((await inspect('ls -R secret')).decision, 'review');
+  assert.equal((await inspect('ls -L secret')).decision, 'review');
+  assert.equal((await inspect('cat --number secret/.ssh/fixture-key')).decision, 'review');
   for (const command of ["head -n 2 '中文 文件.md'", "tail -c10 '中文 文件.md'", "wc -lw '中文 文件.md'",
     "grep -in hello '中文 文件.md'", "grep -e hello -- '中文 文件.md'", "grep hello '中文 文件.md' > output.md", 'head ../outside.txt']) {
     assert.equal((await inspect(command)).decision, 'allow', command);
@@ -60,6 +68,23 @@ if (process.platform === 'win32') {
   assert.equal((await inspect('echo hello > one > two')).decision, 'review');
   assert.equal((await inspect("echo hello > ''")).decision, 'review');
   assert.equal((await inspect('echo hello > output.md; rm -rf /')).decision, 'review');
+  const bashPath = value => value.replace(/^([A-Za-z]):\\/, (_, drive) => `/${drive.toLowerCase()}/`).replaceAll('\\', '/');
+  const file = bashPath(path.join(workspace, '中文 文件.md'));
+  const secret = bashPath(path.join(workspace, 'secret'));
+  const request = command => ({ kind: 'command', providerMethod: 'can_use_tool', params: { tool_name: 'Bash', input: { command } } });
+  for (const riskMode of ['recommended', 'full-auto']) {
+    const state = { riskMode, cwd: workspace, riskContext: context };
+    assert.equal((await decideWindowsApproval(request(`cat -n '${file}'`), state)).decision, 'auto-allow');
+    assert.equal((await decideWindowsApproval(request(`ls -lah '${secret}'`), state)).decision, 'auto-allow');
+    assert.equal((await decideWindowsApproval(request(`ls -R '${secret}'`), state)).decision, 'prompt');
+  }
+  if (process.env.AGENTOC_TEST_BASH_BINARY) {
+    const bash = process.env.AGENTOC_TEST_BASH_BINARY;
+    const numbered = execFileSync(bash, ['--noprofile', '--norc', '-c', `cat -n '${file}'`], { cwd: workspace, encoding: 'utf8', windowsHide: true });
+    assert.match(numbered, /\b1\s+fixture/);
+    const listing = execFileSync(bash, ['--noprofile', '--norc', '-c', `ls -1 '${bashPath(workspace)}'`], { cwd: workspace, encoding: 'utf8', windowsHide: true });
+    assert.ok(listing.includes('中文 文件.md'));
+  }
   await rm(root, { recursive: true, force: true });
 }
 console.log('windows-bash-actions: literal command and path policy checks passed');
