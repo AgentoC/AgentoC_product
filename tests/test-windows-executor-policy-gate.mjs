@@ -19,7 +19,10 @@
  */
 
 import assert from 'node:assert/strict';
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, verify } from 'node:crypto';
+import { createWindowsAutoInstallAuthorization, createWindowsBrokerAutoInstallGrant, queryWindowsBrokerAutoInstall, submitWindowsBrokerAutoInstall, submitOrResumeWindowsBrokerAutoInstall, waitWindowsBrokerAutoInstall } from '../chat/windows-auto-install-authorization.mjs';
+import { getWindowsManagedAutoInstallStatus, prepareWindowsManagedUserInstall, tryWindowsManagedAutoInstall, verifyWindowsManagedUserInstallAuthorization } from '../chat/windows-managed-auto-install.mjs';
+import { createWindowsPrivilegedBrokerClient } from '../chat/windows-privileged-broker.mjs';
 
 import { compileSemanticOperations } from '../chat/semantic-compiler.mjs';
 import { evaluateSemanticOperation } from '../chat/semantic-policy.mjs';
@@ -28,6 +31,7 @@ import {
   SEMANTIC_ADAPTER_WINGET_INSTALL_V1,
   createSemanticCapability,
   signSemanticCapability,
+  verifySemanticCapability,
 } from '../chat/semantic-capability.mjs';
 import {
   buildWindowsDispatchPermissionFacts,
@@ -66,7 +70,7 @@ const kid = 'kid_win_policy';
 const binding = { sessionId: 's_win_policy', runId: 'r_win_policy', turnId: 't_win_policy', requestKey: 'req_win_policy', executionClass: 'host' };
 const trustedContext = { cwd: 'C:\\project', projectRoot: 'C:\\project', home: 'C:\\Users\\owner', platform: 'win32' };
 const compile = (rawCommand) => compileSemanticOperations({ request: { ...binding, rawCommand }, trustedContext });
-const packageOperation = compile('winget install --id Git.Git --exact --source winget').operations[0];
+const packageOperation = compile('winget install --id Git.Git --exact --source winget --scope machine').operations[0];
 // A server resolver marks complete effect enumeration before minting a
 // Phase 2A capability; buildPermissionFacts requires it.
 packageOperation.analysis.effectsComplete = true;
@@ -297,6 +301,179 @@ check('signed grant proof verifies under the trusted verifier', verifier.verifyG
 }
 
 // ── 4. platform / executionClass smuggling → DENY ──────────────────────────────
+
+// Policy authorization still goes through the real signed-facts/grant gate;
+// no owner credential is invented and replay is rejected by the dispatcher.
+for (const riskMode of ['recommended', 'full-auto']) {
+  const auto = createWindowsAutoInstallAuthorization({ prepared: { binding, projection: { decisions: [packageDecision] } }, riskMode, kid, privateKey: keys.privateKey, now: NOW });
+  const nativeGrant = createWindowsBrokerAutoInstallGrant({ authorization: auto, requestId: 'native-1', actionId: 'action-1', kid, privateKey: keys.privateKey, brokerInstallationId: 'broker-1', policyGeneration: 1, now: NOW });
+  assert.equal(nativeGrant.grant.installScope, 'machine');
+  const wire = Buffer.concat([Buffer.from('AgentoC Windows auto install v1\0'), Buffer.from(JSON.stringify(nativeGrant.grant))]);
+  check(`${riskMode} native grant signature covers the exact package`, verify(null, wire, keys.publicKey, Buffer.from(nativeGrant.signature, 'base64url')));
+  assert.equal(nativeGrant.grant.packageId, 'Git.Git');
+  assert.equal(nativeGrant.grant.packageVersion, '2.0');
+  let submissions = 0;
+  const client = {
+    async health() { return { type: 'health', autoInstallReady: true, autoInstallKeyId: kid, installationId: 'broker-1', policyGeneration: 1 }; },
+    async executeAutoInstall({ grant, signature }) {
+      submissions++;
+      const payload = Buffer.concat([Buffer.from('AgentoC Windows auto install v1\0'), Buffer.from(JSON.stringify(grant))]);
+      assert(verify(null, payload, keys.publicKey, Buffer.from(signature, 'base64url')));
+      return { type: 'result', requestId: grant.requestId, status: 'executing' };
+    },
+  };
+  const submitOptions = { client, prepared: { binding, projection: { decisions: [packageDecision] } }, riskMode, requestId: 'native-1', actionId: 'action-1', kid, privateKey: keys.privateKey, now: NOW };
+  assert.equal((await submitWindowsBrokerAutoInstall(submitOptions)).status, 'executing');
+  assert.equal(submissions, 1);
+  let framedSubmissions = 0;
+  const framedClient = createWindowsPrivilegedBrokerClient({ platform: 'win32', pipeExchange: async ({ pipe, request }) => {
+    if (pipe === 'health') return client.health();
+    assert.equal(request.type, 'auto_install.execute');
+    assert.equal(request.autoInstall.installScope, 'machine');
+    if (request.type === 'auto_install.inspect') return { type: 'error', code: 'REQUEST_INVALID' };
+    framedSubmissions++;
+    return client.executeAutoInstall({ grant: request.autoInstall, signature: request.signature });
+  } });
+  assert.equal((await submitWindowsBrokerAutoInstall({ ...submitOptions, client: framedClient })).status, 'executing');
+  assert.equal(framedSubmissions, 1, 'signed grant passes the actual broker client wire validation');
+  const selected = { id: 'Git.Git', version: '2.0', source: 'winget', scope: 'System', elevation: 'ElevationRequired', type: 'Msi', nestedType: 'Unknown', architecture: 'X64', locale: 'en-US' };
+  let selectedGrant;
+  const selectedClient = { ...client, async inspectAutoInstall(query) { assert.deepEqual(query, { packageId: 'Git.Git', packageVersion: '2.0' }); return selected; },
+    async executeAutoInstall({ grant, signature }) { selectedGrant = grant; return client.executeAutoInstall({ grant, signature }); } };
+  assert.equal((await submitWindowsBrokerAutoInstall({ ...submitOptions, client: selectedClient })).status, 'executing');
+  assert.deepEqual(selectedGrant.selectedInstaller, selected, 'trusted inspector selection is signed into the broker grant');
+  let prohibitedSubmitted = false;
+  await assert.rejects(submitWindowsBrokerAutoInstall({ ...submitOptions, client: { ...client,
+    async inspectAutoInstall() { return { ...selected, elevation: 'ElevationProhibited' }; },
+    async executeAutoInstall() { prohibitedSubmitted = true; throw new Error('must not submit'); },
+  } }), { code: 'AUTO_INSTALL_ELEVATION_PROHIBITED' });
+  assert.equal(prohibitedSubmitted, false, 'an installer that prohibits elevation cannot reach the system executor');
+  let activeAfterInspection = true;
+  let submittedAfterCancellation = false;
+  const cancelledClient = { ...client, async inspectAutoInstall() { activeAfterInspection = false; return selected; },
+    async executeAutoInstall() { submittedAfterCancellation = true; throw new Error('must not submit'); } };
+  await assert.rejects(submitWindowsBrokerAutoInstall({ ...submitOptions, client: cancelledClient, assertActive: async () => {
+    if (!activeAfterInspection) throw Object.assign(new Error('run changed'), { code: 'AUTO_INSTALL_RUN_CHANGED' });
+  } }), { code: 'AUTO_INSTALL_RUN_CHANGED' });
+  assert.equal(submittedAfterCancellation, false, 'a run cancelled during inspection cannot start installation');
+  await assert.rejects(submitWindowsBrokerAutoInstall({ ...submitOptions, client: { ...client, async inspectAutoInstall() { throw Object.assign(new Error('bad response'), { code: 'BROKER_RESPONSE_INVALID' }); } } }), { code: 'AUTO_INSTALL_INSPECTION_INVALID' });
+  await assert.rejects(submitWindowsBrokerAutoInstall({ ...submitOptions, client: { ...client, async health() { return { type: 'health', autoInstallReady: true, autoInstallKeyId: 'other' }; } } }), { code: 'AUTO_INSTALL_BROKER_NOT_READY' });
+  await assert.rejects(submitWindowsBrokerAutoInstall({ ...submitOptions, client: { ...client, async executeAutoInstall() { throw new Error('pipe closed'); } } }), { code: 'AUTO_INSTALL_OUTCOME_UNKNOWN', requestId: 'native-1' });
+  let recordedGrant = null;
+  let autoCalls = 0;
+  const durableClient = {
+    health: client.health,
+    inspectAutoInstall: selectedClient.inspectAutoInstall,
+    async status(requestId) { return recordedGrant ? { type: 'result', requestId, status: 'succeeded', autoInstall: recordedGrant } : { type: 'result', requestId, code: 'REQUEST_NOT_FOUND' }; },
+    async executeAutoInstall({ grant }) { autoCalls++; recordedGrant = grant; return { type: 'result', requestId: grant.requestId, status: 'executing' }; },
+  };
+  const durableOptions = { ...submitOptions, client: durableClient };
+  assert.equal((await submitOrResumeWindowsBrokerAutoInstall(durableOptions)).status, 'executing');
+  assert.deepEqual(recordedGrant.selectedInstaller, selected);
+  assert.equal((await submitOrResumeWindowsBrokerAutoInstall(durableOptions)).duplicate, true);
+  assert.equal(autoCalls, 1);
+  assert.equal((await queryWindowsBrokerAutoInstall({ client: durableClient, binding })).status, 'succeeded');
+  assert.equal((await getWindowsManagedAutoInstallStatus({ platform: 'win32', binding: { ...binding, authenticatedPrincipalKind: 'owner' } }, { client: durableClient, userStore: { status: async () => null } })).status, 'succeeded');
+  const userStatus = await getWindowsManagedAutoInstallStatus({ platform: 'win32', binding: { ...binding, authenticatedPrincipalKind: 'owner' } }, {
+    client: { status: async () => { throw new Error('broker must not be queried'); } },
+    userStore: { status: async () => ({ status: 'unknown', code: '', duplicate: true }) },
+  });
+  assert.equal(userStatus.status, 'unknown');
+  assert.equal(userStatus.requestKey, binding.requestKey);
+  await assert.rejects(getWindowsManagedAutoInstallStatus({ platform: 'win32', binding: { ...binding, authenticatedPrincipalKind: 'guest' } }, { client: durableClient }), { code: 'AUTO_INSTALL_STATUS_UNAVAILABLE' });
+  assert.equal(autoCalls, 1, 'status lookup must never submit an installation');
+  let raceGrant;
+  let racingLookups = 0;
+  let racingSubmissions = 0;
+  const racingClient = {
+    health: client.health,
+    async status(requestId) {
+      racingLookups++;
+      if (racingLookups <= 2) return { type: 'result', requestId, code: 'REQUEST_NOT_FOUND' };
+      return { type: 'result', requestId, status: 'executing', autoInstall: raceGrant };
+    },
+    async executeAutoInstall({ grant }) {
+      racingSubmissions++;
+      if (!raceGrant) { raceGrant = grant; return { type: 'result', requestId: grant.requestId, status: 'executing' }; }
+      return { type: 'error', code: 'REQUEST_ID_CONFLICT' };
+    },
+  };
+  const racingResults = await Promise.all([
+    submitOrResumeWindowsBrokerAutoInstall({ ...durableOptions, client: racingClient }),
+    submitOrResumeWindowsBrokerAutoInstall({ ...durableOptions, client: racingClient }),
+  ]);
+  assert.equal(racingSubmissions, 2, 'the service receives a competing claim but only one is admitted');
+  assert.ok(racingResults.every((result) => result.status === 'executing'));
+  assert.equal(racingResults.filter((result) => result.duplicate).length, 1);
+  const conflictClient = { ...racingClient, status: async (id) => ({ type: 'result', requestId: id, status: 'executing', autoInstall: { ...raceGrant, packageId: 'Different.Package' } }) };
+  await assert.rejects(submitOrResumeWindowsBrokerAutoInstall({ ...durableOptions, client: conflictClient }), { code: 'AUTO_INSTALL_BINDING_CONFLICT' });
+  assert.equal((await queryWindowsBrokerAutoInstall({ client: { status: async (requestId) => ({ type: 'result', requestId, code: 'REQUEST_NOT_FOUND' }) }, binding })).status, 'unknown');
+  await assert.rejects(queryWindowsBrokerAutoInstall({ client: durableClient, binding: { ...binding, runId: 'another-run' } }), { code: 'AUTO_INSTALL_BINDING_CONFLICT' });
+  recordedGrant = { ...recordedGrant, packageId: 'Different.Package' };
+  await assert.rejects(submitOrResumeWindowsBrokerAutoInstall(durableOptions), { code: 'AUTO_INSTALL_BINDING_CONFLICT' });
+  let checkedActive = false;
+  const managedOptions = { platform: 'win32', actions: [{ command: 'winget install Git.Git --scope machine' }], riskMode,
+    binding: { ...binding, authenticatedPrincipalKind: 'owner' }, trustedContext: { cwd: 'D:\\work' } };
+  const managedDeps = { prepare: async () => ({ binding, projection: { decisions: [packageDecision] } }),
+    assertActive: async () => { checkedActive = true; }, loadKeys: async () => {}, getKey: () => ({ kid, privateKey: keys.privateKey }),
+    client: {}, submit: async () => ({ status: 'executing', requestId: 'request-1' }) };
+  assert.equal((await tryWindowsManagedAutoInstall(managedOptions, managedDeps)).status, 'executing');
+  assert.equal((await tryWindowsManagedAutoInstall({ ...managedOptions, actions: [{ command: 'winget add Git.Git --scope machine' }] }, managedDeps)).status, 'executing');
+  const userOperation = compile('winget install Git.Git --scope user').operations[0];
+  const userDecision = evaluateSemanticOperation(userOperation, packageResolution);
+  const userOptions = { ...managedOptions, actions: [{ command: 'winget install Git.Git --scope user' }], runExecutionSid: 'S-1-5-21-1-2-3-4' };
+  const userDeps = { ...managedDeps, prepare: async () => ({ binding, projection: { decisions: [userDecision] } }) };
+  const userAuthorization = await prepareWindowsManagedUserInstall(userOptions, userDeps);
+  assert.ok(await prepareWindowsManagedUserInstall({ ...userOptions, actions: [{ command: 'winget add Git.Git --scope user' }] }, userDeps));
+  assert.equal(userAuthorization.expectedExecutionSid, userOptions.runExecutionSid);
+  assert.equal(userAuthorization.capability.windowsExecutionSid, userOptions.runExecutionSid);
+  assert.equal(verifySemanticCapability(userAuthorization.capability, { publicKey: keys.publicKey }).ok, true);
+  const verifiedUser = { authorization: userAuthorization, pinnedIdentity: { kid, publicKey: keys.publicKey }, binding, runExecutionSid: userOptions.runExecutionSid };
+  assert.equal(verifyWindowsManagedUserInstallAuthorization(verifiedUser), true);
+  assert.equal(verifyWindowsManagedUserInstallAuthorization({ ...verifiedUser, runExecutionSid: 'S-1-5-21-1-2-3-5' }), false);
+  assert.equal(verifyWindowsManagedUserInstallAuthorization({ ...verifiedUser, binding: { ...binding, requestKey: 'another' } }), false);
+  assert.equal(verifyWindowsManagedUserInstallAuthorization({ ...verifiedUser, pinnedIdentity: { kid: 'other', publicKey: keys.publicKey } }), false);
+  assert.equal(await prepareWindowsManagedUserInstall({ ...userOptions, runExecutionSid: '' }, userDeps), null);
+  assert.equal(await prepareWindowsManagedUserInstall({ ...userOptions, binding: { ...userOptions.binding, authenticatedPrincipalKind: 'guest' } }, userDeps), null);
+  assert.equal(await prepareWindowsManagedUserInstall(userOptions, { ...userDeps, prepare: async () => ({ binding, projection: { decisions: [packageDecision] } }) }), null);
+  assert.equal(checkedActive, true);
+  let previewSubmitted = false;
+  const previewDeps = { ...managedDeps, client: { health: async () => ({ type: 'health', autoInstallReady: true, autoInstallKeyId: kid }) },
+    submit: async () => { previewSubmitted = true; throw new Error('preflight must not submit'); } };
+  assert.deepEqual(await tryWindowsManagedAutoInstall({ ...managedOptions, preflight: true }, previewDeps), { ready: true });
+  assert.equal(previewSubmitted, false);
+  assert.deepEqual(await tryWindowsManagedAutoInstall({ ...managedOptions, preflight: true }, { ...previewDeps,
+    client: { health: async () => ({ type: 'health', autoInstallReady: true, autoInstallKeyId: 'other' }) } }), { ready: false });
+  assert.equal(await tryWindowsManagedAutoInstall({ ...managedOptions, binding: { ...managedOptions.binding, authenticatedPrincipalKind: 'guest' } }, managedDeps), null);
+  assert.equal(await tryWindowsManagedAutoInstall({ ...managedOptions, riskMode: 'conservative-auto' }, managedDeps), null);
+  const proofVerifier = createPermissionProofVerifier({ publicKeyByKid: { [kid]: keys.publicKey }, now: NOW });
+  const tracker = createWindowsNonceTracker();
+  const options = { request: { capability: auto.capability }, publicKeyByKid, revalidate: okRevalidate, execInvocation: okExec, nonceState: tracker, now: NOW,
+    policyContext: { operation: auto.operation, facts: auto.facts, mode: PERMISSION_MODES.STANDARD, capability: auto.grant,
+      verifyFactsProof: proofVerifier.verifyFactsProof, verifyGrantProof: proofVerifier.verifyGrantProof, useNonce: auto.useNonce } };
+  const result = await dispatchWindowsSemanticExec(options);
+  check(`${riskMode} auto install reaches the real permission gate`, result.ok === true);
+  const replay = await dispatchWindowsSemanticExec(options);
+  check(`${riskMode} auto install cannot replay`, replay.ok === false);
+  const mixed = await dispatchWindowsSemanticExec({ ...options, nonceState: createWindowsNonceTracker(), policyContext: { ...options.policyContext, capability: signedGrant } });
+  eq(`${riskMode} auto authorization cannot use an owner grant`, mixed.code, 'SEMANTIC_AUTHORIZATION_MISMATCH');
+  const mixedOwner = await dispatchWindowsSemanticExec({ ...options, request: { capability: signedCapability }, nonceState: createWindowsNonceTracker() });
+  eq(`${riskMode} owner authorization cannot use an automatic grant`, mixedOwner.code, 'SEMANTIC_AUTHORIZATION_MISMATCH');
+}
+assert.throws(() => createWindowsAutoInstallAuthorization({ prepared: { binding, projection: { decisions: [packageDecision] } }, riskMode: 'conservative-auto', kid, privateKey: keys.privateKey, now: NOW }));
+passed += 1;
+
+{
+  let checks = 0;
+  let clock = 0;
+  const options = { requestId: 'native-1', intervalMs: 10, timeoutMs: 100, monotonicNow: () => clock, delay: async (ms) => { clock += ms; } };
+  const client = { async status(requestId) { checks++; return { type: 'result', requestId, status: checks === 2 ? 'succeeded' : 'executing' }; } };
+  assert.equal((await waitWindowsBrokerAutoInstall({ ...options, client })).status, 'succeeded');
+  assert.equal(checks, 2);
+  assert.equal((await waitWindowsBrokerAutoInstall({ ...options, client: { async status() { throw new Error('disconnected'); } } })).status, 'unknown');
+  assert.equal((await waitWindowsBrokerAutoInstall({ ...options, client: { async status() { return { type: 'result', requestId: 'different', status: 'succeeded' }; } } })).status, 'unknown');
+  assert.equal((await waitWindowsBrokerAutoInstall({ ...options, client: { async status(requestId) { return { type: 'result', requestId, status: 'executing' }; } } })).status, 'unknown');
+}
 
 // 4a: re-resolved operation claims a non-win32 platform on a win32 capability.
 {
