@@ -5,6 +5,7 @@ package safedelete
 import (
 	"crypto/sha256"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -96,4 +97,62 @@ func TestProductionRuntimeACLRefusesUserWritableFixture(t *testing.T) {
 		lease.Close()
 		t.Fatal("user-owned fixture accepted as protected runtime")
 	}
+}
+
+// Reuses an installed, administrator-controlled flat tool directory without
+// modifying it. The generated snapshot tests ACL/lease wiring only; it is not
+// an authenticated software provenance manifest.
+func TestOptionalProtectedInstalledRuntimeLease(t *testing.T) {
+	root := os.Getenv("AGENTOC_QA_PROTECTED_RUNTIME")
+	if root == "" {
+		t.Skip("no protected installed runtime supplied")
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest []RuntimeManifestFile
+	for _, entry := range entries {
+		if entry.IsDir() {
+			t.Skip("fixture requires a flat installed runtime")
+		}
+		info, err := entry.Info()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !info.Mode().IsRegular() {
+			t.Skip("fixture contains nonregular files")
+		}
+		file, err := os.Open(filepath.Join(root, entry.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		hash := sha256.New()
+		_, readErr := io.Copy(hash, file)
+		closeErr := file.Close()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if closeErr != nil {
+			t.Fatal(closeErr)
+		}
+		var digest [sha256.Size]byte
+		copy(digest[:], hash.Sum(nil))
+		manifest = append(manifest, RuntimeManifestFile{Path: entry.Name(), Size: info.Size(), SHA256: digest})
+	}
+	lease, err := OpenRuntimeManifestLease(root, manifest)
+	if err != nil {
+		for dir := root; ; dir = filepath.Dir(dir) {
+			t.Logf("ACL check tree=%v path=%s ok=%v", dir == root, dir, verifyRuntimeACL(dir, dir == root) == nil)
+			if filepath.Dir(dir) == dir {
+				break
+			}
+		}
+		t.Fatalf("protected installed runtime rejected: %v", err)
+	}
+	defer lease.Close()
+	if err := VerifyRuntimeManifestContent(root, manifest); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("production ACL and runtime lease held for %d existing files", len(manifest))
 }
