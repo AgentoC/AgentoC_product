@@ -41,7 +41,9 @@ if ((installCase || deleteCase || dotnetCase || guidanceCase || readCase) && !pa
 const safeDeleteHelper = process.env.AGENTOC_TEST_SAFE_DELETE_BINARY;
 if (deleteCase && !path.isAbsolute(safeDeleteHelper || '')) throw new Error('absolute safe deletion helper required');
 const installCommand = `winget ${process.env.AGENTOC_QA_CLAUDE_INSTALL_ALIAS === '1' ? 'add' : 'install'} --${process.env.AGENTOC_QA_CLAUDE_INSTALL_QUERY === '1' ? 'query' : 'id'}=Vendor.App --source=winget --scope=user`;
-const protectedRoot = path.join(root, 'protected');
+// The admitted-context fixture uses an actually sensitive profile directory,
+// rather than injecting an extra protected root directly into gate state.
+const protectedRoot = path.join(root, process.env.AGENTOC_QA_BOUND_CONTEXT === '1' ? '.ssh' : 'protected');
 if (protectedCase) await mkdir(protectedRoot);
 const outsideRoot = outsideCase ? await mkdtemp(path.join(os.tmpdir(), 'agentoc-claude-outside-')) : '';
 const outsideFileRoot = outsideFileCase ? await mkdtemp(path.join(os.tmpdir(), 'agentoc-claude-outside-file-')) : '';
