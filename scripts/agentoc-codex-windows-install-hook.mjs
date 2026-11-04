@@ -26,8 +26,9 @@ async function main() {
     sessionId: process.env.AGENTOC_APPROVED_ACTIONS_SESSION_ID, runId: process.env.AGENTOC_APPROVED_ACTIONS_RUN_ID,
     turnId: process.env.AGENTOC_APPROVED_ACTIONS_TURN_ID };
   try { channel.windowsUserInstallIdentity = JSON.parse(process.env.AGENTOC_WINDOWS_USER_INSTALL_IDENTITY || 'null'); } catch {}
-  const install = await buildCodexWindowsInstallHookDecision({ event, channel, nodePath: process.execPath,
-    scriptPath: fileURLToPath(new URL('./agentoc-windows-install-bridge.mjs', import.meta.url)) });
+  const install = process.env.AGENTOC_WINDOWS_INSTALL_BRIDGE_DISABLED === '1' ? {} :
+    await buildCodexWindowsInstallHookDecision({ event, channel, nodePath: process.execPath,
+      scriptPath: fileURLToPath(new URL('./agentoc-windows-install-bridge.mjs', import.meta.url)) });
   if (install.hookSpecificOutput) return install;
   return buildCodexWindowsElevationGuidance({ event, channel });
 }

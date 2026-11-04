@@ -36,6 +36,15 @@ export function windowsElevationGuidance(channelAvailable) {
     : 'AgentoC’s managed privileged action channel is unavailable. Do not use direct elevation wrappers; report that the operation is blocked.';
 }
 
+// Guidance is useful even in unattended modes or without an MCP binding. It
+// does not grant permissions; without the channel the message reports that
+// managed elevation is unavailable. Planning and the workbench policy retain
+// their existing behavior.
+export function shouldInstallWindowsElevationHook({ platform, runtimeFamily, interactionMode, permissionMode, workbenchPolicy } = {}) {
+  return platform === 'win32' && runtimeFamily === 'codex-app-server-json' && !workbenchPolicy &&
+    interactionMode !== 'plan' && permissionMode !== 'plan';
+}
+
 export async function buildCodexWindowsElevationGuidance({ event, channel } = {}) {
   if (event?.hook_event_name !== 'PreToolUse' || event?.tool_name !== 'Bash' ||
       typeof event.tool_use_id !== 'string' || !event.tool_use_id.trim() || event.tool_use_id.length > 1024 ||

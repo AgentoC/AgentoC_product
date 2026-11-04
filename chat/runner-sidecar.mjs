@@ -105,7 +105,7 @@ import {
 } from './privileged-gate.mjs';
 import { decideWindowsApproval } from './windows-approval-gate.mjs';
 import { buildClaudeWindowsInstallBridge, checkWindowsInstallBridgeReadiness } from './windows-auto-install-bridge.mjs';
-import { needsWindowsElevationGuidance, windowsElevationGuidance } from './windows-elevation-guidance.mjs';
+import { needsWindowsElevationGuidance, windowsElevationGuidance, shouldInstallWindowsElevationHook } from './windows-elevation-guidance.mjs';
 import { verifyCodexWindowsInstallBridgeApproval } from './codex-windows-install-hook.mjs';
 import { createCodexManagedHookSetup } from './codex-managed-hook-setup.mjs';
 import { buildWindowsSafeDeleteBridge, needsClaudeAbsoluteDeleteRetry } from './windows-safe-delete-bridge.mjs';
@@ -3572,6 +3572,9 @@ async function main() {
   const managedActionMcpRequested = Boolean(
     approvedActionChannel?.token && approvedActionChannel?.endpoint,
   );
+  const windowsElevationHook = shouldInstallWindowsElevationHook({ platform: process.platform, runtimeFamily,
+    interactionMode: manifest.options?.interactionMode, permissionMode: manifest.options?.permissionMode,
+    workbenchPolicy: WORKBENCH_EXECUTION_POLICY });
   const windowsBrokerChannel = manifest.options?.windowsBrokerChannel;
   const windowsBrokerMcpRequested = Boolean(
     windowsBrokerChannel?.token && windowsBrokerChannel?.endpoint,
@@ -3580,6 +3583,10 @@ async function main() {
   // run-scoped. Strip the inherited flag before projecting the manifest grant.
   delete spawnEnv.AGENTOC_AGENT_CREATE_APPROVED_ACTION_ENABLED;
   delete spawnEnv.AGENTOC_WINDOWS_SAFE_DELETE_CONTEXT;
+  delete spawnEnv.AGENTOC_WINDOWS_INSTALL_BRIDGE_DISABLED;
+  if (windowsElevationHook && !['recommended', 'full-auto'].includes(manifest.options?.riskMode)) {
+    spawnEnv.AGENTOC_WINDOWS_INSTALL_BRIDGE_DISABLED = '1';
+  }
   if (process.platform === 'win32' && appServerState && !WORKBENCH_EXECUTION_POLICY && appServerState.riskContextValid === true &&
       ['recommended', 'full-auto'].includes(appServerState.riskMode) && appServerState.interactionMode !== 'plan' && appServerState.permissionMode !== 'plan') {
     spawnEnv.AGENTOC_WINDOWS_SAFE_DELETE_CONTEXT = JSON.stringify({ runId, helperPath: join(PROJECT_ROOT, 'bin', 'agentoc-safe-delete.exe'), state: { riskMode: appServerState.riskMode, riskContextValid: true,
@@ -3696,9 +3703,7 @@ async function main() {
         servers: managedMcpServers,
         codexWindowsApprovalGate: process.platform === 'win32' && runtimeFamily === 'codex-app-server-json'
           && ['safe', 'recommended', 'full-auto'].includes(manifest.options?.riskMode),
-        codexWindowsInstallHook: process.platform === 'win32' && runtimeFamily === 'codex-app-server-json' && (managedActionMcpRequested || spawnEnv.AGENTOC_WINDOWS_SAFE_DELETE_CONTEXT)
-          && !WORKBENCH_EXECUTION_POLICY && manifest.options?.interactionMode !== 'plan'
-          && ['recommended', 'full-auto'].includes(manifest.options?.riskMode)
+        codexWindowsInstallHook: windowsElevationHook
           ? join(PROJECT_ROOT, 'scripts', 'agentoc-codex-windows-install-hook.mjs') : '',
       });
 
@@ -3818,12 +3823,11 @@ async function main() {
       throw overlayError;
     }
   }
-  // Safe deletion also applies to runs without a managed MCP channel. Its
-  // private hook overlay is optional: if preparation fails, retain the
-  // original provider configuration and ordinary approval behavior.
-  if (!managedMcpOverlay && appServerState && spawnEnv.AGENTOC_WINDOWS_SAFE_DELETE_CONTEXT) {
+  // The private hook also supplies elevation guidance when no managed MCP
+  // channel exists. It does not add approval rules in other permission modes.
+  if (!managedMcpOverlay && appServerState && windowsElevationHook) {
     try {
-      managedMcpOverlay = await prepareManagedMcpOverlay({ runtimeFamily, runId, spawnEnv, servers: [], codexWindowsApprovalGate: true,
+      managedMcpOverlay = await prepareManagedMcpOverlay({ runtimeFamily, runId, spawnEnv, servers: [], codexWindowsApprovalGate: Boolean(spawnEnv.AGENTOC_WINDOWS_SAFE_DELETE_CONTEXT),
         codexWindowsInstallHook: join(PROJECT_ROOT, 'scripts', 'agentoc-codex-windows-install-hook.mjs') });
       if (managedMcpOverlay?.codexWindowsInstallHook) {
         Object.assign(spawnEnv, managedMcpOverlay.env);
@@ -3831,7 +3835,7 @@ async function main() {
       } else { await managedMcpOverlay?.cleanup?.(); managedMcpOverlay = null; }
     } catch (error) {
       await managedMcpOverlay?.cleanup?.(); managedMcpOverlay = null;
-      await logSidecarDiagnostic(runId, 'Optional Windows deletion hook unavailable', { error: normalizeErrorMessage(error) });
+      await logSidecarDiagnostic(runId, 'Optional Windows command hook unavailable', { error: normalizeErrorMessage(error) });
     }
   }
   if (browserMcpRequested && acp === true) {

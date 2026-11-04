@@ -3,7 +3,14 @@ import { spawnSync } from 'node:child_process';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { needsWindowsElevationGuidance, buildCodexWindowsElevationGuidance } from '../chat/windows-elevation-guidance.mjs';
+import { needsWindowsElevationGuidance, buildCodexWindowsElevationGuidance, shouldInstallWindowsElevationHook } from '../chat/windows-elevation-guidance.mjs';
+
+const hookContext = { platform: 'win32', runtimeFamily: 'codex-app-server-json' };
+assert.equal(shouldInstallWindowsElevationHook(hookContext), true);
+for (const overrides of [{ platform: 'linux' }, { runtimeFamily: 'claude' }, { interactionMode: 'plan' },
+  { permissionMode: 'plan' }, { workbenchPolicy: true }, { workbenchPolicy: { schemaVersion: 1 } }]) {
+  assert.equal(shouldInstallWindowsElevationHook({ ...hookContext, ...overrides }), false);
+}
 
 if (process.platform === 'win32') {
   for (const command of ['runas /user:admin cmd.exe', 'gsudo.exe whoami', 'sudo whoami',
@@ -30,6 +37,17 @@ if (process.platform === 'win32') {
       AGENTOC_APPROVED_ACTIONS_TURN_ID: channel.turnId, AGENTOC_WINDOWS_SAFE_DELETE_CONTEXT: '' } });
   assert.equal(hook.status, 0, hook.stderr);
   assert.match(JSON.parse(hook.stdout).hookSpecificOutput.permissionDecisionReason, /agentoc_request_actions/);
+  const disabledEnv = { ...process.env, AGENTOC_WINDOWS_INSTALL_BRIDGE_DISABLED: '1', AGENTOC_WINDOWS_SAFE_DELETE_CONTEXT: '',
+    AGENTOC_APPROVED_ACTIONS_ENDPOINT: channel.endpoint, AGENTOC_APPROVED_ACTIONS_TOKEN: channel.token,
+    AGENTOC_APPROVED_ACTIONS_SESSION_ID: channel.sessionId, AGENTOC_APPROVED_ACTIONS_RUN_ID: channel.runId,
+    AGENTOC_APPROVED_ACTIONS_TURN_ID: channel.turnId };
+  const disabledInstall = spawnSync(process.execPath, ['scripts/agentoc-codex-windows-install-hook.mjs'],
+    { input: JSON.stringify({ ...event, tool_input: { command: 'winget install Git.Git' } }), encoding: 'utf8', env: disabledEnv });
+  assert.equal(disabledInstall.status, 0, disabledInstall.stderr);
+  assert.deepEqual(JSON.parse(disabledInstall.stdout), {});
+  const disabledElevation = spawnSync(process.execPath, ['scripts/agentoc-codex-windows-install-hook.mjs'],
+    { input: JSON.stringify(event), encoding: 'utf8', env: disabledEnv });
+  assert.match(JSON.parse(disabledElevation.stdout).hookSpecificOutput.permissionDecisionReason, /agentoc_request_actions/);
 
   const root = await mkdtemp(path.join(os.tmpdir(), 'agentoc-elevation-guidance-test-'));
   try {
