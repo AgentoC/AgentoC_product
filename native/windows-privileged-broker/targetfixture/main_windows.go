@@ -7,17 +7,18 @@ package main
 import (
 	"fmt"
 	"os"
+	"regexp"
 
 	"golang.org/x/sys/windows/svc"
 )
 
 const serviceName = "AgentoC-Broker-QA-Target"
 
-type targetService struct{}
+type targetService struct{ name string }
 
-func (targetService) Execute(args []string, requests <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
+func (s targetService) Execute(args []string, requests <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
 	changes <- svc.Status{State: svc.StartPending}
-	if len(args) != 1 || args[0] != serviceName {
+	if len(args) != 1 || args[0] != s.name {
 		return false, 87
 	}
 	running := svc.Status{State: svc.Running, Accepts: svc.AcceptStop | svc.AcceptShutdown}
@@ -35,11 +36,14 @@ func (targetService) Execute(args []string, requests <-chan svc.ChangeRequest, c
 }
 
 func main() {
-	if len(os.Args) != 1 {
+	name := serviceName
+	if len(os.Args) == 3 && os.Args[1] == "--service-name" && regexp.MustCompile(`^AgentoC-QA-Service-[a-f0-9]{32}$`).MatchString(os.Args[2]) {
+		name = os.Args[2]
+	} else if len(os.Args) != 1 {
 		fmt.Fprintln(os.Stderr, "APB_QA_TARGET_ARGUMENTS_REFUSED")
 		os.Exit(2)
 	}
-	if err := svc.Run(serviceName, targetService{}); err != nil {
+	if err := svc.Run(name, targetService{name: name}); err != nil {
 		fmt.Fprintln(os.Stderr, "APB_QA_TARGET_SCM_REFUSED")
 		os.Exit(1)
 	}
