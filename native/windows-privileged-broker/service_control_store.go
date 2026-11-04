@@ -253,3 +253,28 @@ func (s *brokerStore) GetServiceControl(requestID string) (serviceControlRecord,
 	}
 	return serviceControlRecord{}, false
 }
+
+// Status polling must expire an unanswered request even when no phone is
+// connected to read the pending list.
+func (s *brokerStore) GetServiceControlStatus(requestID string, now time.Time) (serviceControlRecord, bool, error) {
+	record, found := s.GetServiceControl(requestID)
+	if !found || record.Status != statusAwaitingDevice || (now.UnixMilli() >= 0 && uint64(now.UnixMilli()) < record.Grant.ExpiresMS) {
+		return record, found, nil
+	}
+	err := s.transact(func(state *persistedBrokerState) error {
+		current, ok := state.ServiceControls[record.Grant.Nonce]
+		if !ok || current.Grant.RequestID != requestID {
+			return errStateInvalid
+		}
+		if current.Status == statusAwaitingDevice && (now.UnixMilli() < 0 || uint64(now.UnixMilli()) >= current.Grant.ExpiresMS) {
+			current.Status, current.Code, current.UpdatedAt = statusExpired, "DECISION_EXPIRED", now.UTC()
+			state.ServiceControls[current.Grant.Nonce] = current
+			if err := s.appendAudit(state, "service_control.expired", requestID, current.Code, current.Digest); err != nil {
+				return err
+			}
+		}
+		record = current
+		return nil
+	})
+	return record, true, err
+}

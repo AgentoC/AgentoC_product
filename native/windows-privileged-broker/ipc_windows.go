@@ -719,12 +719,18 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 			response.Status, response.Code = owner.Status, owner.Code
 			grant := owner.Grant
 			response.OwnerInstall = &grant
-		} else if control, found := s.store.GetServiceControl(request.RequestID); found {
-			response.Status, response.Code = control.Status, control.Code
-			grant := control.Grant
-			response.ServiceControl = &grant
 		} else {
-			response.Code = "REQUEST_NOT_FOUND"
+			control, found, err := s.store.GetServiceControlStatus(request.RequestID, time.Now().UTC())
+			if err != nil {
+				return newErrorResponse("BROKER_STORAGE_UNAVAILABLE")
+			}
+			if found {
+				response.Status, response.Code = control.Status, control.Code
+				grant := control.Grant
+				response.ServiceControl = &grant
+			} else {
+				response.Code = "REQUEST_NOT_FOUND"
+			}
 		}
 		return response
 	}

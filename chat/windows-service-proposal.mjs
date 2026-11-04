@@ -35,6 +35,30 @@ export function windowsServiceRequestIds(action) {
   return { requestId: `svc_${digest}`, actionId: `action_${digest}` };
 }
 
+function matchesServiceResult(result, action, target, requestId, actionId) {
+  const grant = result?.serviceControl;
+  return result?.type === 'result' && result.requestId === requestId && statuses.has(result.status) && grant &&
+    grant.requestId === requestId && grant.actionId === actionId && grant.sessionId === action.sessionId &&
+    grant.runId === action.runId && grant.turnId === action.turnId && grant.authorization === 'owner' &&
+    grant.serviceName === target.serviceName && grant.action === target.action && grant.definitionHash === target.definitionHash;
+}
+
+// Status is read-only and never retries a submission or consumes a grant.
+export async function queryWindowsServiceProposal({ action, projection, authenticatedPrincipalKind, client } = {}) {
+  if (authenticatedPrincipalKind !== 'owner') fail('SERVICE_PROFILE_DENIED', 'Service status requires the owner run');
+  const target = boundService(action, projection);
+  const { requestId, actionId } = windowsServiceRequestIds(action);
+  if (!client || typeof client.status !== 'function') fail('SERVICE_PROPOSAL_UNAVAILABLE', 'Service broker is unavailable');
+  const result = await client.status(requestId);
+  if (result?.type === 'result' && result.requestId === requestId && result.code === 'REQUEST_NOT_FOUND' && !result.status) {
+    return { requestId, status: 'unknown', code: 'SERVICE_REQUEST_NOT_FOUND' };
+  }
+  if (!matchesServiceResult(result, action, target, requestId, actionId)) {
+    fail('SERVICE_BINDING_CONFLICT', 'Existing service request does not match this operation');
+  }
+  return { requestId, status: result.status, code: result.code || '' };
+}
+
 // A failed or timed-out proposal is ambiguous. A retry reads the original
 // durable request ID before creating any new nonce, and matches every target.
 export async function submitOrResumeWindowsServiceProposal({ action, projection, riskMode, authenticatedPrincipalKind, client,
@@ -48,13 +72,7 @@ export async function submitOrResumeWindowsServiceProposal({ action, projection,
       typeof assertActive !== 'function' || !privateKey || !id.test(kid || '') || !Number.isSafeInteger(now) || now < 1) {
     fail('SERVICE_PROPOSAL_UNAVAILABLE', 'Service proposal dependencies are unavailable');
   }
-  const matches = result => {
-    const grant = result?.serviceControl;
-    return result?.type === 'result' && result.requestId === requestId && statuses.has(result.status) && grant &&
-      grant.requestId === requestId && grant.actionId === actionId && grant.sessionId === action.sessionId &&
-      grant.runId === action.runId && grant.turnId === action.turnId && grant.authorization === 'owner' &&
-      grant.serviceName === target.serviceName && grant.action === target.action && grant.definitionHash === target.definitionHash;
-  };
+  const matches = result => matchesServiceResult(result, action, target, requestId, actionId);
   const resume = result => {
     if (!matches(result)) fail('SERVICE_BINDING_CONFLICT', 'Existing service request does not match this operation');
     return { ...result, duplicate: true };

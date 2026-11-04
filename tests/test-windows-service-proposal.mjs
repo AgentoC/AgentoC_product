@@ -3,7 +3,7 @@ import { generateKeyPairSync, verify } from 'node:crypto';
 import { buildApprovedAction } from '../chat/approved-actions.mjs';
 import { prepareApprovedActionSemanticProjection } from '../chat/approved-action-semantic.mjs';
 import { windowsServiceControlSigningBytes } from '../chat/windows-service-grant.mjs';
-import { submitOrResumeWindowsServiceProposal, windowsServiceRequestIds } from '../chat/windows-service-proposal.mjs';
+import { submitOrResumeWindowsServiceProposal, queryWindowsServiceProposal, windowsServiceRequestIds } from '../chat/windows-service-proposal.mjs';
 
 const context = { sessionId: 'session', runId: 'run', turnId: 'turn', requestKey: 'request', platform: 'win32',
   cwd: 'D:\\work', projectRoot: 'D:\\work', home: 'D:\\home' };
@@ -32,10 +32,12 @@ assert.equal((await submitOrResumeWindowsServiceProposal(options)).duplicate, fa
 assert.equal(submitted.grant.serviceName, 'Example');
 assert.equal(submitted.grant.action, 'restart-service');
 assert.equal((await submitOrResumeWindowsServiceProposal(options)).duplicate, true);
+assert.equal((await queryWindowsServiceProposal(options)).status, 'awaiting_device');
 assert.equal(count, 1); assert.equal(active, 1);
 const mismatchClient = { ...client, status: async id => ({ type: 'result', requestId: id, status: 'awaiting_device',
   serviceControl: { ...submitted.grant, definitionHash: 'b'.repeat(64) } }) };
 await assert.rejects(submitOrResumeWindowsServiceProposal({ ...options, client: mismatchClient }), { code: 'SERVICE_BINDING_CONFLICT' });
+await assert.rejects(queryWindowsServiceProposal({ ...options, client: mismatchClient }), { code: 'SERVICE_BINDING_CONFLICT' });
 for (const riskMode of ['full-auto', 'conservative-auto']) {
   await assert.rejects(submitOrResumeWindowsServiceProposal({ ...options, riskMode }), { code: 'SERVICE_PROFILE_DENIED' });
 }
@@ -47,6 +49,7 @@ const changed = { ...action, requestKey: 'different' };
 await assert.rejects(submitOrResumeWindowsServiceProposal({ ...options, action: changed }), { code: 'SERVICE_PROJECTION_INVALID' });
 const ambiguousClient = { ...client, status: async id => ({ type: 'result', requestId: id, code: 'REQUEST_NOT_FOUND' }),
   proposeServiceControl: async () => { throw new Error('connection lost'); } };
+assert.deepEqual(await queryWindowsServiceProposal({ ...options, client: ambiguousClient }), { requestId, status: 'unknown', code: 'SERVICE_REQUEST_NOT_FOUND' });
 await assert.rejects(submitOrResumeWindowsServiceProposal({ ...options, client: ambiguousClient }), { code: 'SERVICE_PROPOSAL_OUTCOME_UNKNOWN', requestId });
 const unavailableClient = { ...ambiguousClient, health: async () => ({ type: 'health', serviceControlReady: false }) };
 await assert.rejects(submitOrResumeWindowsServiceProposal({ ...options, client: unavailableClient }), { code: 'SERVICE_BROKER_NOT_READY' });

@@ -239,6 +239,12 @@ func TestPendingServiceControlPaginationAndExpiration(t *testing.T) {
 	if _, _, err := store.AttestServiceControl(denied.Grant, denied.Signature, deviceID, now); err == nil {
 		t.Fatal("denied request still reviewable")
 	}
+	if record, found, err := store.GetServiceControlStatus("request-01", now.Add(time.Minute)); err != nil || !found || record.Status != statusExpired || record.Code != "DECISION_EXPIRED" {
+		t.Fatal("status did not expire unanswered request without a phone", err)
+	}
+	if record, found, err := store.GetServiceControlStatus("request-00", now.Add(time.Minute)); err != nil || !found || record.Status != statusDenied {
+		t.Fatal("status expiry overwrote owner denial", err)
+	}
 	if expired, _, _, err := store.PendingServiceControls(deviceID, "", now.Add(time.Minute)); err != nil || len(expired) != 0 {
 		t.Fatal("expired approvals remained visible")
 	}
