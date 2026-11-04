@@ -45,13 +45,14 @@ const installCommand = process.env.AGENTOC_QA_HOOK_WRAPPED_INSTALL === '1'
   : packageCommand;
 const managedDelete = process.env.AGENTOC_QA_HOOK_MANAGED_DELETE === '1';
 const fileCommand = process.env.AGENTOC_QA_FILE_COMMAND || '';
-if (fileCommand && (!['rename', 'clear', 'dotnet', 'git-status'].includes(fileCommand) || managedDelete || managedInstall || process.env.AGENTOC_QA_HOOK_REWRITE === '1' || process.env.AGENTOC_QA_SENSITIVE === '1')) throw new Error('invalid file command fixture mode');
-if (fileCommand === 'git-status' && process.env.AGENTOC_QA_EXPECT_DECISION !== 'prompt') throw new Error('git-status fixture must expect review');
+if (fileCommand && (!['rename', 'clear', 'dotnet', 'git-status', 'uninstall'].includes(fileCommand) || managedDelete || managedInstall || process.env.AGENTOC_QA_HOOK_REWRITE === '1' || process.env.AGENTOC_QA_SENSITIVE === '1')) throw new Error('invalid file command fixture mode');
+if (['git-status', 'uninstall'].includes(fileCommand) && process.env.AGENTOC_QA_EXPECT_DECISION !== 'prompt') throw new Error('review fixture must expect review');
 const fileFixture = path.join(home, 'ordinary-fixture.txt');
 if (fileCommand) await writeFile(fileFixture, 'fixture content');
 if (fileCommand === 'git-status') execFileSync('git', ['init', '-q'], { cwd: home, windowsHide: true });
 const safeFileCommand = fileCommand === 'rename'
   ? `Rename-Item -LiteralPath '${fileFixture.replace(/'/g, "''")}' -NewName renamed-fixture.txt`
+  : fileCommand === 'uninstall' ? 'winget uninstall --id AgentoC.Nonexistent.Test.Fixture --exact'
   : fileCommand === 'git-status' ? 'git status --short'
   : fileCommand === 'dotnet'
     ? `[System.IO.File]::WriteAllText('${fileFixture.replace(/'/g, "''")}', 'dotnet fixture'${process.env.AGENTOC_QA_DOTNET_ENCODING === '1' ? ', [System.Text.Encoding]::UTF8' : ''})`
