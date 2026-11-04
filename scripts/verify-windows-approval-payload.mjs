@@ -11,7 +11,7 @@ export const WINDOWS_APPROVAL_PAYLOAD_FILES = Object.freeze([
   'scripts/initialize-windows-owner-identity.mjs', 'scripts/windows-job-object-host.cmd', 'scripts/windows-job-object-host.ps1',
   'chat/codex-windows-install-hook.mjs', 'scripts/agentoc-codex-windows-install-hook.mjs',
   'scripts/agentoc-windows-install-bridge.mjs', 'scripts/create-windows-runtime-manifest.mjs',
-  'native/windows-privileged-broker/auto_install.go', 'native/windows-privileged-broker/auto_install_windows.go', 'native/windows-privileged-broker/service_control.go',
+  'native/windows-privileged-broker/auto_install.go', 'native/windows-privileged-broker/auto_install_windows.go', 'native/windows-privileged-broker/service_control.go', 'native/windows-privileged-broker/service_control_windows.go',
   'native/windows-safe-delete/go.mod', 'native/windows-safe-delete/go.sum', 'native/windows-safe-delete/pinned_windows.go',
   'native/windows-safe-delete/tree_windows.go', 'native/windows-safe-delete/cmd/agentoc-safe-delete/main_windows.go',
   'packaging/windows/build-safe-delete.ps1', 'chat/windows-safe-delete-plan.mjs', 'chat/windows-safe-delete-bridge.mjs', 'chat/codex-windows-safe-delete-hook.mjs',
