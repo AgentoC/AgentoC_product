@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { compileWindowsGitStatus } from '../chat/windows-git-status.mjs';
@@ -39,5 +39,33 @@ try {
       "& 'git.exe' status", 'git status -s; Remove-Item file.txt',
     ]) assert.equal(await compileWindowsGitStatus(source, { executable: shell }), null, source);
   }
+  // A status operation may query submodules. Verify that the safe setting
+  // propagates to the real Git child process, rather than assuming it does.
+  const subSource = path.join(root, 'sub-source');
+  const parent = path.join(root, 'parent');
+  mkdirSync(subSource); mkdirSync(parent);
+  const env = { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: path.join(root, 'empty-global-config') };
+  const run = (cwd, args) => execFileSync(git, args, { cwd, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  const init = cwd => {
+    run(cwd, ['init', '-q']); run(cwd, ['config', 'user.name', 'AgentoC Fixture']);
+    run(cwd, ['config', 'user.email', 'fixture@agentoc.local']);
+  };
+  init(subSource);
+  writeFileSync(path.join(subSource, 'tracked.txt'), 'fixture');
+  run(subSource, ['add', 'tracked.txt']); run(subSource, ['commit', '-q', '-m', 'fixture']);
+  init(parent);
+  run(parent, ['-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', subSource, 'sub']);
+  run(parent, ['commit', '-q', '-am', 'fixture']);
+  const sub = path.join(parent, 'sub');
+  const marker = path.join(root, 'sub-fsmonitor-ran');
+  const markerBash = marker.replace(/^([A-Za-z]):\\/, (_, drive) => `/${drive.toLowerCase()}/`).replaceAll('\\', '/').replaceAll("'", "'\\''");
+  const hook = path.join(sub, 'fixture-monitor.sh');
+  writeFileSync(hook, `#!/bin/sh\nprintf invoked > '${markerBash}'\nexit 0\n`); chmodSync(hook, 0o755);
+  run(sub, ['config', 'core.fsmonitor', './fixture-monitor.sh']);
+  run(parent, ['status', '--short']);
+  assert.ok(existsSync(marker), 'fixture must demonstrate submodule fsmonitor execution');
+  unlinkSync(marker);
+  run(parent, ['-c', 'core.fsmonitor=false', '--no-optional-locks', 'status', '--short']);
+  assert.equal(existsSync(marker), false, 'safe status must suppress submodule fsmonitor');
   console.log('windows-git-status: native AST and real Git output checks passed');
 } finally { rmSync(root, { recursive: true, force: true }); }
