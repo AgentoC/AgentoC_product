@@ -8,6 +8,8 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +18,10 @@ import (
 
 	safedelete "agentoc/windows-safe-delete"
 )
+
+type fixtureLease struct{ closed *bool }
+
+func (f fixtureLease) Close() error { *f.closed = true; return nil }
 
 func encodeRequest(t *testing.T, r request) []string {
 	t.Helper()
@@ -145,6 +151,59 @@ func TestStatusExecutorUsesPinnedGitAndSuppressesFsmonitor(t *testing.T) {
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatal("fsmonitor ran during controlled status")
 	}
+	t.Run("manifest lease wiring", func(t *testing.T) {
+		runtimeRoot := filepath.Dir(git)
+		entries, err := os.ReadDir(runtimeRoot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		doc := runtimeManifest{SchemaVersion: 1}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				t.Skip("fixture expects a flat Git command directory")
+			}
+			data, err := os.ReadFile(filepath.Join(runtimeRoot, entry.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			sum := sha256.Sum256(data)
+			doc.Files = append(doc.Files, runtimeManifestEntry{Path: entry.Name(), Size: int64(len(data)), SHA256: hex.EncodeToString(sum[:])})
+		}
+		data, err := json.Marshal(doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		manifestPath := filepath.Join(root, "runtime-manifest.json")
+		if err := os.WriteFile(manifestPath, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(data)
+		candidate := r
+		candidate.Dependencies = nil // This test checks wiring, not dependency completeness.
+		candidate.Runtime = &runtimeRequest{Root: runtimeRoot, ManifestPath: manifestPath, SHA256: hex.EncodeToString(sum[:])}
+		oldOpen := openRuntimeLease
+		defer func() { openRuntimeLease = oldOpen }()
+		called, closed := false, false
+		openRuntimeLease = func(root string, files []safedelete.RuntimeManifestFile) (io.Closer, error) {
+			called = true
+			if err := safedelete.VerifyRuntimeManifestContent(root, files); err != nil {
+				return nil, err
+			}
+			return fixtureLease{closed: &closed}, nil
+		}
+		var result, details bytes.Buffer
+		code, err := run(encodeRequest(t, candidate), &result, &details)
+		if err != nil || code != 0 || !called || !closed || !strings.Contains(result.String(), "ordinary.txt") {
+			t.Fatalf("manifest wiring failed: code=%d err=%v called=%v closed=%v stderr=%s", code, err, called, closed, details.String())
+		}
+		openRuntimeLease = func(string, []safedelete.RuntimeManifestFile) (io.Closer, error) {
+			return nil, errors.New("untrusted fixture")
+		}
+		result.Reset()
+		if _, err := run(encodeRequest(t, candidate), &result, &details); err == nil || result.Len() != 0 {
+			t.Fatal("failed runtime lease allowed execution")
+		}
+	})
 	out.Reset()
 	r.Dependencies[0].SHA256 = strings.Repeat("0", 64)
 	if _, err := run(encodeRequest(t, r), &out, &stderr); err == nil || out.Len() != 0 {
@@ -199,5 +258,48 @@ func TestStatusOptionsAndEnvironmentFailClosed(t *testing.T) {
 	}
 	if _, err := safeEnvironment([]string{"PATH=x", "GIT_CONFIG_NOSYSTEM=1"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRuntimeManifestDigestAndMembership(t *testing.T) {
+	root := t.TempDir()
+	manifestDir := t.TempDir()
+	gitPath := filepath.Join(root, "bin", "git.exe")
+	dllPath := filepath.Join(root, "bin", "依赖.dll")
+	gitHash := sha256.Sum256([]byte("git"))
+	dllHash := sha256.Sum256([]byte("dll"))
+	doc := runtimeManifest{SchemaVersion: 1, Files: []runtimeManifestEntry{
+		{Path: "bin/git.exe", Size: 3, SHA256: hex.EncodeToString(gitHash[:])},
+		{Path: "bin/依赖.dll", Size: 3, SHA256: hex.EncodeToString(dllHash[:])},
+	}}
+	data, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(manifestDir, "manifest.json")
+	if err := os.WriteFile(manifestPath, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(data)
+	runtime := &runtimeRequest{Root: root, ManifestPath: manifestPath, SHA256: hex.EncodeToString(digest[:])}
+	deps := []dependency{{Path: dllPath, SHA256: hex.EncodeToString(dllHash[:])}}
+	files, err := readRuntimeManifest(runtime, gitPath, gitHash, deps)
+	if err != nil || len(files) != 2 {
+		t.Fatalf("valid manifest rejected: %v", err)
+	}
+	bad := *runtime
+	bad.SHA256 = strings.Repeat("0", 64)
+	if _, err := readRuntimeManifest(&bad, gitPath, gitHash, deps); err == nil {
+		t.Fatal("wrong manifest digest accepted")
+	}
+	if _, err := readRuntimeManifest(runtime, filepath.Join(manifestDir, "git.exe"), gitHash, deps); err == nil {
+		t.Fatal("executable outside runtime accepted")
+	}
+	wrongDeps := []dependency{{Path: dllPath, SHA256: strings.Repeat("0", 64)}}
+	if _, err := readRuntimeManifest(runtime, gitPath, gitHash, wrongDeps); err == nil {
+		t.Fatal("dependency digest mismatch accepted")
+	}
+	if _, err := readRuntimeManifest(runtime, gitPath, sha256.Sum256([]byte("other")), deps); err == nil {
+		t.Fatal("executable digest mismatch accepted")
 	}
 }

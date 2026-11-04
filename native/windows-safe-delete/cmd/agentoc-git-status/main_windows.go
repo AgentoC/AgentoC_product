@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -24,17 +25,104 @@ import (
 )
 
 type request struct {
-	SchemaVersion int          `json:"schemaVersion"`
-	Executable    string       `json:"executable"`
-	SHA256        string       `json:"sha256"`
-	Cwd           string       `json:"cwd"`
-	Args          []string     `json:"args"`
-	Dependencies  []dependency `json:"dependencies,omitempty"`
+	SchemaVersion int             `json:"schemaVersion"`
+	Executable    string          `json:"executable"`
+	SHA256        string          `json:"sha256"`
+	Cwd           string          `json:"cwd"`
+	Args          []string        `json:"args"`
+	Dependencies  []dependency    `json:"dependencies,omitempty"`
+	Runtime       *runtimeRequest `json:"runtime,omitempty"`
 }
 
 type dependency struct {
 	Path   string `json:"path"`
 	SHA256 string `json:"sha256"`
+}
+
+type runtimeRequest struct {
+	Root         string `json:"root"`
+	ManifestPath string `json:"manifestPath"`
+	SHA256       string `json:"sha256"`
+}
+
+type runtimeManifestEntry struct {
+	Path   string `json:"path"`
+	Size   int64  `json:"size"`
+	SHA256 string `json:"sha256"`
+}
+
+type runtimeManifest struct {
+	SchemaVersion int                    `json:"schemaVersion"`
+	Files         []runtimeManifestEntry `json:"files"`
+}
+
+// The production function cannot be configured by a request. Tests can
+// substitute it only inside this package; its return value is held until exit.
+var openRuntimeLease = func(root string, files []safedelete.RuntimeManifestFile) (io.Closer, error) {
+	return safedelete.OpenRuntimeManifestLease(root, files)
+}
+
+func readRuntimeManifest(input *runtimeRequest, executable string, executableHash [sha256.Size]byte, dependencies []dependency) ([]safedelete.RuntimeManifestFile, error) {
+	if input == nil || !filepath.IsAbs(input.Root) || len(filepath.VolumeName(input.Root)) != 2 ||
+		filepath.Clean(input.Root) == filepath.VolumeName(input.Root)+string(filepath.Separator) ||
+		!filepath.IsAbs(input.ManifestPath) || len(filepath.VolumeName(input.ManifestPath)) != 2 {
+		return nil, errors.New("invalid runtime manifest location")
+	}
+	expected, err := decodeDigest(input.SHA256)
+	if err != nil {
+		return nil, err
+	}
+	file, err := os.Open(input.ManifestPath)
+	if err != nil {
+		return nil, errors.New("runtime manifest unavailable")
+	}
+	data, readErr := io.ReadAll(io.LimitReader(file, 4*1024*1024+1))
+	closeErr := file.Close()
+	if readErr != nil || closeErr != nil || len(data) == 0 || len(data) > 4*1024*1024 {
+		return nil, errors.New("invalid runtime manifest")
+	}
+	actual := sha256.Sum256(data)
+	if subtle.ConstantTimeCompare(actual[:], expected[:]) != 1 {
+		return nil, errors.New("runtime manifest digest mismatch")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var doc runtimeManifest
+	if decoder.Decode(&doc) != nil || decoder.Decode(new(any)) != io.EOF || doc.SchemaVersion != 1 || len(doc.Files) == 0 || len(doc.Files) > 10000 {
+		return nil, errors.New("invalid runtime manifest")
+	}
+	files := make([]safedelete.RuntimeManifestFile, 0, len(doc.Files))
+	byPath := make(map[string][sha256.Size]byte, len(doc.Files))
+	for _, entry := range doc.Files {
+		digest, err := decodeDigest(entry.SHA256)
+		if err != nil {
+			return nil, err
+		}
+		key := strings.ToLower(filepath.ToSlash(entry.Path))
+		if _, exists := byPath[key]; exists {
+			return nil, errors.New("duplicate runtime manifest path")
+		}
+		byPath[key] = digest
+		files = append(files, safedelete.RuntimeManifestFile{Path: entry.Path, Size: entry.Size, SHA256: digest})
+	}
+	contains := func(name string, digest [sha256.Size]byte) bool {
+		rel, err := filepath.Rel(filepath.Clean(input.Root), filepath.Clean(name))
+		if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+			return false
+		}
+		actual, ok := byPath[strings.ToLower(filepath.ToSlash(rel))]
+		return ok && subtle.ConstantTimeCompare(actual[:], digest[:]) == 1
+	}
+	if !contains(executable, executableHash) {
+		return nil, errors.New("Git image missing from runtime manifest")
+	}
+	for _, dep := range dependencies {
+		digest, err := decodeDigest(dep.SHA256)
+		if err != nil || !contains(dep.Path, digest) {
+			return nil, errors.New("Git dependency missing from runtime manifest")
+		}
+	}
+	return files, nil
 }
 
 func decodeDigest(value string) ([sha256.Size]byte, error) {
@@ -131,6 +219,17 @@ func run(args []string, stdout, stderr io.Writer) (int, error) {
 	env, err := safeEnvironment(os.Environ())
 	if err != nil {
 		return 0, err
+	}
+	if input.Runtime != nil {
+		files, err := readRuntimeManifest(input.Runtime, input.Executable, digest, input.Dependencies)
+		if err != nil {
+			return 0, err
+		}
+		lease, err := openRuntimeLease(input.Runtime.Root, files)
+		if err != nil || lease == nil {
+			return 0, errors.New("Git runtime lease unavailable")
+		}
+		defer lease.Close()
 	}
 	pin, err := safedelete.OpenPinnedExecutablePath(input.Executable, digest)
 	if err != nil {
