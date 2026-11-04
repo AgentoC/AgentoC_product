@@ -58,6 +58,34 @@ func validateServiceControlHandleSecurity(handle windows.Handle) error {
 	return validateServiceDefinitionSecurity(sd, mask)
 }
 
+// The image itself is held without write sharing. Its containing directory
+// must also prevent an untrusted principal from planting sibling DLLs or
+// replacing configuration files loaded by the elevated service.
+func validateServiceImageDirectorySecurity(sd *windows.SECURITY_DESCRIPTOR) error {
+	const addFile = 0x0002
+	const addDirectory = 0x0004
+	const deleteChild = 0x0040
+	const writeEA = 0x0010
+	const writeAttributes = 0x0100
+	mask := uint32(addFile | addDirectory | deleteChild | writeEA | writeAttributes |
+		windows.DELETE | windows.WRITE_DAC | windows.WRITE_OWNER | windows.GENERIC_WRITE | windows.GENERIC_ALL)
+	return validateServiceDefinitionSecurity(sd, mask)
+}
+
+func validatePinnedServiceImageDirectories(pins []*serviceImagePins) error {
+	for _, pin := range pins {
+		if pin == nil || len(pin.handles) < 2 {
+			return errServiceDefinitionUnprotected
+		}
+		parent := pin.handles[len(pin.handles)-2]
+		sd, err := windows.GetSecurityInfo(parent, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+		if err != nil || validateServiceImageDirectorySecurity(sd) != nil {
+			return errServiceDefinitionUnprotected
+		}
+	}
+	return nil
+}
+
 // Check each registry ancestor as well as Parameters. A writable parent or
 // key could otherwise be replaced after the approved ServiceDll was checked.
 func validateSharedServiceRegistrySecurity(name string) error {

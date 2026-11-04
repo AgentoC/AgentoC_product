@@ -33,7 +33,7 @@ func (p *serviceImagePins) add(path string, directory bool) error {
 	if err != nil {
 		return err
 	}
-	access, share, flags := uint32(windows.FILE_READ_ATTRIBUTES), uint32(windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE), uint32(windows.FILE_FLAG_OPEN_REPARSE_POINT|windows.FILE_FLAG_BACKUP_SEMANTICS)
+	access, share, flags := uint32(windows.FILE_READ_ATTRIBUTES|windows.READ_CONTROL), uint32(windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE), uint32(windows.FILE_FLAG_OPEN_REPARSE_POINT|windows.FILE_FLAG_BACKUP_SEMANTICS)
 	if !directory {
 		access = windows.GENERIC_READ
 		share = windows.FILE_SHARE_READ

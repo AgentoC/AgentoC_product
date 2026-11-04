@@ -47,6 +47,13 @@ func TestWindowsServiceControlIsolatedLiveSCM(t *testing.T) {
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build fixture: %v\n%s", err, output)
 	}
+	fixtureDir := filepath.Dir(binary)
+	setLocalTargetOwner(t, fixtureDir, true)
+	icacls := filepath.Join(os.Getenv("SystemRoot"), "System32", "icacls.exe")
+	protect := exec.Command(icacls, fixtureDir, "/inheritance:r", "/grant:r", "*S-1-5-32-544:(OI)(CI)F", "*S-1-5-18:(OI)(CI)F")
+	if output, err := protect.CombinedOutput(); err != nil {
+		t.Fatalf("protect fixture directory: %v\n%s", err, output)
+	}
 	manager, err := mgr.Connect()
 	if err != nil {
 		t.Fatal(err)
@@ -102,6 +109,18 @@ func TestWindowsServiceControlIsolatedLiveSCM(t *testing.T) {
 	hash, err := inspectWindowsServiceControl(name)
 	if err != nil {
 		t.Fatalf("inspect fixture: %v", err)
+	}
+	allowUserWrite := exec.Command(icacls, fixtureDir, "/grant:r", "*S-1-5-32-545:(OI)(CI)M")
+	if output, err := allowUserWrite.CombinedOutput(); err != nil {
+		t.Fatalf("create writable fixture: %v\n%s", err, output)
+	}
+	if target, err := openWindowsServiceControl(name, "start-service"); err == nil {
+		_ = target.Close()
+		t.Fatal("service with a user-writable image directory was accepted")
+	}
+	removeUserWrite := exec.Command(icacls, fixtureDir, "/remove:g", "*S-1-5-32-545")
+	if output, err := removeUserWrite.CombinedOutput(); err != nil {
+		t.Fatalf("restore fixture protection: %v\n%s", err, output)
 	}
 	run := func(action string, expected svc.State) {
 		t.Helper()

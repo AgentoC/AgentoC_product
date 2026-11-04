@@ -77,10 +77,20 @@ func openWindowsServiceControl(name, action string) (serviceControlTarget, error
 		windows.CloseServiceHandle(handle)
 		return nil, err
 	}
+	if err := validatePinnedServiceImageDirectories(pins); err != nil {
+		for _, pin := range pins {
+			pin.Close()
+		}
+		windows.CloseServiceHandle(handle)
+		return nil, err
+	}
 	return &windowsServiceControlTarget{name: name, handle: handle, imagePins: pins}, nil
 }
 
 func (s *windowsServiceControlTarget) Fingerprint() (string, error) {
+	if err := validatePinnedServiceImageDirectories(s.imagePins); err != nil {
+		return "", err
+	}
 	if err := validateServiceControlHandleSecurity(s.handle); err != nil {
 		return "", err
 	}

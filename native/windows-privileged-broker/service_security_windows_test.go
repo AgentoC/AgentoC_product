@@ -51,3 +51,27 @@ func TestServiceRegistrySecurityRejectsWriteAndAllowsRead(t *testing.T) {
 		}
 	}
 }
+
+func TestServiceImageDirectoryRejectsUntrustedSiblingWrites(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		rights  uint32
+		allowed bool
+	}{
+		{"read", windows.FILE_GENERIC_READ, true},
+		{"add file", 0x0002, false},
+		{"add directory", 0x0004, false},
+		{"delete child", 0x0040, false},
+		{"change dacl", windows.WRITE_DAC, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sd, err := windows.SecurityDescriptorFromString(fmt.Sprintf("O:SYD:(A;;GA;;;SY)(A;;0x%08x;;;BU)", tc.rights))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := validateServiceImageDirectorySecurity(sd) == nil; got != tc.allowed {
+				t.Fatalf("got %v want %v", got, tc.allowed)
+			}
+		})
+	}
+}
