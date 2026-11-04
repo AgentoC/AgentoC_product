@@ -9,6 +9,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.SemanticsProperties
 import com.andysagent.agentoc.core.designsystem.AgentocTheme
 import com.andysagent.agentoc.core.timeline.*
+import com.andysagent.agentoc.core.protocol.SessionEventDto
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -40,6 +42,26 @@ class TimelineChronologyUiTest {
         rule.onNodeWithTag("thinking-content").assertDoesNotExist()
         rule.onNodeWithContentDescription(rule.activity.getString(R.string.timeline_details_show)).performClick()
         rule.onNodeWithTag("thinking-content").assertExists()
+    }
+
+    @Test fun separatedProviderPagesRenderReasoningBeforeFinalReply() {
+        val thought = SessionEventDto(seq = 7, type = "thinking_block", runId = "r", providerMessageId = "m",
+            providerBlockId = "thinking:0", state = "completed", content = JsonPrimitive("Page thought"))
+        val user = SessionEventDto(seq = 1, type = "message", role = "user", runId = "r", content = JsonPrimitive("Question"))
+        val reply = SessionEventDto(seq = 3, firstSeq = 3, type = "message", role = "assistant", runId = "r",
+            providerMessageId = "m", providerContentBlockIndex = 1, messagePhase = "final_answer", content = JsonPrimitive("Page answer"))
+        val firstPage = LiveTimelineProjector().projectPage(listOf(thought))
+        val otherPage = LiveTimelineProjector().projectPage(listOf(user, reply))
+        val turn = TurnGroupProjector().project(TimelineProjector.project(emptyList(), firstPage + otherPage)).single()
+        rule.setContent { AgentocTheme { Column { TurnTimelineView(turn, true, null, null, {}, { _, _ -> }, {}, {}) } } }
+        rule.onNodeWithText("Page answer").assertIsDisplayed()
+        rule.onNodeWithTag("thinking-row").assertDoesNotExist()
+        rule.onNodeWithTag("turn-process-toggle").performClick()
+        val thoughtTop = rule.onNodeWithTag("thinking-row").getUnclippedBoundsInRoot().top
+        val answerTop = rule.onNodeWithText("Page answer").getUnclippedBoundsInRoot().top
+        assertTrue("The provider thought should precede the reply after pages merge", thoughtTop < answerTop)
+        rule.onNodeWithContentDescription(rule.activity.getString(R.string.timeline_details_show)).performClick()
+        rule.onNodeWithText("Page thought").assertIsDisplayed()
     }
 
     @Test fun completedTurnCollapsesProcessAndKeepsFinalAnswerVisible() {
