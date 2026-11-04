@@ -96,6 +96,19 @@ func TestServiceControlPipeRequiresSignatureAndRunsOnce(t *testing.T) {
 			t.Error("server did not stop")
 		}
 	})
+	proposal := request
+	proposal.Type = "service.propose"
+	proposal.DeviceID = ""
+	proposal.DeviceSignature = ""
+	for i := 0; i < 2; i++ {
+		if got := exchangeTestPipeRequest(t, base+".Request", proposal); got.Status != statusAwaitingDevice {
+			t.Fatalf("proposal: %+v", got)
+		}
+	}
+	pending := exchangeTestPipeRequest(t, base+".Request", brokerRequest{Version: protocolVersion, Type: "service.pending", DeviceID: deviceID})
+	if pending.Type != "service_pending" || len(pending.ServicePending) != 1 || verifyBrokerSignature(pending.ServicePending[0].BrokerPublicKey, pending.ServicePending[0].BrokerSignature, serviceControlBrokerSigningBytes(grant)) != nil {
+		t.Fatalf("pending approval invalid: %+v", pending)
+	}
 	bad := request
 	bad.Signature = base64.RawURLEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))
 	if got := exchangeTestPipeRequest(t, base+".Request", bad); got.Code != "SERVICE_CONTROL_AUTHORIZATION_DENIED" {

@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -55,6 +56,20 @@ func TestServiceControlClaimIsAtomicAndCrashIsUnknown(t *testing.T) {
 		ServiceName: "测试服务", Action: "restart-service", DefinitionHash: strings.Repeat("a", 64), Authorization: "owner", IssuedMS: uint64(now.UnixMilli()), ExpiresMS: uint64(now.Add(time.Minute).UnixMilli())}
 	signature := base64.RawURLEncoding.EncodeToString(ed25519.Sign(private, serviceControlSigningBytes(grant)))
 	proof := serviceOwnerProof{DeviceID: deviceID, Signature: signApprovalMessage(t, deviceKey, serviceControlOwnerSigningBytes(grant))}
+	proposed, duplicate, err := store.ProposeServiceControl(grant, signature, now)
+	if err != nil || duplicate || proposed.Status != statusAwaitingDevice {
+		t.Fatalf("proposal: %+v %v", proposed, err)
+	}
+	if pending, _, more, err := store.PendingServiceControls(deviceID, "", now); err != nil || more || len(pending) != 1 || pending[0].Grant.RequestID != grant.RequestID {
+		t.Fatalf("pending: %+v %v", pending, err)
+	}
+	recoveredPending, err := openBrokerStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending, _, _, err := recoveredPending.PendingServiceControls(deviceID, "", now); err != nil || len(pending) != 1 {
+		t.Fatal("pending approval did not survive restart")
+	}
 	brokerKey, attestation, err := store.AttestServiceControl(grant, signature, deviceID, now)
 	if err != nil || verifyBrokerSignature(brokerKey, attestation, serviceControlBrokerSigningBytes(grant)) != nil {
 		t.Fatal("broker did not attest the exact review grant")
@@ -117,7 +132,7 @@ func TestServiceControlClaimIsAtomicAndCrashIsUnknown(t *testing.T) {
 	if !ok || record.Status != statusUnknown {
 		t.Fatalf("recovery: %+v", record)
 	}
-	record, duplicate, err := reopened.ClaimServiceControl(grant, signature, proof, now)
+	record, duplicate, err = reopened.ClaimServiceControl(grant, signature, proof, now)
 	if err != nil || !duplicate || record.Status != statusUnknown {
 		t.Fatalf("unsafe replay: %+v %v %v", record, duplicate, err)
 	}
@@ -128,6 +143,9 @@ func TestServiceControlClaimIsAtomicAndCrashIsUnknown(t *testing.T) {
 	completed.Nonce, completed.RequestID = "completedabcdefghijklmnop", "completed"
 	completedSig := base64.RawURLEncoding.EncodeToString(ed25519.Sign(private, serviceControlSigningBytes(completed)))
 	completedProof := serviceOwnerProof{DeviceID: deviceID, Signature: signApprovalMessage(t, deviceKey, serviceControlOwnerSigningBytes(completed))}
+	if _, _, err := reopened.ProposeServiceControl(completed, completedSig, now); err != nil {
+		t.Fatal(err)
+	}
 	if _, _, err := reopened.ClaimServiceControl(completed, completedSig, completedProof, now); err != nil {
 		t.Fatal(err)
 	}
@@ -141,6 +159,9 @@ func TestServiceControlClaimIsAtomicAndCrashIsUnknown(t *testing.T) {
 	rotating.Nonce, rotating.RequestID = "rotatingabcdefghijklmnopq", "rotating"
 	rotatingSig := base64.RawURLEncoding.EncodeToString(ed25519.Sign(private, serviceControlSigningBytes(rotating)))
 	rotatingProof := serviceOwnerProof{DeviceID: deviceID, Signature: signApprovalMessage(t, deviceKey, serviceControlOwnerSigningBytes(rotating))}
+	if _, _, err := reopened.ProposeServiceControl(rotating, rotatingSig, now); err != nil {
+		t.Fatal(err)
+	}
 	if _, _, err := reopened.ClaimServiceControl(rotating, rotatingSig, rotatingProof, now); err != nil {
 		t.Fatal(err)
 	}
@@ -157,5 +178,53 @@ func TestServiceControlClaimIsAtomicAndCrashIsUnknown(t *testing.T) {
 	}
 	if got, ok := reopened.GetServiceControl(rotating.RequestID); !ok || got.Status != statusUnknown {
 		t.Fatal("signer rotation did not mark active action unknown")
+	}
+}
+
+func TestPendingServiceControlPaginationAndExpiration(t *testing.T) {
+	store, err := openBrokerStore(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKIXPublicKey(public)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	if err := store.ConfigureAutoInstallSigner("key", base64.RawURLEncoding.EncodeToString(der), now); err != nil {
+		t.Fatal(err)
+	}
+	_, deviceID := enrollServiceTestDevice(t, store, now)
+	snapshot := store.Snapshot()
+	for i := 0; i < maxPendingPageSize+1; i++ {
+		id := fmt.Sprintf("request-%02d", i)
+		grant := serviceControlGrant{Version: 1, KeyID: "key", BrokerInstallationID: snapshot.InstallationID, PolicyGeneration: snapshot.PolicyGeneration,
+			RequestID: id, SessionID: "session", RunID: "run", TurnID: "turn", ActionID: "action", Nonce: fmt.Sprintf("nonce%020d", i),
+			ServiceName: "Example", Action: "start-service", DefinitionHash: strings.Repeat("a", 64), Authorization: "owner", IssuedMS: uint64(now.UnixMilli()), ExpiresMS: uint64(now.Add(time.Minute).UnixMilli())}
+		sig := base64.RawURLEncoding.EncodeToString(ed25519.Sign(private, serviceControlSigningBytes(grant)))
+		if _, _, err := store.ProposeServiceControl(grant, sig, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first, cursor, more, err := store.PendingServiceControls(deviceID, "", now)
+	if err != nil || !more || len(first) != maxPendingPageSize || cursor != first[len(first)-1].Grant.RequestID {
+		t.Fatal("first page invalid")
+	}
+	second, _, more, err := store.PendingServiceControls(deviceID, cursor, now)
+	if err != nil || more || len(second) != 1 || second[0].Grant.RequestID <= cursor {
+		t.Fatal("second page invalid")
+	}
+	if _, _, _, err := store.PendingServiceControls(strings.Repeat("0", 64), "", now); err != errDeviceNotEnrolled {
+		t.Fatal("unenrolled device saw pending approvals")
+	}
+	if expired, _, _, err := store.PendingServiceControls(deviceID, "", now.Add(time.Minute)); err != nil || len(expired) != 0 {
+		t.Fatal("expired approvals remained visible")
+	}
+	if record, ok := store.GetServiceControl("request-00"); !ok || record.Status != statusExpired {
+		t.Fatal("expiry was not persisted")
 	}
 }

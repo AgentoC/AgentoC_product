@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -202,6 +203,15 @@ func recoverInterruptedExecutions(state *persistedBrokerState, now time.Time) (b
 		recovered = true
 	}
 	for nonce, record := range state.ServiceControls {
+		if record.Status == statusAwaitingDevice && now.UnixMilli() >= 0 && uint64(now.UnixMilli()) >= record.Grant.ExpiresMS {
+			record.Status, record.Code, record.UpdatedAt = statusExpired, "DECISION_EXPIRED", now.UTC()
+			state.ServiceControls[nonce] = record
+			if err := appendAuditState(state, "service_control.expired", record.Grant.RequestID, record.Code, record.Digest); err != nil {
+				return false, err
+			}
+			recovered = true
+			continue
+		}
 		if record.Status != statusExecuting {
 			continue
 		}
@@ -681,6 +691,14 @@ func expireOutstandingApprovals(state *persistedBrokerState, code string, now ti
 		}
 	}
 	for nonce, record := range state.ServiceControls {
+		if record.Status == statusAwaitingDevice {
+			record.Status, record.Code, record.UpdatedAt = statusExpired, code, now.UTC()
+			state.ServiceControls[nonce] = record
+			if err := appendAuditState(state, "service_control.expired", record.Grant.RequestID, code, record.Digest); err != nil {
+				return err
+			}
+			continue
+		}
 		if record.Status != statusExecuting {
 			continue
 		}
@@ -1003,10 +1021,12 @@ func validateState(state persistedBrokerState) error {
 	}
 	for nonce, record := range state.ServiceControls {
 		message := serviceControlSigningBytes(record.Grant)
+		signature, signatureErr := base64.RawURLEncoding.DecodeString(record.Signature)
 		if nonce != record.Grant.Nonce || !ownerGrantNonce.MatchString(nonce) || !validRequestID(record.Grant.RequestID) ||
+			signatureErr != nil || len(signature) != ed25519.SignatureSize ||
 			autoRequests[record.Grant.RequestID] || state.Requests[record.Grant.RequestID].Request.RequestID != "" ||
 			!isSHA256Hex(record.Digest) || record.Digest != fmt.Sprintf("%x", sha256.Sum256(message)) ||
-			!(record.Status == statusExecuting || record.Status == statusSucceeded || record.Status == statusFailed || record.Status == statusUnknown) ||
+			!(record.Status == statusAwaitingDevice || record.Status == statusExpired || record.Status == statusExecuting || record.Status == statusSucceeded || record.Status == statusFailed || record.Status == statusUnknown) ||
 			!validAuditCode(record.Code) || !record.CreatedAt.Equal(record.CreatedAt.UTC()) || !record.UpdatedAt.Equal(record.UpdatedAt.UTC()) {
 			return errStateInvalid
 		}

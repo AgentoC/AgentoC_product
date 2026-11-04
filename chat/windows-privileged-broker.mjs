@@ -143,6 +143,17 @@ function validateRequest(request) {
     try { windowsServiceControlSigningBytes(request.serviceControl); } catch { throw brokerError('BROKER_REQUEST_INVALID'); }
     return;
   }
+  if (request.type === 'service.propose') {
+    if (!hasOnlyKeys(request, ['version', 'type', 'serviceControl', 'signature']) || typeof request.signature !== 'string' ||
+        !/^[A-Za-z0-9_-]{86}$/.test(request.signature)) throw brokerError('BROKER_REQUEST_INVALID');
+    try { windowsServiceControlSigningBytes(request.serviceControl); } catch { throw brokerError('BROKER_REQUEST_INVALID'); }
+    return;
+  }
+  if (request.type === 'service.pending') {
+    if (!hasOnlyKeys(request, ['version', 'type', 'deviceId', 'cursor']) || typeof request.deviceId !== 'string' ||
+        !DEVICE_ID_PATTERN.test(request.deviceId) || (request.cursor !== undefined && !validId(request.cursor))) throw brokerError('BROKER_REQUEST_INVALID');
+    return;
+  }
   if (request.type === 'owner_install.identity') {
     if (!hasOnlyKeys(request, ['version', 'type'])) throw brokerError('BROKER_REQUEST_INVALID');
     return;
@@ -431,6 +442,26 @@ export function createWindowsPrivilegedBrokerClient({
           typeof response.brokerPublicKey !== 'string' || !response.brokerPublicKey ||
           typeof response.brokerSignature !== 'string' || !response.brokerSignature || !SIGNATURE_PATTERN.test(response.brokerSignature)) throw brokerError('BROKER_RESPONSE_INVALID');
       return response;
+    },
+    proposeServiceControl: async ({ grant, signature }) => {
+      const response = await rpc('request', { version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'service.propose', serviceControl: grant, signature });
+      if (response?.type === 'error') throw brokerError(response.code || 'SERVICE_PROPOSAL_REJECTED');
+      if (response?.type !== 'result' || response.requestId !== grant.requestId ||
+          !['awaiting_device', 'executing', 'succeeded', 'failed', 'unknown', 'expired'].includes(response.status)) throw brokerError('BROKER_RESPONSE_INVALID');
+      return response;
+    },
+    pendingServiceControls: async ({ deviceId, cursor }) => {
+      const response = await rpc('request', { version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'service.pending', deviceId, ...(cursor ? { cursor } : {}) });
+      if (response?.type === 'error') throw brokerError(response.code || 'SERVICE_PENDING_UNAVAILABLE');
+      const items = response?.servicePending ?? [];
+      if (response?.type !== 'service_pending' || !Array.isArray(items) || items.length > 16 || typeof response.hasMore !== 'boolean' ||
+          (response.hasMore && !validId(response.nextCursor))) throw brokerError('BROKER_RESPONSE_INVALID');
+      for (const item of items) {
+        if (!hasOnlyKeys(item, ['grant', 'brokerPublicKey', 'brokerSignature']) || typeof item.brokerPublicKey !== 'string' || !item.brokerPublicKey ||
+            typeof item.brokerSignature !== 'string' || !item.brokerSignature || !SIGNATURE_PATTERN.test(item.brokerSignature)) throw brokerError('BROKER_RESPONSE_INVALID');
+        try { windowsServiceControlSigningBytes(item.grant); } catch { throw brokerError('BROKER_RESPONSE_INVALID'); }
+      }
+      return { items, hasMore: response.hasMore, nextCursor: response.nextCursor || '' };
     },
   });
 }

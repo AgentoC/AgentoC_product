@@ -737,6 +737,47 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 		response.ServiceFacts = &serviceInspectFacts{ServiceName: name, DefinitionHash: digest}
 		return response
 	}
+	if request.Type == "service.propose" {
+		if s.serviceController == nil || s.serviceInspector == nil {
+			return newErrorResponse("SERVICE_CONTROL_UNAVAILABLE")
+		}
+		grant := *request.ServiceControl
+		current, err := s.serviceInspector(grant.ServiceName)
+		if err != nil || current != grant.DefinitionHash {
+			return newErrorResponse("SERVICE_TARGET_CHANGED")
+		}
+		record, _, err := s.store.ProposeServiceControl(grant, request.Signature, time.Now().UTC())
+		if err != nil {
+			if errors.Is(err, errRequestConflict) {
+				return newErrorResponse("REQUEST_ID_CONFLICT")
+			}
+			return newErrorResponse("SERVICE_CONTROL_AUTHORIZATION_DENIED")
+		}
+		response := newResponse("result")
+		response.RequestID, response.Status, response.Code = record.Grant.RequestID, record.Status, record.Code
+		return response
+	}
+	if request.Type == "service.pending" {
+		if s.serviceController == nil {
+			return newErrorResponse("SERVICE_CONTROL_UNAVAILABLE")
+		}
+		now := time.Now().UTC()
+		records, cursor, more, err := s.store.PendingServiceControls(request.DeviceID, request.Cursor, now)
+		if err != nil {
+			return newErrorResponse("BROKER_DEVICE_NOT_ENROLLED")
+		}
+		response := newResponse("service_pending")
+		response.NextCursor = cursor
+		response.HasMore = more
+		for _, record := range records {
+			key, sig, err := s.store.AttestServiceControl(record.Grant, record.Signature, request.DeviceID, now)
+			if err != nil {
+				return newErrorResponse("SERVICE_REVIEW_UNAVAILABLE")
+			}
+			response.ServicePending = append(response.ServicePending, servicePendingApproval{Grant: record.Grant, BrokerPublicKey: key, BrokerSignature: sig})
+		}
+		return response
+	}
 	if request.Type == "service.review" {
 		if s.serviceController == nil || s.serviceInspector == nil {
 			return newErrorResponse("SERVICE_CONTROL_UNAVAILABLE")

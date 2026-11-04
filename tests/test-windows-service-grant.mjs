@@ -24,14 +24,19 @@ for (const mutation of [{ serviceName: 'bad*' }, { serviceName: 'bad\ud800' }, {
 }
 let calls = 0;
 const client = createWindowsPrivilegedBrokerClient({ platform: 'win32', pipeExchange: async ({ pipe, request }) => {
-  calls++; assert.equal(pipe, 'request'); assert.deepEqual(request.serviceControl, grant);
+  calls++; assert.equal(pipe, 'request');
+  if (request.type === 'service.pending') return { version: 2, type: 'service_pending', servicePending: [{ grant, brokerPublicKey: 'fixture', brokerSignature: 'eA==' }], hasMore: false };
+  assert.deepEqual(request.serviceControl, grant);
+  if (request.type === 'service.propose') return { version: 2, type: 'result', requestId: grant.requestId, status: 'awaiting_device' };
   if (request.type === 'service.review') return { version: 2, type: 'service_review', serviceControl: grant, brokerPublicKey: 'fixture', brokerSignature: 'eA==' };
   assert.equal(request.type, 'service.execute');
   return { type: 'result', version: 2, requestId: grant.requestId, status: 'executing', code: 'EXECUTION_STARTED' };
 } });
+assert.equal((await client.proposeServiceControl({ grant, signature: signature.toString('base64url') })).status, 'awaiting_device');
+assert.equal((await client.pendingServiceControls({ deviceId })).items[0].grant.serviceName, grant.serviceName);
 assert.equal((await client.reviewServiceControl({ grant, signature: signature.toString('base64url'), deviceId })).type, 'service_review');
 assert.equal((await client.executeServiceControl({ grant, signature: signature.toString('base64url'), deviceId, deviceSignature })).status, 'executing');
 await assert.rejects(client.executeServiceControl({ grant: { ...grant, action: 'delete' }, signature: signature.toString('base64url'), deviceId, deviceSignature }), { code: 'BROKER_REQUEST_INVALID' });
 await assert.rejects(client.executeServiceControl({ grant, signature: signature.toString('base64url') }), { code: 'BROKER_REQUEST_INVALID' });
-assert.equal(calls, 2);
+assert.equal(calls, 4);
 console.log('windows-service-grant: cross-language signing vector passed');

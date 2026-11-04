@@ -85,12 +85,19 @@ type brokerResponse struct {
 	SelectedInstaller   *selectedInstallerFacts    `json:"selectedInstaller,omitempty"`
 	ServiceFacts        *serviceInspectFacts       `json:"serviceFacts,omitempty"`
 	ServiceControl      *serviceControlGrant       `json:"serviceControl,omitempty"`
+	ServicePending      []servicePendingApproval   `json:"servicePending,omitempty"`
 	Challenge           *brokerChallenge           `json:"challenge,omitempty"`
 	EnrollmentChallenge *brokerEnrollmentChallenge `json:"enrollmentChallenge,omitempty"`
 	Result              *brokerOperationResult     `json:"result,omitempty"`
 	PendingRequests     []brokerPendingRequest     `json:"pendingRequests,omitempty"`
 	NextCursor          string                     `json:"nextCursor,omitempty"`
 	HasMore             bool                       `json:"hasMore"`
+}
+
+type servicePendingApproval struct {
+	Grant           serviceControlGrant `json:"grant"`
+	BrokerPublicKey string              `json:"brokerPublicKey"`
+	BrokerSignature string              `json:"brokerSignature"`
 }
 
 type brokerPendingRequest struct {
@@ -171,7 +178,7 @@ func validateRequest(request brokerRequest) error {
 	if request.Type != "service.execute" && request.DeviceSignature != "" {
 		return errInvalidRequest
 	}
-	if request.Type != "service.execute" && request.Type != "service.review" && request.ServiceControl != nil {
+	if request.Type != "service.execute" && request.Type != "service.review" && request.Type != "service.propose" && request.ServiceControl != nil {
 		return errInvalidRequest
 	}
 	if request.Type != "service.inspect" && request.ServiceInspect != nil {
@@ -299,6 +306,19 @@ func validateRequest(request brokerRequest) error {
 		copy.Signature = ""
 		copy.DeviceID = ""
 		if hasNonHealthFields(copy) {
+			return errInvalidRequest
+		}
+	case "service.propose":
+		if request.ServiceControl == nil || request.Signature == "" || len(request.Signature) > 1024 {
+			return errInvalidRequest
+		}
+		copy := request
+		copy.Signature = ""
+		if hasNonHealthFields(copy) {
+			return errInvalidRequest
+		}
+	case "service.pending":
+		if len(request.DeviceID) != 64 || !isLowerHex(request.DeviceID) || (request.Cursor != "" && !validRequestID(request.Cursor)) || hasFieldsExceptPending(request) {
 			return errInvalidRequest
 		}
 	default:

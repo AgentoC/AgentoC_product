@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -24,25 +25,9 @@ func (s *brokerStore) AttestServiceControl(grant serviceControlGrant, signature,
 		verifyServiceControlGrant(grant, signature, key, state.AutoInstallSigner.KeyID, state.InstallationID, state.PolicyGeneration, now) != nil {
 		return "", "", errServiceControlGrant
 	}
-	if _, exists := state.ServiceControls[grant.Nonce]; exists {
-		return "", "", errRequestConflict
-	}
-	for _, record := range state.ServiceControls {
-		if record.Grant.RequestID == grant.RequestID {
-			return "", "", errRequestConflict
-		}
-	}
-	for _, record := range state.AutoInstalls {
-		if record.Grant.RequestID == grant.RequestID {
-			return "", "", errRequestConflict
-		}
-	}
-	for _, record := range state.OwnerInstalls {
-		if record.Grant.RequestID == grant.RequestID {
-			return "", "", errRequestConflict
-		}
-	}
-	if _, exists := state.Requests[grant.RequestID]; exists {
+	record, exists := state.ServiceControls[grant.Nonce]
+	digest := fmt.Sprintf("%x", sha256.Sum256(serviceControlSigningBytes(grant)))
+	if !exists || record.Status != statusAwaitingDevice || record.Digest != digest || record.Signature != signature {
 		return "", "", errRequestConflict
 	}
 	private, err := base64.StdEncoding.DecodeString(state.BrokerPrivateKey)
@@ -58,6 +43,7 @@ func (s *brokerStore) AttestServiceControl(grant serviceControlGrant, signature,
 
 type serviceControlRecord struct {
 	Grant     serviceControlGrant `json:"grant"`
+	Signature string              `json:"signature"`
 	Digest    string              `json:"digest"`
 	Status    requestStatus       `json:"status"`
 	Code      string              `json:"code"`
@@ -65,7 +51,8 @@ type serviceControlRecord struct {
 	UpdatedAt time.Time           `json:"updatedAt"`
 }
 
-func (s *brokerStore) ClaimServiceControl(grant serviceControlGrant, signature string, proof serviceOwnerProof, now time.Time) (serviceControlRecord, bool, error) {
+// Proposals survive reconnects and must exist before device approval can be claimed.
+func (s *brokerStore) ProposeServiceControl(grant serviceControlGrant, signature string, now time.Time) (serviceControlRecord, bool, error) {
 	digest := fmt.Sprintf("%x", sha256.Sum256(serviceControlSigningBytes(grant)))
 	var result serviceControlRecord
 	duplicate := false
@@ -77,16 +64,11 @@ func (s *brokerStore) ClaimServiceControl(grant serviceControlGrant, signature s
 		if err != nil || verifyServiceControlGrant(grant, signature, key, state.AutoInstallSigner.KeyID, state.InstallationID, state.PolicyGeneration, now) != nil {
 			return errServiceControlGrant
 		}
-		device, ok := state.Devices[proof.DeviceID]
-		if !ok || state.OwnerID == "" || device.DeviceID != proof.DeviceID || device.OwnerID != state.OwnerID ||
-			verifyDeviceSignature(device.PublicKey, proof.Signature, serviceControlOwnerSigningBytes(grant)) != nil {
-			return errServiceControlGrant
-		}
 		if state.ServiceControls == nil {
 			state.ServiceControls = make(map[string]serviceControlRecord)
 		}
 		if old, ok := state.ServiceControls[grant.Nonce]; ok {
-			if old.Digest != digest {
+			if old.Digest != digest || old.Signature != signature {
 				return errRequestConflict
 			}
 			result, duplicate = old, true
@@ -113,9 +95,101 @@ func (s *brokerStore) ClaimServiceControl(grant serviceControlGrant, signature s
 		if len(state.ServiceControls) >= maxStoredRequests {
 			return errors.New("APB_REQUEST_CAPACITY_REACHED")
 		}
-		result = serviceControlRecord{Grant: grant, Digest: digest, Status: statusExecuting, Code: "EXECUTION_STARTED", CreatedAt: now.UTC(), UpdatedAt: now.UTC()}
+		result = serviceControlRecord{Grant: grant, Signature: signature, Digest: digest, Status: statusAwaitingDevice, Code: "DEVICE_APPROVAL_REQUIRED", CreatedAt: now.UTC(), UpdatedAt: now.UTC()}
 		state.ServiceControls[grant.Nonce] = result
-		return s.appendAudit(state, "service_control.executing", grant.RequestID, result.Code, digest)
+		return s.appendAudit(state, "service_control.awaiting_device", grant.RequestID, result.Code, digest)
+	})
+	return result, duplicate, err
+}
+
+func (s *brokerStore) PendingServiceControls(deviceID, cursor string, now time.Time) ([]serviceControlRecord, string, bool, error) {
+	var records []serviceControlRecord
+	err := s.transact(func(state *persistedBrokerState) error {
+		device, ok := state.Devices[deviceID]
+		if !ok || state.OwnerID == "" || device.OwnerID != state.OwnerID || device.DeviceID != deviceID {
+			return errDeviceNotEnrolled
+		}
+		for nonce, record := range state.ServiceControls {
+			if record.Status != statusAwaitingDevice {
+				continue
+			}
+			if now.UnixMilli() < 0 || uint64(now.UnixMilli()) >= record.Grant.ExpiresMS {
+				record.Status, record.Code, record.UpdatedAt = statusExpired, "DECISION_EXPIRED", now.UTC()
+				state.ServiceControls[nonce] = record
+				if err := s.appendAudit(state, "service_control.expired", record.Grant.RequestID, record.Code, record.Digest); err != nil {
+					return err
+				}
+				continue
+			}
+			if record.Grant.RequestID > cursor {
+				records = append(records, record)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, "", false, err
+	}
+	sort.Slice(records, func(i, j int) bool { return records[i].Grant.RequestID < records[j].Grant.RequestID })
+	const pageSize = maxPendingPageSize
+	if len(records) > pageSize {
+		records = records[:pageSize]
+		return records, records[len(records)-1].Grant.RequestID, true, nil
+	}
+	return records, "", false, nil
+}
+
+func (s *brokerStore) ClaimServiceControl(grant serviceControlGrant, signature string, proof serviceOwnerProof, now time.Time) (serviceControlRecord, bool, error) {
+	digest := fmt.Sprintf("%x", sha256.Sum256(serviceControlSigningBytes(grant)))
+	var result serviceControlRecord
+	duplicate := false
+	err := s.transact(func(state *persistedBrokerState) error {
+		if state.AutoInstallSigner == nil || state.AutoInstallSigner.KeyID != grant.KeyID {
+			return errServiceControlGrant
+		}
+		key, err := parseAutoInstallPublicKey(state.AutoInstallSigner.PublicKey)
+		if err != nil || verifyServiceControlGrant(grant, signature, key, state.AutoInstallSigner.KeyID, state.InstallationID, state.PolicyGeneration, now) != nil {
+			return errServiceControlGrant
+		}
+		device, ok := state.Devices[proof.DeviceID]
+		if !ok || state.OwnerID == "" || device.DeviceID != proof.DeviceID || device.OwnerID != state.OwnerID ||
+			verifyDeviceSignature(device.PublicKey, proof.Signature, serviceControlOwnerSigningBytes(grant)) != nil {
+			return errServiceControlGrant
+		}
+		if state.ServiceControls == nil {
+			state.ServiceControls = make(map[string]serviceControlRecord)
+		}
+		if old, ok := state.ServiceControls[grant.Nonce]; ok {
+			if old.Digest != digest || old.Signature != signature {
+				return errRequestConflict
+			}
+			if old.Status != statusAwaitingDevice {
+				result, duplicate = old, true
+				return nil
+			}
+			old.Status, old.Code, old.UpdatedAt = statusExecuting, "EXECUTION_STARTED", now.UTC()
+			state.ServiceControls[grant.Nonce], result = old, old
+			return s.appendAudit(state, "service_control.executing", grant.RequestID, result.Code, digest)
+		}
+		for _, old := range state.ServiceControls {
+			if old.Grant.RequestID == grant.RequestID {
+				return errRequestConflict
+			}
+		}
+		for _, old := range state.AutoInstalls {
+			if old.Grant.RequestID == grant.RequestID {
+				return errRequestConflict
+			}
+		}
+		for _, old := range state.OwnerInstalls {
+			if old.Grant.RequestID == grant.RequestID {
+				return errRequestConflict
+			}
+		}
+		if _, ok := state.Requests[grant.RequestID]; ok {
+			return errRequestConflict
+		}
+		return errServiceControlGrant
 	})
 	return result, duplicate, err
 }
