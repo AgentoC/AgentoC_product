@@ -62,7 +62,7 @@ const bashArtifact = artifact.replace(/^([A-Za-z]):\\/, (_, drive) => `/${drive.
 const bashRoot = root.replace(/^([A-Za-z]):\\/, (_, drive) => `/${drive.toLowerCase()}/`).replaceAll('\\', '/');
 const readCommand = readCase === 'numbered' ? `cat -n ${bashQuote(bashArtifact)}` : readCase === 'git-status' ? 'git status --short' : `ls -lah ${bashQuote(bashRoot)}`;
 const powershell = path.join(process.env.SystemRoot || process.env.WINDIR, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-const dotnetScript = `[System.IO.File]::WriteAllText('${artifact.replaceAll("'", "''")}', 'dotnet fixture')`;
+const dotnetScript = `[System.IO.File]::WriteAllText('${artifact.replaceAll("'", "''")}', 'dotnet fixture'${process.env.AGENTOC_QA_DOTNET_ENCODING === '1' ? ', [System.Text.Encoding]::UTF8' : ''})`;
 const dotnetCommand = `${bashQuote(powershell)} -NoProfile -NonInteractive -Command ${bashQuote(dotnetScript)}`;
 const guidanceMarker = path.join(root, 'admin-command-ran.txt');
 const guidanceAction = process.env.AGENTOC_QA_CLAUDE_ELEVATION_REGISTRY === '1'
@@ -196,7 +196,7 @@ try {
     if (readCase !== 'git-status' || approvals === 0) assert.ok(toolResultObserved, 'actual Claude must receive the read result');
     if (readCase === 'git-status' && approvals && mode === 'recommended') assert.ok(gitOwnerReviewObserved, 'Git must wait for owner when not auto-approved');
   } else if (protectedCase) await assert.rejects(access(artifact), { code: 'ENOENT' });
-  else assert.equal(await readFile(artifact, 'utf8'), dotnetCase ? 'dotnet fixture' : 'local fixture\n');
+  else assert.equal((await readFile(artifact, 'utf8')).replace(/^\uFEFF/, ''), dotnetCase ? 'dotnet fixture' : 'local fixture\n');
   assert.ok(requests >= 2, 'local model must receive the tool result');
   const spool = await readRunSpoolRecords(run.id);
   if (deleteCase && !reviewCase) assert.ok(spool.some((record) => record.json?.reason === 'handle-bound workspace deletion'), 'actual sidecar must use the handle-bound deletion helper');

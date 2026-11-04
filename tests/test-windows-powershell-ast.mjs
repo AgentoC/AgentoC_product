@@ -33,8 +33,14 @@ const dynamic = await parseWindowsPowerShellAst('Get-Content $env:TEMP');
 const staticWrite = await parseWindowsPowerShellAst("[System.IO.File]::WriteAllText('文档.txt', 'hello')");
 assert.deepEqual(staticWrite.dynamicNodes, []);
 assert.deepEqual(staticWrite.expressions[0].staticFileCall, { kind: 'write', path: '文档.txt', method: 'WriteAllText' });
+const encodedWrite = await parseWindowsPowerShellAst("[System.IO.File]::WriteAllText('文档.txt', 'hello', [System.Text.Encoding]::UTF8)");
+assert.deepEqual(encodedWrite.dynamicNodes, []);
+assert.deepEqual(encodedWrite.expressions[0].staticFileCall, { kind: 'write', path: '文档.txt', method: 'WriteAllText' });
 for (const source of ["[System.IO.File]::Move('a', 'b')", "[System.IO.File]::WriteAllText('a', $env:TEMP)",
-  "[System.IO.Directory]::Delete('a', $true)", "[System.IO.File]::WriteAllText('a', (Get-Date).ToString())"]) {
+  "[System.IO.Directory]::Delete('a', $true)", "[System.IO.File]::WriteAllText('a', (Get-Date).ToString())",
+  "[System.IO.File]::WriteAllText('a', 'b', [System.Text.Encoding]::GetEncoding(65001))",
+  "[System.IO.File]::WriteAllText('a', 'b', [System.Environment]::CommandLine)",
+  "[System.Text.Encoding]::UTF8"]) {
   assert.ok((await parseWindowsPowerShellAst(source)).dynamicNodes.length, source);
 }
 assert.ok(dynamic.dynamicNodes.includes('VariableExpressionAst'));
@@ -53,6 +59,7 @@ if (pwsh && existsSync(pwsh)) {
   const modernStatic = await parseWindowsPowerShellAst("[System.IO.File]::WriteAllText('文档.txt', 'hello')", { executable: pwsh });
   assert.deepEqual(modernStatic.dynamicNodes, []);
   assert.deepEqual(modernStatic.expressions[0].staticFileCall, { kind: 'write', path: '文档.txt', method: 'WriteAllText' });
+  assert.deepEqual((await parseWindowsPowerShellAst("[System.IO.File]::ReadAllText('文档.txt', [System.Text.Encoding]::UTF8)", { executable: pwsh })).dynamicNodes, []);
   assert.ok((await parseWindowsPowerShellAst("[System.IO.File]::WriteAllText('a', $env:TEMP)", { executable: pwsh })).dynamicNodes.length);
 }
 await assert.rejects(parseWindowsPowerShellAst('x'.repeat(128 * 1024 + 1)));

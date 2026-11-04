@@ -23,6 +23,14 @@ function Get-RedirectionFacts($node) {
     @{ type = $_.GetType().Name; location = $location; locationType = $locationType }
   })
 }
+function Get-SafeStaticEncoding($node) {
+  if ($node -isnot [System.Management.Automation.Language.MemberExpressionAst] -or
+      $node -is [System.Management.Automation.Language.InvokeMemberExpressionAst] -or -not $node.Static -or
+      $node.Expression -isnot [System.Management.Automation.Language.TypeExpressionAst] -or
+      $node.Expression.TypeName.FullName -ine 'System.Text.Encoding' -or
+      $node.Member -isnot [System.Management.Automation.Language.StringConstantExpressionAst]) { return $false }
+  return [string]$node.Member.Value -iin @('UTF8', 'Unicode', 'BigEndianUnicode', 'UTF32', 'ASCII', 'Default')
+}
 function Get-SafeStaticFileCall($node) {
   if ($node -isnot [System.Management.Automation.Language.InvokeMemberExpressionAst] -or
       -not $node.Static -or
@@ -39,9 +47,11 @@ function Get-SafeStaticFileCall($node) {
     default { return $null }
   }
   $count = if ($kind -eq 'write') { 2 } else { 1 }
-  if (@($node.Arguments).Count -ne $count) { return $null }
-  foreach ($argument in $node.Arguments) {
-    if ($argument -isnot [System.Management.Automation.Language.StringConstantExpressionAst]) { return $null }
+  $argumentCount = @($node.Arguments).Count
+  if ($argumentCount -ne $count -and
+      -not ($kind -ne 'delete' -and $argumentCount -eq ($count + 1) -and (Get-SafeStaticEncoding $node.Arguments[$count]))) { return $null }
+  for ($index = 0; $index -lt $count; $index++) {
+    if ($node.Arguments[$index] -isnot [System.Management.Automation.Language.StringConstantExpressionAst]) { return $null }
   }
   return @{ kind = $kind; path = [string]$node.Arguments[0].Value; method = $method }
 }
@@ -71,8 +81,10 @@ $dynamicNodes = @($ast.FindAll({ param($n)
   ($n -is [System.Management.Automation.Language.ScriptBlockExpressionAst]) -or
   ($n -is [System.Management.Automation.Language.AssignmentStatementAst]) -or
   (($n -is [System.Management.Automation.Language.InvokeMemberExpressionAst]) -and $null -eq (Get-SafeStaticFileCall $n)) -or
-  (($n -is [System.Management.Automation.Language.TypeExpressionAst]) -and $null -eq (Get-SafeStaticFileCall $n.Parent)) -or
-  (($n.GetType().Name -eq 'MemberExpressionAst') -and $null -eq (Get-SafeStaticFileCall $n)) -or
+  (($n -is [System.Management.Automation.Language.TypeExpressionAst]) -and $null -eq (Get-SafeStaticFileCall $n.Parent) -and
+    -not ((Get-SafeStaticEncoding $n.Parent) -and $null -ne (Get-SafeStaticFileCall $n.Parent.Parent))) -or
+  (($n.GetType().Name -eq 'MemberExpressionAst') -and
+    -not ((Get-SafeStaticEncoding $n) -and $null -ne (Get-SafeStaticFileCall $n.Parent))) -or
   ($n.GetType().Name -in @('FunctionDefinitionAst','TypeDefinitionAst','IfStatementAst','ForStatementAst','ForEachStatementAst','WhileStatementAst','DoWhileStatementAst','DoUntilStatementAst','TryStatementAst','TrapStatementAst','UsingStatementAst','ExitStatementAst','ThrowStatementAst','DataStatementAst')) -or
   ($n -is [System.Management.Automation.Language.ExpandableStringExpressionAst] -and @($n.NestedExpressions).Count -gt 0)
 }, $true) | ForEach-Object { $_.GetType().Name })

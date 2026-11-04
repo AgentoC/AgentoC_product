@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, link, mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { access, link, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
@@ -295,10 +295,14 @@ const protectedFile = psLiteral(path.join(root, 'protected', 'important.txt'));
 for (const command of [
   `[System.IO.File]::ReadAllText(${ordinaryFile})`,
   `[System.IO.File]::WriteAllText(${ordinaryFile}, 'hello')`,
+  `[System.IO.File]::WriteAllText(${ordinaryFile}, 'hello', [System.Text.Encoding]::UTF8)`,
+  `[System.IO.File]::ReadAllText(${ordinaryFile}, [System.Text.Encoding]::Unicode)`,
   `[System.IO.File]::AppendAllText(${outsideFile}, 'hello')`,
+  `[System.IO.File]::AppendAllText(${outsideFile}, 'hello', [System.Text.Encoding]::UTF8)`,
   `[System.IO.File]::Delete(${ordinaryFile})`,
 ]) assert.equal((await inspect(command)).decision, 'allow', command);
 assert.equal((await inspect(`[System.IO.File]::WriteAllText(${protectedFile}, 'x')`)).decision, 'review');
+assert.equal((await inspect(`[System.IO.File]::WriteAllText(${protectedFile}, 'x', [System.Text.Encoding]::UTF8)`)).decision, 'review');
 assert.equal((await inspect(`[System.IO.File]::WriteAllText(${psLiteral(path.join(workspace, 'ordinary-link'))}, 'x')`)).decision, 'review');
 assert.equal((await inspect(`[System.IO.File]::ReadAllText(${psLiteral(path.join(workspace, 'sensitive-folder', '.ssh', 'fixture-key'))})`)).decision, 'review');
 assert.equal(decideWindowsPowerShellActions(await analyzeWindowsPowerShell(`[System.IO.File]::WriteAllText(${outsideFile}, 'x')`, context), { conservative: true }).decision, 'review');
@@ -307,7 +311,8 @@ for (const command of [
   `[System.IO.File]::ReadAllText('C:relative.txt')`,
   `[System.IO.File]::WriteAllText($env:TEMP, 'x')`,
   `[System.IO.File]::WriteAllText(${ordinaryFile}, (Get-Date).ToString())`,
-  `[System.IO.File]::WriteAllText(${ordinaryFile}, 'x', [System.Text.Encoding]::UTF8)`,
+  `[System.IO.File]::WriteAllText(${ordinaryFile}, 'x', [System.Text.Encoding]::GetEncoding(65001))`,
+  `[System.IO.File]::WriteAllText(${ordinaryFile}, 'x', $encoding)`,
   `[System.IO.Directory]::Delete(${psLiteral(workspace)}, $true)`,
   `[System.IO.File]::WriteAllText(${ordinaryFile}, 'x'); Remove-Item -LiteralPath ${protectedFile}`,
 ]) assert.equal((await inspect(command)).decision, 'review', command);
@@ -315,6 +320,7 @@ for (const riskMode of ['recommended', 'full-auto']) {
   const state = { cwd: workspace, riskContext: context, riskContextValid: true, riskMode };
   const request = command => ({ kind: 'command', providerMethod: 'can_use_tool', params: { tool_name: 'PowerShell', input: { command } } });
   assert.equal((await decideWindowsApproval(request(`[System.IO.File]::WriteAllText(${outsideFile}, 'x')`), state)).decision, 'auto-allow');
+  assert.equal((await decideWindowsApproval(request(`[System.IO.File]::WriteAllText(${outsideFile}, 'x', [System.Text.Encoding]::UTF8)`), state)).decision, 'auto-allow');
   assert.equal((await decideWindowsApproval(request(`[System.IO.File]::WriteAllText(${protectedFile}, 'x')`), state)).decision, 'prompt');
 }
 if (process.env.AGENTOC_TEST_PWSH) {
@@ -322,5 +328,13 @@ if (process.env.AGENTOC_TEST_PWSH) {
   assert.equal(decideWindowsPowerShellActions(modern).decision, 'allow');
   const modernProtected = await analyzeWindowsPowerShell(`[System.IO.File]::WriteAllText(${protectedFile}, 'hello')`, context, { executable: process.env.AGENTOC_TEST_PWSH });
   assert.equal(decideWindowsPowerShellActions(modernProtected).decision, 'review');
+  const utf8Target = path.join(workspace, 'unicode-编码.txt');
+  const utf8Command = `[System.IO.File]::WriteAllText(${psLiteral(utf8Target)}, '中文', [System.Text.Encoding]::UTF8)`;
+  for (const shell of [resolveWindowsSystemPaths().powershell, process.env.AGENTOC_TEST_PWSH]) {
+    const encoded = await analyzeWindowsPowerShell(utf8Command, context, { executable: shell });
+    assert.equal(decideWindowsPowerShellActions(encoded).decision, 'allow');
+    execFileSync(shell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', utf8Command], { windowsHide: true });
+    assert.equal((await readFile(utf8Target, 'utf8')).replace(/^\uFEFF/, ''), '中文');
+  }
 }
 console.log('windows-powershell-actions: native AST and file policy checks passed');

@@ -52,7 +52,7 @@ const safeFileCommand = fileCommand === 'rename'
   ? `Rename-Item -LiteralPath '${fileFixture.replace(/'/g, "''")}' -NewName renamed-fixture.txt`
   : fileCommand === 'git-status' ? 'git status --short'
   : fileCommand === 'dotnet'
-    ? `[System.IO.File]::WriteAllText('${fileFixture.replace(/'/g, "''")}', 'dotnet fixture')`
+    ? `[System.IO.File]::WriteAllText('${fileFixture.replace(/'/g, "''")}', 'dotnet fixture'${process.env.AGENTOC_QA_DOTNET_ENCODING === '1' ? ', [System.Text.Encoding]::UTF8' : ''})`
     : `Clear-Content -LiteralPath '${fileFixture.replace(/'/g, "''")}'`;
 const managedDeleteRelative = managedDelete && process.env.AGENTOC_QA_RELATIVE_DELETE === '1';
 const dangerousRetry = managedDeleteRelative && process.env.AGENTOC_QA_RELATIVE_DANGEROUS === '1';
@@ -318,7 +318,7 @@ createInterface({ input: child.stdout }).on('line', async line => {
     const fileResult = fileCommand === 'rename'
       ? await readFile(path.join(home, 'renamed-fixture.txt'), 'utf8').catch(() => null) === 'fixture content' && !await access(fileFixture).then(() => true, () => false)
       : fileCommand === 'clear' ? await readFile(fileFixture, 'utf8').catch(() => null) === ''
-        : fileCommand === 'dotnet' ? await readFile(fileFixture, 'utf8').catch(() => null) === 'dotnet fixture' : true;
+        : fileCommand === 'dotnet' ? (await readFile(fileFixture, 'utf8').catch(() => '')).replace(/^\uFEFF/, '') === 'dotnet fixture' : true;
     if (msg.params.item.exitCode !== 0 || !fileResult || (!fileCommand && !String(msg.params.item.aggregatedOutput || '').includes(managedDelete ? '"deleted":2' : managedInstall ? 'Installation completed successfully' : hookExpectedRun ? 'agentoc-rewritten' : 'agentoc-fixture')) || (!hookExpectedRun && hookCompleted) || (managedInstall && submissions !== 1)) {
       process.stderr.write('approved harmless command failed\n'); process.exitCode = 1;
     } else process.stdout.write(fileCommand ? `codex-windows-local-gate: ${fileCommand} executed on isolated fixture\n` : managedDelete ? 'codex-windows-local-gate: bound deletion used the approved absolute target\n' : managedInstall ? 'codex-windows-local-gate: managed install bridge reached mock control plane\n' : hookShouldFail ? 'codex-windows-local-gate: failed hook; original passed gate\n' : hookExpectedRun ? 'codex-windows-local-gate: hook rewrote approved harmless command\n' : hookExperiment ? 'codex-windows-local-gate: untrusted hook skipped; original passed gate\n' : 'codex-windows-local-gate: auto-allow executed harmless command\n');
