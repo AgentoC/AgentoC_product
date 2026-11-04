@@ -65,7 +65,7 @@
     <string name="settings_workspace_tools">工作区工具</string>
     <string name="settings_group_preferences">偏好设置</string>
     <string name="settings_group_about">关于</string>
-    <string name="welcome_value_summary">把任务交给电脑，在手机上跟进进展、查看结果。</string>
+    <string name="welcome_value_summary">把任务交给电脑，\n在手机上查看进展与结果。</string>
     <string name="welcome_sign_in_hint">登录 Google 账号，让电脑保持长期绑定。</string>
     <string name="welcome_pairing_hint">在电脑端 AgentoC 中获取配对码。未登录时，访问最长持续 10 分钟。</string>
     <string name="settings_title">设置</string>
@@ -271,7 +271,7 @@
     <string name="temporary_pairing_host_unavailable">电脑的临时配对服务暂不可用。请确认 AgentoC 正在运行后重试。</string>
     <string name="temporary_pairing_retry_hint">使用同一个配对码重试是安全的。</string>
     <string name="sign_in_guide_title">使用同一帐号\n找到工作设备</string>
-    <string name="sign_in_guide_continue_with_google">使用 Google 登录</string>
+    <string name="sign_in_guide_continue_with_google">Google 登录</string>
     <string name="sign_in_guide_google_account">Google\n帐号</string>
     <string name="sign_in_guide_connection_path_description">通过 Google 帐号连接本机与工作设备</string>
     <string name="welcome_connection_methods_title">在电脑上建立连接。</string>

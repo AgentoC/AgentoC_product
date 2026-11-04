@@ -1,16 +1,11 @@
 package com.andysagent.agentoc.feature.workbench
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.graphics.Brush
-import com.andysagent.agentoc.core.designsystem.AgentoFrostedGlassBox
-import com.andysagent.agentoc.core.designsystem.AgentoGlassSurface
-import com.andysagent.agentoc.core.designsystem.AgentoGlassMaterial
-import com.andysagent.agentoc.core.designsystem.theme.AgentoFrostedTokens
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -42,7 +37,6 @@ import com.andysagent.agentoc.core.designsystem.AgentoTextAction
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -55,7 +49,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.andysagent.agentoc.core.designsystem.AgentoButton
 import com.andysagent.agentoc.core.designsystem.AgentoIconButton
-import com.andysagent.agentoc.core.designsystem.AgentoSpacing
 import com.andysagent.agentoc.core.designsystem.AgentoWebGlyph
 import com.andysagent.agentoc.core.designsystem.AgentoWebIcon
 import com.andysagent.agentoc.core.designsystem.AgentocTextStyles
@@ -114,35 +107,37 @@ private fun WelcomeConnectionContent(
     onSetUpComputer: () -> Unit,
 ) {
     val colors = LocalAgentocColors.current
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 48.dp)
-            .testTag(if (signedIn) "connect-computer-page" else "welcome-entry-page"),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        DeviceRelationship()
-        Spacer(Modifier.height(32.dp))
+    OnboardingPageContent(
+        Modifier.testTag(if (signedIn) "connect-computer-page" else "welcome-entry-page"),
+    ) { compact ->
+        DeviceRelationship(compact = compact)
+        Spacer(Modifier.height(if (compact) 20.dp else 28.dp))
         Text(stringResource(if (signedIn) R.string.journey_connect_title else R.string.welcome_connect_title),
-            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold), color = colors.primaryContent,
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontSize = 28.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold,
+                letterSpacing = (-0.4).sp,
+            ), color = colors.primaryContent,
             textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.height(12.dp))
         Text(stringResource(if (signedIn) R.string.journey_connect_summary else R.string.welcome_value_summary),
-            style = MaterialTheme.typography.bodyMedium.copy(lineBreak = LineBreak.Heading), color = colors.secondaryContent,
-            textAlign = TextAlign.Center)
-        Spacer(Modifier.height(32.dp))
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = 15.sp, lineHeight = 24.sp, lineBreak = LineBreak.Heading,
+            ), color = colors.secondaryContent,
+            textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = 304.dp))
+        Spacer(Modifier.height(if (compact) 24.dp else 36.dp))
         AgentoButton(stringResource(if (signedIn) R.string.journey_setup_computer else R.string.settings_sign_in),
             onClick = if (signedIn) onSetUpComputer else onConnectComputer,
             modifier = Modifier.widthIn(min = 180.dp, max = 280.dp)
                 .testTag(if (signedIn) "connect-my-computer" else "welcome-sign-in"),
             decision = true, labelMaxLines = 2,
+            labelStyle = MaterialTheme.typography.labelLarge.copy(fontSize = 16.sp, lineHeight = 22.sp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp, vertical = 12.dp))
         if (!signedIn) {
-            Spacer(Modifier.height(12.dp))
-            AgentoTextAction(stringResource(R.string.journey_reverse_sign_in), onScanPairing,
+            Spacer(Modifier.height(8.dp))
+            OnboardingTextAction(stringResource(R.string.journey_reverse_sign_in), onScanPairing,
                 Modifier.testTag("sign-in-from-computer"))
-            Spacer(Modifier.height(24.dp))
-            AgentoTextAction(stringResource(R.string.journey_temporary_entry), onLearnConnectionMethods,
+            Spacer(Modifier.height(if (compact) 8.dp else 24.dp))
+            OnboardingTextAction(stringResource(R.string.journey_temporary_entry), onLearnConnectionMethods,
                 Modifier.testTag("temporary-access-entry"))
         }
     }
@@ -309,78 +304,24 @@ private fun ConnectionMethodsPreview() {
 }
 
 @Composable
-private fun DeviceRelationship(modifier: Modifier = Modifier) {
+private fun DeviceRelationship(modifier: Modifier = Modifier, compact: Boolean = false) {
     val colors = LocalAgentocColors.current
     val isDark = colors.canvas.red < 0.5f
-    val stageShape = RoundedCornerShape(30.dp)
-    val tileShape = RoundedCornerShape(16.dp)
-
-    AgentoFrostedGlassBox(
+    Box(
         modifier = modifier
-            .width(204.dp)
-            .height(104.dp),
-        shape = stageShape,
-        surface = AgentoGlassSurface.BrushOverlay(if (isDark) AgentoFrostedTokens.DarkDockGlassBrush else AgentoFrostedTokens.LightDockGlassBrush),
-        showTopHairline = true,
-        blurRadius = AgentoFrostedTokens.BlurNavigation,
-        material = AgentoGlassMaterial.LiquidClear,
-        hasShadow = true,
-        shadowElevation = 8.dp,
+            .width(if (compact) 204.dp else 220.dp)
+            .height(if (compact) 80.dp else 104.dp)
+            .clip(RoundedCornerShape(30.dp))
+            .background(Brush.verticalGradient(listOf(
+                Color.White.copy(alpha = if (isDark) 0.045f else 0.65f),
+                Color.White.copy(alpha = if (isDark) 0.015f else 0.25f),
+            ))),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            // Computer / Host tile
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 16.dp)
-                    .size(58.dp)
-                    .clip(tileShape)
-                    .background(if (isDark) AgentoFrostedTokens.SurfaceLevel2 else Color.White),
-                contentAlignment = Alignment.Center,
-            ) {
-                AgentoWebIcon(
-                    glyph = AgentoWebGlyph.Monitor,
-                    contentDescription = null,
-                    modifier = Modifier.size(30.dp),
-                    tint = Color(0xFF0A84FF),
-                )
-            }
-
-            // Connection bridge with gradient
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .width(48.dp)
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(99.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                Color(0xFF0A84FF).copy(alpha = 0.7f),
-                                Color(0xFF5E5CE6).copy(alpha = 0.9f),
-                                Color(0xFF0A84FF).copy(alpha = 0.7f),
-                            ),
-                        ),
-                    ),
-            )
-
-            // Phone / Device tile
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 16.dp)
-                    .size(58.dp)
-                    .clip(tileShape)
-                    .background(if (isDark) AgentoFrostedTokens.SurfaceLevel2 else Color.White),
-                contentAlignment = Alignment.Center,
-            ) {
-                AgentoWebIcon(
-                    glyph = AgentoWebGlyph.Device,
-                    contentDescription = null,
-                    modifier = Modifier.size(28.dp),
-                    tint = Color(0xFF5E5CE6),
-                )
-            }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OnboardingDeviceTile(phone = false)
+            OnboardingConnectionLine(Modifier.width(if (compact) 48.dp else 64.dp))
+            OnboardingDeviceTile(phone = true)
         }
     }
 }

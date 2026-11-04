@@ -49,7 +49,7 @@
     <string name="settings_workspace_tools">工作區工具</string>
     <string name="settings_group_preferences">偏好設定</string>
     <string name="settings_group_about">關於</string>
-    <string name="welcome_value_summary">把任務交給電腦，在手機上追蹤進度、查看結果。</string>
+    <string name="welcome_value_summary">把任務交給電腦，\n在手機上查看進度與結果。</string>
     <string name="welcome_sign_in_hint">登入 Google 帳戶，讓電腦保持長期綁定。</string>
     <string name="welcome_pairing_hint">在電腦版 AgentoC 中取得配對碼。未登入時，存取最長持續 10 分鐘。</string>
     <string name="settings_title">設定</string>
@@ -238,7 +238,7 @@
     <string name="welcome_this_phone">這台手機</string>
     <string name="welcome_back_to_connection">返回連接</string>
     <string name="sign_in_guide_title">使用同一帳號\n找到工作電腦</string>
-    <string name="sign_in_guide_continue_with_google">使用 Google 登入</string>
+    <string name="sign_in_guide_continue_with_google">Google 登入</string>
     <string name="sign_in_guide_google_account">Google\n帳號</string>
     <string name="sign_in_guide_connection_path_description">透過 Google 帳號連接本機與工作電腦</string>
     <string name="welcome_connection_methods_title">在電腦上建立連接。</string>

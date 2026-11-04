@@ -14,8 +14,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.andysagent.agentoc.core.designsystem.*
 
 private const val COMPUTER_RELEASES_URL = "https://www.agentoncloud.com/download.html"
@@ -27,6 +31,9 @@ fun PairingScanGuideDialog(onScan: () -> Unit, onDismiss: () -> Unit) {
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     val colors = LocalAgentocColors.current
+    val instructionStyle = MaterialTheme.typography.bodyMedium.copy(
+        fontSize = 15.sp, lineHeight = 24.sp, lineBreak = LineBreak.Heading,
+    )
     var step by rememberSaveable { mutableIntStateOf(0) }
     var feedback by rememberSaveable { mutableStateOf<Int?>(null) }
     val stepTitle = stringResource(when (step) {
@@ -50,26 +57,25 @@ fun PairingScanGuideDialog(onScan: () -> Unit, onDismiss: () -> Unit) {
         onDismissRequest = { if (step == 0) onDismiss() else { step--; feedback = null } },
         actionLayout = AgentoDialogActionLayout.PrimaryWithTextDismiss,
         opaqueFallback = true,
+        textureAlpha = 0.2f,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.fillMaxWidth().testTag("computer-setup-step")
+                modifier = Modifier.width(72.dp).testTag("computer-setup-step")
                     .semantics { contentDescription = progress; liveRegion = LiveRegionMode.Polite }) {
                 repeat(3) { index ->
-                    Box(Modifier.weight(1f).height(4.dp).background(
+                    Box(Modifier.weight(1f).height(3.dp).background(
                         if (index <= step) colors.actionPrimary else colors.subtleOutline, AgentoShapes.Pill))
                 }
             }
             when (step) {
                 0 -> {
                     Text(stringResource(if (feedback == R.string.journey_link_failed) R.string.journey_link_failed else R.string.journey_handoff_hint),
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = instructionStyle, color = colors.secondaryContent,
                         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        AgentoButton(text = stringResource(R.string.journey_share_link), secondary = true,
-                            secondaryContainerColor = colors.canvas.copy(alpha = 0f), labelMaxLines = 2,
-                            contentPadding = PaddingValues(horizontal = 4.dp),
-                            leadingIcon = { AgentoWebIcon(AgentoWebGlyph.Share, null, Modifier.size(24.dp)) },
+                        OnboardingTextAction(text = stringResource(R.string.journey_share_link),
+                            leadingIcon = AgentoWebGlyph.Share,
                             onClick = {
                             feedback = null
                             runCatching {
@@ -79,11 +85,9 @@ fun PairingScanGuideDialog(onScan: () -> Unit, onDismiss: () -> Unit) {
                                 }, context.getString(R.string.journey_share_link)))
                             }.onFailure { feedback = R.string.journey_link_failed }
                         })
-                        AgentoButton(text = stringResource(if (feedback == R.string.journey_link_copied) R.string.journey_link_copied else R.string.pairing_setup_guide_copy), secondary = true,
+                        OnboardingTextAction(text = stringResource(if (feedback == R.string.journey_link_copied) R.string.journey_link_copied else R.string.pairing_setup_guide_copy),
                             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                            secondaryContainerColor = colors.canvas.copy(alpha = 0f), labelMaxLines = 2,
-                            contentPadding = PaddingValues(horizontal = 4.dp),
-                            leadingIcon = { AgentoWebIcon(AgentoWebGlyph.Copy, null, Modifier.size(24.dp)) },
+                            leadingIcon = AgentoWebGlyph.Copy,
                             onClick = {
                             clipboard.setText(AnnotatedString(COMPUTER_RELEASES_URL))
                             feedback = R.string.journey_link_copied
@@ -91,12 +95,25 @@ fun PairingScanGuideDialog(onScan: () -> Unit, onDismiss: () -> Unit) {
                     }
                 }
                 1 -> Text(
-                    stringResource(R.string.journey_account_instructions),
-                    style = MaterialTheme.typography.bodyLarge.copy(lineBreak = LineBreak.Heading),
+                    emphasizedMenuNames(stringResource(R.string.journey_account_instructions)),
+                    style = instructionStyle, color = colors.secondaryContent,
                     modifier = Modifier.testTag("computer-setup-instructions"),
                 )
-                else -> Text(stringResource(R.string.journey_scan_hint), style = MaterialTheme.typography.bodyLarge)
+                else -> Text(stringResource(R.string.journey_scan_hint), style = instructionStyle, color = colors.secondaryContent)
             }
+        }
+    }
+}
+
+/** Emphasize the existing localized menu labels without adding another visual layer. */
+@Composable
+private fun emphasizedMenuNames(instructions: String): AnnotatedString {
+    val colors = LocalAgentocColors.current
+    return buildAnnotatedString {
+        append(instructions)
+        Regex("「[^」]+」|“[^”]+”|«[^»]+»").findAll(instructions).forEach {
+            addStyle(SpanStyle(color = colors.primaryContent, fontWeight = FontWeight.Medium),
+                it.range.first, it.range.last + 1)
         }
     }
 }

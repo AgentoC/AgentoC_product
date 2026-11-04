@@ -1353,6 +1353,7 @@ fun AgentoFrostedGlassBox(
     // Moving controls can update sampling coordinates in draw, without
     // recomposing their sharp foreground on every placement frame.
     backdropOffsetProvider: (() -> IntOffset)? = null,
+    textureAlpha: Float = 1f,
     content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
     val colors = LocalAgentocColors.current
@@ -1474,7 +1475,7 @@ fun AgentoFrostedGlassBox(
                         }
 
                         val noiseBrush = AgentoFrostedNoise.getBrush(isDark)
-                        drawOutline(outline = outline, brush = noiseBrush)
+                        drawOutline(outline = outline, brush = noiseBrush, alpha = textureAlpha.coerceIn(0f, 1f))
 
                         if (showTopHairline) {
                             val hairlineColor = if (isDark) {

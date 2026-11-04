@@ -1699,6 +1699,7 @@ fun AgentoDialog(
     backdropLayer: GraphicsLayer? = null,
     backgroundDimAmount: Float? = null,
     opaqueFallback: Boolean = false,
+    textureAlpha: Float = 1f,
     content: @Composable () -> Unit,
 ) {
     val colors = LocalAgentocColors.current
@@ -1786,6 +1787,7 @@ fun AgentoDialog(
                 backdropTone = AgentoBackdropTone.QuietHeader,
                 specularBrush = if (isDark) AgentoFrostedTokens.SpecularBorderDark else AgentoFrostedTokens.SpecularBorderLight,
                 hasShadow = false,
+                textureAlpha = textureAlpha,
             ) {
                 Column(
                     Modifier.padding(
