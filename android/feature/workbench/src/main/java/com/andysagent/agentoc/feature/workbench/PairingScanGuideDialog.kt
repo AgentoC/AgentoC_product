@@ -3,7 +3,6 @@ package com.andysagent.agentoc.feature.workbench
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -15,6 +14,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.unit.dp
 import com.andysagent.agentoc.core.designsystem.*
 
@@ -37,7 +37,6 @@ fun PairingScanGuideDialog(onScan: () -> Unit, onDismiss: () -> Unit) {
     val progress = stringResource(R.string.journey_step_count, step + 1, 3)
     AgentoDialog(
         title = stepTitle,
-        icon = { Text("${step + 1}", style = MaterialTheme.typography.headlineSmall, color = colors.actionPrimary) },
         modifier = Modifier.testTag("computer-setup-guide"),
         confirmLabel = stringResource(when (step) {
             0 -> R.string.journey_installed
@@ -60,12 +59,6 @@ fun PairingScanGuideDialog(onScan: () -> Unit, onDismiss: () -> Unit) {
                     Box(Modifier.weight(1f).height(4.dp).background(
                         if (index <= step) colors.actionPrimary else colors.subtleOutline, AgentoShapes.Pill))
                 }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                AgentoWebIcon(if (step < 2) AgentoWebGlyph.Monitor else AgentoWebGlyph.Device,
-                    null, Modifier.size(24.dp), tint = colors.actionPrimary)
-                Text(stringResource(if (step < 2) R.string.journey_on_computer else R.string.journey_on_phone),
-                    style = MaterialTheme.typography.titleSmall, color = colors.secondaryContent)
             }
             when (step) {
                 0 -> {
@@ -97,23 +90,11 @@ fun PairingScanGuideDialog(onScan: () -> Unit, onDismiss: () -> Unit) {
                         })
                     }
                 }
-                1 -> {
-                    // A localized illustration of the desktop click path, not phone controls.
-                    AgentoCard(Modifier.fillMaxWidth().testTag("computer-setup-method")) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text(stringResource(R.string.journey_desktop_tab), style = MaterialTheme.typography.titleSmall)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                AgentoWebIcon(AgentoWebGlyph.ChevronRight, null, Modifier.size(24.dp), tint = colors.secondaryContent)
-                                Text(stringResource(R.string.journey_desktop_start), style = MaterialTheme.typography.bodyLarge)
-                            }
-                            Row(Modifier.padding(start = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                AgentoWebIcon(AgentoWebGlyph.ChevronRight, null, Modifier.size(24.dp), tint = colors.actionPrimary)
-                                Text(stringResource(R.string.journey_desktop_trusted), style = MaterialTheme.typography.titleSmall,
-                                    color = colors.actionPrimary)
-                            }
-                        }
-                    }
-                }
+                1 -> Text(
+                    stringResource(R.string.journey_account_instructions),
+                    style = MaterialTheme.typography.bodyLarge.copy(lineBreak = LineBreak.Heading),
+                    modifier = Modifier.testTag("computer-setup-instructions"),
+                )
                 else -> Text(stringResource(R.string.journey_scan_hint), style = MaterialTheme.typography.bodyLarge)
             }
         }

@@ -16,7 +16,7 @@
     <string name="journey_link_failed">无法打开其他应用。请复制地址，在电脑上打开。</string>
     <string name="journey_long_term">长期连接</string>
     <string name="journey_temporary">临时访问</string>
-    <string name="journey_account_instructions">打开「手机配对」→「开始手机配对」，选择「正式配对」。</string>
+    <string name="journey_account_instructions">在电脑上打开「手机配对」。\n再点「开始手机配对」「正式配对」。</string>
     <string name="journey_temporary_instructions">电脑端：手机配对 → 开始手机配对。\n未登录的电脑选「临时配对」，确认后可访问 10 分钟。</string>
     <string name="journey_have_code">已有配对码，直接扫描</string>
     <string name="journey_home_quiet">当前没有需要你处理的事项。</string>
@@ -49,4 +49,5 @@
     <string name="journey_desktop_start">开始手机配对</string>
     <string name="journey_desktop_trusted">正式配对</string>
     <string name="journey_scanner_hint">将电脑上的配对码放入取景框</string>
+    <string name="sign_in_guide_continue_with_browser">使用浏览器登录</string>
 </resources>

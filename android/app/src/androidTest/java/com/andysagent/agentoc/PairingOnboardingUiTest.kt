@@ -40,18 +40,19 @@ class PairingOnboardingUiTest {
 
     @Test
     fun firstRunShowsLoginBeforeComputerConnection() {
-        var request: com.andysagent.agentoc.feature.workbench.GoogleSignInRequest? = null
+        var event: PairingOnboardingEvent? = null
         composeRule.setContent { AgentocTheme {
             WorkbenchScreen(state = WorkbenchUiState(),
                 pairingOnboardingState = PairingOnboardingUiState(open = true, step = PairingOnboardingStep.Welcome),
-                onRequestGoogleSignIn = { request = it })
+                onPairingOnboardingEvent = { event = it })
         } }
-        composeRule.onNodeWithText(workbenchText(WorkbenchR.string.journey_login_title)).assertIsDisplayed()
+        composeRule.onNodeWithText(workbenchText(WorkbenchR.string.welcome_connect_title)).assertIsDisplayed()
+        composeRule.onNodeWithTag("account-sign-in-page").assertDoesNotExist()
         composeRule.onNodeWithTag("connect-my-computer").assertDoesNotExist()
         composeRule.onNodeWithTag("sign-in-from-computer").assertIsDisplayed()
-        composeRule.onNodeWithTag("account-sign-in-primary").performScrollTo().performClick()
+        composeRule.onNodeWithTag("welcome-sign-in").performScrollTo().performClick()
         composeRule.runOnIdle {
-            assertEquals(com.andysagent.agentoc.feature.workbench.GoogleSignInRequest.PairComputerFromWelcome, request)
+            assertEquals(PairingOnboardingEvent.ContinueFromWelcome, event)
         }
     }
 
@@ -297,7 +298,7 @@ class PairingOnboardingUiTest {
         var returnedToWelcome = false
         val back = workbenchText(WorkbenchR.string.pairing_back)
         val scannerUnavailable = workbenchText(WorkbenchR.string.pairing_scanner_title)
-        val welcomeTitle = workbenchText(WorkbenchR.string.journey_login_title)
+        val welcomeTitle = workbenchText(WorkbenchR.string.welcome_connect_title)
         composeRule.setContent {
             AgentocTheme {
                 WorkbenchScreen(

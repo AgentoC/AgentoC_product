@@ -16,7 +16,7 @@
     <string name="journey_link_failed">No se pudo abrir otra aplicación. Copia la dirección y ábrela en tu equipo.</string>
     <string name="journey_long_term">Conexión permanente</string>
     <string name="journey_temporary">Acceso temporal</string>
-    <string name="journey_account_instructions">Abre Vincular teléfono → Iniciar vinculación. Elige la vinculación de confianza.</string>
+    <string name="journey_account_instructions">En el ordenador, abre «Vincular teléfono».\nPulsa «Iniciar vinculación» y elige «Vinculación de confianza».</string>
     <string name="journey_temporary_instructions">En el ordenador: Phone pairing → Start phone pairing.\nSin sesión iniciada, elige Temporary. Confirma en el ordenador para acceder durante 10 minutos.</string>
     <string name="journey_have_code">Ya tengo un código</string>
     <string name="journey_home_quiet">No hay nada que requiera tu atención.</string>
@@ -49,4 +49,5 @@
     <string name="journey_desktop_start">Iniciar vinculación</string>
     <string name="journey_desktop_trusted">Vinculación de confianza</string>
     <string name="journey_scanner_hint">Coloca el código del ordenador dentro del marco</string>
+    <string name="sign_in_guide_continue_with_browser">Iniciar sesión en el navegador</string>
 </resources>

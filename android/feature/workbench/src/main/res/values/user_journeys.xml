@@ -16,7 +16,7 @@
     <string name="journey_link_failed">Could not open another app. Copy the address and open it on your computer.</string>
     <string name="journey_long_term">Long-term connection</string>
     <string name="journey_temporary">Temporary access</string>
-    <string name="journey_account_instructions">Open Phone pairing → Start phone pairing. Choose Trusted pairing.</string>
+    <string name="journey_account_instructions">On your computer, open “Phone pairing”.\nClick “Start phone pairing”, then choose “Trusted pairing”.</string>
     <string name="journey_temporary_instructions">On your computer: Phone pairing → Start phone pairing.\nIf signed out, choose Temporary. Confirm on the computer for 10 minutes of access.</string>
     <string name="journey_have_code">I already have a code</string>
     <string name="journey_home_quiet">Nothing needs your attention right now.</string>

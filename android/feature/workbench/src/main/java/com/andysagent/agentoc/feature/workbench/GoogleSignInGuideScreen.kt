@@ -31,7 +31,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import com.andysagent.agentoc.core.designsystem.AgentoTextAction
@@ -61,12 +60,8 @@ fun GoogleSignInGuideScreen(
     modifier: Modifier = Modifier,
     onContinueWithBrowser: (() -> Unit)? = null,
     onContinueWithDemo: (() -> Unit)? = null,
-    onScanSignedInComputer: (() -> Unit)? = null,
-    onTemporaryAccess: (() -> Unit)? = null,
-    showBack: Boolean = true,
 ) {
     val colors = LocalAgentocColors.current
-    var otherSignInMethods by rememberSaveable { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -87,11 +82,9 @@ fun GoogleSignInGuideScreen(
                     .fillMaxWidth()
                     .heightIn(min = maxHeight)
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                    .padding(start = 24.dp, end = 24.dp, top = 64.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.Center,
             ) {
-                if (showBack) SignInTopBar(onBack = onBack)
-
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -130,31 +123,18 @@ fun GoogleSignInGuideScreen(
                     )
 
 
-                    onScanSignedInComputer?.let { scan ->
-                        Spacer(Modifier.height(12.dp))
-                        AgentoTextAction(stringResource(R.string.journey_reverse_sign_in), scan,
-                            Modifier.testTag("sign-in-from-computer"))
+                    Spacer(Modifier.height(12.dp))
+                    onContinueWithBrowser?.let { browser ->
+                        AgentoTextAction(stringResource(R.string.sign_in_guide_continue_with_browser), browser)
                     }
-                    if (onContinueWithDemo != null || onContinueWithBrowser != null) {
-                        AgentoTextAction(stringResource(R.string.journey_other_sign_in),
-                            { otherSignInMethods = !otherSignInMethods }, Modifier.testTag("other-sign-in-methods"))
-                        if (otherSignInMethods) {
-                            onContinueWithBrowser?.let { browser ->
-                                AgentoTextAction(stringResource(R.string.sign_in_guide_continue_with_browser), browser)
-                            }
-                            onContinueWithDemo?.let { demo ->
-                                AgentoTextAction(stringResource(R.string.demo_sign_in_title), demo)
-                            }
-                        }
-                    }
-                    onTemporaryAccess?.let { temporary ->
-                        Spacer(Modifier.height(24.dp))
-                        AgentoTextAction(stringResource(R.string.journey_temporary_entry), temporary,
-                            Modifier.testTag("temporary-access-entry"))
+                    onContinueWithDemo?.let { demo ->
+                        AgentoTextAction(stringResource(R.string.demo_sign_in_title), demo)
                     }
                     Spacer(Modifier.height(24.dp))
                 }
             }
+            SignInTopBar(onBack = onBack,
+                modifier = Modifier.align(Alignment.TopStart).background(colors.canvas).padding(horizontal = 24.dp))
         }
     }
 }

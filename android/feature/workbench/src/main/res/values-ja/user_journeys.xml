@@ -16,7 +16,7 @@
     <string name="journey_link_failed">他のアプリを開けませんでした。アドレスをコピーしてコンピュータで開いてください。</string>
     <string name="journey_long_term">継続的な接続</string>
     <string name="journey_temporary">一時アクセス</string>
-    <string name="journey_account_instructions">「スマートフォンのペアリング」→「ペアリングを開始」を開き、正式なペアリングを選択します。</string>
+    <string name="journey_account_instructions">パソコンで「スマートフォンのペアリング」を開きます。\n「ペアリングを開始」をクリックし、「正式なペアリング」を選びます。</string>
     <string name="journey_temporary_instructions">パソコン：Phone pairing → Start phone pairing。\n未ログインなら Temporary を選択。パソコンで承認すると 10 分間利用できます。</string>
     <string name="journey_have_code">コードを持っています</string>
     <string name="journey_home_quiet">現在、対応が必要な項目はありません。</string>
@@ -49,4 +49,5 @@
     <string name="journey_desktop_start">ペアリングを開始</string>
     <string name="journey_desktop_trusted">正式なペアリング</string>
     <string name="journey_scanner_hint">パソコンのペアリングコードを枠内に合わせてください</string>
+    <string name="sign_in_guide_continue_with_browser">ブラウザでログイン</string>
 </resources>

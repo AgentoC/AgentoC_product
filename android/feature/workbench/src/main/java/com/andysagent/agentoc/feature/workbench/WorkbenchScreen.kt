@@ -399,13 +399,11 @@ fun WorkbenchScreen(
         when (fullScreenOnboarding?.step ?: PairingOnboardingStep.Welcome) {
             PairingOnboardingStep.Welcome -> Box(modifier = modifier.fillMaxSize()) {
                 if (!welcomeSignedIn) {
-                    GoogleSignInGuideScreen(
-                        onContinue = { onRequestGoogleSignIn(GoogleSignInRequest.PairComputerFromWelcome) },
-                        onContinueWithBrowser = { onRequestBrowserSignIn(GoogleSignInRequest.PairComputerFromWelcome) },
-                        onContinueWithDemo = onRequestDemoSignIn,
-                        onScanSignedInComputer = onScanPairingFromWelcome,
-                        onTemporaryAccess = { onPairingOnboardingEvent(PairingOnboardingEvent.LearnConnectionMethods) },
-                        onBack = {}, showBack = false, modifier = modifier,
+                    WelcomeScreen(
+                        onConnectComputer = { onPairingOnboardingEvent(PairingOnboardingEvent.ContinueFromWelcome) },
+                        onScanPairing = onScanPairingFromWelcome,
+                        onLearnConnectionMethods = { onPairingOnboardingEvent(PairingOnboardingEvent.LearnConnectionMethods) },
+                        modifier = modifier,
                     )
                 } else if (welcomeComputerLookup != null && welcomeComputerLookup != AccountComputerLookup.Empty) {
                     AccountComputerLookupScreen(welcomeComputerLookup, onRequestComputerDiscovery, modifier)
@@ -431,8 +429,6 @@ fun WorkbenchScreen(
                 modifier = modifier,
             )
             PairingOnboardingStep.GoogleRequired -> GoogleSignInGuideScreen(
-                onScanSignedInComputer = onScanPairingFromWelcome,
-                onTemporaryAccess = { onPairingOnboardingEvent(PairingOnboardingEvent.LearnConnectionMethods) },
                 onContinueWithDemo = onRequestDemoSignIn,
                 onContinue = {
                     val request = when (fullScreenOnboarding!!.mode) {

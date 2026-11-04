@@ -16,7 +16,7 @@
     <string name="journey_link_failed">無法開啟其他應用程式。請複製網址，在電腦上開啟。</string>
     <string name="journey_long_term">長期連線</string>
     <string name="journey_temporary">暫時存取</string>
-    <string name="journey_account_instructions">開啟「手機配對」→「開始手機配對」，選擇「正式配對」。</string>
+    <string name="journey_account_instructions">在電腦上開啟「手機配對」。\n再點「開始手機配對」「正式配對」。</string>
     <string name="journey_temporary_instructions">電腦端：手机配对 → 开始手机配对。\n未登入的電腦選「临时配对」，確認後可存取 10 分鐘。</string>
     <string name="journey_have_code">已有配對碼，直接掃描</string>
     <string name="journey_home_quiet">目前沒有需要你處理的事項。</string>
@@ -49,4 +49,5 @@
     <string name="journey_desktop_start">開始手機配對</string>
     <string name="journey_desktop_trusted">正式配對</string>
     <string name="journey_scanner_hint">將電腦上的配對碼放入取景框</string>
+    <string name="sign_in_guide_continue_with_browser">使用瀏覽器登入</string>
 </resources>

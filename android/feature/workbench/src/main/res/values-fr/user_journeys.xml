@@ -16,7 +16,7 @@
     <string name="journey_link_failed">Impossible d’ouvrir une autre application. Copiez l’adresse et ouvrez-la sur votre ordinateur.</string>
     <string name="journey_long_term">Connexion durable</string>
     <string name="journey_temporary">Accès temporaire</string>
-    <string name="journey_account_instructions">Ouvrez Association du téléphone → Démarrer. Choisissez une association de confiance.</string>
+    <string name="journey_account_instructions">Sur l’ordinateur, ouvrez « Association du téléphone ».\nCliquez sur « Démarrer l’association », puis « Association de confiance ».</string>
     <string name="journey_temporary_instructions">Sur l’ordinateur : Phone pairing → Start phone pairing.\nSans compte connecté, choisissez Temporary. Confirmez sur l’ordinateur pour un accès de 10 minutes.</string>
     <string name="journey_have_code">J’ai déjà un code</string>
     <string name="journey_home_quiet">Rien ne nécessite votre attention pour le moment.</string>
@@ -49,4 +49,5 @@
     <string name="journey_desktop_start">Démarrer l’association</string>
     <string name="journey_desktop_trusted">Association de confiance</string>
     <string name="journey_scanner_hint">Placez le code de l’ordinateur dans le cadre</string>
+    <string name="sign_in_guide_continue_with_browser">Connexion dans le navigateur</string>
 </resources>

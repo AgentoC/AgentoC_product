@@ -49,6 +49,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -101,7 +102,7 @@ fun WelcomeScreen(
     }
 }
 
-/** Connection is a distinct signed-in page; authentication is rendered by its own screen. */
+/** The welcome entry opens account sign-in; signed-in setup remains a separate destination. */
 @Composable
 private fun WelcomeConnectionContent(
     signedIn: Boolean,
@@ -115,24 +116,35 @@ private fun WelcomeConnectionContent(
     val colors = LocalAgentocColors.current
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 48.dp).testTag("connect-computer-page"),
+            .padding(horizontal = 24.dp, vertical = 48.dp)
+            .testTag(if (signedIn) "connect-computer-page" else "welcome-entry-page"),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         DeviceRelationship()
         Spacer(Modifier.height(32.dp))
-        Text(stringResource(R.string.journey_connect_title),
-            style = MaterialTheme.typography.headlineMedium, color = colors.primaryContent,
+        Text(stringResource(if (signedIn) R.string.journey_connect_title else R.string.welcome_connect_title),
+            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold), color = colors.primaryContent,
             textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.height(12.dp))
-        Text(stringResource(R.string.journey_connect_summary),
-            style = MaterialTheme.typography.bodyMedium, color = colors.secondaryContent,
+        Text(stringResource(if (signedIn) R.string.journey_connect_summary else R.string.welcome_value_summary),
+            style = MaterialTheme.typography.bodyMedium.copy(lineBreak = LineBreak.Heading), color = colors.secondaryContent,
             textAlign = TextAlign.Center)
         Spacer(Modifier.height(32.dp))
-        AgentoButton(stringResource(R.string.journey_setup_computer), onClick = onSetUpComputer,
-            modifier = Modifier.widthIn(min = 180.dp, max = 280.dp).testTag("connect-my-computer"),
+        AgentoButton(stringResource(if (signedIn) R.string.journey_setup_computer else R.string.settings_sign_in),
+            onClick = if (signedIn) onSetUpComputer else onConnectComputer,
+            modifier = Modifier.widthIn(min = 180.dp, max = 280.dp)
+                .testTag(if (signedIn) "connect-my-computer" else "welcome-sign-in"),
             decision = true, labelMaxLines = 2,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp, vertical = 12.dp))
+        if (!signedIn) {
+            Spacer(Modifier.height(12.dp))
+            AgentoTextAction(stringResource(R.string.journey_reverse_sign_in), onScanPairing,
+                Modifier.testTag("sign-in-from-computer"))
+            Spacer(Modifier.height(24.dp))
+            AgentoTextAction(stringResource(R.string.journey_temporary_entry), onLearnConnectionMethods,
+                Modifier.testTag("temporary-access-entry"))
+        }
     }
 }
 

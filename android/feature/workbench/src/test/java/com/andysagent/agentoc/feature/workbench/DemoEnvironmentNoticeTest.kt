@@ -47,11 +47,9 @@ class DemoEnvironmentNoticeTest {
         rule.onNodeWithText("Workbench content").assertIsDisplayed()
     }
 
-    @Test fun loginKeepsSpecialAccountEntryUnderOtherSignInMethods() {
+    @Test fun accountLoginOffersSpecialAccountEntry() {
         var starts = 0
         rule.setContent { AgentocTheme { GoogleSignInGuideScreen({}, {}, onContinueWithDemo = { starts++ }) } }
-        rule.onNodeWithText("Demo account sign-in").assertDoesNotExist()
-        rule.onNodeWithTag("other-sign-in-methods").performScrollTo().performClick()
         rule.onNodeWithText("Demo account sign-in").performScrollTo().assertIsDisplayed().performClick()
         assertEquals(1, starts)
     }
