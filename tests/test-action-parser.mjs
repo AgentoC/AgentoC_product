@@ -4,14 +4,14 @@ import { inferShellKind, parseCmdCommand, parsePowerShellCommand } from '../chat
 import { classifyProviderOperation } from '../chat/provider-operation-classifier.mjs';
 import { buildOperationProjection } from '../chat/operation-projection.mjs';
 
-assert.equal(parseShellCommand('cat src/package.json').semanticKind, 'read');
-assert.equal(parseShellCommand('cat src/package.json').subject, 'package.json');
-assert.equal(parseShellCommand('ls src').semanticKind, 'list');
-assert.deepEqual(parseShellCommand('rg "timeout" src').subject, 'timeout in src');
-assert.equal(parseShellCommand('git status --short').semanticKind, 'inspect');
-assert.equal(parseShellCommand('bash -lc "rg foo src"').semanticKind, 'search');
-assert.equal(parseShellCommand('npm test').semanticKind, 'execute');
-assert.equal(parseShellCommand('cat package.json && ls src').composite, true);
+assert.equal(parseShellCommand('cat src/package.json', { executionPlatform: 'linux' }).semanticKind, 'read');
+assert.equal(parseShellCommand('cat src/package.json', { executionPlatform: 'linux' }).subject, 'package.json');
+assert.equal(parseShellCommand('ls src', { executionPlatform: 'linux' }).semanticKind, 'list');
+assert.deepEqual(parseShellCommand('rg "timeout" src', { executionPlatform: 'linux' }).subject, 'timeout in src');
+assert.equal(parseShellCommand('git status --short', { executionPlatform: 'linux' }).semanticKind, 'inspect');
+assert.equal(parseShellCommand('bash -lc "rg foo src"', { executionPlatform: 'linux' }).semanticKind, 'search');
+assert.equal(parseShellCommand('npm test', { executionPlatform: 'linux' }).semanticKind, 'execute');
+assert.equal(parseShellCommand('cat package.json && ls src', { executionPlatform: 'linux' }).composite, true);
 
 assert.equal(inferShellKind({ executionPlatform: 'win32' }), 'powershell');
 assert.equal(inferShellKind({ executionPlatform: 'win32', command: 'dir src' }), 'cmd');
@@ -39,6 +39,7 @@ assert.equal(structured.subject, 'timeout in src');
 const classified = classifyProviderOperation({
   operationKind: 'command',
   toolName: 'bash',
+  executionPlatform: 'linux',
   toolInput: JSON.stringify({ command: 'git status --short', cwd: '/tmp/project' }),
 });
 assert.equal(classified.action.semanticKind, 'inspect');
@@ -55,9 +56,9 @@ assert.equal(windowsClassified.action.semanticKind, 'list');
 assert.equal(windowsClassified.shellKind, 'powershell-5.1');
 
 const projection = buildOperationProjection([
-  { type: 'tool_use', seq: 1, runId: 'run-1', providerToolUseId: 'a', toolName: 'bash', toolInput: 'cat a.txt', operationKind: 'command', operationLifecycle: 'started' },
-  { type: 'tool_result', seq: 2, runId: 'run-1', providerToolUseId: 'a', toolName: 'bash', toolInput: 'cat a.txt', operationKind: 'command', operationLifecycle: 'completed', exitCode: 0 },
-  { type: 'tool_use', seq: 3, runId: 'run-1', providerToolUseId: 'b', toolName: 'bash', toolInput: 'rg foo src', operationKind: 'command', operationLifecycle: 'started' },
+  { type: 'tool_use', seq: 1, runId: 'run-1', providerToolUseId: 'a', toolName: 'bash', executionPlatform: 'linux', toolInput: 'cat a.txt', operationKind: 'command', operationLifecycle: 'started' },
+  { type: 'tool_result', seq: 2, runId: 'run-1', providerToolUseId: 'a', toolName: 'bash', executionPlatform: 'linux', toolInput: 'cat a.txt', operationKind: 'command', operationLifecycle: 'completed', exitCode: 0 },
+  { type: 'tool_use', seq: 3, runId: 'run-1', providerToolUseId: 'b', toolName: 'bash', executionPlatform: 'linux', toolInput: 'rg foo src', operationKind: 'command', operationLifecycle: 'started' },
 ]);
 assert.equal(projection.operations[0].presentation.labelKind, 'read');
 assert.equal(projection.operations[0].presentation.subject, 'a.txt');
