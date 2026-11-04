@@ -58,7 +58,7 @@ export function readClaudeBidiApprovalRequest(message) {
   const request = message.request;
   const toolName = typeof request.tool_name === 'string' ? request.tool_name : '';
   let kind = 'permissions';
-  if (toolName === 'Bash') {
+  if (toolName === 'Bash' || toolName === 'PowerShell') {
     kind = 'command';
   } else if (toolName === 'AskUserQuestion') {
     kind = 'question';
@@ -138,7 +138,7 @@ export function buildClaudeBidiApprovalResponseMessage(approval, decision, choic
             ? request.permission_suggestions
             : [],
         }
-    : { behavior: 'deny', message: 'User denied this tool request.', interrupt: normalized === 'cancel' };
+    : { behavior: 'deny', message: typeof options?.message === 'string' && options.message ? options.message : 'User denied this tool request.', interrupt: normalized === 'cancel' };
   return {
     type: 'control_response',
     response: { subtype: 'success', request_id: String(requestId), response },

@@ -53,14 +53,16 @@ export function buildCodexAppServerThreadOptions({
   developerInstructions,
   interactionMode,
   permissionMode,
+  agentocApprovalGate,
 } = {}) {
   const permissionPolicy = resolveCodexAppServerPermissionPolicy({ interactionMode, permissionMode });
   return {
     ...(typeof model === 'string' && model.trim() ? { model: model.trim() } : {}),
     ...(typeof cwd === 'string' && cwd.trim() ? { cwd: cwd.trim() } : {}),
     approvalPolicy: permissionPolicy.approvalPolicy || 'never',
+    ...(agentocApprovalGate === true ? { approvalsReviewer: 'user' } : {}),
     sandbox: permissionPolicy.sandbox || 'danger-full-access',
-    config: buildCodexAppServerConfig(interactionMode),
+    config: { ...buildCodexAppServerConfig(interactionMode), ...(agentocApprovalGate === true ? { allow_login_shell: false } : {}) },
     ...(typeof developerInstructions === 'string' && developerInstructions.trim()
       ? { developerInstructions: developerInstructions.trim() }
       : {}),
@@ -190,6 +192,7 @@ export function buildCodexAppServerTurnStartMessage({
   reasoningEffort,
   interactionMode,
   permissionMode,
+  agentocApprovalGate,
 } = {}) {
   const permissionPolicy = resolveCodexAppServerPermissionPolicy({ interactionMode, permissionMode });
   return {
@@ -203,6 +206,7 @@ export function buildCodexAppServerTurnStartMessage({
       input: buildCodexAppServerInput(text),
       ...(typeof cwd === 'string' && cwd.trim() ? { cwd: cwd.trim() } : {}),
       approvalPolicy: permissionPolicy.approvalPolicy || 'never',
+      ...(agentocApprovalGate === true ? { approvalsReviewer: 'user' } : {}),
       sandboxPolicy: permissionPolicy.sandboxPolicy?.type === 'workspaceWrite'
         ? {
           ...permissionPolicy.sandboxPolicy,
@@ -502,7 +506,13 @@ export function readCodexAppServerManagedMcpRequest(message) {
   if (!approval || approval.providerMethod !== 'mcpServer/elicitation/request') return null;
   const params = approval.params || {};
   const serverName = trimString(params.serverName || params.server_name);
-  if (!serverName) return null;
+  // Only Codex's own empty tool-call confirmation may be auto-accepted.
+  // An MCP server's ordinary elicitation may ask for credentials or a real
+  // user decision, even when it comes from an otherwise managed server.
+  const schema = params.requestedSchema;
+  if (!serverName || params.mode !== 'form' || params._meta?.codex_approval_kind !== 'mcp_tool_call' ||
+      !schema || schema.type !== 'object' || !schema.properties || typeof schema.properties !== 'object' || Array.isArray(schema.properties) ||
+      Object.keys(schema.properties).length !== 0 || (schema.required !== undefined && (!Array.isArray(schema.required) || schema.required.length !== 0))) return null;
   return {
     ...approval,
     mcpServerName: serverName,

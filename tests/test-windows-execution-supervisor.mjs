@@ -24,7 +24,7 @@ Object.assign(process.env, childEnvironment);
 const { assertOrdinaryWindowsExecutionIdentity, readWindowsExecutionIdentity } = await import('../lib/windows-execution-identity.mjs');
 const { createRunnerSupervisorServer, spawnSupervisedRunner } = await import('../chat/runner-supervisor-daemon.mjs');
 const { launchDetachedRunnerViaSupervisor } = await import('../chat/run-launcher.mjs');
-const { createRun } = await import('../chat/runs.mjs');
+const { createRun, getRun } = await import('../chat/runs.mjs');
 const pipe = '\\\\.\\pipe\\agentoc-identity-test-' + randomBytes(12).toString('hex');
 const prepareProviderImpl = async () => ({});
 let server, child, childExit, childOutput = '';
@@ -38,7 +38,7 @@ try {
   server = await createRunnerSupervisorServer({ socketPath: pipe,
     spawnRunner: runId => spawnSupervisedRunner(runId, {
       assertExecutionIdentityImpl: () => assertOrdinaryWindowsExecutionIdentity({
-        readIdentityImpl: async () => ({ version: 1, sid: 'S-1-5-18', isSystem: true,
+        readIdentityImpl: async () => ({ version: 1, sid: 'S-1-5-18', isSystem: true, isService: true,
           isAdministrator: true, integrityRid: 16384 }),
       }),
       spawnImpl() { attemptedSpawn = true; throw new Error('forbidden spawn'); },
@@ -61,7 +61,7 @@ import {assertOrdinaryWindowsExecutionIdentity,readWindowsExecutionIdentity} fro
 const identity=await assertOrdinaryWindowsExecutionIdentity({readIdentityImpl:()=>readWindowsExecutionIdentity({execFileImpl:async(...args)=>{
 try{return await promisify(execFile)(...args)}catch(error){console.error(JSON.stringify({probeError:error.code,stderr:String(error.stderr||'').slice(0,2000)}));throw error}
 }})});
-await writeFile(${JSON.stringify(receipt)},JSON.stringify({identity,runId:process.argv[2]}));\n`);
+await writeFile(${JSON.stringify(receipt)},JSON.stringify({identity,runId:process.argv[2],env:{SystemRoot:process.env.SystemRoot,WINDIR:process.env.WINDIR,USERPROFILE:process.env.USERPROFILE,LOCALAPPDATA:process.env.LOCALAPPDATA,TEMP:process.env.TEMP,TMP:process.env.TMP}}));\n`);
   server = await createRunnerSupervisorServer({ socketPath: pipe,
     spawnRunner: runId => spawnSupervisedRunner(runId, { runnerScriptPath: workerPath,
       spawnImpl(...args) {
@@ -78,6 +78,7 @@ await writeFile(${JSON.stringify(receipt)},JSON.stringify({identity,runId:proces
   });
   const launched = await launchDetachedRunnerViaSupervisor('run_ordinary_live_123', { socketPath: pipe, prepareProviderImpl });
   assert.equal(launched.pid, child.pid);
+  assert.equal((await getRun('run_ordinary_live_123')).windowsExecutionSid, parentIdentity.sid);
   let timer;
   const code = await Promise.race([childExit, new Promise((_, reject) => {
     timer = setTimeout(() => reject(new Error('Ordinary child exceeded 15s deadline')), 15000);
@@ -87,6 +88,11 @@ await writeFile(${JSON.stringify(receipt)},JSON.stringify({identity,runId:proces
   const result = JSON.parse(await readFile(receipt, 'utf8'));
   assert.equal(result.runId, 'run_ordinary_live_123');
   assert.deepEqual(result.identity, parentIdentity);
+  assert.equal(result.env.SystemRoot, process.env.SystemRoot);
+  assert.equal(result.env.USERPROFILE, process.env.USERPROFILE);
+  assert.equal(result.env.LOCALAPPDATA, process.env.LOCALAPPDATA);
+  assert.equal(result.env.TEMP, process.env.TEMP);
+  assert.equal(result.env.TMP, process.env.TMP);
   assert.equal((await readWindowsExecutionIdentity()).sid, parentIdentity.sid);
   console.log('PASS: real ordinary Windows supervisor child, matching SID/token label, workspace receipt, exit 0');
 } finally {

@@ -20,7 +20,7 @@ function check(label, condition) {
   passed += 1;
 }
 
-const callSites = [...source.matchAll(/(?:const gateDecision = decideRunGate\(approval, state\);|:\s*decideRunGate\(approval, state\);)/g)];
+const callSites = [...source.matchAll(/(?:const gateDecision = await decideRunGate\(approval, state\);|:\s*await decideRunGate\(approval, state\);)/g)];
 check('both gate call sites route via decideRunGate', callSites.length === 2);
 check('decideRiskGate is imported', /decideRiskGate/.test(source));
 check('state carries riskMode (Codex + Claude state creators)',

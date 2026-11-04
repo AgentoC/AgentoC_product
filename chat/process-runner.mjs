@@ -224,7 +224,7 @@ export function buildRuntimeInvocation(runtimeFamily, prompt, options = {}, tool
     throw error;
   }
   if ((riskMode === 'conservative-auto'
-      || (riskMode === 'full-auto' && requiresExplicitAcpAutoMode(normalizedRuntimeFamily)))
+      || (riskMode === 'full-auto' && (process.platform === 'win32' || requiresExplicitAcpAutoMode(normalizedRuntimeFamily))))
       && !permissionPolicy) {
     const error = new Error(`The ${normalizedRuntimeFamily} Harness cannot enforce ${riskMode} permissions`);
     error.code = 'PERMISSION_PROFILE_UNSUPPORTED_RUNTIME';

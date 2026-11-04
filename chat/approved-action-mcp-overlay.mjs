@@ -6,6 +6,7 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  realpath,
   rename,
   rm,
   stat,
@@ -15,8 +16,9 @@ import {
 } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, win32 } from 'node:path';
 import { createHash } from 'node:crypto';
+import { resolveWindowsSystemPaths } from './windows-system-paths.mjs';
 
 const CODEX_RUNTIME = 'codex-app-server-json';
 const CLAUDE_RUNTIME = 'claude-stream-json-bidi';
@@ -299,6 +301,57 @@ async function copyTreeWithoutModes(source, target) {
   }
 }
 
+// Codex loads command policy files from CODEX_HOME/rules. An overlay which
+// drops those files could silently remove an owner's existing restrictions.
+// Snapshot regular rule files into the private run home; never modify or
+// symlink the original rules directory.
+async function copyCodexRules(sourceHome, targetHome) {
+  const source = join(sourceHome, 'rules');
+  let entries;
+  try { entries = await readdir(source, { withFileTypes: true }); }
+  catch (error) { if (error?.code === 'ENOENT') return; throw error; }
+  const rules = entries.filter((entry) => entry.name.endsWith('.rules'));
+  if (!rules.length) return;
+  const target = join(targetHome, 'rules');
+  await mkdir(target, { recursive: true });
+  for (const entry of rules) {
+    const from = join(source, entry.name);
+    const info = await stat(from);
+    if (!info.isFile() || !await copyIfPresent(from, join(target, entry.name))) throw new Error('Codex rule file is unavailable');
+  }
+}
+
+async function addWindowsCodexShellRules(root, runId, env) {
+  const paths = new Set(['powershell', 'powershell.exe', 'PowerShell', 'PowerShell.exe', 'pwsh', 'pwsh.exe']);
+  const addPathSpellings = (value) => {
+    for (const spelling of [value, value.toLowerCase()]) {
+      paths.add(spelling);
+      paths.add(spelling.replace(/\\/g, '/'));
+      // Drive-letter casing often differs even when the rest was canonical.
+      const driveUpper = spelling[0].toUpperCase() + spelling.slice(1);
+      paths.add(driveUpper);
+      paths.add(driveUpper.replace(/\\/g, '/'));
+    }
+  };
+  const legacy = resolveWindowsSystemPaths(env)?.powershell;
+  const nativeProgramFiles = typeof env?.ProgramW6432 === 'string' && env.ProgramW6432.trim() ? env.ProgramW6432 : env?.ProgramFiles;
+  const modern = typeof nativeProgramFiles === 'string' && /^[A-Za-z]:[\\/]/.test(nativeProgramFiles)
+    ? win32.join(nativeProgramFiles, 'PowerShell', '7', 'pwsh.exe') : '';
+  for (const candidate of [legacy, modern]) {
+    if (!candidate) continue;
+    addPathSpellings(candidate);
+    // Windows paths are case-insensitive; the policy matcher is not. Include
+    // the actual filesystem spelling as well as the configured spelling.
+    const canonical = await realpath(candidate).catch(() => '');
+    if (canonical && win32.isAbsolute(canonical)) addPathSpellings(canonical);
+  }
+  const dir = join(root, 'rules');
+  await mkdir(dir, { recursive: true });
+  const name = `agentoc-shell-gate-${createHash('sha256').update(String(runId)).digest('hex').slice(0, 16)}.rules`;
+  const content = [...paths].map((candidate) => `prefix_rule(pattern=[${JSON.stringify(candidate)}], decision="prompt")`).join('\n') + '\n';
+  await writeFile(join(dir, name), content, { flag: 'wx', mode: 0o600 });
+}
+
 function withCleanup(root, extra = {}) {
   let cleaned = false;
   return {
@@ -336,7 +389,7 @@ function envPairsFor(server, spawnEnv) {
     .map((key) => `${key} = ${tomlString(spawnEnv[key])}`);
 }
 
-async function prepareCodexOverlay({ root, sourceHome, servers, runId, spawnEnv = {} }) {
+async function prepareCodexOverlay({ root, sourceHome, servers, runId, spawnEnv = {}, codexWindowsApprovalGate = false, codexWindowsInstallHook = '' }) {
   const config = await readFile(join(sourceHome, 'config.toml'), 'utf8').catch((error) => {
     if (error?.code === 'ENOENT') return '';
     throw error;
@@ -353,6 +406,8 @@ async function prepareCodexOverlay({ root, sourceHome, servers, runId, spawnEnv 
   await copyIfPresent(join(sourceHome, 'models_cache.json'), join(root, 'models_cache.json'));
   await copyIfPresent(join(sourceHome, 'AGENTS.md'), join(root, 'AGENTS.md'));
   await copyIfPresent(join(sourceHome, '.agentoc-provider-id'), join(root, '.agentoc-provider-id'));
+  await copyCodexRules(sourceHome, root);
+  if (codexWindowsApprovalGate) await addWindowsCodexShellRules(root, runId, spawnEnv);
   const sourceSessions = join(sourceHome, 'sessions');
   const targetSessions = join(root, 'sessions');
   try {
@@ -383,12 +438,35 @@ async function prepareCodexOverlay({ root, sourceHome, servers, runId, spawnEnv 
     return section;
   });
   const sectionText = sections.join('\n');
+  let hook = null;
+  const sourceHooks = join(sourceHome, 'hooks.json');
+  const overlayHooks = join(root, 'hooks.json');
+  const existingHooks = await readFile(sourceHooks, 'utf8').catch(error => { if (error?.code === 'ENOENT') return null; throw error; });
+  if (existingHooks !== null) await writeOverlayFileAtomically(overlayHooks, existingHooks);
+  if (codexWindowsInstallHook && win32.isAbsolute(codexWindowsInstallHook) && win32.isAbsolute(process.execPath)) {
+    const info = await stat(codexWindowsInstallHook).catch(() => null);
+    if (info?.isFile()) {
+      const quote = value => `'${value.replace(/'/g, "''")}'`;
+      const command = `& ${quote(process.execPath)} ${quote(codexWindowsInstallHook)}`;
+      let document;
+      try { document = existingHooks === null ? { hooks: {} } : JSON.parse(existingHooks); } catch { document = null; }
+      if (document && typeof document === 'object' && !Array.isArray(document) && document.hooks &&
+          typeof document.hooks === 'object' && !Array.isArray(document.hooks) &&
+          (document.hooks.PreToolUse === undefined || Array.isArray(document.hooks.PreToolUse))) {
+        document.hooks.PreToolUse ||= [];
+        document.hooks.PreToolUse.push({ matcher: '^Bash$', hooks: [{ type: 'command', command }] });
+        await writeOverlayFileAtomically(overlayHooks, JSON.stringify(document, null, 2));
+        hook = { command, configPath: join(root, 'config.toml'), sourcePath: overlayHooks };
+      }
+    }
+  }
   await writeOverlayFileAtomically(root + '/config.toml', `${config.replace(/\s*$/, '')}${sectionText}`);
   return withCleanup(root, {
     runtimeFamily: CODEX_RUNTIME,
     serverNames: servers.map((server) => safeServerName(runId, server.kind)),
     env: { CODEX_HOME: root },
     configPath: join(root, 'config.toml'),
+    codexWindowsInstallHook: hook,
   });
 }
 
@@ -467,10 +545,13 @@ export async function prepareManagedMcpOverlay({
   runId = '',
   spawnEnv = {},
   servers = [],
+  codexWindowsApprovalGate = false,
+  codexWindowsInstallHook = '',
 } = {}) {
   const family = trimString(runtimeFamily);
   const normalizedServers = normalizeServers(servers);
-  if (normalizedServers.length === 0 || ![CODEX_RUNTIME, CLAUDE_RUNTIME].includes(family)) return null;
+  if (![CODEX_RUNTIME, CLAUDE_RUNTIME].includes(family) ||
+      (normalizedServers.length === 0 && !(family === CODEX_RUNTIME && codexWindowsInstallHook))) return null;
   const sourceHome = trimString(spawnEnv.CODEX_HOME);
   const maxAttempts = configuredMaxAttempts();
 
@@ -500,6 +581,8 @@ export async function prepareManagedMcpOverlay({
           servers: normalizedServers,
           runId,
           spawnEnv,
+          codexWindowsApprovalGate,
+          codexWindowsInstallHook,
         })
         : await prepareClaudeOverlay({ root, servers: normalizedServers, runId });
       await verifyManagedMcpOverlay({ ...result, runId }, normalizedServers);

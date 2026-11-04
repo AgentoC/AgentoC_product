@@ -87,7 +87,7 @@ export function createClaudeBidiAdapter() {
           reason: isPlan
             ? (planText || params.description || '')
             : (params.description || ''),
-          command: params.tool_name === 'Bash' ? params.input?.command : '',
+          command: ['Bash', 'PowerShell'].includes(params.tool_name) ? params.input?.command : '',
           grantRoot: params.blocked_path || '',
           permissions: { suggestions: params.permission_suggestions || [] },
           status: 'pending',

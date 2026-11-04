@@ -557,6 +557,14 @@ export function getGatedPermissionModeId(runtimeFamily) {
   return PRIVILEGED_GATED_MODES[trimString(runtimeFamily)] || '';
 }
 
+function getProfileGatedPermissionModeId(runtimeFamily, platform) {
+  // Codex on-request delegates the decision to ask to the model, so it is
+  // not an interception gate in danger-full-access. On Windows, request
+  // approval for the harness's untrusted commands before our policy runs.
+  if (runtimeFamily === 'codex-app-server-json' && platform === 'win32') return 'untrusted-danger-full-access';
+  return getGatedPermissionModeId(runtimeFamily);
+}
+
 // These ACP adapters currently start in the Harness's own default mode and
 // cannot prove an unattended mode switch before sending the first prompt.
 export function requiresExplicitAcpAutoMode(runtimeFamily) {
@@ -606,6 +614,13 @@ export function resolveProviderPermissionPolicy(input, options = {}) {
     return mode ? cloneJson(mode) : null;
   }
   if (riskMode === 'full-auto' && trimString(options.interactionMode) !== 'plan') {
+    // Windows autonomous runs must reach the same AgentoC decision gate as
+    // approval runs; only the treatment of an ASK differs. Keep unsupported
+    // harnesses explicit instead of silently claiming that bypass is gated.
+    if ((options.platform || process.platform) === 'win32') {
+      const gatedId = getProfileGatedPermissionModeId(capabilities.runtimeFamily, options.platform || process.platform);
+      return gatedId ? cloneJson(findPermissionMode(capabilities, gatedId)) : null;
+    }
     const mode = findPermissionMode(capabilities, capabilities.defaultPermissionMode);
     return mode ? cloneJson(mode) : null;
   }
@@ -617,7 +632,7 @@ export function resolveProviderPermissionPolicy(input, options = {}) {
   // a session's risk policy cannot be silently disabled by the provider mode.
   const gatedByRiskMode = riskMode === 'safe' || riskMode === 'recommended';
   if ((options.privilegedMode === true && riskMode !== 'full-auto' && riskMode !== 'conservative-auto') || gatedByRiskMode) {
-    const gatedId = getGatedPermissionModeId(capabilities.runtimeFamily);
+    const gatedId = getProfileGatedPermissionModeId(capabilities.runtimeFamily, options.platform || process.platform);
     if (gatedId) {
       const gatedMode = findPermissionMode(capabilities, gatedId);
       if (gatedMode) return cloneJson(gatedMode);

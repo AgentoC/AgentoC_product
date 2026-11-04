@@ -27,6 +27,7 @@ import { resolveRunnerProxyEnvironment } from '../lib/network-proxy.mjs';
 import { watchWindowsServiceStop } from '../lib/windows-service-stop.mjs';
 import { assertOrdinaryWindowsExecutionIdentity } from '../lib/windows-execution-identity.mjs';
 import { assertRunLaunchBoundary } from './run-execution-boundary.mjs';
+import { bindWindowsRunExecutionIdentity } from './windows-run-identity.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const runnerEntry = join(__dirname, 'runner-sidecar.mjs');
@@ -105,10 +106,17 @@ export async function spawnSupervisedRunner(runId, {
   platform = process.platform,
   assertExecutionIdentityImpl = assertOrdinaryWindowsExecutionIdentity,
   assertExecutionBoundaryImpl = assertRunLaunchBoundary,
+  bindWindowsExecutionIdentityImpl = bindWindowsRunExecutionIdentity,
   resolveRunnerProxyEnvironmentImpl = resolveRunnerProxyEnvironment,
 } = {}) {
-  await assertExecutionIdentityImpl({ platform });
+  const identity = await assertExecutionIdentityImpl({ platform });
   await assertExecutionBoundaryImpl(runId);
+  if (platform === 'win32' && identity?.sid) {
+    // Missing identity binding disables user-scoped managed execution. Do not
+    // break an otherwise valid chat run when this optional feature is absent.
+    try { await bindWindowsExecutionIdentityImpl(runId, identity); }
+    catch (error) { console.error(`[runner-supervisor] Windows Run identity binding unavailable: ${error?.message || 'unknown error'}`); }
+  }
   const proxyEnv = await resolveRunnerProxyEnvironmentImpl();
   const env = buildDetachedRunnerEnvironment({
     launchMode: DETACHED_RUNNER_SUPERVISOR_LAUNCH_MODE,

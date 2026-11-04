@@ -35,8 +35,9 @@ async function resolveAgentTool(agentId) {
   };
 }
 
-function shouldUseRiskGatedRuntime({ riskMode = '', privilegedMode = false } = {}) {
-  return RISK_GATED_MODES.has(trimString(riskMode)) || privilegedMode === true;
+function shouldUseRiskGatedRuntime({ riskMode = '', privilegedMode = false, platform = process.platform } = {}) {
+  return RISK_GATED_MODES.has(trimString(riskMode)) || privilegedMode === true
+    || (platform === 'win32' && trimString(riskMode) === 'full-auto');
 }
 
 function isClaudeCompatibilityFallback(definition) {
@@ -72,8 +73,9 @@ export async function resolveSessionRuntimeTool(session, {
   fallbackToTemplate = true,
   riskMode = '',
   privilegedMode = false,
+  platform = process.platform,
 } = {}) {
-  const resolutionOptions = { riskMode, privilegedMode };
+  const resolutionOptions = { riskMode, privilegedMode, platform };
   const explicitTool = trimString(requestedTool);
   const storedTool = trimString(session?.tool);
   const candidate = explicitTool || storedTool;

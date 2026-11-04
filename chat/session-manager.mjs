@@ -199,7 +199,10 @@ import {
   isApprovedActionExpired,
 } from './approved-actions.mjs';
 import { createApprovedActionStore } from './approved-action-store.mjs';
-import { resolvePrivilegedBatchPolicy } from './privileged-permission-profile.mjs';
+import { getWindowsManagedAutoInstallStatus, loadWindowsAutoInstallPublicIdentity, prepareWindowsManagedUserInstall, tryWindowsManagedAutoInstall, verifyWindowsManagedUserInstallAuthorization } from './windows-managed-auto-install.mjs';
+import { createWindowsUserInstallStore } from './windows-user-install-store.mjs';
+import { windowsUserInstallOperationFingerprint } from './windows-user-install-executor.mjs';
+import { resolvePrivilegedBatchPolicy, deferWindowsLegacyInstallBatch } from './privileged-permission-profile.mjs';
 import { buildHostPermissionFacts, executeApprovedAction } from './approved-action-executor.mjs';
 import {
   isApprovedActionSemanticProjectionIntact,
@@ -3924,6 +3927,14 @@ async function proposeApprovedActionsUnlocked({
   turnId = '',
   cwd = '',
   projectRoot = '',
+  autoInstallPreflight = false,
+  autoInstallStatusOnly = false,
+  autoInstallUserAuthorization = false,
+  autoInstallUserClaim = false,
+  autoInstallUserFinish = false,
+  autoInstallUserCheck = false,
+  userInstallCapability = null,
+  userInstallResult = null,
 } = {}) {
   const normalizedRunId = trimString(runId);
   if (!normalizedRunId) {
@@ -3999,6 +4010,77 @@ async function proposeApprovedActionsUnlocked({
     const { cwd: _callerCwd, projectRoot: _callerProjectRoot, semanticProjection: _callerSemantic, ...rest } = input || {};
     return rest;
   });
+  const riskMode = resolveSessionRiskMode(session);
+  const userModes = [autoInstallUserAuthorization, autoInstallUserClaim, autoInstallUserFinish, autoInstallUserCheck].filter((value) => value === true).length;
+  if (userModes > 1 || (userModes && (autoInstallPreflight === true || autoInstallStatusOnly === true))) {
+    throw Object.assign(new Error('Conflicting installation request modes'), { code: 'AUTO_INSTALL_REQUEST_INVALID' });
+  }
+  if (autoInstallStatusOnly === true) {
+    const status = await getWindowsManagedAutoInstallStatus({ binding: { sessionId: run.sessionId, runId: normalizedRunId,
+      turnId: trustedTurnId, requestKey: trimString(requestKey), authenticatedPrincipalKind: binding.authenticatedPrincipalKind } });
+    return { ...status, kind: 'automatic_install' };
+  }
+  const assertInstallActive = async () => {
+    const latestRun = await getRun(normalizedRunId);
+    const latestSession = await getSession(run.sessionId);
+    if (!latestRun || isTerminalRunState(latestRun.state) || !latestSession || resolveSessionRiskMode(latestSession) !== riskMode
+        || (run.windowsExecutionSid && latestRun.windowsExecutionSid !== run.windowsExecutionSid)
+        || (typeof run.windowsExecutionIsService === 'boolean' && latestRun.windowsExecutionIsService !== run.windowsExecutionIsService)) {
+      const error = new Error('Run or permission policy changed before installation');
+      error.code = 'AUTO_INSTALL_RUN_CHANGED';
+      throw error;
+    }
+  };
+  const userInstallBinding = { sessionId: run.sessionId, runId: normalizedRunId, turnId: trustedTurnId, requestKey: trimString(requestKey) };
+  if (autoInstallUserClaim === true || autoInstallUserFinish === true || autoInstallUserCheck === true) {
+    const pinned = binding?.windowsUserInstallIdentity;
+    const validationNow = autoInstallUserFinish === true ? Date.parse(userInstallCapability?.issuedAt || '') + 1 : Date.now();
+    if (binding?.authenticatedPrincipalKind !== 'owner' || !['recommended', 'full-auto'].includes(riskMode)
+        || !Number.isFinite(validationNow)
+        || !verifyWindowsManagedUserInstallAuthorization({ authorization: { capability: userInstallCapability, expectedExecutionSid: run.windowsExecutionSid },
+          pinnedIdentity: pinned, binding: userInstallBinding, runExecutionSid: run.windowsExecutionSid, now: validationNow })) {
+      throw Object.assign(new Error('User installation authorization is invalid'), { code: 'USER_INSTALL_AUTHORIZATION_INVALID' });
+    }
+    if (autoInstallUserFinish !== true) await assertInstallActive();
+    const store = createWindowsUserInstallStore();
+    if (autoInstallUserCheck === true) return { kind: 'automatic_user_install_check', ok: true };
+    if (autoInstallUserClaim === true) {
+      const result = await store.claim({ binding: userInstallBinding, nonce: userInstallCapability.nonce, operationFingerprint: windowsUserInstallOperationFingerprint(userInstallCapability) });
+      return { kind: 'automatic_user_install_claim', ...result };
+    }
+    await store.finish({ binding: userInstallBinding, nonce: userInstallCapability.nonce, status: userInstallResult?.status, code: userInstallResult?.code || '' });
+    return { kind: 'automatic_user_install_finish', ok: true };
+  }
+  const prepareUserAuthorization = async () => {
+    const pinned = binding?.windowsUserInstallIdentity;
+    if (!pinned?.kid || !pinned?.publicKey) return null;
+    const authorization = await prepareWindowsManagedUserInstall({
+      actions: serverActions, riskMode, runExecutionSid: run.windowsExecutionSid, runExecutionIsService: run.windowsExecutionIsService,
+      binding: { ...userInstallBinding, authenticatedPrincipalKind: binding.authenticatedPrincipalKind },
+      trustedContext: { cwd: trustedCwd, projectRoot: trustedProjectRoot, home: trustedHome },
+    }, { assertActive: assertInstallActive });
+    if (!verifyWindowsManagedUserInstallAuthorization({ authorization, pinnedIdentity: pinned,
+      binding: userInstallBinding, runExecutionSid: run.windowsExecutionSid })) return null;
+    return authorization;
+  };
+  if (autoInstallUserAuthorization === true) {
+    if (!binding?.windowsUserInstallIdentity?.kid || !binding?.windowsUserInstallIdentity?.publicKey) throw Object.assign(new Error('User installation identity is unavailable'), { code: 'USER_INSTALL_IDENTITY_UNAVAILABLE' });
+    const authorization = await prepareUserAuthorization();
+    if (!authorization) throw Object.assign(new Error('User installation authorization is unavailable'), { code: 'USER_INSTALL_AUTHORIZATION_UNAVAILABLE' });
+    return { kind: 'automatic_user_install_authorization', capability: authorization.capability };
+  }
+  const automaticInstall = await tryWindowsManagedAutoInstall({
+    actions: serverActions, riskMode, runExecutionIsService: run.windowsExecutionIsService, preflight: autoInstallPreflight === true,
+    binding: { sessionId: run.sessionId, runId: normalizedRunId, turnId: trustedTurnId, requestKey: trimString(requestKey), authenticatedPrincipalKind: binding.authenticatedPrincipalKind },
+    trustedContext: { cwd: trustedCwd, projectRoot: trustedProjectRoot, home: trustedHome },
+  }, { assertActive: assertInstallActive });
+  if (autoInstallPreflight === true) {
+    if (automaticInstall?.ready === true) return { kind: 'automatic_install_preflight', ready: true };
+    return { kind: 'automatic_install_preflight', ready: Boolean(await prepareUserAuthorization()) };
+  }
+  if (automaticInstall) return { ...automaticInstall, kind: 'automatic_install' };
+  const userAuthorization = await prepareUserAuthorization();
+  if (userAuthorization) return { kind: 'automatic_user_install_authorization', capability: userAuthorization.capability };
   const preliminaryActions = serverActions.map((input) => buildApprovedAction(input, {
     requestKey: trimString(requestKey),
     sessionId: run.sessionId,
@@ -5859,6 +5941,10 @@ async function syncDetachedRunUnlocked(sessionId, runId) {
   // only produced by a gated run. No privilege gain: the request event is inert
   // data; actual root execution is P3.
   if (run.privilegedBatchPending) {
+    // Normalize even persisted pre-upgrade batches before their first event is
+    // surfaced. Safe Windows installs use the separately verified managed
+    // channel; legacy install labels alone cannot authorize them.
+    run = { ...run, privilegedBatchPending: deferWindowsLegacyInstallBatch(run.privilegedBatchPending) };
     const session = await getSession(sessionId).catch(() => null);
     const realStore = {
       // Privileged helpers only need the request/response/exec records for
@@ -12041,7 +12127,7 @@ function resolveSessionProviderPermissionContract({
   const unattendedProfile = sessionRiskMode === 'full-auto'
     || sessionRiskMode === 'conservative-auto';
   if ((sessionRiskMode === 'conservative-auto'
-      || (sessionRiskMode === 'full-auto' && requiresExplicitAcpAutoMode(runtimeFamily)))
+      || (sessionRiskMode === 'full-auto' && (process.platform === 'win32' || requiresExplicitAcpAutoMode(runtimeFamily))))
       && !effectivePermissionPolicy) {
     const error = new Error(`The ${trimString(runtimeFamily) || 'unknown'} Harness cannot enforce ${sessionRiskMode} permissions`);
     error.code = 'PERMISSION_PROFILE_UNSUPPORTED_RUNTIME';
@@ -13156,6 +13242,10 @@ async function submitHttpMessageInternal(sessionId, text, images, options = {}) 
   const approvedActionChannelToken = managedActionMcpEligible
     ? randomBytes(32).toString('base64url')
     : '';
+  const windowsUserInstallIdentity = process.platform === 'win32' && approvedActionChannelToken
+    && authenticatedPrincipalKind === 'owner' && ['recommended', 'full-auto'].includes(sessionRiskMode)
+    ? await loadWindowsAutoInstallPublicIdentity().catch(() => null)
+    : null;
   const approvedActionChannel = approvedActionChannelToken
     ? {
         endpoint: `http://127.0.0.1:${CHAT_PORT}/api/internal/approved-actions/propose`,
@@ -13163,6 +13253,7 @@ async function submitHttpMessageInternal(sessionId, text, images, options = {}) 
         tokenHash: createHash('sha256').update(approvedActionChannelToken, 'utf8').digest('hex'),
         turnId: trimString(requestId),
         ...(authenticatedPrincipalKind ? { authenticatedPrincipalKind } : {}),
+        ...(windowsUserInstallIdentity ? { windowsUserInstallIdentity } : {}),
         ...(productAgentCreateEligible ? { productAgentCreate: true } : {}),
       }
     : null;

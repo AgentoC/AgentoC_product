@@ -182,19 +182,18 @@ assert.equal(invocation.isCodexAppServerFamily, true);
 
 // `full-auto` is an AgentoC risk mode, not a provider CLI flag. The runtime
 // contract maps it to the selected harness's native permission behavior.
-const codexFullAutoInvocation = buildRuntimeInvocation('codex-json', 'hello', {
-  riskMode: 'full-auto',
-}, 'codex-cli');
-assert.equal(codexFullAutoInvocation.args.includes('--full-auto'), false);
-assert.equal(
-  codexFullAutoInvocation.args.includes('--dangerously-bypass-approvals-and-sandbox'),
-  true,
-);
+if (process.platform === 'win32') {
+  assert.throws(() => buildRuntimeInvocation('codex-json', 'hello', { riskMode: 'full-auto' }, 'codex-cli'), { code: 'PERMISSION_PROFILE_UNSUPPORTED_RUNTIME' });
+} else {
+  const codexFullAutoInvocation = buildRuntimeInvocation('codex-json', 'hello', { riskMode: 'full-auto' }, 'codex-cli');
+  assert.equal(codexFullAutoInvocation.args.includes('--full-auto'), false);
+  assert.equal(codexFullAutoInvocation.args.includes('--dangerously-bypass-approvals-and-sandbox'), true);
+}
 const codexGatedInvocation = buildRuntimeInvocation('codex-app-server-json', 'hello', {
   riskMode: 'recommended',
 }, 'codex');
 assert.equal(codexGatedInvocation.args.includes('--full-auto'), false);
-assert.equal(codexGatedInvocation.permissionMode, 'on-request-danger-full-access');
+assert.equal(codexGatedInvocation.permissionMode, process.platform === 'win32' ? 'untrusted-danger-full-access' : 'on-request-danger-full-access');
 
 const claudeBidiInvocation = buildRuntimeInvocation('claude-stream-json-bidi', 'hello', {}, 'claude-bidi');
 assert.equal(claudeBidiInvocation.capabilities.provider, 'claude');
@@ -240,7 +239,7 @@ assert.equal(
 );
 assert.equal(
   resolveProviderPermissionPolicy('codex-app-server-json', { privilegedMode: true }).approvalPolicy,
-  'on-request',
+  process.platform === 'win32' ? 'untrusted' : 'on-request',
 );
 assert.equal(
   resolveProviderPermissionPolicy('codex-app-server-json', { privilegedMode: true }).sandbox,
@@ -288,7 +287,7 @@ assert.equal(
 );
 assert.equal(
   resolveProviderPermissionPolicy('codex-app-server-json', { riskMode: 'recommended' }).approvalPolicy,
-  'on-request',
+  process.platform === 'win32' ? 'untrusted' : 'on-request',
 );
 assert.equal(
   resolveProviderPermissionPolicy('claude-stream-json-bidi', { riskMode: 'recommended', permissionMode: 'bypassPermissions' }).claudePermissionMode,
@@ -301,15 +300,15 @@ assert.equal(
 );
 assert.equal(
   resolveProviderPermissionPolicy('claude-stream-json-bidi', { riskMode: 'full-auto' }).claudePermissionMode,
-  'bypassPermissions',
+  process.platform === 'win32' ? 'default' : 'bypassPermissions',
 );
 assert.equal(
   resolveProviderPermissionPolicy('claude-stream-json-bidi', { privilegedMode: true, riskMode: 'full-auto' }).claudePermissionMode,
-  'bypassPermissions',
+  process.platform === 'win32' ? 'default' : 'bypassPermissions',
 );
 assert.equal(
   resolveProviderPermissionPolicy('codex-app-server-json', { riskMode: 'full-auto' }).id,
-  'never-danger-full-access',
+  process.platform === 'win32' ? 'untrusted-danger-full-access' : 'never-danger-full-access',
 );
 assert.equal(
   resolveProviderPermissionPolicy('claude-stream-json-bidi', { riskMode: 'conservative-auto', permissionMode: 'bypassPermissions' }).id,
@@ -326,13 +325,13 @@ assert.equal(
 for (const runtimeFamily of ['cline-json', 'kilo-json']) {
   assert.equal(resolveProviderPermissionPolicy(runtimeFamily, { riskMode: 'conservative-auto' }).id, 'headless-deny');
 }
-assert.equal(resolveProviderPermissionPolicy('cline-json', { riskMode: 'full-auto' }).id, 'yolo');
-assert.equal(resolveProviderPermissionPolicy('kilo-json', { riskMode: 'full-auto' }).id, 'auto');
-assert.equal(resolveProviderPermissionPolicy('opencode-json', { riskMode: 'full-auto' }).id, 'auto');
+assert.equal(resolveProviderPermissionPolicy('cline-json', { riskMode: 'full-auto', platform: 'linux' }).id, 'yolo');
+assert.equal(resolveProviderPermissionPolicy('kilo-json', { riskMode: 'full-auto', platform: 'linux' }).id, 'auto');
+assert.equal(resolveProviderPermissionPolicy('opencode-json', { riskMode: 'full-auto', platform: 'linux' }).id, 'auto');
 assert.equal(resolveProviderPermissionPolicy('opencode-json', { riskMode: 'conservative-auto' }), null);
-assert.equal(resolveProviderPermissionPolicy('qwen-code-acp', { riskMode: 'full-auto' }).id, 'yolo');
+assert.equal(resolveProviderPermissionPolicy('qwen-code-acp', { riskMode: 'full-auto', platform: 'linux' }).id, 'yolo');
 assert.equal(resolveProviderPermissionPolicy('qwen-code-acp', { riskMode: 'conservative-auto' }).id, 'auto');
-assert.equal(resolveProviderPermissionPolicy('kimi-code-acp', { riskMode: 'full-auto' }).id, 'yolo');
+assert.equal(resolveProviderPermissionPolicy('kimi-code-acp', { riskMode: 'full-auto', platform: 'linux' }).id, 'yolo');
 assert.equal(resolveProviderPermissionPolicy('kimi-code-acp', { riskMode: 'conservative-auto' }).id, 'auto');
 assert.equal(resolveProviderPermissionPolicy('kimi-code-acp', { riskMode: 'conservative-auto', permissionMode: 'yolo' }).id, 'auto',
   'the conservative profile must not inherit Kimi 2.x approve-everything mode');

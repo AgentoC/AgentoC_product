@@ -100,6 +100,10 @@ const GATED_PERMISSION_MODES = new Set([
   'on-request',
   'on-request-workspace-write',
   'on-request-danger-full-access',
+  'untrusted',
+  'untrusted-read-only',
+  'untrusted-workspace-write',
+  'untrusted-danger-full-access',
   'auto',
   'never-read-only',
 ]);

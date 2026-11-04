@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { mkdtemp, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 
 import {
@@ -66,6 +66,11 @@ const server = createServer((req, res) => {
       res.end(JSON.stringify({ error: 'Unattended policy denied the action', code: 'APPROVED_ACTION_AUTO_DENIED' }));
       return;
     }
+    if (payload.requestKey === 'mcp-fixture-install') {
+      res.writeHead(202, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ kind: 'automatic_install', status: 'executing', requestId: 'auto-1', duplicate: false }));
+      return;
+    }
     res.writeHead(202, { 'content-type': 'application/json' });
     res.end(JSON.stringify({
       status: 'awaiting_approval',
@@ -96,6 +101,8 @@ assert.equal(initialize.result.serverInfo.name, 'agentoc-approved-actions');
 const tools = await request(2, 'tools/list');
 assert.equal(tools.result.tools.length, 2);
 assert.equal(tools.result.tools[0].name, 'agentoc_request_actions');
+assert.match(tools.result.tools[0].description, /executing status is not completion/);
+assert.match(tools.result.tools[0].description, /statusOnly=true and the same requestKey and identical action/);
 assert.equal(tools.result.tools[1].name, 'agentoc_create_agent');
 assert.doesNotMatch(JSON.stringify(tools), /run-secret-token/);
 const call = await request(3, 'tools/call', {
@@ -141,6 +148,20 @@ const deniedCall = await request(6, 'tools/call', {
 });
 assert.equal(deniedCall.result.isError, true);
 assert.match(deniedCall.result.content[0].text, /Unattended policy denied the action/);
+assert.match(deniedCall.result.content[0].text, /requestKey: mcp-fixture-denied/);
+const automatic = await request(7, 'tools/call', { name: 'agentoc_request_actions', arguments: {
+  requestKey: 'mcp-fixture-install', actions: [{ command: 'winget install Git.Git' }],
+} });
+assert.deepEqual(JSON.parse(automatic.result.content[0].text), { kind: 'automatic_install', status: 'executing', code: '', requestId: 'auto-1', requestKey: 'mcp-fixture-install', duplicate: false });
+const automaticStatus = await request(8, 'tools/call', { name: 'agentoc_request_actions', arguments: {
+  requestKey: 'mcp-fixture-install', statusOnly: true, actions: [{ command: 'winget install Git.Git' }],
+} });
+assert.equal(automaticStatus.result.isError, false);
+assert.equal(received.at(-1).body.autoInstallStatusOnly, true);
+const missingKeyStatus = await request(9, 'tools/call', { name: 'agentoc_request_actions', arguments: {
+  statusOnly: true, actions: [{ command: 'winget install Git.Git' }],
+} });
+assert.equal(missingKeyStatus.result.isError, true);
 child.stdin.end();
 await new Promise((resolve, reject) => {
   child.once('exit', resolve);
@@ -177,6 +198,9 @@ const { mkdir, writeFile } = await import('node:fs/promises');
 await mkdir(codexSource, { recursive: true });
 await writeFile(join(codexSource, 'config.toml'), '[mcp_servers.user_tool]\ncommand = "user-mcp"\n');
 await writeFile(join(codexSource, 'auth.json'), '{"access_token":"fixture"}\n');
+await mkdir(join(codexSource, 'rules'));
+const ownerRule = 'prefix_rule(pattern=["dangerous-tool"], decision="forbidden")\n';
+await writeFile(join(codexSource, 'rules', 'owner.rules'), ownerRule);
 const codexOverlay = await prepareApprovedActionMcpOverlay({
   runtimeFamily: 'codex-app-server-json',
   runId: 'r_fixture',
@@ -198,6 +222,9 @@ assert.notEqual(codexOverlay.env.CODEX_HOME, codexSource);
 // into the OS temporary directory. Keep the scoped overlay in its managed
 // provider home so the normal workspace sandbox can initialize its helpers.
 assert.equal(dirname(codexOverlay.root), codexSource);
+assert.equal(await readFile(join(codexOverlay.root, 'rules', 'owner.rules'), 'utf8'), ownerRule);
+await writeFile(join(codexOverlay.root, 'rules', 'owner.rules'), '# isolated change\n');
+assert.equal(await readFile(join(codexSource, 'rules', 'owner.rules'), 'utf8'), ownerRule);
 const overlayConfig = await readFile(codexOverlay.configPath, 'utf8');
 assert.match(overlayConfig, /mcp_servers\.user_tool/);
 assert.match(overlayConfig, /mcp_servers\.agentoc_actions_/);
@@ -212,6 +239,54 @@ assert.match(overlayConfig, /agentoc-approved-actions-mcp\.mjs/);
 assert.equal(await readFile(join(codexSource, 'config.toml'), 'utf8'), '[mcp_servers.user_tool]\ncommand = "user-mcp"\n');
 await codexOverlay.cleanup();
 await assert.rejects(stat(codexOverlay.root), { code: 'ENOENT' });
+
+const shellGateOverlay = await prepareManagedMcpOverlay({ runtimeFamily: 'codex-app-server-json', runId: 'shell-gate-fixture',
+  spawnEnv: { CODEX_HOME: codexSource, SystemRoot: 'D:\\Custom Windows', ProgramW6432: 'E:\\Apps' },
+  servers: [{ kind: 'actions', scriptPath }], codexWindowsApprovalGate: true });
+const { readdir } = await import('node:fs/promises');
+const ruleNames = await readdir(join(shellGateOverlay.root, 'rules'));
+const generatedName = ruleNames.find((name) => /^agentoc-shell-gate-[a-f0-9]{16}\.rules$/.test(name));
+assert.ok(generatedName);
+const shellRules = await readFile(join(shellGateOverlay.root, 'rules', generatedName), 'utf8');
+assert.ok(shellRules.includes(JSON.stringify('D:\\Custom Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')));
+assert.ok(shellRules.includes(JSON.stringify('E:\\Apps\\PowerShell\\7\\pwsh.exe')));
+assert.match(shellRules, /decision="prompt"/);
+assert.equal(await readFile(join(shellGateOverlay.root, 'rules', 'owner.rules'), 'utf8'), ownerRule);
+if (process.env.AGENTOC_TEST_CODEX_BINARY) {
+  const decision = JSON.parse(execFileSync(process.env.AGENTOC_TEST_CODEX_BINARY,
+    ['execpolicy', 'check', '--rules', join(shellGateOverlay.root, 'rules', generatedName), '--',
+      'D:\\Custom Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', '-NoProfile', '-Command', 'Get-Content a'], { encoding: 'utf8' }));
+  assert.equal(decision.decision, 'prompt');
+  const lowerCase = JSON.parse(execFileSync(process.env.AGENTOC_TEST_CODEX_BINARY,
+    ['execpolicy', 'check', '--rules', join(shellGateOverlay.root, 'rules', generatedName), '--',
+      'd:/custom windows/system32/windowspowershell/v1.0/powershell.exe', '-NoProfile', '-Command', 'Get-Content a'], { encoding: 'utf8' }));
+  assert.equal(lowerCase.decision, 'prompt');
+  const ownerDecision = JSON.parse(execFileSync(process.env.AGENTOC_TEST_CODEX_BINARY,
+    ['execpolicy', 'check', '--rules', join(shellGateOverlay.root, 'rules', 'owner.rules'), '--', 'dangerous-tool', 'example'], { encoding: 'utf8' }));
+  assert.equal(ownerDecision.decision, 'forbidden');
+}
+await shellGateOverlay.cleanup();
+
+if (process.platform === 'win32') {
+  const ownerHooks = JSON.stringify({ description: 'owner fixture', hooks: { PreToolUse: [{ matcher: '^Edit$', hooks: [{ type: 'command', command: 'owner-command' }] }] } });
+  await writeFile(join(codexSource, 'hooks.json'), ownerHooks);
+  const hookPath = join(repoRoot, 'scripts', 'agentoc-codex-windows-install-hook.mjs');
+  const hookOverlay = await prepareManagedMcpOverlay({ runtimeFamily: 'codex-app-server-json', runId: 'hook-fixture',
+    spawnEnv: { CODEX_HOME: codexSource }, servers: [{ kind: 'actions', scriptPath }], codexWindowsInstallHook: hookPath });
+  assert.ok(hookOverlay.codexWindowsInstallHook);
+  const hooks = JSON.parse(await readFile(join(hookOverlay.root, 'hooks.json'), 'utf8'));
+  assert.equal(hooks.description, 'owner fixture');
+  assert.equal(hooks.hooks.PreToolUse[0].hooks[0].command, 'owner-command');
+  assert.equal(hooks.hooks.PreToolUse[1].hooks[0].command, hookOverlay.codexWindowsInstallHook.command);
+  assert.equal(await readFile(join(codexSource, 'hooks.json'), 'utf8'), ownerHooks);
+  await hookOverlay.cleanup();
+  const hookOnly = await prepareManagedMcpOverlay({ runtimeFamily: 'codex-app-server-json', runId: 'hook-only-fixture',
+    spawnEnv: { CODEX_HOME: codexSource }, servers: [], codexWindowsInstallHook: hookPath });
+  assert.ok(hookOnly.codexWindowsInstallHook);
+  assert.deepEqual(hookOnly.serverNames, []);
+  assert.equal(JSON.parse(await readFile(join(hookOnly.root, 'hooks.json'), 'utf8')).hooks.PreToolUse.length, 2);
+  await hookOnly.cleanup();
+}
 
 await assert.rejects(
   () => prepareApprovedActionMcpOverlay({

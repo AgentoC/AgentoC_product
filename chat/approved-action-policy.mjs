@@ -49,9 +49,10 @@ function trimString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-export function isPrivilegeRoutingEnabled(session = {}) {
+export function isPrivilegeRoutingEnabled(session = {}, platform = process.platform) {
   if (WORKBENCH_EXECUTION_POLICY) return false;
-  return session?.privilegedMode === true || RISK_MODES.has(trimString(session?.riskMode).toLowerCase());
+  const riskMode = trimString(session?.riskMode).toLowerCase();
+  return session?.privilegedMode === true || RISK_MODES.has(riskMode) || (platform === 'win32' && riskMode === 'full-auto');
 }
 
 export function supportsManagedApprovedActions(runtime = {}) {

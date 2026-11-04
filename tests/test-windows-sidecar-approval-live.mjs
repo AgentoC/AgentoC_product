@@ -1,0 +1,251 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import { createServer } from 'node:http';
+
+if (process.platform !== 'win32') {
+  console.log('windows-sidecar-approval-live: skipped (requires Windows)');
+  process.exit(0);
+}
+const root = await mkdtemp(path.join(os.tmpdir(), 'agentoc-approval-sidecar-'));
+const workspace = path.join(root, 'instance', 'workspace');
+await mkdir(workspace, { recursive: true });
+await writeFile(path.join(workspace, 'readme.txt'), 'fixture');
+const psPath = (name) => `'${path.join(workspace, name).replace(/'/g, "''")}'`;
+const bashPath = (name) => {
+  const absolute = path.join(workspace, name);
+  return `'/${absolute[0].toLowerCase()}${absolute.slice(2).replaceAll('\\', '/').replace(/'/g, `'"'"'`)}'`;
+};
+process.env.AGENTOC_INSTANCE_ROOT = path.join(root, 'instance');
+process.env.AGENTOC_CONFIG_DIR = path.join(root, 'instance', 'config');
+process.env.AGENTOC_WORK_ROOT_DIR = workspace;
+process.env.AGENTOC_MEMORY_DIR = path.join(root, 'instance', 'memory');
+process.env.AGENTOC_PROVIDER_HOMES_DIR = path.join(root, 'instance', 'provider-homes');
+process.env.AGENTOC_RUN_SPOOL_DIR = path.join(root, 'instance', 'data', 'chat-runs');
+
+const { createRun, getRun } = await import('../chat/runs.mjs');
+const { configureWindowsClaudeWorkingDirectory, observeCodexAppServerItem, trackCodexAppServerApprovalRequest, trackClaudeBidiApprovalRequest } = await import('../chat/runner-sidecar.mjs');
+for (const riskMode of ['safe', 'recommended', 'full-auto', 'conservative-auto']) {
+  const env = {}; configureWindowsClaudeWorkingDirectory(env, { platform: 'win32', bidi: true, riskMode });
+  assert.equal(env.CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR, '1');
+}
+for (const option of [{ platform: 'linux', bidi: true, riskMode: 'recommended' }, { platform: 'win32', bidi: false, riskMode: 'recommended' },
+  { platform: 'win32', bidi: true, riskMode: 'bypass' }]) {
+  const env = {}; configureWindowsClaudeWorkingDirectory(env, option); assert.equal(env.CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR, undefined);
+}
+async function fixture(mode) {
+  const run = await createRun({ status: { sessionId: `session-${mode}`, requestId: `req-${mode}`, state: 'accepted', tool: 'codex' },
+    manifest: { sessionId: `session-${mode}`, requestId: `req-${mode}`, folder: workspace, tool: 'codex', runtimeFamily: 'codex-app-server-json', prompt: 'fixture', options: {} } });
+  const sent = [];
+  const proc = { stdin: { writable: true, write(line) { sent.push(JSON.parse(line)); return true; } } };
+  const state = { riskMode: mode, cwd: workspace, projectRoot: workspace, riskContextValid: true,
+    riskContext: { platform: 'win32', trustedWorkspaceRoot: workspace, protectedRoots: [] },
+    pendingApprovals: new Map(), autoApprovedMcpRequestIds: new Set(), activeItems: new Map(), threadId: 'thread', turnId: 'turn', startedTurn: true };
+  return { run, state, sent, proc };
+}
+for (const mode of ['full-auto', 'recommended', 'conservative-auto']) {
+  const { run, state, sent, proc } = await fixture(mode);
+  const write = { type: 'control_request', request_id: 'write', request: { subtype: 'can_use_tool', tool_name: 'Write', input: { file_path: path.join(workspace, 'output.md') } } };
+  await trackClaudeBidiApprovalRequest(run.id, state, write, proc);
+  assert.equal(sent.length, 1, `${mode} should automatically answer ordinary writes`);
+  assert.equal(sent[0].response?.response?.behavior, 'allow');
+
+  const powershell = { type: 'control_request', request_id: 'powershell', request: { subtype: 'can_use_tool', tool_name: 'PowerShell', input: { command: `Set-Content -Path ${psPath('output.md')} -Value hello` } } };
+  await trackClaudeBidiApprovalRequest(run.id, state, powershell, proc);
+  assert.equal(sent.length, 2, `${mode} should automatically answer an ordinary native PowerShell write`);
+  assert.equal(sent[1].response?.response?.behavior, 'allow');
+
+  const bash = { type: 'control_request', request_id: 'bash', request: { subtype: 'can_use_tool', tool_name: 'Bash', input: { command: `cat ${bashPath('readme.txt')}` } } };
+  await trackClaudeBidiApprovalRequest(run.id, state, bash, proc);
+  assert.equal(sent.length, 3, `${mode} should automatically answer an ordinary Bash read`);
+  assert.equal(sent[2].response?.response?.behavior, 'allow');
+
+  const dangerousBash = { type: 'control_request', request_id: 'dangerous-bash', request: { subtype: 'can_use_tool', tool_name: 'Bash', input: { command: 'rm -rf /c/Windows' } } };
+  await trackClaudeBidiApprovalRequest(run.id, state, dangerousBash, proc);
+  if (mode === 'recommended') {
+    assert.equal(sent.length, 3, 'dangerous Bash must wait for the owner in request mode');
+    assert.ok((await getRun(run.id)).appServerPendingApprovals.some((entry) => entry.approvalId === 'claude:dangerous-bash'));
+  } else {
+    assert.equal(sent[3].response?.response?.behavior, 'deny', 'dangerous Bash must be denied without waiting in unattended modes');
+  }
+
+  const dangerousPowerShell = { type: 'control_request', request_id: 'dangerous-powershell', request: { subtype: 'can_use_tool', tool_name: 'PowerShell', input: { command: 'Remove-Item C:\\Windows -Recurse -Force' } } };
+  await trackClaudeBidiApprovalRequest(run.id, state, dangerousPowerShell, proc);
+  if (mode === 'recommended') {
+    const pending = (await getRun(run.id)).appServerPendingApprovals.find((entry) => entry.approvalId === 'claude:dangerous-powershell');
+    assert.equal(pending?.kind, 'command');
+    assert.equal(pending?.params?.input?.command, dangerousPowerShell.request.input.command);
+  } else {
+    assert.equal(sent[4].response?.response?.behavior, 'deny');
+  }
+
+  const unknown = { type: 'control_request', request_id: 'unknown', request: { subtype: 'can_use_tool', tool_name: 'UnknownTool', input: {} } };
+  await trackClaudeBidiApprovalRequest(run.id, state, unknown, proc);
+  if (mode === 'recommended') {
+    assert.equal(sent.length, 3, 'request mode should leave an unknown tool for owner approval');
+    assert.ok((await getRun(run.id)).appServerPendingApprovals.some((entry) => entry.approvalId === 'claude:unknown'));
+  } else {
+    assert.equal(sent.length, 6, `${mode} should deny without waiting`);
+    assert.equal(sent[5].response?.response?.behavior, 'deny');
+  }
+}
+let preflightReady = true;
+const preflightCommands = [];
+const preflightServer = createServer((req, res) => {
+  let body = '';
+  req.on('data', (part) => { body += part; });
+  req.on('end', () => {
+    assert.equal(req.headers['x-agentoc-approved-action-token'], 'test-token');
+    const payload = JSON.parse(body);
+    assert.equal(payload.autoInstallPreflight, true);
+    preflightCommands.push(payload.actions[0].command);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ kind: 'automatic_install_preflight', ready: preflightReady }));
+  });
+});
+await new Promise((resolve) => preflightServer.listen(0, '127.0.0.1', resolve));
+for (const mode of ['recommended', 'full-auto']) {
+  const { run, state, sent, proc } = await fixture(mode);
+  state.mcpRequired = true;
+  state.mcpAutoApproveServerNames = new Set(['agentoc_actions']);
+  const params = { serverName: 'agentoc_actions', threadId: 'thread', turnId: 'turn', mode: 'form' };
+  await trackCodexAppServerApprovalRequest(run.id, state, { id: 'managed-tool', method: 'mcpServer/elicitation/request', params: {
+    ...params, _meta: { codex_approval_kind: 'mcp_tool_call' }, requestedSchema: { type: 'object', properties: {} },
+  } }, proc);
+  assert.equal(sent[0]?.result?.action, 'accept', 'only the managed tool-call confirmation should auto-accept');
+  await trackCodexAppServerApprovalRequest(run.id, state, { id: 'real-elicitation', method: 'mcpServer/elicitation/request', params: {
+    ...params, requestedSchema: { type: 'object', properties: { token: { type: 'string' } } }, message: 'Enter a token',
+  } }, proc);
+  if (mode === 'recommended') {
+    assert.equal(sent.length, 1);
+    assert.ok((await getRun(run.id)).appServerPendingApprovals.some((entry) => entry.approvalId === 'mcpServer/elicitation/request:real-elicitation'));
+  } else assert.equal(sent[1]?.result?.action, 'decline');
+}
+for (const mode of ['recommended', 'full-auto']) {
+  const { run, state, sent, proc } = await fixture(mode);
+  const request = { type: 'control_request', request_id: 'unattested-cwd', request: { subtype: 'can_use_tool', tool_name: 'PowerShell', input: { command: 'Set-Content -Path output.md -Value hello' } } };
+  await trackClaudeBidiApprovalRequest(run.id, state, request, proc);
+  if (mode === 'recommended') assert.ok((await getRun(run.id)).appServerPendingApprovals.some(entry => entry.approvalId === 'claude:unattested-cwd'));
+  else assert.equal(sent[0]?.response?.response?.behavior, 'deny');
+}
+for (const mode of ['recommended', 'full-auto']) {
+  const { run, state, sent, proc } = await fixture(mode);
+  state.turnActive = true;
+  const request = (id, command) => ({ type: 'control_request', request_id: id, request: { subtype: 'can_use_tool', tool_name: 'PowerShell', input: { command } } });
+  await trackClaudeBidiApprovalRequest(run.id, state, request('relative-write', 'Set-Content -Path output.md -Value hello'), proc);
+  assert.equal(sent[0]?.response?.response?.behavior, 'deny');
+  assert.match(sent[0]?.response?.response?.message || '', /absolute paths/);
+  await trackClaudeBidiApprovalRequest(run.id, state, request('absolute-write', `Set-Content -Path ${psPath('output.md')} -Value hello`), proc);
+  assert.equal(sent[1]?.response?.response?.behavior, 'allow');
+}
+for (const mode of ['recommended', 'full-auto']) {
+  const { run, state, sent, proc } = await fixture(mode);
+  const request = (id, command) => ({ type: 'control_request', request_id: id, request: { subtype: 'can_use_tool', tool_name: 'PowerShell', input: { command } } });
+  await trackClaudeBidiApprovalRequest(run.id, state, request('redirect-safe', `Write-Output hello > ${psPath('output.md')}`), proc);
+  assert.equal(sent[0]?.response?.response?.behavior, 'allow', `${mode} should allow an ordinary file redirection`);
+  await trackClaudeBidiApprovalRequest(run.id, state, request('redirect-sensitive', 'Write-Output hello > .ssh\\key'), proc);
+  if (mode === 'recommended') assert.ok((await getRun(run.id)).appServerPendingApprovals.some((entry) => entry.approvalId === 'claude:redirect-sensitive'));
+  else assert.equal(sent[1]?.response?.response?.behavior, 'deny');
+  const beforeBash = sent.length;
+  const bashRequest = (id, command) => ({ type: 'control_request', request_id: id, request: { subtype: 'can_use_tool', tool_name: 'Bash', input: { command } } });
+  await trackClaudeBidiApprovalRequest(run.id, state, bashRequest('bash-redirect-safe', `echo hello > ${bashPath('output.md')}`), proc);
+  assert.equal(sent[beforeBash]?.response?.response?.behavior, 'allow', `${mode} should allow an ordinary Bash redirection`);
+  await trackClaudeBidiApprovalRequest(run.id, state, bashRequest('bash-redirect-sensitive', 'echo hello > .ssh/key'), proc);
+  if (mode === 'recommended') assert.ok((await getRun(run.id)).appServerPendingApprovals.some((entry) => entry.approvalId === 'claude:bash-redirect-sensitive'));
+  else assert.equal(sent[beforeBash + 1]?.response?.response?.behavior, 'deny');
+  const beforeLiteral = sent.length;
+  await trackClaudeBidiApprovalRequest(run.id, state, request('literal-redirect-safe', `'hello' > ${psPath('literal.md')}`), proc);
+  assert.equal(sent[beforeLiteral]?.response?.response?.behavior, 'allow', `${mode} should allow a literal file redirection`);
+}
+for (const mode of ['recommended', 'full-auto']) {
+  const { run, state, sent, proc } = await fixture(mode);
+  state.windowsManagedActionChannel = true;
+  state.windowsManagedActionBinding = { endpoint: `http://127.0.0.1:${preflightServer.address().port}/api/internal/approved-actions/propose`,
+    token: 'test-token', sessionId: `session-${mode}`, runId: run.id, turnId: `req-${mode}` };
+  const request = { type: 'control_request', request_id: 'install', request: { subtype: 'can_use_tool', tool_name: 'PowerShell', input: { command: 'winget install Git.Git' } } };
+  await trackClaudeBidiApprovalRequest(run.id, state, request, proc);
+  assert.equal(sent[0]?.response?.response?.behavior, 'allow');
+  const rewritten = sent[0]?.response?.response?.updatedInput?.command;
+  assert.match(rewritten, /agentoc-windows-install-bridge\.mjs/);
+  assert.doesNotMatch(rewritten, /winget install Git\.Git/);
+}
+for (const mode of ['recommended', 'full-auto']) {
+  for (const toolName of ['PowerShell', 'Bash']) {
+    const { run, state, sent, proc } = await fixture(mode);
+    state.windowsManagedActionChannel = true;
+    state.windowsManagedActionBinding = { endpoint: `http://127.0.0.1:${preflightServer.address().port}/api/internal/approved-actions/propose`,
+      token: 'test-token', sessionId: `session-${mode}`, runId: run.id, turnId: `req-${mode}` };
+    const request = { type: 'control_request', request_id: `wrapped-${toolName}`, request: {
+      subtype: 'can_use_tool', tool_name: toolName, input: {
+        command: 'agentoc-privileged --description "Install Git" --category install -- winget install Git.Git',
+      },
+    } };
+    await trackClaudeBidiApprovalRequest(run.id, state, request, proc);
+    assert.equal(sent[0]?.response?.response?.behavior, 'allow');
+    assert.match(sent[0].response.response.updatedInput.command, /agentoc-windows-install-bridge\.mjs/);
+    assert.equal(preflightCommands.at(-1), 'winget install Git.Git', 'preflight must inspect the exact unwrapped installation');
+  }
+}
+for (const mode of ['recommended', 'full-auto']) {
+  const { run, state, sent, proc } = await fixture(mode);
+  state.windowsManagedActionChannel = true;
+  state.windowsManagedActionBinding = { endpoint: `http://127.0.0.1:${preflightServer.address().port}/api/internal/approved-actions/propose`,
+    token: 'test-token', sessionId: `session-${mode}`, runId: run.id, turnId: `req-${mode}` };
+  const command = 'winget install --id Vendor.App -e -h --disable-interactivity';
+  await trackClaudeBidiApprovalRequest(run.id, state, { type: 'control_request', request_id: 'noninteractive-install',
+    request: { subtype: 'can_use_tool', tool_name: 'PowerShell', input: { command } } }, proc);
+  assert.equal(sent[0]?.response?.response?.behavior, 'allow');
+  assert.equal(preflightCommands.at(-1), command);
+}
+preflightReady = false;
+for (const mode of ['recommended', 'full-auto']) {
+  const { run, state, sent, proc } = await fixture(mode);
+  state.windowsManagedActionChannel = true;
+  state.windowsManagedActionBinding = { endpoint: `http://127.0.0.1:${preflightServer.address().port}/api/internal/approved-actions/propose`,
+    token: 'test-token', sessionId: `session-${mode}`, runId: run.id, turnId: `req-${mode}` };
+  const request = { type: 'control_request', request_id: 'unavailable-install', request: { subtype: 'can_use_tool', tool_name: 'PowerShell', input: { command: 'winget install Git.Git' } } };
+  await trackClaudeBidiApprovalRequest(run.id, state, request, proc);
+  if (mode === 'recommended') {
+    assert.equal(sent.length, 0, 'unavailable installer must fall back to owner approval');
+    assert.ok((await getRun(run.id)).appServerPendingApprovals.some((entry) => entry.approvalId === 'claude:unavailable-install'));
+  } else assert.equal(sent[0]?.response?.response?.behavior, 'deny', 'unavailable installer must be denied unattended');
+}
+for (const mode of ['recommended', 'full-auto']) {
+  const { run, state, sent, proc } = await fixture(mode);
+  state.windowsManagedActionChannel = true;
+  state.windowsManagedActionBinding = { endpoint: `http://127.0.0.1:${preflightServer.address().port}/api/internal/approved-actions/propose`,
+    token: 'test-token', sessionId: `session-${mode}`, runId: run.id, turnId: `req-${mode}` };
+  const request = { type: 'control_request', request_id: 'unavailable-wrapped-install', request: {
+    subtype: 'can_use_tool', tool_name: 'Bash', input: { command: 'agentoc-privileged --category install -- winget install Git.Git' },
+  } };
+  await trackClaudeBidiApprovalRequest(run.id, state, request, proc);
+  if (mode === 'recommended') {
+    assert.equal(sent.length, 0);
+    assert.ok((await getRun(run.id)).appServerPendingApprovals.some((entry) => entry.approvalId === 'claude:unavailable-wrapped-install'));
+  } else assert.equal(sent[0]?.response?.response?.behavior, 'deny');
+}
+await new Promise((resolve) => preflightServer.close(resolve));
+{
+  const { run, state, sent, proc } = await fixture('full-auto');
+  observeCodexAppServerItem(state, { method: 'item/started', params: { threadId: 'thread', turnId: 'turn', item: {
+    id: 'patch', type: 'fileChange', changes: [{ path: path.join(workspace, 'output.md'), kind: { type: 'update' } }],
+  } } });
+  await trackCodexAppServerApprovalRequest(run.id, state, { id: 7, method: 'item/fileChange/requestApproval', params: { threadId: 'thread', turnId: 'turn', itemId: 'patch' } }, proc);
+  assert.equal(sent[0]?.result?.decision, 'accept', 'Codex file approval must use its correlated item changes');
+  await trackCodexAppServerApprovalRequest(run.id, state, { id: 70, method: 'item/fileChange/requestApproval', params: { threadId: 'thread', turnId: 'other-turn', itemId: 'patch' } }, proc);
+  assert.equal(sent.length, 1, 'a request belonging to another turn must not be answered by this run');
+  await trackCodexAppServerApprovalRequest(run.id, state, { id: 71, method: 'item/fileChange/requestApproval', params: { threadId: 'other-thread', turnId: 'turn', itemId: 'patch' } }, proc);
+  assert.equal(sent.length, 1, 'a request belonging to another thread must not be answered by this run');
+  const shell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  // app-server serializes the actual executable argv using shlex_join.
+  const wrapped = `'${shell}' -NoProfile -Command 'Get-Content readme.txt'`;
+  await trackCodexAppServerApprovalRequest(run.id, state, { id: 8, method: 'item/commandExecution/requestApproval', params: { threadId: 'thread', turnId: 'turn', cwd: workspace, command: wrapped } }, proc);
+  assert.equal(sent[1]?.result?.decision, 'accept', 'Codex PowerShell request must be analyzed using the real parser');
+}
+console.log('windows-sidecar-approval-live: Claude and Codex sidecar decisions passed');
+const actualRoot = await realpath(root);
+const actualParent = await realpath(os.tmpdir());
+assert.equal(path.dirname(actualRoot).toLowerCase(), actualParent.toLowerCase());
+assert.ok(path.basename(actualRoot).startsWith('agentoc-approval-sidecar-'));
+await rm(actualRoot, { recursive: true, force: true });

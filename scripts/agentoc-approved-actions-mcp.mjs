@@ -39,11 +39,12 @@ function jsonRpcResult(id, result) {
 function actionTool() {
   return {
     name: 'agentoc_request_actions',
-    description: 'Propose one related set of dangerous or host-administrator actions for owner review. This tool never executes a command and returns while the decision is pending.',
+    description: 'Propose related host-administrator actions. For Windows winget installs, use this tool rather than running winget directly: eligible installs may start automatically and dangerous actions go to owner review. An executing status is not completion: call this tool with statusOnly=true and the same requestKey and identical action until it reports succeeded, failed or unknown. Never start another installation when its outcome is unknown; check the original requestKey.',
     inputSchema: {
       type: 'object',
       properties: {
         requestKey: { type: 'string', description: 'Optional stable idempotency key for a retry of the same proposal.' },
+        statusOnly: { type: 'boolean', description: 'Only check an existing Windows automatic installation by requestKey; never starts an installation.' },
         actions: {
           type: 'array',
           minItems: 1,
@@ -142,7 +143,10 @@ function postProposal(config, payload) {
         'content-length': Buffer.byteLength(body, 'utf8'),
         'x-agentoc-approved-action-token': config.token,
       },
-      timeout: 5_000,
+      // A Windows package lookup may query a remote trusted source before the
+      // broker accepts the operation. Timing out earlier makes its outcome
+      // ambiguous and encourages an unsafe retry with a different request ID.
+      timeout: 120_000,
     }, (response) => {
       let data = '';
       response.setEncoding('utf8');
@@ -191,17 +195,29 @@ async function requestActions(args, requestId) {
     throw new Error('approved action capability is not bound to an active run');
   }
   const actions = normalizeActions(args);
+  if (args?.statusOnly === true && !trimString(args?.requestKey)) throw new Error('statusOnly requires the original requestKey');
   const requestKey = trimString(args?.requestKey)
     || `mcp:${config.runId}:${config.turnId}:${String(requestId || randomBytes(6).toString('hex'))}`;
-  const response = await postProposal(config, {
+  let response;
+  try { response = await postProposal(config, {
     requestKey,
+    ...(args?.statusOnly === true ? { autoInstallStatusOnly: true } : {}),
     actions,
     sessionId: config.sessionId,
     runId: config.runId,
     turnId: config.turnId,
     cwd: config.cwd,
     projectRoot: config.projectRoot,
-  });
+  }); } catch (error) {
+    // The server may have accepted a submission even if the reply was lost.
+    // Always return its stable key so the agent can query the same operation.
+    error.message = `${error.message || 'Approved action request failed'} (requestKey: ${requestKey}; check this same key before retrying)`;
+    throw error;
+  }
+  if (response?.kind === 'automatic_install') {
+    return { kind: response.kind, status: response.status, code: response.code || '', requestId: response.requestId,
+      requestKey, duplicate: response.duplicate === true };
+  }
   return {
     status: 'awaiting_approval',
     batchId: trimString(response?.batchId),

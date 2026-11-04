@@ -103,6 +103,12 @@ import {
   isGatedPermissionMode,
   isUserFacingGateKind,
 } from './privileged-gate.mjs';
+import { decideWindowsApproval } from './windows-approval-gate.mjs';
+import { buildClaudeWindowsInstallBridge, checkWindowsInstallBridgeReadiness } from './windows-auto-install-bridge.mjs';
+import { verifyCodexWindowsInstallBridgeApproval } from './codex-windows-install-hook.mjs';
+import { createCodexManagedHookSetup } from './codex-managed-hook-setup.mjs';
+import { buildWindowsSafeDeleteBridge, needsClaudeAbsoluteDeleteRetry } from './windows-safe-delete-bridge.mjs';
+import { verifyCodexWindowsSafeDeleteApproval } from './codex-windows-safe-delete-hook.mjs';
 import { buildPrivilegedBatch } from './privileged-ops.mjs';
 import {
   appendRunSpoolRecord,
@@ -146,6 +152,7 @@ import {
 } from '../lib/agy-runtime.mjs';
 import { createClaudeThinkingTokenSampler } from './provider-spool-sampling.mjs';
 import { assertOrdinaryWindowsExecutionIdentity } from '../lib/windows-execution-identity.mjs';
+import { bindWindowsRunExecutionIdentity } from './windows-run-identity.mjs';
 
 const RUN_INPUT_VERIFY_CONCURRENCY = 4;
 
@@ -476,10 +483,18 @@ function isCodexAppServerStateEvent(state, parsed) {
   return !state.turnId || !eventTurnId || eventTurnId === state.turnId;
 }
 
-function observeCodexAppServerItem(state, parsed) {
+export function observeCodexAppServerItem(state, parsed) {
   if (!isCodexAppServerCurrentTurnEvent(state, parsed)) return;
   if (!(state.activeItems instanceof Map)) state.activeItems = new Map();
   const method = typeof parsed?.method === 'string' ? parsed.method : '';
+  if (method === 'item/fileChange/patchUpdated') {
+    const itemId = typeof parsed?.params?.itemId === 'string' ? parsed.params.itemId.trim() : '';
+    const previous = state.activeItems.get(itemId);
+    if (previous && Array.isArray(parsed.params.changes)) {
+      previous.changes = parsed.params.changes.map((change) => ({ path: change?.path, kind: change?.kind }));
+    }
+    return;
+  }
   if (method !== 'item/started' && method !== 'item/completed') return;
   const item = parsed?.params?.item && typeof parsed.params.item === 'object'
     ? parsed.params.item
@@ -498,6 +513,7 @@ function observeCodexAppServerItem(state, parsed) {
     type: typeof item?.type === 'string' ? item.type : '',
     tool: isCodexAppServerToolItemType(item?.type),
     startedAtMs: Date.now(),
+    ...(Array.isArray(item?.changes) ? { changes: item.changes.map((change) => ({ path: change?.path, kind: change?.kind })) } : {}),
   });
 }
 
@@ -1624,6 +1640,12 @@ function markCodexAppServerFailure(state, parsed, fallback = 'Codex app-server r
   return reason;
 }
 
+export function configureWindowsClaudeWorkingDirectory(env, { platform = process.platform, bidi = false, riskMode = '' } = {}) {
+  if (platform === 'win32' && bidi && ['safe', 'recommended', 'full-auto', 'conservative-auto'].includes(riskMode)) {
+    env.CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR = '1';
+  }
+}
+
 function createClaudeBidiRunState({ prompt, manifest, cwd } = {}) {
   manifest = applyWorkbenchRunPolicy(manifest);
   const options = manifest?.options || {};
@@ -1639,6 +1661,7 @@ function createClaudeBidiRunState({ prompt, manifest, cwd } = {}) {
     riskContextValid: riskContextBinding.valid,
     riskContextInvalidReason: riskContextBinding.valid ? '' : riskContextBinding.reason,
     permissionMode: typeof options.permissionMode === 'string' ? options.permissionMode : '',
+    interactionMode: typeof options.interactionMode === 'string' ? options.interactionMode : '',
     projectRoot: typeof options.projectRoot === 'string' ? options.projectRoot : '',
     privilegedTurnOps: [],
     initialized: false,
@@ -1802,6 +1825,7 @@ export function writeCodexAppServerThreadStart(proc, state) {
     developerInstructions: state.developerInstructions,
     interactionMode: state.interactionMode,
     permissionMode: state.permissionMode,
+    agentocApprovalGate: process.platform === 'win32' && ['safe', 'recommended', 'full-auto', 'conservative-auto'].includes(state.riskMode),
   }));
   if (written) state.threadRequestSent = true;
   return written;
@@ -1840,7 +1864,9 @@ export function handleCodexAppServerInitializeResponse(proc, state, parsed) {
   state.initialized = true;
   state.providerStage = 'initialized';
   writeCodexAppServerMessage(proc, buildCodexAppServerInitializedNotification());
-  if (state.needsAccountModelCatalog) {
+  const continueStartup = () => {
+    if (state.terminalSeen || state.hadError || state.startupCancelled) return;
+    if (state.needsAccountModelCatalog) {
     state.providerStage = 'account_model_catalog';
     if (state.accountModelCatalog) state.accountModelCatalog.start();
     else {
@@ -1848,7 +1874,15 @@ export function handleCodexAppServerInitializeResponse(proc, state, parsed) {
         message: 'Run model negotiation was not configured' } });
       state.terminalSeen = true;
     }
-  } else writeCodexAppServerThreadStart(proc, state);
+    } else writeCodexAppServerThreadStart(proc, state);
+  };
+  if (state.codexWindowsInstallHook) {
+    state.providerStage = 'managed_hook_setup';
+    state.codexManagedHookSetup = createCodexManagedHookSetup({ ...state.codexWindowsInstallHook, cwd: state.cwd,
+      nextRequestId: () => state.nextControlRequestId++, send: message => writeCodexAppServerMessage(proc, message),
+      onDone: ready => { state.codexManagedHookReady = ready; continueStartup(); } });
+    state.codexManagedHookSetup.start();
+  } else continueStartup();
   return true;
 }
 
@@ -2271,6 +2305,7 @@ export function maybeStartCodexAppServerTurn(proc, state, parsed) {
     reasoningEffort: state.reasoningEffort,
     interactionMode: state.interactionMode,
     permissionMode: state.permissionMode,
+    agentocApprovalGate: process.platform === 'win32' && ['safe', 'recommended', 'full-auto', 'conservative-auto'].includes(state.riskMode),
   }));
   if (written) state.startedTurn = true;
   if (written) state.providerStage = 'turn_start_sent';
@@ -2467,7 +2502,7 @@ function clearPrivilegedBatchOpenIfResolved(state) {
 // auto-answered by the classifier. Everything else falls back to the legacy
 // privileged gate so bypass-mode sessions stay unchanged. Pure dispatch — the
 // gate functions share the {decision, reason, op} contract.
-function decideRunGate(approval, state) {
+async function decideRunGate(approval, state) {
   if (isUserFacingGateKind(approval?.kind || '')) {
     return {
       decision: PRIVILEGED_GATE_DECISION.PASS,
@@ -2478,6 +2513,13 @@ function decideRunGate(approval, state) {
     return { decision: PRIVILEGED_GATE_DECISION.PROMPT, reason: 'Workbench operator requires explicit approval' };
   }
   const riskMode = typeof state?.riskMode === 'string' ? state.riskMode : '';
+  if (process.platform === 'win32' && (['safe', 'recommended', 'full-auto', 'conservative-auto'].includes(riskMode)
+      || isGatedPermissionMode(state?.permissionMode || ''))) {
+    if (isManagedLearningProfileWrite(approval)) {
+      return { decision: PRIVILEGED_GATE_DECISION.AUTO_ALLOW, reason: 'managed learning profile write' };
+    }
+    return decideWindowsApproval(approval, state);
+  }
   const gated = riskMode === 'safe' || riskMode === 'recommended'
     || isGatedPermissionMode(state?.permissionMode || '');
   if (gated) {
@@ -2557,10 +2599,16 @@ function isAutoApprovedMcpServer(state, serverName) {
   return serverName === state?.mcpExpectedServerName;
 }
 
-async function trackCodexAppServerApprovalRequest(runId, state, parsed, proc) {
+export async function trackCodexAppServerApprovalRequest(runId, state, parsed, proc, { safeDeleteHelperPath = join(PROJECT_ROOT, 'bin', 'agentoc-safe-delete.exe') } = {}) {
   if (!state || !parsed) return null;
   const approval = readCodexAppServerApprovalRequest(parsed);
   if (!approval?.approvalId) return null;
+  // A shared app-server may report requests for another thread or turn. Never
+  // answer those using this run's workspace and approval policy.
+  const requestThread = typeof approval.params?.threadId === 'string' ? approval.params.threadId.trim() : '';
+  const requestTurn = typeof approval.params?.turnId === 'string' ? approval.params.turnId.trim() : '';
+  if ((requestThread && state.threadId && requestThread !== state.threadId)
+      || (requestTurn && state.turnId && requestTurn !== state.turnId)) return null;
   const managedMcp = readCodexAppServerManagedMcpRequest(parsed);
 
   if (managedMcp
@@ -2592,7 +2640,7 @@ async function trackCodexAppServerApprovalRequest(runId, state, parsed, proc) {
     }
   }
 
-  if (isUnattendedPermissionMode(state, approval)) {
+  if (process.platform !== 'win32' && isUnattendedPermissionMode(state, approval)) {
     return denyUnattendedPermissionRequest(runId, state, approval, proc, 'codex');
   }
 
@@ -2602,9 +2650,23 @@ async function trackCodexAppServerApprovalRequest(runId, state, parsed, proc) {
   // MCP elicitation is not a shell/file operation. Never let the generic risk
   // classifier auto-allow an unknown server; it must reach the user approval
   // path and use the provider-specific elicitation response shape.
-  const gateDecision = managedMcp || approval.providerMethod === 'mcpServer/elicitation/request'
+  const controlledInstall = process.platform === 'win32' && !WORKBENCH_EXECUTION_POLICY && !managedMcp
+    && await verifyCodexWindowsInstallBridgeApproval({ approval, state, runId, nodePath: process.execPath,
+      scriptPath: join(PROJECT_ROOT, 'scripts', 'agentoc-windows-install-bridge.mjs') });
+  const controlledDelete = process.platform === 'win32' && !WORKBENCH_EXECUTION_POLICY && !managedMcp
+    && await verifyCodexWindowsSafeDeleteApproval({ approval, state, runId, helperPath: safeDeleteHelperPath });
+  const gateDecision = controlledDelete
+    ? { decision: PRIVILEGED_GATE_DECISION.AUTO_ALLOW, reason: 'handle-bound workspace deletion' }
+    : controlledInstall
+    ? { decision: PRIVILEGED_GATE_DECISION.AUTO_ALLOW, reason: 'controlled Windows installation' }
+    : managedMcp || approval.providerMethod === 'mcpServer/elicitation/request'
     ? { decision: PRIVILEGED_GATE_DECISION.PASS, reason: 'MCP elicitation requires explicit server binding or user approval' }
-    : decideRunGate(approval, state);
+    : await decideRunGate(approval, state);
+
+  if (process.platform === 'win32' && isUnattendedPermissionMode(state)
+      && gateDecision.decision !== PRIVILEGED_GATE_DECISION.AUTO_ALLOW) {
+    return denyUnattendedPermissionRequest(runId, state, approval, proc, 'codex');
+  }
 
   if (gateDecision.decision === PRIVILEGED_GATE_DECISION.AUTO_ALLOW) {
     // Auto-allow: write the gate response directly to stdin so gated mode does
@@ -2675,7 +2737,7 @@ async function trackCodexAppServerApprovalRequest(runId, state, parsed, proc) {
   return record;
 }
 
-async function trackClaudeBidiApprovalRequest(runId, state, parsed, proc) {
+export async function trackClaudeBidiApprovalRequest(runId, state, parsed, proc, { safeDeleteHelperPath = join(PROJECT_ROOT, 'bin', 'agentoc-safe-delete.exe') } = {}) {
   if (!state || !parsed) return null;
   const approval = readClaudeBidiApprovalRequest(parsed);
   if (!approval?.approvalId) return null;
@@ -2711,7 +2773,7 @@ async function trackClaudeBidiApprovalRequest(runId, state, parsed, proc) {
     }
   }
 
-  if (isUnattendedPermissionMode(state, approval)) {
+  if (process.platform !== 'win32' && isUnattendedPermissionMode(state, approval)) {
     return denyUnattendedPermissionRequest(runId, state, approval, proc, 'claude');
   }
 
@@ -2722,7 +2784,58 @@ async function trackClaudeBidiApprovalRequest(runId, state, parsed, proc) {
   // remain an explicit user decision, even in a risk-gated session.
   const gateDecision = isMcpTool
     ? { decision: PRIVILEGED_GATE_DECISION.PASS, reason: 'MCP tool requires explicit server binding or user approval' }
-    : decideRunGate(approval, state);
+    : await decideRunGate(approval, state);
+
+  const relativeRetry = gateDecision.reason === 'working directory is not attested' && approval.kind === 'command' &&
+    ['PowerShell', 'Bash'].includes(approval.params?.tool_name) && state.turnActive === true && state.riskContextValid === true &&
+    ['recommended', 'full-auto'].includes(state.riskMode) && state.interactionMode !== 'plan' && state.permissionMode !== 'plan';
+  if (process.platform === 'win32' && !WORKBENCH_EXECUTION_POLICY && !isMcpTool &&
+      (relativeRetry || await needsClaudeAbsoluteDeleteRetry({ approval, state, helperPath: safeDeleteHelperPath }))) {
+    const reason = 'For this Windows operation, resolve each target against the command working directory and retry the same command using absolute paths and the same options.';
+    const message = buildClaudeBidiApprovalResponseMessage(approval, 'deny', null, { message: reason });
+    if (!message || !writeClaudeBidiMessage(proc, message)) throw new Error('Unable to request an absolute deletion target');
+    await appendRunSpoolRecord(runId, { ts: nowIso(), stream: 'stdout', json: { type: 'agentoc.approval_response',
+      approvalId: approval.approvalId, provider: 'claude', decision: 'denied', status: 'denied', autoDenied: true,
+      providerRequestId: approval.providerRequestIdString || String(approval.providerRequestId ?? ''), providerMethod: approval.providerMethod || '', reason } });
+    return null;
+  }
+
+  const deleteBridge = process.platform === 'win32' && !WORKBENCH_EXECUTION_POLICY && !isMcpTool
+    ? await buildWindowsSafeDeleteBridge({ approval, state, runId, helperPath: safeDeleteHelperPath }) : null;
+  if (deleteBridge) {
+    const message = buildClaudeBidiApprovalResponseMessage(approval, 'approve', null, { updatedInput: { command: deleteBridge.updatedCommand } });
+    if (!message || !writeClaudeBidiMessage(proc, message)) throw new Error('Unable to send controlled deletion response');
+    await appendRunSpoolRecord(runId, { ts: nowIso(), stream: 'stdout', json: {
+      type: 'agentoc.approval_response', approvalId: approval.approvalId, provider: 'claude', decision: 'approved', status: 'approved',
+      providerRequestId: approval.providerRequestIdString || String(approval.providerRequestId ?? ''), providerMethod: approval.providerMethod || '',
+      autoApproved: true, reason: 'handle-bound workspace deletion',
+    } });
+    const record = markApprovalRecordAutoResponded(serializeCodexAppServerApprovalForRun(approval, gateDecision.risk));
+    if (record) state.pendingApprovals.set(approval.approvalId, record);
+    return record;
+  }
+
+  const installBridge = process.platform === 'win32' && !isMcpTool
+    ? buildClaudeWindowsInstallBridge({ approval, state, runId, nodePath: process.execPath,
+      scriptPath: join(PROJECT_ROOT, 'scripts', 'agentoc-windows-install-bridge.mjs') }) : null;
+  if (installBridge && await checkWindowsInstallBridgeReadiness({ channel: state.windowsManagedActionBinding,
+    command: installBridge.installCommand, requestKey: installBridge.requestKey })) {
+    const message = buildClaudeBidiApprovalResponseMessage(approval, 'approve', null, { updatedInput: { command: installBridge.updatedCommand } });
+    if (!message || !writeClaudeBidiMessage(proc, message)) throw new Error('Unable to send controlled installation response');
+    await appendRunSpoolRecord(runId, { ts: nowIso(), stream: 'stdout', json: {
+      type: 'agentoc.approval_response', approvalId: approval.approvalId, provider: 'claude', decision: 'approved', status: 'approved',
+      providerRequestId: approval.providerRequestIdString || String(approval.providerRequestId ?? ''), providerMethod: approval.providerMethod || '',
+      autoApproved: true, reason: 'controlled Windows installation',
+    } });
+    const record = markApprovalRecordAutoResponded(serializeCodexAppServerApprovalForRun(approval, gateDecision.risk));
+    if (record) state.pendingApprovals.set(approval.approvalId, record);
+    return record;
+  }
+
+  if (process.platform === 'win32' && isUnattendedPermissionMode(state)
+      && gateDecision.decision !== PRIVILEGED_GATE_DECISION.AUTO_ALLOW) {
+    return denyUnattendedPermissionRequest(runId, state, approval, proc, 'claude');
+  }
 
   if (gateDecision.decision === PRIVILEGED_GATE_DECISION.AUTO_ALLOW) {
     // Auto-allow: write the gate response directly to stdin so gated mode does
@@ -3112,10 +3225,14 @@ process.on('uncaughtException', (error) => {
 async function main() {
   if (!runId) process.exit(1);
   // Check the real inherited token again, including direct/recovery launches.
-  await assertOrdinaryWindowsExecutionIdentity();
+  const executionIdentity = await assertOrdinaryWindowsExecutionIdentity();
   // Direct starts and recovery must not adopt an OAuth lock or execute a
   // temporary task through the ordinary sidecar.
   const { run, manifest } = await assertRunLaunchBoundary(runId);
+  if (process.platform === 'win32' && executionIdentity?.sid) {
+    try { await bindWindowsRunExecutionIdentity(runId, executionIdentity); }
+    catch (error) { console.error(`[sidecar] Windows Run identity binding unavailable: ${error?.message || 'unknown error'}`); }
+  }
   await adoptNativeOAuthLockForSidecar();
 
   await updateRun(runId, (current) => ({
@@ -3269,6 +3386,7 @@ async function main() {
     agyHomeDir: runnerAgyHomeDir,
     acp,
   });
+  configureWindowsClaudeWorkingDirectory(spawnEnv, { bidi: isClaudeBidiFamily, riskMode: manifest.options?.riskMode });
   let args = initialArgs;
 
   const attachmentPaths = [];
@@ -3444,6 +3562,14 @@ async function main() {
   // The control-plane feature flag is process-global, but the worker tool is
   // run-scoped. Strip the inherited flag before projecting the manifest grant.
   delete spawnEnv.AGENTOC_AGENT_CREATE_APPROVED_ACTION_ENABLED;
+  delete spawnEnv.AGENTOC_WINDOWS_SAFE_DELETE_CONTEXT;
+  if (process.platform === 'win32' && appServerState && !WORKBENCH_EXECUTION_POLICY && appServerState.riskContextValid === true &&
+      ['recommended', 'full-auto'].includes(appServerState.riskMode) && appServerState.interactionMode !== 'plan' && appServerState.permissionMode !== 'plan') {
+    spawnEnv.AGENTOC_WINDOWS_SAFE_DELETE_CONTEXT = JSON.stringify({ runId, helperPath: join(PROJECT_ROOT, 'bin', 'agentoc-safe-delete.exe'), state: { riskMode: appServerState.riskMode, riskContextValid: true,
+      interactionMode: appServerState.interactionMode, permissionMode: appServerState.permissionMode,
+      riskContext: { platform: 'win32', trustedWorkspaceRoot: appServerState.riskContext.trustedWorkspaceRoot,
+        protectedRoots: appServerState.riskContext.protectedRoots, systemPathRoots: appServerState.riskContext.systemPathRoots || [] } } });
+  }
   const browserChannel = manifest.options?.browserChannel;
   const browserMcpRequested = Boolean(
     spawnEnv.AGENTOC_BROWSER_MCP_ENABLED === '1'
@@ -3461,6 +3587,9 @@ async function main() {
     spawnEnv.AGENTOC_APPROVED_ACTIONS_SESSION_ID = manifest.sessionId || '';
     spawnEnv.AGENTOC_APPROVED_ACTIONS_RUN_ID = runId;
     spawnEnv.AGENTOC_APPROVED_ACTIONS_TURN_ID = approvedActionChannel.turnId || manifest.requestId || runId;
+    if (approvedActionChannel.windowsUserInstallIdentity) {
+      spawnEnv.AGENTOC_WINDOWS_USER_INSTALL_IDENTITY = JSON.stringify(approvedActionChannel.windowsUserInstallIdentity);
+    }
     spawnEnv.AGENTOC_APPROVED_ACTIONS_CWD = resolvedFolder.cwd;
     spawnEnv.AGENTOC_APPROVED_ACTIONS_PROJECT_ROOT = manifest.options?.projectRoot || resolvedFolder.cwd;
     // The agent-create grant must be decided before overlay preparation: the
@@ -3548,6 +3677,12 @@ async function main() {
         runId,
         spawnEnv,
         servers: managedMcpServers,
+        codexWindowsApprovalGate: process.platform === 'win32' && runtimeFamily === 'codex-app-server-json'
+          && ['safe', 'recommended', 'full-auto'].includes(manifest.options?.riskMode),
+        codexWindowsInstallHook: process.platform === 'win32' && runtimeFamily === 'codex-app-server-json' && (managedActionMcpRequested || spawnEnv.AGENTOC_WINDOWS_SAFE_DELETE_CONTEXT)
+          && !WORKBENCH_EXECUTION_POLICY && manifest.options?.interactionMode !== 'plan'
+          && ['recommended', 'full-auto'].includes(manifest.options?.riskMode)
+          ? join(PROJECT_ROOT, 'scripts', 'agentoc-codex-windows-install-hook.mjs') : '',
       });
 
       if (managedMcpOverlay) {
@@ -3573,6 +3708,7 @@ async function main() {
         args = [...args, ...managedMcpOverlay.args];
       }
       const runtimeState = appServerState || claudeBidiState;
+      if (appServerState && managedMcpOverlay?.codexWindowsInstallHook) appServerState.codexWindowsInstallHook = managedMcpOverlay.codexWindowsInstallHook;
       if (runtimeState && managedMcpOverlay?.serverNames?.length) {
         const serverNamesByKind = new Map(
           managedMcpServers.map((server, index) => [server.kind, managedMcpOverlay.serverNames[index]]),
@@ -3599,6 +3735,12 @@ async function main() {
           });
         }
         runtimeState.mcpRequired = true;
+        if (process.platform === 'win32' && managedActionMcpRequested) {
+          runtimeState.windowsManagedActionChannel = true;
+          runtimeState.windowsManagedActionBinding = { endpoint: approvedActionChannel.endpoint, token: approvedActionChannel.token,
+            sessionId: manifest.sessionId || '', runId, turnId: approvedActionChannel.turnId || manifest.requestId || runId,
+            ...(approvedActionChannel.windowsUserInstallIdentity ? { windowsUserInstallIdentity: approvedActionChannel.windowsUserInstallIdentity } : {}) };
+        }
         runtimeState.mcpRequiredServers = requiredServers;
         runtimeState.mcpAutoApproveServerNames = new Set(
           requiredServers.filter((server) =>
@@ -3657,6 +3799,22 @@ async function main() {
       overlayError.causeCode = preparation.causeCode || '';
       overlayError.mcpPreparation = preparation;
       throw overlayError;
+    }
+  }
+  // Safe deletion also applies to runs without a managed MCP channel. Its
+  // private hook overlay is optional: if preparation fails, retain the
+  // original provider configuration and ordinary approval behavior.
+  if (!managedMcpOverlay && appServerState && spawnEnv.AGENTOC_WINDOWS_SAFE_DELETE_CONTEXT) {
+    try {
+      managedMcpOverlay = await prepareManagedMcpOverlay({ runtimeFamily, runId, spawnEnv, servers: [], codexWindowsApprovalGate: true,
+        codexWindowsInstallHook: join(PROJECT_ROOT, 'scripts', 'agentoc-codex-windows-install-hook.mjs') });
+      if (managedMcpOverlay?.codexWindowsInstallHook) {
+        Object.assign(spawnEnv, managedMcpOverlay.env);
+        appServerState.codexWindowsInstallHook = managedMcpOverlay.codexWindowsInstallHook;
+      } else { await managedMcpOverlay?.cleanup?.(); managedMcpOverlay = null; }
+    } catch (error) {
+      await managedMcpOverlay?.cleanup?.(); managedMcpOverlay = null;
+      await logSidecarDiagnostic(runId, 'Optional Windows deletion hook unavailable', { error: normalizeErrorMessage(error) });
     }
   }
   if (browserMcpRequested && acp === true) {
@@ -4418,6 +4576,7 @@ async function main() {
     if (appServerState && parsed && await maybeConsumeCodexAppServerGoalResponse(runId, appServerState, parsed)) {
       return;
     }
+    if (appServerState?.codexManagedHookSetup && parsed && appServerState.codexManagedHookSetup.consume(parsed)) return;
     if (appServerState?.accountModelCatalog && parsed
         && await appServerState.accountModelCatalog.consume(parsed)) return;
     if (appServerState && parsed && handleCodexAppServerInitializeResponse(proc, appServerState, parsed)) {
@@ -4674,6 +4833,7 @@ async function main() {
                 reasoningEffort: appServerState.reasoningEffort,
                 interactionMode: appServerState.interactionMode,
                 permissionMode: appServerState.permissionMode,
+                agentocApprovalGate: process.platform === 'win32' && ['safe', 'recommended', 'full-auto', 'conservative-auto'].includes(appServerState.riskMode),
               });
               if (writeCodexAppServerMessage(proc, retryMessage)) {
                 appServerState.startedTurn = true;
