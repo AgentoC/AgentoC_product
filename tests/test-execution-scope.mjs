@@ -38,8 +38,8 @@ try {
   assert.equal(normalizePlatformPath('D:/a/b', 'win32'), 'd:\\a\\b');
   assert.equal(normalizePlatformPath('/home/x/repo', 'posix'), '/home/x/repo',
     'posix should return the path unchanged');
-  assert.equal(normalizePlatformPath('/home/x/repo'), '/home/x/repo',
-    'default platform on posix hosts should return the path unchanged');
+  assert.equal(normalizePlatformPath('/home/x/repo'), normalizePlatformPath('/home/x/repo', process.platform),
+    'default platform should match the current host');
   assert.throws(() => normalizePlatformPath(''), (error) => error.code === 'EINVAL',
     'normalizePlatformPath should reject empty paths');
   assert.throws(() => normalizePlatformPath('a\0b'), (error) => error.code === 'EINVAL',
@@ -60,8 +60,8 @@ try {
   );
   assert.equal(
     physicalKeyForPath('host_x', '/repo'),
-    physicalKeyForPath('host_x', '/repo', 'posix'),
-    'default platform key should equal an explicit posix key',
+    physicalKeyForPath('host_x', '/repo', process.platform),
+    'default platform key should equal the explicit host platform key',
   );
   assert.notEqual(
     physicalKeyForPath('host_x', '/repo'),
@@ -148,7 +148,7 @@ try {
   // ── symlink handling: outside → reject, inside → allow ───────────────────
   const outside = makeRootDir('agentoc-es-outside-');
   const escapeLink = join(wsRoot, 'escape-link');
-  symlinkSync(outside, escapeLink);
+  symlinkSync(outside, escapeLink, process.platform === 'win32' ? 'junction' : 'dir');
   await assert.rejects(
     () => resolveContainedScope(wsRoot, 'escape-link'),
     (error) => error.code === 'PROJECT_SCOPE_ESCAPE' && error.statusCode === 400,
@@ -162,7 +162,7 @@ try {
   const inner = join(wsRoot, 'real-inner');
   mkdirSync(inner);
   const innerLink = join(wsRoot, 'inner-link');
-  symlinkSync(inner, innerLink);
+  symlinkSync(inner, innerLink, process.platform === 'win32' ? 'junction' : 'dir');
   assert.deepEqual(
     await resolveContainedScope(wsRoot, 'inner-link'),
     { relativePath: 'real-inner', realPath: inner },
