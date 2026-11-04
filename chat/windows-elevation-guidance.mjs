@@ -14,10 +14,15 @@ function directAdminProgram(name, args) {
   if (adminCmdlets.has(name)) return true;
   // Avoid treating queries such as `sc query` and `net user` as writes.
   // In Windows PowerShell, bare `sc` is an alias for Set-Content.
-  if (name === 'sc.exe') return ['create', 'delete', 'config', 'failure', 'sdset'].includes(String(args[0] || '').toLowerCase());
+  if (name === 'sc.exe') {
+    const verb = String(args[0] || '').toLowerCase();
+    return ['create', 'delete', 'config', 'failure', 'sdset'].includes(verb) ||
+      (['start', 'stop'].includes(verb) && args.length > 1);
+  }
   if (name === 'net.exe' || name === 'net') {
     const subcommand = String(args[0] || '').toLowerCase();
-    return ['user', 'localgroup'].includes(subcommand) && args.slice(1).some(arg => /^\/(?:add|delete)$/i.test(String(arg)));
+    return (['start', 'stop'].includes(subcommand) && args.length > 1) ||
+      (['user', 'localgroup'].includes(subcommand) && args.slice(1).some(arg => /^\/(?:add|delete)$/i.test(String(arg))));
   }
   return false;
 }
@@ -32,7 +37,7 @@ export function isWindowsAdministrativeArgv(argv) {
 // This is guidance for explicit elevation, not a privilege or risk classifier.
 // Unrecognized and dynamic commands remain with the existing approval policy.
 export async function needsWindowsElevationGuidance(command, shell = 'PowerShell', parse = parseWindowsPowerShellAst) {
-  if (typeof command !== 'string' || !/runas|gsudo|sudo|localuser|localgroup|(?:^|[\\/\s])(?:sc|net)(?:\.exe)?(?:\s|$)|(?:new|remove|set|start|stop|restart)-service/i.test(command)) return false;
+  if (typeof command !== 'string' || !/runas|gsudo|sudo|localuser|localgroup|(?:^|[\\/\s'\"])(?:sc|net)(?:\.exe)?['\"]?(?:\s|$)|(?:new|remove|set|start|stop|restart)-service/i.test(command)) return false;
   if (shell === 'Bash') {
     const words = parseLiteralBashWords(command);
     if (!words || words.length < 2) return false;
@@ -59,7 +64,7 @@ export async function needsWindowsElevationGuidance(command, shell = 'PowerShell
 
 export function windowsElevationGuidance(channelAvailable) {
   return channelAvailable
-    ? 'Use AgentoC’s separate managed privileged executor through the agentoc_request_actions tool for the underlying concrete command. Do not use direct elevation wrappers. The current approval policy still applies; if the operation is unsupported, report that limitation.'
+    ? 'Use AgentoC’s separate managed privileged executor through the agentoc_request_actions tool for the underlying concrete command. For service start or stop, submit Start-Service or Stop-Service with the exact service name. Do not use direct elevation wrappers. The current approval policy still applies; if the operation is unsupported, report that limitation.'
     : 'AgentoC’s managed privileged action channel is unavailable. Do not use direct elevation wrappers; report that the operation is blocked.';
 }
 
