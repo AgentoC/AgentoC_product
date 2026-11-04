@@ -29,6 +29,7 @@ const { createRun, getRun } = await import('../chat/runs.mjs');
 const { trackCodexAppServerApprovalRequest, handleCodexAppServerInitializeResponse } = await import('../chat/runner-sidecar.mjs');
 const riskMode = process.env.AGENTOC_QA_MODE === 'full-auto' ? 'full-auto' : 'recommended';
 const managedInstall = process.env.AGENTOC_QA_HOOK_MANAGED_INSTALL === '1';
+const managedElevation = process.env.AGENTOC_QA_HOOK_ELEVATION === '1';
 const pinnedIdentity = managedInstall && process.env.AGENTOC_QA_PIN_INSTALL_KEY === '1'
   ? { kid: 'fixture-key', publicKey: generateKeyPairSync('ed25519').publicKey.export({ type: 'spki', format: 'pem' }).toString() } : null;
 const packageCommand = process.env.AGENTOC_QA_INSTALL_EQUALS === '1'
@@ -58,7 +59,7 @@ if (managedDelete) {
   if (managedDeleteRelative) { await mkdir(path.join(alternateCwd, 'delete-target')); await writeFile(path.join(alternateCwd, 'delete-target', 'fixture.txt'), 'fixture'); }
   if (dangerousRetry) { outsideFixture = await mkdtemp(path.join(tmpdir(), 'agentoc-delete-outside-')); await mkdir(path.join(outsideFixture, 'target')); await writeFile(path.join(outsideFixture, 'target', 'keep.txt'), 'keep'); }
 }
-const productionStartup = (managedInstall || managedDelete) && process.env.AGENTOC_QA_PRODUCTION_STARTUP === '1';
+const productionStartup = (managedInstall || managedDelete || managedElevation) && process.env.AGENTOC_QA_PRODUCTION_STARTUP === '1';
 const failSecondPreflight = managedInstall && process.env.AGENTOC_QA_PREFLIGHT_FAIL_SECOND === '1';
 let preflights = 0; let submissions = 0;
 let providerRequests = 0;
@@ -79,11 +80,21 @@ const server = createServer((req, res) => {
     const tools = (data.tools || []).map(item => ({ type: item.type, name: item.name || item.function?.name || '' }));
     if (!tools.some(item => item.name === 'exec_command')) { process.stderr.write('exec_command missing\n'); process.exitCode = 1; res.writeHead(400).end(); child.kill(); server.close(); return; }
     providerRequests++;
+    if (managedElevation && providerRequests > 1) {
+      if (!JSON.stringify(data).includes('agentoc_request_actions')) { process.stderr.write('managed elevation instruction did not reach model\n'); process.exitCode = 1; res.writeHead(400).end(); child.kill(); server.close(); return; }
+      const item = { id: 'msg_fixture', type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'Managed elevation required', annotations: [] }] };
+      const response = { id: 'resp_done', object: 'response', created_at: 1, status: 'completed', model: 'gpt-5.4', output: [item], usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } };
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      for (const event of [{ type: 'response.created', response: { ...response, status: 'in_progress', output: [] } },
+        { type: 'response.output_item.added', output_index: 0, item }, { type: 'response.output_item.done', output_index: 0, item },
+        { type: 'response.completed', response }]) res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+      res.end(); return;
+    }
     if (managedDeleteRelative && providerRequests === 2 && !JSON.stringify(data).includes('resolve the target against the command working directory')) { process.stderr.write('relative retry instruction did not reach model\n'); process.exitCode = 1; res.writeHead(400).end(); child.kill(); server.close(); return; }
     const deleteTarget = dangerousRetry ? path.join(outsideFixture, 'target') : managedDeleteRelative ? path.join(alternateCwd, 'delete-target') : path.join(home, 'build');
     const relativeTarget = dangerousRetry ? path.relative(alternateCwd, deleteTarget) : 'delete-target';
     const deleteCommand = managedDeleteRelative && providerRequests === 1 ? `Remove-Item -LiteralPath '${relativeTarget.replace(/'/g, "''")}' -Recurse -Force` : `Remove-Item -LiteralPath '${deleteTarget.replace(/'/g, "''")}' -Recurse -Force`;
-    const args = JSON.stringify({ cmd: managedDelete ? deleteCommand : managedInstall ? installCommand : fileCommand ? safeFileCommand : process.env.AGENTOC_QA_SENSITIVE === '1' ? "Write-Output 'fixture' > .ssh\\dummy" : "Write-Output 'agentoc-fixture'", yield_time_ms: 1000, ...(process.env.AGENTOC_QA_HOOK_WORKDIR === '1' || managedDelete ? { workdir: alternateCwd } : {}) });
+    const args = JSON.stringify({ cmd: managedElevation ? `Start-Process -FilePath '${path.join(home, 'nonexistent.exe').replace(/'/g, "''")}' -Verb RunAs` : managedDelete ? deleteCommand : managedInstall ? installCommand : fileCommand ? safeFileCommand : process.env.AGENTOC_QA_SENSITIVE === '1' ? "Write-Output 'fixture' > .ssh\\dummy" : "Write-Output 'agentoc-fixture'", yield_time_ms: 1000, ...(process.env.AGENTOC_QA_HOOK_WORKDIR === '1' || managedDelete ? { workdir: alternateCwd } : {}) });
     const call = { id: managedDeleteRelative && providerRequests > 1 ? 'fc_fixture_retry' : 'fc_fixture', type: 'function_call', name: 'exec_command', call_id: managedDeleteRelative && providerRequests > 1 ? 'call_fixture_retry' : 'call_fixture', arguments: args, status: 'completed' };
     const response = { id: 'resp_fixture', object: 'response', created_at: 1, status: 'completed', model: 'gpt-5.4', output: [call], usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } };
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
@@ -111,8 +122,8 @@ let hookConfig = '';
 let fixtureHookCommand = '';
 let fixtureHookSourcePath = path.join(home, 'config.toml');
 if (hookExperiment) {
-  const hookPath = managedInstall || managedDelete ? fileURLToPath(new URL('../scripts/agentoc-codex-windows-install-hook.mjs', import.meta.url)) : path.join(home, 'fixture-hook.cjs');
-  if (!managedInstall && !managedDelete) await writeFile(hookPath, `const fs=require('fs'); process.on('uncaughtException', e => { fs.writeFileSync(${JSON.stringify(path.join(home, 'hook-error.txt'))}, String(e.stack)); process.exitCode=1; }); let data=''; process.stdin.setEncoding('utf8'); process.stdin.on('data', c => data += c); process.stdin.on('end', () => { fs.writeFileSync(${JSON.stringify(path.join(home, 'hook-input.json'))}, data); fs.writeFileSync(${JSON.stringify(path.join(home, 'hook-process-cwd.txt'))}, process.cwd()); JSON.parse(data); ${hookShouldFail ? "throw new Error('fixture hook failure');" : ''} process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'allow',updatedInput:{command:"Write-Output 'agentoc-rewritten'"}}})); });`);
+  const hookPath = managedInstall || managedDelete || managedElevation ? fileURLToPath(new URL('../scripts/agentoc-codex-windows-install-hook.mjs', import.meta.url)) : path.join(home, 'fixture-hook.cjs');
+  if (!managedInstall && !managedDelete && !managedElevation) await writeFile(hookPath, `const fs=require('fs'); process.on('uncaughtException', e => { fs.writeFileSync(${JSON.stringify(path.join(home, 'hook-error.txt'))}, String(e.stack)); process.exitCode=1; }); let data=''; process.stdin.setEncoding('utf8'); process.stdin.on('data', c => data += c); process.stdin.on('end', () => { fs.writeFileSync(${JSON.stringify(path.join(home, 'hook-input.json'))}, data); fs.writeFileSync(${JSON.stringify(path.join(home, 'hook-process-cwd.txt'))}, process.cwd()); JSON.parse(data); ${hookShouldFail ? "throw new Error('fixture hook failure');" : ''} process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'allow',updatedInput:{command:"Write-Output 'agentoc-rewritten'"}}})); });`);
   const quote = value => `'${value.replace(/'/g, "''")}'`;
   const command = `& ${quote(process.execPath)} ${quote(hookPath)}`;
   fixtureHookCommand = command;
@@ -157,7 +168,7 @@ if (productionStartup) {
 const child = spawn(process.env.AGENTOC_TEST_CODEX_BINARY, ['app-server', '--disable', 'plugins', '--disable', 'remote_plugin', '--disable', 'plugin_sharing', '--listen', 'stdio://'], { cwd: home, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
 child.stderr.resume();
 const timeout = setTimeout(() => { process.stderr.write('fixture timed out\n'); child.kill(); server.close(); process.exitCode = 1; }, 30000);
-let stage = 0; let hookCompleted = false; let hookFailed = false;
+let stage = 0; let hookCompleted = false; let hookFailed = false; let hookBlocked = false;
 let fixtureHookKey = '';
 let managedHookSetup = null;
 let productionState = null;
@@ -169,7 +180,7 @@ function fixtureError(message) { process.stderr.write(message + '\n'); process.e
 createInterface({ input: child.stdout }).on('line', async line => {
   let msg; try { msg = JSON.parse(line); } catch { return; }
   if (process.env.AGENTOC_QA_TRACE_LIFECYCLE === '1' && ['item/started', 'hook/started', 'hook/completed', 'item/commandExecution/requestApproval'].includes(msg.method)) process.stderr.write('fixture event: ' + JSON.stringify({ method: msg.method, params: msg.params }) + '\n');
-  if (hookExperiment && msg.method === 'hook/completed' && msg.params?.run?.eventName === 'preToolUse') { hookCompleted = msg.params.run.status === 'completed'; hookFailed = msg.params.run.status === 'failed'; }
+  if (hookExperiment && msg.method === 'hook/completed' && msg.params?.run?.eventName === 'preToolUse') { hookCompleted = msg.params.run.status === 'completed'; hookFailed = msg.params.run.status === 'failed'; hookBlocked = msg.params.run.status === 'blocked'; }
   if (productionState?.codexManagedHookSetup?.consume(msg)) return;
   if (managedHookSetup?.consume(msg)) return;
   if (stage === 0 && msg.id === 1) {
@@ -209,6 +220,7 @@ createInterface({ input: child.stdout }).on('line', async line => {
     if (productionStartup && productionState.codexManagedHookReady !== true) { fixtureError('production startup did not verify the managed hook'); return; }
     stage = 2; child.stdin.write(JSON.stringify({ id: 3, method: 'turn/start', params: { threadId: msg.result.thread.id, cwd: home, input: [{type:'text',text:'Fixture only',text_elements:[]}], approvalPolicy: 'untrusted', approvalsReviewer: 'user', sandboxPolicy: {type:'dangerFullAccess'} } }) + '\n');
   } else if (stage === 2 && msg.method === 'item/commandExecution/requestApproval') {
+    if (managedElevation) { fixtureError('direct elevation unexpectedly reached command approval'); return; }
     if (dangerousRetry) {
       const state = { riskMode, cwd: home, riskContextValid: true, riskContext: { trustedWorkspaceRoot: home }, startedTurn: true,
         threadId: msg.params.threadId, turnId: msg.params.turnId, pendingApprovals: new Map(), activeItems: new Map(), autoApprovedMcpRequestIds: new Set() };
@@ -304,10 +316,14 @@ createInterface({ input: child.stdout }).on('line', async line => {
     } else process.stdout.write(fileCommand ? `codex-windows-local-gate: ${fileCommand} executed on isolated fixture\n` : managedDelete ? 'codex-windows-local-gate: bound deletion used the approved absolute target\n' : managedInstall ? 'codex-windows-local-gate: managed install bridge reached mock control plane\n' : hookShouldFail ? 'codex-windows-local-gate: failed hook; original passed gate\n' : hookExpectedRun ? 'codex-windows-local-gate: hook rewrote approved harmless command\n' : hookExperiment ? 'codex-windows-local-gate: untrusted hook skipped; original passed gate\n' : 'codex-windows-local-gate: auto-allow executed harmless command\n');
     child.kill(); server.close();
   } else if (stage === 2 && msg.method === 'item/completed' && msg.params?.item?.type === 'commandExecution') {
+    if (managedElevation) { fixtureError('direct elevation unexpectedly executed'); return; }
     if (managedDeleteRelative && msg.params.item.id === 'call_fixture') return;
     stage = 3;
     process.stderr.write('command completed without a gate request\n'); process.exitCode = 1;
     child.kill(); server.close();
+  } else if (stage === 2 && managedElevation && msg.method === 'turn/completed') {
+    if (!hookBlocked || providerRequests < 2) { fixtureError('managed elevation denial did not reach the model'); return; }
+    stage = 5; process.stdout.write('codex-windows-local-gate: managed elevation guidance reached model without executing command\n'); child.kill(); server.close();
   }
 });
 child.on('exit', async () => {
