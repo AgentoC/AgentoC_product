@@ -23,7 +23,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Button
+import com.andysagent.agentoc.core.designsystem.AgentoButton
+import com.andysagent.agentoc.feature.workbench.R as WorkbenchR
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -58,7 +59,7 @@ class PairingQrScannerActivity : ComponentActivity() {
     private lateinit var decoder: PairingQrImageDecoder
     private var previewView: PreviewView? = null
     private var cameraProvider: ProcessCameraProvider? = null
-    private var status by mutableStateOf("将电脑上的临时配对二维码放入取景框")
+    private var status by mutableStateOf<String?>(null)
 
     private val cameraPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startCamera() else fail("需要相机权限才能扫描配对二维码")
@@ -121,8 +122,8 @@ class PairingQrScannerActivity : ComponentActivity() {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
-                            Text(status, color = Color.White, style = MaterialTheme.typography.bodyLarge)
-                            Button(onClick = { setResult(RESULT_CANCELED); finish() }) { Text("取消") }
+                            Text(status ?: getString(WorkbenchR.string.journey_scanner_hint), color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                            AgentoButton(text = getString(android.R.string.cancel), onClick = { setResult(RESULT_CANCELED); finish() })
                         }
                     }
                 }

@@ -7,6 +7,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollTo
 import com.andysagent.agentoc.core.designsystem.AgentocTheme
 import com.andysagent.agentoc.feature.workbench.PairingOnboardingEvent
 import com.andysagent.agentoc.feature.workbench.PairingOnboardingStep
@@ -37,32 +39,20 @@ class PairingOnboardingUiTest {
         }
 
     @Test
-    fun firstRunShowsTaskFocusedConnectionEntry() {
-        var continued = false
-        val title = workbenchText(WorkbenchR.string.welcome_connect_title)
-        val scan = workbenchText(WorkbenchR.string.welcome_scan_pairing_code)
-        val signIn = workbenchText(WorkbenchR.string.settings_sign_in)
-        composeRule.setContent {
-            AgentocTheme {
-                WorkbenchScreen(
-                    state = WorkbenchUiState(),
-                    pairingOnboardingState = PairingOnboardingUiState(
-                        open = true,
-                        step = PairingOnboardingStep.Welcome,
-                    ),
-                    onPairingOnboardingEvent = {
-                        continued = it == PairingOnboardingEvent.ContinueFromWelcome
-                    },
-                )
-            }
+    fun firstRunShowsLoginBeforeComputerConnection() {
+        var request: com.andysagent.agentoc.feature.workbench.GoogleSignInRequest? = null
+        composeRule.setContent { AgentocTheme {
+            WorkbenchScreen(state = WorkbenchUiState(),
+                pairingOnboardingState = PairingOnboardingUiState(open = true, step = PairingOnboardingStep.Welcome),
+                onRequestGoogleSignIn = { request = it })
+        } }
+        composeRule.onNodeWithText(workbenchText(WorkbenchR.string.journey_login_title)).assertIsDisplayed()
+        composeRule.onNodeWithTag("connect-my-computer").assertDoesNotExist()
+        composeRule.onNodeWithTag("sign-in-from-computer").assertIsDisplayed()
+        composeRule.onNodeWithTag("account-sign-in-primary").performScrollTo().performClick()
+        composeRule.runOnIdle {
+            assertEquals(com.andysagent.agentoc.feature.workbench.GoogleSignInRequest.PairComputerFromWelcome, request)
         }
-
-        composeRule.onNodeWithText(title).assertIsDisplayed()
-        composeRule.onNodeWithText(scan).assertIsDisplayed()
-        composeRule.onNodeWithText(signIn).assertIsDisplayed()
-        composeRule.onNodeWithText("Your agents.\nWithin reach.").assertDoesNotExist()
-        composeRule.onNodeWithText(signIn).performClick()
-        assertTrue("The primary action should continue to pairing", continued)
     }
 
     @Test
@@ -93,7 +83,7 @@ class PairingOnboardingUiTest {
     }
 
     @Test
-    fun welcomeLoginSuccessMapsToSignedInWelcomeAction() {
+    fun loginSuccessAutomaticallyChecksAccountComputers() {
         var action: com.andysagent.agentoc.feature.workbench.GoogleSignInSuccessAction? = null
         composeRule.setContent {
             AgentocTheme {
@@ -105,51 +95,34 @@ class PairingOnboardingUiTest {
             }
         }
 
-        composeRule.onNodeWithText("Continue to connect a computer").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("account-computer-lookup").assertIsDisplayed()
+        composeRule.onNodeWithText("Continue to connect a computer").assertDoesNotExist()
         composeRule.runOnIdle {
             assertTrue(
-                "Welcome login success should continue to the signed-in Welcome",
-                action == com.andysagent.agentoc.feature.workbench.GoogleSignInSuccessAction.OpenSignedInWelcome,
+                "Login success should automatically resolve the account destination",
+                action == com.andysagent.agentoc.feature.workbench.GoogleSignInSuccessAction.EnterApp,
             )
         }
     }
 
     @Test
-    fun signedInWithoutComputerDefaultsToAccountWelcomeAtLaunch() {
-        var learnMethods = false
-        var skipped = false
-        val scanPairingCode = workbenchText(WorkbenchR.string.welcome_scan_pairing_code)
-        val otherMethods = workbenchText(WorkbenchR.string.welcome_other_connection_methods)
-        val notNow = workbenchText(WorkbenchR.string.welcome_not_now)
-        val signIn = workbenchText(WorkbenchR.string.settings_sign_in)
-        composeRule.setContent {
-            AgentocTheme {
-                WorkbenchScreen(
-                    state = WorkbenchUiState(),
-                    // This mirrors a cold launch: the onboarding controller is
-                    // idle, the account identity has resolved, and no computer
-                    // has been linked yet.
-                    showWelcomeAtLaunch = true,
-                    welcomeSignedIn = true,
-                    onPairingOnboardingEvent = {
-                        learnMethods = it == PairingOnboardingEvent.LearnConnectionMethods
-                    },
-                    onScanPairing = {},
-                    onSkipWelcome = { skipped = true },
-                )
-            }
-        }
-
-        composeRule.onNodeWithText(scanPairingCode).assertIsDisplayed()
-        composeRule.onNodeWithText(otherMethods).performClick()
-        assertTrue("The alternate connection explainer should be reachable", learnMethods)
-        composeRule.onNodeWithText(notNow).performClick()
-        assertTrue("A signed-in user can enter Home without pairing", skipped)
-        composeRule.onNodeWithText(signIn).assertDoesNotExist()
+    fun signedInWithoutComputerOffersOneGuidedConnectionEntry() {
+        var setup = 0
+        composeRule.setContent { AgentocTheme {
+            WorkbenchScreen(state = WorkbenchUiState(), showWelcomeAtLaunch = true, welcomeSignedIn = true,
+                welcomeComputerLookup = com.andysagent.agentoc.feature.workbench.AccountComputerLookup.Empty,
+                onSetUpComputer = { setup++ })
+        } }
+        composeRule.onNodeWithText(workbenchText(WorkbenchR.string.journey_connect_title)).assertIsDisplayed()
+        composeRule.onNodeWithTag("account-sign-in-page").assertDoesNotExist()
+        composeRule.onNodeWithText(workbenchText(WorkbenchR.string.welcome_scan_pairing_code)).assertDoesNotExist()
+        composeRule.onNodeWithTag("connect-my-computer").performScrollTo().performClick()
+        composeRule.runOnIdle { assertEquals(1, setup) }
     }
 
     @Test
-    fun connectionMethodsOffersDirectAndTemporaryActions() {
+    fun temporaryAccessHasItsOwnScanEntry() {
         val events = mutableListOf<PairingOnboardingEvent>()
         var scanTemporary = false
         val directConnection = workbenchText(WorkbenchR.string.welcome_try_direct_connection)
@@ -169,8 +142,8 @@ class PairingOnboardingUiTest {
             }
         }
 
-        composeRule.onNodeWithText(directConnection).assertIsDisplayed().performClick()
-        assertTrue(events.contains(PairingOnboardingEvent.StartComputerConnection))
+        composeRule.onNodeWithText(directConnection).assertDoesNotExist()
+        assertTrue(events.isEmpty())
         composeRule.onNodeWithText(temporaryScan).assertIsDisplayed().performClick()
         assertTrue(scanTemporary)
     }
@@ -192,7 +165,12 @@ class PairingOnboardingUiTest {
             WorkbenchR.string.pairing_account_claim_guidance,
             WorkbenchR.string.settings_sign_in,
             WorkbenchR.string.welcome_other_connection_methods,
-            WorkbenchR.string.sign_in_guide_title,
+            WorkbenchR.string.journey_login_title,
+            WorkbenchR.string.journey_connect_title,
+            WorkbenchR.string.journey_setup_computer,
+            WorkbenchR.string.journey_reverse_sign_in,
+            WorkbenchR.string.journey_devices_failed,
+            WorkbenchR.string.journey_desktop_trusted,
             WorkbenchR.string.sign_in_guide_continue_with_google,
             WorkbenchR.string.sign_in_guide_google_account,
         )
@@ -215,7 +193,7 @@ class PairingOnboardingUiTest {
     fun googleSignInGuideUsesAFullScreenStepWithBackAndPrimaryAction() {
         var requestedSignIn = false
         var returnedToWelcome = false
-        val title = workbenchText(WorkbenchR.string.sign_in_guide_title)
+        val title = workbenchText(WorkbenchR.string.journey_login_title)
         val continueWithGoogle = workbenchText(WorkbenchR.string.sign_in_guide_continue_with_google)
         val backToWelcome = workbenchText(WorkbenchR.string.welcome_back_to_connection)
         composeRule.setContent {
@@ -319,7 +297,7 @@ class PairingOnboardingUiTest {
         var returnedToWelcome = false
         val back = workbenchText(WorkbenchR.string.pairing_back)
         val scannerUnavailable = workbenchText(WorkbenchR.string.pairing_scanner_title)
-        val welcomeTitle = workbenchText(WorkbenchR.string.welcome_connect_title)
+        val welcomeTitle = workbenchText(WorkbenchR.string.journey_login_title)
         composeRule.setContent {
             AgentocTheme {
                 WorkbenchScreen(
@@ -339,7 +317,7 @@ class PairingOnboardingUiTest {
         }
 
         composeRule.onNodeWithText(scannerUnavailable).assertIsDisplayed()
-        composeRule.onNodeWithText(welcomeTitle).assertIsDisplayed()
+        composeRule.onNodeWithText(welcomeTitle).assertExists()
         composeRule.onNodeWithText(back).assertIsDisplayed().performClick()
         assertTrue("Scanner errors from Welcome should return to the connection entry", returnedToWelcome)
     }

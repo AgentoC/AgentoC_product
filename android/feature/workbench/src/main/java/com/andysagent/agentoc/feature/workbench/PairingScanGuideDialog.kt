@@ -28,7 +28,6 @@ fun PairingScanGuideDialog(onScan: () -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val colors = LocalAgentocColors.current
     var step by rememberSaveable { mutableIntStateOf(0) }
-    var temporary by rememberSaveable { mutableStateOf(false) }
     var feedback by rememberSaveable { mutableStateOf<Int?>(null) }
     val stepTitle = stringResource(when (step) {
         0 -> R.string.journey_install_step
@@ -62,6 +61,12 @@ fun PairingScanGuideDialog(onScan: () -> Unit, onDismiss: () -> Unit) {
                         if (index <= step) colors.actionPrimary else colors.subtleOutline, AgentoShapes.Pill))
                 }
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                AgentoWebIcon(if (step < 2) AgentoWebGlyph.Monitor else AgentoWebGlyph.Device,
+                    null, Modifier.size(24.dp), tint = colors.actionPrimary)
+                Text(stringResource(if (step < 2) R.string.journey_on_computer else R.string.journey_on_phone),
+                    style = MaterialTheme.typography.titleSmall, color = colors.secondaryContent)
+            }
             when (step) {
                 0 -> {
                     Text(stringResource(if (feedback == R.string.journey_link_failed) R.string.journey_link_failed else R.string.journey_handoff_hint),
@@ -93,28 +98,21 @@ fun PairingScanGuideDialog(onScan: () -> Unit, onDismiss: () -> Unit) {
                     }
                 }
                 1 -> {
-                    Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(stringResource(R.string.journey_choose_connection),
-                            style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.semantics { heading() })
-                        AgentoRadioOption(
-                            title = stringResource(R.string.journey_long_term),
-                            description = stringResource(R.string.journey_long_term_summary),
-                            selected = !temporary,
-                            modifier = Modifier.testTag("setup-long-term"),
-                            onClick = { temporary = false },
-                        )
-                        AgentoRadioOption(
-                            title = stringResource(R.string.journey_temporary),
-                            description = stringResource(R.string.journey_temporary_summary),
-                            selected = temporary,
-                            modifier = Modifier.testTag("setup-temporary"),
-                            onClick = { temporary = true },
-                        )
+                    // A localized illustration of the desktop click path, not phone controls.
+                    AgentoCard(Modifier.fillMaxWidth().testTag("computer-setup-method")) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(stringResource(R.string.journey_desktop_tab), style = MaterialTheme.typography.titleSmall)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                AgentoWebIcon(AgentoWebGlyph.ChevronRight, null, Modifier.size(24.dp), tint = colors.secondaryContent)
+                                Text(stringResource(R.string.journey_desktop_start), style = MaterialTheme.typography.bodyLarge)
+                            }
+                            Row(Modifier.padding(start = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                AgentoWebIcon(AgentoWebGlyph.ChevronRight, null, Modifier.size(24.dp), tint = colors.actionPrimary)
+                                Text(stringResource(R.string.journey_desktop_trusted), style = MaterialTheme.typography.titleSmall,
+                                    color = colors.actionPrimary)
+                            }
+                        }
                     }
-                    Text(stringResource(if (temporary) R.string.journey_temporary_instructions else R.string.journey_account_instructions),
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.testTag("computer-setup-method").semantics { liveRegion = LiveRegionMode.Polite })
                 }
                 else -> Text(stringResource(R.string.journey_scan_hint), style = MaterialTheme.typography.bodyLarge)
             }

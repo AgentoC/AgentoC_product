@@ -176,8 +176,8 @@ class StartupAccountSessionGateTest {
     }
 
     @Test
-    fun `signed out account starts on the workbench even when a local computer remains`() {
-        assertFalse(
+    fun `signed out account returns to login even when a local computer remains`() {
+        assertTrue(
             shouldShowWelcomeAtLaunch(
                 startupOnboardingLoading = false,
                 hasPendingGoogleBinding = false,

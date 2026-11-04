@@ -11,6 +11,23 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AccountDeviceDirectoryTest {
+    @Test fun `offline account computer skips setup without local pairing or rendezvous keys`() {
+        val offline = AccountDirectoryDevice(deviceId = "pc", instanceId = "pc", alias = "Offline PC",
+            deviceKind = "computer", endpoint = null)
+        assertEquals(com.andysagent.agentoc.feature.workbench.AccountComputerLookup.Available,
+            accountComputerLookupFor(listOf(offline)))
+    }
+
+    @Test fun `phones and revoked computers do not skip setup`() {
+        val phone = AccountDirectoryDevice(deviceId = "phone", instanceId = "phone", alias = "Phone",
+            deviceKind = "phone", endpoint = null)
+        val revoked = phone.copy(deviceId = "pc", instanceId = "pc", deviceKind = "computer", unboundAt = "2026-11-01")
+        for (devices in listOf(emptyList(), listOf(phone), listOf(revoked), listOf(phone, revoked))) {
+            assertEquals(com.andysagent.agentoc.feature.workbench.AccountComputerLookup.Empty,
+                accountComputerLookupFor(devices))
+        }
+    }
+
     @Test
     fun `signed out device surface falls back to the session computer directory`() {
         val targets = deviceSurfaceTargets(

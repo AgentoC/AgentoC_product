@@ -3,7 +3,8 @@ package com.andysagent.agentoc
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.*
+import com.andysagent.agentoc.feature.workbench.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -31,22 +32,46 @@ class UserJourneyOnboardingUiTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private fun text(id: Int) = context.getString(id)
 
-    @Test fun firstUseSeparatesPreparationFromAnExistingCode() {
-        var setup = 0
-        var scans = 0
+    @Test fun loginAndConnectionAreSeparatePages() {
+        var signedIn by mutableStateOf(false)
+        var lookup by mutableStateOf(AccountComputerLookup.Loading)
         var signIns = 0
-        compose.setContent {
-            AgentocTheme {
-                WelcomeScreen(onConnectComputer = { signIns++ }, onScanPairing = { scans++ },
-                    onSetUpComputer = { setup++ })
-            }
-        }
-        compose.onNodeWithText(text(WorkbenchR.string.journey_setup_computer)).performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(1, setup); assertEquals(0, scans); assertEquals(0, signIns) }
-        compose.onNodeWithText(text(WorkbenchR.string.welcome_scan_pairing_code)).performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(1, scans); assertEquals(0, signIns) }
-        compose.onNodeWithText(text(WorkbenchR.string.settings_sign_in)).performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(1, signIns) }
+        var setups = 0
+        var retries = 0
+        compose.setContent { AgentocTheme {
+            WorkbenchScreen(state = WorkbenchUiState(), showWelcomeAtLaunch = true,
+                welcomeSignedIn = signedIn, welcomeComputerLookup = lookup,
+                onRequestGoogleSignIn = { signIns++ }, onSetUpComputer = { setups++ },
+                onRequestComputerDiscovery = { retries++ })
+        } }
+        compose.onNodeWithTag("account-sign-in-page").assertExists()
+        compose.onNodeWithTag("connect-my-computer").assertDoesNotExist()
+        compose.onNodeWithTag("account-sign-in-primary").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(1, signIns); signedIn = true }
+        compose.onNodeWithTag("account-computer-lookup").assertExists()
+        compose.onNodeWithTag("connect-my-computer").assertDoesNotExist()
+        compose.runOnIdle { lookup = AccountComputerLookup.Failed }
+        compose.onNodeWithTag("retry-account-computers").performClick()
+        compose.runOnIdle { assertEquals(1, retries); lookup = AccountComputerLookup.Empty }
+        compose.onNodeWithTag("account-sign-in-page").assertDoesNotExist()
+        compose.onNodeWithTag("connect-my-computer").performScrollTo().performClick()
+        compose.onNodeWithText(text(WorkbenchR.string.welcome_scan_pairing_code)).assertDoesNotExist()
+        compose.runOnIdle { assertEquals(1, setups) }
+    }
+
+    @Test fun loginKeepsReversePairingAndTemporaryAccessDistinct() {
+        var reverse = 0; var temporary = 0; var demo = 0
+        compose.setContent { AgentocTheme {
+            GoogleSignInGuideScreen({}, {}, showBack = false,
+                onScanSignedInComputer = { reverse++ }, onTemporaryAccess = { temporary++ },
+                onContinueWithDemo = { demo++ })
+        } }
+        compose.onNodeWithText(text(WorkbenchR.string.demo_sign_in_title)).assertDoesNotExist()
+        compose.onNodeWithTag("sign-in-from-computer").performScrollTo().performClick()
+        compose.onNodeWithTag("temporary-access-entry").performScrollTo().performClick()
+        compose.onNodeWithTag("other-sign-in-methods").performScrollTo().performClick()
+        compose.onNodeWithText(text(WorkbenchR.string.demo_sign_in_title)).performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(1, reverse); assertEquals(1, temporary); assertEquals(1, demo) }
     }
 
     @Test fun setupAdvancesAndReturnsWithoutLaunchingTheScannerEarly() {
@@ -55,12 +80,11 @@ class UserJourneyOnboardingUiTest {
         compose.setContent { AgentocTheme { PairingScanGuideDialog({ scans++ }, { dismissed++ }) } }
         compose.onNodeWithText(text(WorkbenchR.string.journey_install_step)).assertIsDisplayed()
         compose.onNodeWithTag("computer-setup-next").performClick()
-        compose.onNodeWithTag("setup-temporary").performScrollTo().performClick()
-        compose.onNodeWithText(text(WorkbenchR.string.journey_temporary_instructions)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(text(WorkbenchR.string.journey_desktop_trusted)).performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("computer-setup-next").performClick()
         compose.onNodeWithText(text(WorkbenchR.string.journey_scan_step)).assertIsDisplayed()
         compose.onNodeWithText(text(WorkbenchR.string.journey_previous)).performClick()
-        compose.onNodeWithText(text(WorkbenchR.string.journey_temporary_instructions)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(text(WorkbenchR.string.journey_desktop_trusted)).performScrollTo().assertIsDisplayed()
         compose.runOnIdle { assertEquals(0, scans); assertEquals(0, dismissed) }
         compose.onNodeWithTag("computer-setup-next").performClick()
         compose.onNodeWithTag("computer-setup-next").performClick()
@@ -75,36 +99,53 @@ class UserJourneyOnboardingUiTest {
         compose.runOnIdle { assertTrue(!scanned) }
     }
 
-    @Test fun connectionMethodsAreMutuallyExclusiveRadioTargets() {
+    @Test fun normalGuideDoesNotAskForConnectionType() {
         compose.setContent { AgentocTheme { PairingScanGuideDialog({}, {}) } }
         compose.onNodeWithTag("computer-setup-next").performClick()
-        compose.onNodeWithText(text(WorkbenchR.string.journey_choose_connection)).assertIsDisplayed()
-        val longTerm = compose.onNodeWithTag("setup-long-term")
-        val temporary = compose.onNodeWithTag("setup-temporary")
-        for (option in listOf(longTerm, temporary)) {
-            option.assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
-                .assertHasClickAction().assertHeightIsAtLeast(48.dp)
-        }
-        longTerm.assertIsSelected()
-        temporary.assertIsNotSelected().performScrollTo().performClick().assertIsSelected()
-        longTerm.assertIsNotSelected()
-        compose.onNodeWithText(text(WorkbenchR.string.journey_temporary_instructions)).performScrollTo().assertIsDisplayed()
-        temporary.performScrollTo().performClick().assertIsSelected()
-        longTerm.performScrollTo().performClick().assertIsSelected()
-        temporary.assertIsNotSelected()
-        compose.onNodeWithText(text(WorkbenchR.string.journey_account_instructions)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("setup-long-term").assertDoesNotExist()
+        compose.onNodeWithTag("setup-temporary").assertDoesNotExist()
+        compose.onNodeWithText(text(WorkbenchR.string.journey_desktop_trusted)).performScrollTo().assertIsDisplayed()
     }
 
-    @Test fun setupProgressAndConnectionChoiceSurviveStateRestoration() {
+    @Test fun setupProgressSurvivesStateRestoration() {
         val restoration = StateRestorationTester(compose)
         restoration.setContent { AgentocTheme { PairingScanGuideDialog({}, {}) } }
         compose.onNodeWithTag("computer-setup-next").performClick()
-        compose.onNodeWithTag("setup-temporary").performScrollTo().performClick()
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithText(text(WorkbenchR.string.journey_code_step)).assertIsDisplayed()
-        compose.onNodeWithTag("setup-temporary").assertIsSelected()
-        compose.onNodeWithTag("setup-long-term").assertIsNotSelected()
-        compose.onNodeWithText(text(WorkbenchR.string.journey_temporary_instructions)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(text(WorkbenchR.string.journey_desktop_trusted)).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun captureSeparateLoginPage() = captureEntry(false)
+    @Test fun captureSeparateConnectionPage() = captureEntry(true)
+
+    private fun captureEntry(signedIn: Boolean) {
+        val localized = context.createConfigurationContext(Configuration(context.resources.configuration).apply {
+            setLocale(Locale.forLanguageTag("zh-CN"))
+        })
+        compose.setContent { CompositionLocalProvider(LocalContext provides localized) { AgentocTheme {
+            WorkbenchScreen(state = WorkbenchUiState(), showWelcomeAtLaunch = true,
+                welcomeSignedIn = signedIn, welcomeComputerLookup = AccountComputerLookup.Empty)
+        } } }
+        val tag = if (signedIn) "connect-my-computer" else "account-sign-in-primary"
+        compose.onNodeWithTag(tag).performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+        if (context.resources.configuration.fontScale <= 1f) {
+            val bounds = compose.onNodeWithTag(tag).getUnclippedBoundsInRoot()
+            assertTrue(bounds.right - bounds.left <= 280.dp)
+        }
+        capture(if (signedIn) "connection" else "login")
+    }
+
+    private fun capture(name: String) {
+        compose.waitForIdle()
+        android.os.SystemClock.sleep(400)
+        val bitmap = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+        val directory = File(context.getExternalFilesDir(null), "journey-evidence").apply { mkdirs() }
+        val config = context.resources.configuration
+        File(directory, "account-first-$name-${config.fontScale}-${config.screenWidthDp}dp.png").outputStream().use {
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+        bitmap.recycle()
     }
 
     // Run this class both at native display settings and with the device set to

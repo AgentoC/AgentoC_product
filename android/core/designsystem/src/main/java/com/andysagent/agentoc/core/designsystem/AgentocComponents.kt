@@ -218,6 +218,21 @@ fun AgentoButton(
     }
 }
 
+/** Quiet navigation with a full touch target, without another filled surface. */
+@Composable
+fun AgentoTextAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    androidx.compose.material3.TextButton(
+        onClick = onClick,
+        modifier = modifier.defaultMinSize(minHeight = AgentocSpacing.TouchTarget),
+        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+            contentColor = LocalAgentocColors.current.secondaryContent,
+        ),
+    ) {
+        Text(text, style = MaterialTheme.typography.bodyMedium,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
+}
+
 @Composable
 fun AgentoIconButton(
     onClick: () -> Unit,

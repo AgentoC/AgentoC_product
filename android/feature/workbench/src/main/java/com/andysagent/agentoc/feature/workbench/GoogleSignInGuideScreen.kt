@@ -30,7 +30,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import com.andysagent.agentoc.core.designsystem.AgentoTextAction
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,13 +61,17 @@ fun GoogleSignInGuideScreen(
     modifier: Modifier = Modifier,
     onContinueWithBrowser: (() -> Unit)? = null,
     onContinueWithDemo: (() -> Unit)? = null,
+    onScanSignedInComputer: (() -> Unit)? = null,
+    onTemporaryAccess: (() -> Unit)? = null,
+    showBack: Boolean = true,
 ) {
     val colors = LocalAgentocColors.current
+    var otherSignInMethods by rememberSaveable { mutableStateOf(false) }
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.canvas),
+            .background(colors.canvas).testTag("account-sign-in-page"),
         contentAlignment = Alignment.TopCenter,
     ) {
         BoxWithConstraints(
@@ -80,20 +88,20 @@ fun GoogleSignInGuideScreen(
                     .heightIn(min = maxHeight)
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 24.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.Center,
             ) {
-                SignInTopBar(onBack = onBack)
+                if (showBack) SignInTopBar(onBack = onBack)
 
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 48.dp),
+                        .padding(vertical = 32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        text = stringResource(R.string.sign_in_guide_title),
+                        text = stringResource(R.string.journey_login_title),
                         style = MaterialTheme.typography.headlineMedium.copy(
-                            fontSize = 32.sp,
+                            fontSize = 28.sp,
                             lineHeight = 36.sp,
                             fontWeight = FontWeight.SemiBold,
                         ),
@@ -102,7 +110,7 @@ fun GoogleSignInGuideScreen(
                         modifier = Modifier.semantics { heading() },
                     )
 
-                    Spacer(Modifier.height(44.dp))
+                    Spacer(Modifier.height(24.dp))
 
                     AccountConnectionPath()
                 }
@@ -114,46 +122,37 @@ fun GoogleSignInGuideScreen(
                     AgentoButton(
                         text = stringResource(R.string.sign_in_guide_continue_with_google),
                         onClick = onContinue,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.widthIn(min = 200.dp, max = 280.dp).testTag("account-sign-in-primary"),
+                        labelMaxLines = 2,
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp, vertical = 12.dp),
                         decision = true,
                         leadingIcon = { GoogleBrandIcon() },
                     )
 
-                    onContinueWithDemo?.let { onDemo ->
-                        androidx.compose.material3.TextButton(onClick = onDemo) {
-                            Text(stringResource(R.string.demo_sign_in_title))
+
+                    onScanSignedInComputer?.let { scan ->
+                        Spacer(Modifier.height(12.dp))
+                        AgentoTextAction(stringResource(R.string.journey_reverse_sign_in), scan,
+                            Modifier.testTag("sign-in-from-computer"))
+                    }
+                    if (onContinueWithDemo != null || onContinueWithBrowser != null) {
+                        AgentoTextAction(stringResource(R.string.journey_other_sign_in),
+                            { otherSignInMethods = !otherSignInMethods }, Modifier.testTag("other-sign-in-methods"))
+                        if (otherSignInMethods) {
+                            onContinueWithBrowser?.let { browser ->
+                                AgentoTextAction(stringResource(R.string.sign_in_guide_continue_with_browser), browser)
+                            }
+                            onContinueWithDemo?.let { demo ->
+                                AgentoTextAction(stringResource(R.string.demo_sign_in_title), demo)
+                            }
                         }
                     }
-                    if (onContinueWithBrowser != null) {
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            text = stringResource(R.string.sign_in_guide_continue_with_browser),
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontSize = 14.sp,
-                                lineHeight = 20.sp,
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                            color = colors.tertiaryContent,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable(onClick = onContinueWithBrowser)
-                                .padding(vertical = 10.dp),
-                        )
-                        Text(
-                            text = stringResource(R.string.sign_in_guide_continue_with_browser_hint),
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 12.sp,
-                                lineHeight = 17.sp,
-                            ),
-                            color = colors.tertiaryContent,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .widthIn(max = 320.dp)
-                                .padding(top = 2.dp),
-                        )
+                    onTemporaryAccess?.let { temporary ->
+                        Spacer(Modifier.height(24.dp))
+                        AgentoTextAction(stringResource(R.string.journey_temporary_entry), temporary,
+                            Modifier.testTag("temporary-access-entry"))
                     }
+                    Spacer(Modifier.height(24.dp))
                 }
             }
         }
@@ -200,6 +199,7 @@ private fun AccountConnectionPath(modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.Center,
     ) {
         ConnectionNode(
+            modifier = Modifier.weight(1f),
             label = stringResource(R.string.welcome_computer),
             icon = {
                 AgentoWebIcon(
@@ -212,12 +212,14 @@ private fun AccountConnectionPath(modifier: Modifier = Modifier) {
         )
         ConnectionLine()
         ConnectionNode(
+            modifier = Modifier.weight(1f),
             label = stringResource(R.string.sign_in_guide_google_account),
             emphasized = true,
             icon = { GoogleBrandIcon() },
         )
         ConnectionLine()
         ConnectionNode(
+            modifier = Modifier.weight(1f),
             label = stringResource(R.string.welcome_this_phone),
             icon = {
                 AgentoWebIcon(
@@ -240,7 +242,7 @@ private fun ConnectionNode(
 ) {
     val colors = LocalAgentocColors.current
     Column(
-        modifier = modifier.width(88.dp),
+        modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
@@ -252,7 +254,8 @@ private fun ConnectionNode(
         ) {
             icon()
         }
-        Spacer(Modifier.height(10.dp))
+        if (LocalDensity.current.fontScale <= 1.3f) {
+        Spacer(Modifier.height(12.dp))
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium.copy(
@@ -263,8 +266,8 @@ private fun ConnectionNode(
             color = colors.primaryContent,
             textAlign = TextAlign.Center,
             minLines = 2,
-            maxLines = 2,
         )
+        }
     }
 }
 
@@ -280,7 +283,8 @@ private fun ConnectionLine(modifier: Modifier = Modifier) {
     )
 }
 
-@Preview(name = "Google sign-in guide", showBackground = true, widthDp = 390, heightDp = 844)
+@Preview(name = "Google sign-in guide", showBackground = true, widthDp = 320, heightDp = 640)
+@Preview(name = "Expanded sign-in", showBackground = true, widthDp = 840, heightDp = 900)
 @Composable
 private fun GoogleSignInGuidePreview() {
     AgentocTheme {

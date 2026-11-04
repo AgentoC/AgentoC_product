@@ -336,6 +336,7 @@ fun WorkbenchScreen(
     startupOnboardingLoading: Boolean = false,
     showWelcomeAtLaunch: Boolean = false,
     welcomeSignedIn: Boolean = false,
+    welcomeComputerLookup: AccountComputerLookup? = null,
     connectingTargetId: String? = null,
     onSkipWelcome: () -> Unit = {},
     onEvent: (WorkbenchEvent) -> Unit = {},
@@ -351,6 +352,14 @@ fun WorkbenchScreen(
         return
     }
 
+    if (googleSignInSuccess == GoogleSignInRequest.Account ||
+        googleSignInSuccess == GoogleSignInRequest.PairComputerFromWelcome) {
+        LaunchedEffect(googleSignInSuccess) {
+            onGoogleSignInSuccessAction(GoogleSignInSuccessAction.EnterApp)
+        }
+        AccountComputerLookupScreen(AccountComputerLookup.Loading, onRequestComputerDiscovery, modifier)
+        return
+    }
     if (googleSignInSuccess != null) {
         BackHandler(onBack = onGoogleSignInSuccessBack)
         GoogleSignInSuccessScreen(
@@ -378,6 +387,10 @@ fun WorkbenchScreen(
     } == true
     val temporaryPairingAtWelcome = pairingOnboardingState?.temporaryPairing == true && showWelcomeAtLaunch
     if (fullScreenOnboarding != null || showWelcomeAtLaunch || scannerErrorReturningToWelcome || temporaryPairingAtWelcome) {
+        if (fullScreenOnboarding?.step == PairingOnboardingStep.Welcome &&
+            welcomeSignedIn && welcomeComputerLookup == null) {
+            BackHandler { onPairingOnboardingEvent(PairingOnboardingEvent.Dismiss) }
+        }
         if (fullScreenOnboarding?.step == PairingOnboardingStep.GoogleRequired ||
             fullScreenOnboarding?.step == PairingOnboardingStep.ConnectionMethods
         ) {
@@ -385,26 +398,22 @@ fun WorkbenchScreen(
         }
         when (fullScreenOnboarding?.step ?: PairingOnboardingStep.Welcome) {
             PairingOnboardingStep.Welcome -> Box(modifier = modifier.fillMaxSize()) {
-                WelcomeScreen(
-                    onConnectComputer = {
-                        // A persisted account session is enough to start discovery.
-                        // Revalidate it in the activity host, rather than sending a
-                        // signed-in person back through the Google guide.
-                        if (welcomeSignedIn) {
-                            onRequestGoogleSignIn(GoogleSignInRequest.PairComputer)
-                        } else {
-                            onPairingOnboardingEvent(PairingOnboardingEvent.ContinueFromWelcome)
-                        }
-                    },
-                    onScanPairing = onScanPairingFromWelcome,
-                    onSetUpComputer = onSetUpComputer,
-                    signedIn = welcomeSignedIn,
-                    onLearnConnectionMethods = {
-                        onPairingOnboardingEvent(PairingOnboardingEvent.LearnConnectionMethods)
-                    },
-                    onSkip = onSkipWelcome,
-                    onDemoSignIn = onRequestDemoSignIn,
-                )
+                if (!welcomeSignedIn) {
+                    GoogleSignInGuideScreen(
+                        onContinue = { onRequestGoogleSignIn(GoogleSignInRequest.PairComputerFromWelcome) },
+                        onContinueWithBrowser = { onRequestBrowserSignIn(GoogleSignInRequest.PairComputerFromWelcome) },
+                        onContinueWithDemo = onRequestDemoSignIn,
+                        onScanSignedInComputer = onScanPairingFromWelcome,
+                        onTemporaryAccess = { onPairingOnboardingEvent(PairingOnboardingEvent.LearnConnectionMethods) },
+                        onBack = {}, showBack = false, modifier = modifier,
+                    )
+                } else if (welcomeComputerLookup != null && welcomeComputerLookup != AccountComputerLookup.Empty) {
+                    AccountComputerLookupScreen(welcomeComputerLookup, onRequestComputerDiscovery, modifier)
+                } else {
+                    WelcomeScreen(onConnectComputer = onSetUpComputer,
+                        onScanPairing = onScanPairingFromWelcome, onSetUpComputer = onSetUpComputer,
+                        signedIn = true, modifier = modifier)
+                }
                 if (scannerErrorReturningToWelcome || temporaryPairingAtWelcome) {
                     PairingOnboardingDialog(
                         state = pairingOnboardingState!!,
@@ -422,6 +431,8 @@ fun WorkbenchScreen(
                 modifier = modifier,
             )
             PairingOnboardingStep.GoogleRequired -> GoogleSignInGuideScreen(
+                onScanSignedInComputer = onScanPairingFromWelcome,
+                onTemporaryAccess = { onPairingOnboardingEvent(PairingOnboardingEvent.LearnConnectionMethods) },
                 onContinueWithDemo = onRequestDemoSignIn,
                 onContinue = {
                     val request = when (fullScreenOnboarding!!.mode) {

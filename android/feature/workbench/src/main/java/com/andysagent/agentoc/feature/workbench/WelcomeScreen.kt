@@ -37,6 +37,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.testTag
+import com.andysagent.agentoc.core.designsystem.AgentoTextAction
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -99,6 +101,7 @@ fun WelcomeScreen(
     }
 }
 
+/** Connection is a distinct signed-in page; authentication is rendered by its own screen. */
 @Composable
 private fun WelcomeConnectionContent(
     signedIn: Boolean,
@@ -110,117 +113,44 @@ private fun WelcomeConnectionContent(
     onSetUpComputer: () -> Unit,
 ) {
     val colors = LocalAgentocColors.current
-
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 8.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 48.dp).testTag("connect-computer-page"),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        // The connection task, rather than a corner brand mark, owns the
-        // first visual focus on this screen.
-        Spacer(Modifier.height(48.dp))
-
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            DeviceRelationship()
-            Spacer(Modifier.height(32.dp))
-            Text(
-                text = stringResource(R.string.welcome_connect_title),
-                style = MaterialTheme.typography.displaySmall,
-                color = colors.primaryContent,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.semantics { heading() },
-            )
-        }
-
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = stringResource(R.string.welcome_value_summary),
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.secondaryContent,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(28.dp))
-
-        AgentoButton(
-            text = stringResource(
-                // The heading carries the connection context. A short verb
-                // keeps every localized action comfortably within its pill.
-                R.string.journey_setup_computer,
-            ),
-            onClick = onSetUpComputer,
-            modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth(),
-            decision = true,
-            labelStyle = MaterialTheme.typography.labelLarge.copy(
-                fontSize = 17.sp,
-                lineHeight = 22.sp,
-                fontWeight = FontWeight.SemiBold,
-            ),
-        )
-
+        DeviceRelationship()
+        Spacer(Modifier.height(32.dp))
+        Text(stringResource(R.string.journey_connect_title),
+            style = MaterialTheme.typography.headlineMedium, color = colors.primaryContent,
+            textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.height(12.dp))
+        Text(stringResource(R.string.journey_connect_summary),
+            style = MaterialTheme.typography.bodyMedium, color = colors.secondaryContent,
+            textAlign = TextAlign.Center)
+        Spacer(Modifier.height(32.dp))
+        AgentoButton(stringResource(R.string.journey_setup_computer), onClick = onSetUpComputer,
+            modifier = Modifier.widthIn(min = 180.dp, max = 280.dp).testTag("connect-my-computer"),
+            decision = true, labelMaxLines = 2,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp, vertical = 12.dp))
+    }
+}
 
-        if (signedIn) {
-            AgentoButton(
-                text = stringResource(R.string.welcome_scan_pairing_code),
-                onClick = onScanPairing,
-                secondary = true,
-                modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth(),
-            )
-            QuietAction(text = stringResource(R.string.welcome_try_direct_connection), onClick = onConnectComputer)
-            QuietAction(
-                text = stringResource(R.string.welcome_other_connection_methods),
-                onClick = onLearnConnectionMethods,
-            )
-            TextButton(
-                onClick = onSkip,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = 48.dp),
-                colors = ButtonDefaults.textButtonColors(contentColor = colors.secondaryContent),
-            ) {
-                Text(
-                    text = stringResource(R.string.welcome_not_now),
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 15.sp,
-                        lineHeight = 22.sp,
-                    ),
-                )
-            }
-        } else {
-            // Keep the existing-code shortcut separate from computer setup.
-            AgentoButton(
-                text = stringResource(R.string.welcome_scan_pairing_code),
-                onClick = onScanPairing,
-                modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth(),
-                secondary = true,
-                leadingIcon = {
-                    AgentoWebIcon(
-                        glyph = AgentoWebGlyph.Qr,
-                        contentDescription = null,
-                        modifier = Modifier.size(19.dp),
-                    )
-                },
-                labelStyle = MaterialTheme.typography.labelLarge.copy(
-                    fontSize = 16.sp,
-                    lineHeight = 21.sp,
-                    fontWeight = FontWeight.SemiBold,
-                ),
-            )
-            QuietAction(
-                text = stringResource(R.string.welcome_other_connection_methods),
-                onClick = onLearnConnectionMethods,
-            )
-            Spacer(Modifier.height(16.dp))
-            QuietAction(text = stringResource(R.string.settings_sign_in), onClick = onConnectComputer)
-            onDemoSignIn?.let { onDemo ->
-                QuietAction(text = stringResource(R.string.demo_sign_in_title), onClick = onDemo)
-            }
+enum class AccountComputerLookup { Loading, Empty, Available, Failed }
+
+@Composable
+fun AccountComputerLookupScreen(state: AccountComputerLookup, onRetry: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = LocalAgentocColors.current
+    Column(modifier.fillMaxSize().background(colors.canvas).padding(24.dp)
+        .testTag("account-computer-lookup"), verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(stringResource(if (state == AccountComputerLookup.Failed) R.string.journey_devices_failed else R.string.journey_devices_loading),
+            style = MaterialTheme.typography.titleMedium, color = colors.primaryContent,
+            textAlign = TextAlign.Center)
+        if (state == AccountComputerLookup.Failed) {
+            Spacer(Modifier.height(24.dp))
+            AgentoButton(stringResource(R.string.journey_devices_retry), onClick = onRetry,
+                modifier = Modifier.testTag("retry-account-computers"))
         }
     }
 }
@@ -283,7 +213,7 @@ fun ConnectionMethodsScreen(
                 ) {
                     AgentoIconButton(
                         onClick = onBack,
-                        contentDescription = stringResource(R.string.welcome_back_to_connection),
+                        contentDescription = stringResource(R.string.pairing_back),
                     ) {
                         AgentoWebIcon(
                             glyph = AgentoWebGlyph.Back,
@@ -301,7 +231,7 @@ fun ConnectionMethodsScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        text = stringResource(R.string.welcome_connection_methods_title),
+                        text = stringResource(R.string.journey_temporary_entry),
                         style = MaterialTheme.typography.headlineMedium.copy(
                             fontSize = 30.sp,
                             lineHeight = 36.sp,
@@ -313,15 +243,7 @@ fun ConnectionMethodsScreen(
                     )
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        text = stringResource(R.string.welcome_connection_methods_detail),
-                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 22.sp),
-                        color = colors.secondaryContent,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.widthIn(max = 336.dp),
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        text = stringResource(R.string.temporary_pairing_detail),
+                        text = stringResource(R.string.journey_temporary_instructions),
                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 22.sp),
                         color = colors.secondaryContent,
                         textAlign = TextAlign.Center,
@@ -329,23 +251,13 @@ fun ConnectionMethodsScreen(
                     )
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    AgentoButton(
-                        text = stringResource(R.string.welcome_try_direct_connection),
-                        onClick = onTryDirectConnection,
-                        modifier = Modifier.fillMaxWidth(),
-                        decision = true,
-                    )
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     AgentoButton(
                         text = stringResource(R.string.temporary_pairing_scan),
                         onClick = onScanTemporary,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.widthIn(max = 280.dp), labelMaxLines = 2,
                     )
-                    AgentoButton(
-                        text = stringResource(R.string.welcome_back_to_connection),
-                        onClick = onBack,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    AgentoTextAction(stringResource(R.string.pairing_back), onBack)
                 }
             }
         }
@@ -363,7 +275,8 @@ private fun WelcomePreview() {
     }
 }
 
-@Preview(showBackground = true)
+@Preview(showBackground = true, widthDp = 320, heightDp = 640)
+@Preview(showBackground = true, widthDp = 840, heightDp = 900, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun SignedInWelcomePreview() {
     AgentocTheme {

@@ -118,6 +118,8 @@ import com.andysagent.agentoc.feature.workbench.PairingOnboardingViewModel
 import com.andysagent.agentoc.feature.workbench.PairingOnboardingViewModelFactory
 import com.andysagent.agentoc.feature.workbench.TemporaryClaimReplacementOutcome
 import com.andysagent.agentoc.feature.workbench.GoogleSignInRequest
+import com.andysagent.agentoc.feature.workbench.PairingOnboardingStep
+import com.andysagent.agentoc.feature.workbench.AccountComputerLookup
 import com.andysagent.agentoc.feature.workbench.GoogleSignInSuccessAction
 import com.andysagent.agentoc.feature.workbench.WorkbenchEvent
 import com.andysagent.agentoc.feature.workbench.WorkbenchUiState
@@ -158,20 +160,15 @@ internal fun shouldShowWelcomeAtLaunch(
     pairingOpen: Boolean,
     temporaryControlActive: Boolean = false,
 ): Boolean {
-    // A phone with no trusted computer has no useful workbench content yet.
-    // Both the signed-in and signed-out paths therefore begin at the same
-    // connection Welcome; its primary action changes to sign-in when needed.
-    // Never interrupt existing local work, nor speculate while verification is
-    // unavailable.
-    val needsFirstComputer = !hasLocalComputers && accountStatus in setOf(
-        GoogleAccountStatus.SignedIn,
-        GoogleAccountStatus.SignedOut,
-    )
+    // Account authentication precedes computer setup. A signed-in account's
+    // authoritative directory (including offline computers) decides setup.
+    val needsFirstComputer = accountStatus == GoogleAccountStatus.SignedOut ||
+        (!hasLocalComputers && accountStatus == GoogleAccountStatus.SignedIn)
     return !startupOnboardingLoading &&
         !temporaryControlActive &&
         !hasPendingGoogleBinding &&
         !pairingOpen &&
-        !welcomeSuppressedBySignIn &&
+        (!welcomeSuppressedBySignIn || accountStatus == GoogleAccountStatus.SignedOut) &&
         needsFirstComputer
 }
 
@@ -284,6 +281,7 @@ class MainActivity : ComponentActivity() {
     private var discoveredComputers by mutableStateOf<List<DiscoveredComputer>>(emptyList())
     private var accountDirectoryDevices by mutableStateOf<List<AccountDirectoryDevice>>(emptyList())
     private var accountDirectoryGeneration = 0L
+    private var accountComputerLookup by mutableStateOf(AccountComputerLookup.Loading)
     private var pendingComputerConnectionId by mutableStateOf<String?>(null)
     private var pendingComputerConnectionIsPrimary by mutableStateOf(true)
     private var welcomeSuppressedBySignIn by mutableStateOf(false)
@@ -664,7 +662,9 @@ class MainActivity : ComponentActivity() {
                             GoogleSignInRequest.PairComputer,
                             GoogleSignInRequest.PairComputerFromWelcome -> {
                                 accounts.onEvent(AccountsEvent.AccountSessionEstablished(result.profile))
-                                pairingOnboarding.onEvent(PairingOnboardingEvent.AccountSessionReady)
+                                if (request == GoogleSignInRequest.PairComputer) {
+                                    pairingOnboarding.onEvent(PairingOnboardingEvent.AccountSessionReady)
+                                }
                                 googleSignInSuccess = request
                             }
                             GoogleSignInRequest.ManageDevices -> {
@@ -768,7 +768,9 @@ class MainActivity : ComponentActivity() {
                                 GoogleSignInRequest.PairComputerFromWelcome,
                                 -> {
                                     accounts.onEvent(AccountsEvent.AccountSessionEstablished(profile))
-                                    pairingOnboarding.onEvent(PairingOnboardingEvent.AccountSessionReady)
+                                    if (request == GoogleSignInRequest.PairComputer) {
+                                        pairingOnboarding.onEvent(PairingOnboardingEvent.AccountSessionReady)
+                                    }
                                     googleSignInSuccess = request
                                 }
                                 GoogleSignInRequest.ManageDevices -> {
@@ -968,7 +970,9 @@ class MainActivity : ComponentActivity() {
                     startupOnboardingLoading = startupOnboardingLoading,
                     hasPendingGoogleBinding = pendingGoogleBinding != null,
                     welcomeSuppressedBySignIn = welcomeSuppressedBySignIn,
-                    hasLocalComputers = computerDirectory.computers.isNotEmpty(),
+                    hasLocalComputers = if (cachedAccountStatus == GoogleAccountStatus.SignedIn) {
+                        accountComputerLookup == AccountComputerLookup.Available
+                    } else computerDirectory.computers.isNotEmpty(),
                     accountStatus = cachedAccountStatus,
                     pairingOpen = pairingOnboardingState.open,
                     temporaryControlActive = temporaryControlActive,
@@ -1025,16 +1029,30 @@ class MainActivity : ComponentActivity() {
                         ),
                     )
                 }
-                LaunchedEffect(accountsState.hasVerifiedAccountSession, accountsState.accountId) {
+                LaunchedEffect(accountsState.hasVerifiedAccountSession, accountsState.accountId, accountsState.status) {
                     if (!accountsState.hasVerifiedAccountSession) {
                         accountDirectoryGeneration++
                         accountDirectoryDevices = emptyList()
                         discoveredComputers = emptyList()
+                        accountComputerLookup = if (accountsState.status == GoogleAccountStatus.VerificationUnavailable) {
+                            AccountComputerLookup.Failed
+                        } else AccountComputerLookup.Loading
                         return@LaunchedEffect
                     }
                     try { refreshAccountDirectory(app) }
                     catch (cancelled: CancellationException) { throw cancelled }
                     catch (_: Exception) { /* The current request owns its failure projection. */ }
+                }
+                LaunchedEffect(accountComputerLookup, accountsState.hasVerifiedAccountSession,
+                    pairingOnboardingState.step, pairingOnboardingState.open) {
+                    if (accountsState.hasVerifiedAccountSession &&
+                        accountComputerLookup == AccountComputerLookup.Available &&
+                        !welcomeSuppressedBySignIn &&
+                        (!pairingOnboardingState.open || pairingOnboardingState.step == PairingOnboardingStep.Welcome)) {
+                        welcomeSuppressedBySignIn = true
+                        pairingOnboarding.onEvent(PairingOnboardingEvent.Dismiss)
+                        shell.onEvent(AppShellEvent.SelectDestination(AgentoDestination.Home))
+                    }
                 }
                 val localRemoteTargets = computerDirectory.computers.map { computer ->
                     RemoteTarget(
@@ -1280,7 +1298,8 @@ class MainActivity : ComponentActivity() {
                     googleSignInSuccess = googleSignInSuccess,
                     startupOnboardingLoading = startupOnboardingLoading,
                     showWelcomeAtLaunch = !heroDemo && showWelcomeAtLaunch,
-                    welcomeSignedIn = accountsState.hasVerifiedAccountSession,
+                    welcomeSignedIn = cachedAccountStatus == GoogleAccountStatus.SignedIn,
+                    welcomeComputerLookup = accountComputerLookup.takeUnless { welcomeSuppressedBySignIn },
                     connectingTargetId = pendingComputerConnectionId,
                     onSkipWelcome = {
                         welcomeSuppressedBySignIn = true
@@ -1296,17 +1315,12 @@ class MainActivity : ComponentActivity() {
                                 googleSignInSuccess = null
                                 pairingOnboarding.onEvent(PairingOnboardingEvent.StartComputerConnection)
                             }
-                            GoogleSignInSuccessAction.OpenSignedInWelcome -> {
-                                googleSignInSuccess = null
-                                pairingOnboarding.onEvent(PairingOnboardingEvent.OpenWelcome)
-                            }
+                            GoogleSignInSuccessAction.OpenSignedInWelcome,
                             GoogleSignInSuccessAction.EnterApp -> {
                                 googleSignInSuccess = null
-                                // Signing in alone does not satisfy the setup
-                                // requirement. Return to the signed-in welcome
-                                // so the user can scan, discover a computer, or
-                                // explicitly skip this session.
+                                welcomeSuppressedBySignIn = false
                                 pairingOnboarding.onEvent(PairingOnboardingEvent.OpenWelcome)
+                                shell.onEvent(AppShellEvent.SelectDestination(AgentoDestination.Home))
                             }
                         }
                     },
@@ -1776,6 +1790,7 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun refreshAccountDirectory(app: AgentoCApplication) {
         val generation = ++accountDirectoryGeneration
+        accountComputerLookup = AccountComputerLookup.Loading
         val expectedAccount = app.runtime.configStore.accountSession.first()?.accountId ?: return
         suspend fun current(): Boolean {
             currentCoroutineContext().ensureActive()
@@ -1787,6 +1802,7 @@ class MainActivity : ComponentActivity() {
             if (!current()) return
             accountDirectoryDevices = devices
             discoveredComputers = devices.toDiscoverableComputers()
+            accountComputerLookup = accountComputerLookupFor(devices)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
@@ -1796,6 +1812,7 @@ class MainActivity : ComponentActivity() {
             if (current()) {
                 accountDirectoryDevices = emptyList()
                 discoveredComputers = emptyList()
+                accountComputerLookup = AccountComputerLookup.Failed
             }
             throw error
         }
@@ -2017,3 +2034,9 @@ internal fun shouldUseExistingComputerTarget(
         && target.endpoint.isNotBlank()
         && runCatching { RemoteTargetAccessState.valueOf(target.accessState) }
             .getOrDefault(RemoteTargetAccessState.Unavailable) != RemoteTargetAccessState.NeedsPairing
+
+/** Presence is independent of online state, rendezvous keys, or local phone pairing. */
+internal fun accountComputerLookupFor(devices: List<AccountDirectoryDevice>): AccountComputerLookup =
+    if (devices.any { it.deviceKind == "computer" && it.unboundAt.isNullOrBlank() }) {
+        AccountComputerLookup.Available
+    } else AccountComputerLookup.Empty

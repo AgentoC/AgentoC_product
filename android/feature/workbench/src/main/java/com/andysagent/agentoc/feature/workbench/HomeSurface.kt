@@ -44,6 +44,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.testTag
 import com.andysagent.agentoc.core.designsystem.AgentoButton
+import com.andysagent.agentoc.core.designsystem.AgentoListItem
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -360,9 +361,10 @@ fun HomeSurface(
                     item(key = "continue-work") {
                         HomeSection(title = stringResource(R.string.journey_continue_work), palette = palette,
                             grouped = true, modifier = contentModifier) {
-                            AgentoButton(continueSession.title, onClick = {
+                            AgentoListItem(title = continueSession.title, onClick = {
                                 onEvent(WorkbenchEvent.SelectSession(continueSession.id))
-                            }, secondary = true, modifier = Modifier.fillMaxWidth().testTag("home-continue-work"))
+                            }, modifier = Modifier.fillMaxWidth().testTag("home-continue-work"),
+                                trailing = { AgentoWebIcon(AgentoWebGlyph.ChevronRight, null, Modifier.size(24.dp)) })
                         }
                     }
                 }
