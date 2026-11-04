@@ -132,6 +132,11 @@ function canonicalizeCommand(command) {
 
   const leadingCount = stripped.sawSudo ? tokens.findIndex((token) => token !== 'sudo' && !/^-[-EuAknSb]+$/.test(token)) : 0;
   const canonicalTokens = leadingCount > 0 ? tokens.slice(leadingCount) : tokens;
+  // Preserve original token quoting when constructing the command used by
+  // semantic classification and the privileged executor. Joining the
+  // decoded argv would turn one argument like "a b" into two arguments.
+  const rawTokens = raw.match(/(?:[^\s"'`]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+/g) || [];
+  if (rawTokens.length !== tokens.length) reject('APPROVED_ACTION_COMMAND_INVALID', 'command token boundaries are invalid');
   const forbidden = new Set(['sudo', 'su', 'doas', 'sh', 'bash', 'zsh', 'dash', 'ash', 'ksh', 'fish', 'env']);
   if (canonicalTokens.some((token) => forbidden.has(String(token).toLowerCase()))) {
     reject('APPROVED_ACTION_NESTED_ESCALATION', 'nested privilege or shell launchers are not allowed');
@@ -140,7 +145,7 @@ function canonicalizeCommand(command) {
     reject('APPROVED_ACTION_INTERPRETER', 'interpreter launchers are not allowed');
   }
   return {
-    command: canonicalTokens.join(' '),
+    command: rawTokens.slice(leadingCount > 0 ? leadingCount : 0).join(' '),
     argv: canonicalTokens,
     sawLeadingSudo: stripped.sawSudo,
   };

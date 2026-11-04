@@ -21,7 +21,7 @@
  */
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -197,7 +197,7 @@ const HOST_CONTEXT = approvedRevalidationContext({
   const result = await executeApprovedAction({
     actionId: 'aa_session_reval_ok',
     executionClass: 'session',
-    argv: ['printf', 'approved-action-revalidation-ok'],
+    argv: [process.execPath, '-e', 'process.stdout.write("approved-action-revalidation-ok")'],
     cwd: tmp,
   }, {
     sessionId: SESSION, runId: RUN, turnId: TURN,
@@ -206,6 +206,7 @@ const HOST_CONTEXT = approvedRevalidationContext({
   check('injected revalidate provider was actually invoked', invoked === true);
   check('session successful revalidation executes argv', result.ok === true);
   eq('session successful revalidation preserves stdout', result.resultRef.stdout, 'approved-action-revalidation-ok');
+  rmSync(tmp, { recursive: true, force: true });
 }
 
 // ── 8. injected provider is invoked BEFORE execFile (spy order) ────────────────
@@ -220,13 +221,14 @@ const HOST_CONTEXT = approvedRevalidationContext({
   const result = await executeApprovedAction({
     actionId: 'aa_session_reval_spy',
     executionClass: 'session',
-    argv: ['node', '-e', script],
+    argv: [process.execPath, '-e', script],
     cwd: tmp,
   }, {
     sessionId: SESSION, runId: RUN, turnId: TURN,
     revalidate: provider,
   });
   eq('revalidate ran before execFile (marker visible to the executed argv)', result.resultRef.stdout, 'provider-first');
+  rmSync(tmp, { recursive: true, force: true });
 }
 
 // ── 9. revalidation context surfaces approved snapshot identity + resource ────

@@ -115,6 +115,7 @@ check('new action binds canonical command and argv', isApprovedActionManifestInt
 check('altered command invalidates action', !isApprovedActionManifestIntact({ ...host, canonicalCommand: 'systemctl restart sshd' }));
 check('altered argv invalidates action', !isApprovedActionManifestIntact({ ...host, argv: ['systemctl', 'restart', 'sshd'] }));
 const ambiguous = buildApprovedAction({ command: 'sudo systemctl restart "a b"' }, context);
+check('canonical command preserves argument boundaries', ambiguous.canonicalCommand === 'systemctl restart "a b"');
 check('argument boundaries are bound', !isApprovedActionManifestIntact({ ...ambiguous, argv: ['systemctl', 'restart', 'a', 'b'] }));
 check('review shows argument boundaries', createApprovedActionClientProjection(ambiguous).command === 'systemctl restart "a b"');
 
