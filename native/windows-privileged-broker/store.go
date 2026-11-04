@@ -60,6 +60,9 @@ type persistedBrokerState struct {
 	Devices           map[string]brokerDevice            `json:"devices"`
 	Enrollments       map[string]pendingDeviceEnrollment `json:"enrollments"`
 	Requests          map[string]requestRecord           `json:"requests"`
+	AutoInstalls      map[string]autoInstallRecord       `json:"autoInstalls,omitempty"`
+	OwnerInstalls     map[string]ownerInstallRecord      `json:"ownerInstalls,omitempty"`
+	AutoInstallSigner *autoInstallSigner                 `json:"autoInstallSigner,omitempty"`
 	Audit             []auditEntry                       `json:"audit"`
 }
 
@@ -175,6 +178,28 @@ func recoverInterruptedExecutions(state *persistedBrokerState, now time.Time) (b
 		}
 		recovered = true
 	}
+	for nonce, record := range state.AutoInstalls {
+		if record.Status != statusExecuting {
+			continue
+		}
+		record.Status, record.Code, record.UpdatedAt = statusUnknown, "EXECUTION_OUTCOME_UNKNOWN", now.UTC()
+		state.AutoInstalls[nonce] = record
+		if err := appendAuditState(state, "auto_install.unknown", record.Grant.RequestID, record.Code, record.Digest); err != nil {
+			return false, err
+		}
+		recovered = true
+	}
+	for nonce, record := range state.OwnerInstalls {
+		if record.Status != statusExecuting {
+			continue
+		}
+		record.Status, record.Code, record.UpdatedAt = statusUnknown, "EXECUTION_OUTCOME_UNKNOWN", now.UTC()
+		state.OwnerInstalls[nonce] = record
+		if err := appendAuditState(state, "owner_install.unknown", record.Grant.RequestID, record.Code, record.Digest); err != nil {
+			return false, err
+		}
+		recovered = true
+	}
 	return recovered, nil
 }
 
@@ -227,6 +252,16 @@ func (s *brokerStore) RecordProposal(request brokerRequest, now time.Time) (requ
 	var result requestRecord
 	duplicate := false
 	err = s.transact(func(next *persistedBrokerState) error {
+		for _, automatic := range next.AutoInstalls {
+			if automatic.Grant.RequestID == request.RequestID {
+				return errRequestConflict
+			}
+		}
+		for _, automatic := range next.OwnerInstalls {
+			if automatic.Grant.RequestID == request.RequestID {
+				return errRequestConflict
+			}
+		}
 		if existing, ok := next.Requests[request.RequestID]; ok {
 			if existing.Digest != digest {
 				return errRequestConflict
@@ -415,6 +450,7 @@ func (s *brokerStore) ResetOwner(now time.Time) error {
 		}
 		next.PolicyGeneration++
 		next.OwnerID = ""
+		next.AutoInstallSigner = nil
 		next.TargetFingerprint = ""
 		next.Devices = make(map[string]brokerDevice)
 		next.Enrollments = make(map[string]pendingDeviceEnrollment)
@@ -605,6 +641,26 @@ func expireOutstandingApprovals(state *persistedBrokerState, code string, now ti
 			if err := appendAuditState(state, "request.unknown", id, code, record.Digest); err != nil {
 				return err
 			}
+		}
+	}
+	for nonce, record := range state.AutoInstalls {
+		if record.Status != statusExecuting {
+			continue
+		}
+		record.Status, record.Code, record.UpdatedAt = statusUnknown, code, now.UTC()
+		state.AutoInstalls[nonce] = record
+		if err := appendAuditState(state, "auto_install.unknown", record.Grant.RequestID, code, record.Digest); err != nil {
+			return err
+		}
+	}
+	for nonce, record := range state.OwnerInstalls {
+		if record.Status != statusExecuting {
+			continue
+		}
+		record.Status, record.Code, record.UpdatedAt = statusUnknown, code, now.UTC()
+		state.OwnerInstalls[nonce] = record
+		if err := appendAuditState(state, "owner_install.unknown", record.Grant.RequestID, code, record.Digest); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -877,6 +933,43 @@ func validateState(state persistedBrokerState) error {
 			record.Result.TargetID != record.Request.TargetID || len(record.Result.Detail) > 128) {
 			return errStateInvalid
 		}
+	}
+	if len(state.AutoInstalls) > maxStoredRequests {
+		return errStateInvalid
+	}
+	if state.AutoInstallSigner != nil {
+		if !validRequestID(state.AutoInstallSigner.KeyID) {
+			return errStateInvalid
+		}
+		if _, err := parseAutoInstallPublicKey(state.AutoInstallSigner.PublicKey); err != nil {
+			return errStateInvalid
+		}
+	}
+	autoRequests := make(map[string]bool, len(state.AutoInstalls))
+	for nonce, record := range state.AutoInstalls {
+		message, err := autoInstallSigningBytes(record.Grant)
+		if err != nil || nonce != record.Grant.Nonce || !autoInstallNoncePattern.MatchString(nonce) ||
+			!validRequestID(record.Grant.RequestID) || autoRequests[record.Grant.RequestID] ||
+			!isSHA256Hex(record.Digest) || record.Digest != fmt.Sprintf("%x", sha256.Sum256(message)) ||
+			!(record.Status == statusExecuting || record.Status == statusSucceeded || record.Status == statusFailed || record.Status == statusUnknown) ||
+			!validAuditCode(record.Code) || !record.CreatedAt.Equal(record.CreatedAt.UTC()) || !record.UpdatedAt.Equal(record.UpdatedAt.UTC()) {
+			return errStateInvalid
+		}
+		autoRequests[record.Grant.RequestID] = true
+	}
+	if len(state.OwnerInstalls) > maxStoredRequests {
+		return errStateInvalid
+	}
+	for nonce, record := range state.OwnerInstalls {
+		message, err := ownerInstallGrantBytes(record.Grant)
+		if err != nil || nonce != record.Grant.Nonce || !ownerGrantNonce.MatchString(nonce) || !validRequestID(record.Grant.RequestID) ||
+			autoRequests[record.Grant.RequestID] || state.Requests[record.Grant.RequestID].Request.RequestID != "" ||
+			!isSHA256Hex(record.Digest) || record.Digest != fmt.Sprintf("%x", sha256.Sum256(message)) ||
+			!(record.Status == statusExecuting || record.Status == statusSucceeded || record.Status == statusFailed || record.Status == statusUnknown) ||
+			!validAuditCode(record.Code) || !record.CreatedAt.Equal(record.CreatedAt.UTC()) || !record.UpdatedAt.Equal(record.UpdatedAt.UTC()) {
+			return errStateInvalid
+		}
+		autoRequests[record.Grant.RequestID] = true
 	}
 	return nil
 }
