@@ -51,6 +51,11 @@ import com.andysagent.agentoc.core.domain.ScopedMessageClient
 import com.andysagent.agentoc.core.model.RuntimeConnectionState
 import com.andysagent.agentoc.core.model.AppLanguage
 import com.andysagent.agentoc.core.network.*
+import com.andysagent.agentoc.core.p2p.IceServer
+import com.andysagent.agentoc.core.p2p.P2PCandidate
+import com.andysagent.agentoc.core.p2p.P2PHttpRequest
+import com.andysagent.agentoc.core.p2p.P2PProtocol
+import com.andysagent.agentoc.core.p2p.WebRTCDataChannelTransport
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -158,6 +163,18 @@ class AppApiRuntimeGraphTest {
         assumeTrue(port != null && port in 1025..65535)
         val fixturePort = requireNotNull(port)
         val pc = Pc("pc-a").apply { brokerPort = fixturePort }
+        val args = InstrumentationRegistry.getArguments()
+        val p2pUrl = args.getString("p2pSignalingUrl")
+        if (!p2pUrl.isNullOrBlank()) {
+            val p2pRoom = requireNotNull(args.getString("p2pRoomId"))
+            val p2pSecret = requireNotNull(args.getString("p2pSecret"))
+            val stunUrl = args.getString("p2pStunUrl")?.takeIf { it.startsWith("stun:") }
+            val p2p = WebRTCDataChannelTransport(P2PCandidate(p2pUrl, p2pRoom, p2pSecret,
+                stunUrl?.let { listOf(IceServer(it)) } ?: emptyList()), application,
+                connectTimeoutMs = 30_000L, requestTimeoutMs = 15_000L)
+            pc.brokerP2p = p2p
+            try { p2p.connect().getOrThrow() } catch (error: Throwable) { p2p.close(); throw error }
+        }
         pcs[pc.id] = pc
         config.upsertComputer(LinkedComputer(pc.id, "", "Isolated Windows fixture", autoConnect = false), select = true)
         val graph = graph()
@@ -1651,6 +1668,7 @@ class AppApiRuntimeGraphTest {
 
     private class Pc(val id: String) {
         var brokerPort: Int = 0
+        var brokerP2p: WebRTCDataChannelTransport? = null
         val healthReads = AtomicInteger()
         var healthCode = 200
         var healthBody = """{"ok":true,"status":"ready"}"""
@@ -1710,7 +1728,7 @@ class AppApiRuntimeGraphTest {
         override val connectionState = MutableStateFlow<RuntimeConnectionState>(RuntimeConnectionState.Disconnected)
         override fun start() { starts.incrementAndGet(); onStart(); connectionState.value = if (pc.connects) RuntimeConnectionState.Connected else RuntimeConnectionState.Connecting }
         override suspend fun stop() { beforeStop?.invoke() }
-        override suspend fun close() { closes.incrementAndGet(); connectionState.value = RuntimeConnectionState.Disconnected }
+        override suspend fun close() { closes.incrementAndGet(); pc.brokerP2p?.close(); connectionState.value = RuntimeConnectionState.Disconnected }
         override fun applyVerifiedBootstrap(plan: BootstrapConnectionPlan) { require(plan.contract.instanceId == pc.id) }
         override fun refresh() { refreshes.incrementAndGet() }
         override fun connectInvalidationSocket() {}
@@ -1751,6 +1769,12 @@ class AppApiRuntimeGraphTest {
         override suspend fun execute(request: ApiRequest): ApiResponse {
             check(connectionState.value == RuntimeConnectionState.Connected)
             if (pc.brokerPort != 0 && request.path.startsWith("/api/windows-privileged-broker/")) {
+                pc.brokerP2p?.let { p2p ->
+                    val headers = request.headers + mapOf("Authorization" to "Bearer rdt_${"a".repeat(64)}", "Content-Type" to "application/json")
+                    val response = p2p.request(P2PHttpRequest(id = UUID.randomUUID().toString(), method = request.method,
+                        path = request.path, headers = headers, bodyBase64 = request.body?.let(P2PProtocol::encodeBody) ?: "")).getOrThrow()
+                    return ApiResponse(response.status, P2PProtocol.decodeBodyToString(response.bodyBase64), response.headers)
+                }
                 return fixtureRequest(pc.brokerPort, request)
             }
             if (request.path == "/healthz") {

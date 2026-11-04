@@ -10,6 +10,9 @@ import { windowsServiceOwnerSigningBytes, windowsServiceReviewSigningBytes } fro
 import { buildApprovedAction } from '../chat/approved-actions.mjs';
 import { prepareApprovedActionSemanticProjection } from '../chat/approved-action-semantic.mjs';
 import { submitOrResumeWindowsServiceProposal, queryWindowsServiceProposal } from '../chat/windows-service-proposal.mjs';
+import { runP2PHostAgent } from '../lib/p2p-host-agent.mjs';
+import { createP2PRoomId } from '../lib/p2p-signal-protocol.mjs';
+import { createP2PSignaling } from '../p2p/signaling-server.mjs';
 
 const fixtureDir = process.env.AGENTOC_BROKER_LIVE_CLIENT_DIR;
 if (process.platform !== 'win32' || !fixtureDir) {
@@ -33,6 +36,7 @@ async function waitForFixture() {
 let succeeded = false;
 const phonePort = Number(process.env.AGENTOC_BROKER_PHONE_TEST_PORT || 0);
 let phoneServer, phoneReview, phoneDecision, resolvePhoneDecision, phoneClient, phoneSignature;
+let p2pHost, p2pSignaling;
 let phonePublicKey;
 const phoneDecisionPromise = new Promise(resolve => { resolvePhoneDecision = resolve; });
 try {
@@ -91,7 +95,26 @@ try {
         } else res.writeHead(404).end();
       })().catch(() => res.writeHead(400).end()); });
     });
+    const p2pSecret = process.env.AGENTOC_BROKER_P2P_SECRET || '';
+    if (p2pSecret) {
+      assert.match(p2pSecret, /^rpi_[a-f0-9]{48}$/);
+      assert.ok(path.isAbsolute(process.env.AGENTOC_BROKER_P2P_BINARY || ''));
+      p2pSignaling = createP2PSignaling();
+      phoneServer.on('upgrade', (req, socket, head) => {
+        if (new URL(req.url, 'http://127.0.0.1').pathname === '/signal') p2pSignaling.handleUpgrade(req, socket, head);
+        else socket.destroy();
+      });
+    }
     await new Promise((resolve, reject) => { phoneServer.once('error', reject); phoneServer.listen(phonePort, '127.0.0.1', resolve); });
+    if (p2pSecret) {
+      const stunUrl = process.env.AGENTOC_BROKER_P2P_STUN || '';
+      if (stunUrl && !stunUrl.startsWith('stun:')) throw new Error('Invalid fixture STUN URL');
+      p2pHost = await runP2PHostAgent({ signalingUrl: `http://127.0.0.1:${phonePort}`,
+        roomId: createP2PRoomId(p2pSecret), secret: p2pSecret, expiresAt: new Date(Date.now() + 240_000).toISOString(),
+        binaryPath: process.env.AGENTOC_BROKER_P2P_BINARY, localBaseUrl: `http://127.0.0.1:${phonePort}`,
+        iceServers: stunUrl ? [{ urls: stunUrl }] : [] });
+      await p2pHost.ready;
+    }
     await writeFile(path.join(dir, 'phone-server-ready.json'), JSON.stringify({ port: phonePort }), { flag: 'wx' });
   }
   const fixture = await waitForFixture();
@@ -193,6 +216,8 @@ try {
   succeeded = true;
   console.log(`windows-service-live-client: ${phonePort ? 'Android device signature, ' : ''}${controlPlaneOptions ? 'control-plane proposal and ' : ''}signed pending, approval, execution and replay verified through real broker pipe`);
 } finally {
+  if (p2pHost) { p2pHost.stop(); await p2pHost.done.catch(() => {}); }
+  if (p2pSignaling) p2pSignaling.close();
   if (phoneServer) await new Promise(resolve => phoneServer.close(resolve));
   const temporary = path.join(dir, 'result.json.tmp');
   await writeFile(temporary, JSON.stringify({ success: succeeded, ...(succeeded ? {} : { error: 'Node client test failed' }) }), { flag: 'wx' });
