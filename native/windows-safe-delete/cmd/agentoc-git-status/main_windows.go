@@ -33,8 +33,8 @@ type request struct {
 }
 
 type dependency struct {
-	Executable string `json:"executable"`
-	SHA256     string `json:"sha256"`
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
 }
 
 func decodeDigest(value string) ([sha256.Size]byte, error) {
@@ -102,7 +102,8 @@ func safeEnvironment(env []string) ([]string, error) {
 }
 
 func run(args []string, stdout, stderr io.Writer) (int, error) {
-	if len(args) != 2 || args[0] != "--request" || len(args[1]) > 32768 {
+	// Keep the encoded argument below Windows' process command-line limit.
+	if len(args) != 2 || args[0] != "--request" || len(args[1]) > 30000 {
 		return 0, errors.New("invalid request")
 	}
 	data, err := base64.RawURLEncoding.DecodeString(args[1])
@@ -113,7 +114,7 @@ func run(args []string, stdout, stderr io.Writer) (int, error) {
 	decoder.DisallowUnknownFields()
 	var input request
 	if decoder.Decode(&input) != nil || decoder.Decode(new(any)) != io.EOF || input.SchemaVersion != 1 ||
-		!strings.EqualFold(filepath.Base(input.Executable), "git.exe") || !validStatusArgs(input.Args) || len(input.Dependencies) > 32 {
+		!strings.EqualFold(filepath.Base(input.Executable), "git.exe") || !validStatusArgs(input.Args) || len(input.Dependencies) > 256 {
 		return 0, errors.New("invalid Git status request")
 	}
 	if !filepath.IsAbs(input.Cwd) || len(filepath.VolumeName(input.Cwd)) != 2 {
@@ -146,7 +147,7 @@ func run(args []string, stdout, stderr io.Writer) (int, error) {
 		}
 	}()
 	for _, dep := range input.Dependencies {
-		key := strings.ToLower(filepath.Clean(dep.Executable))
+		key := strings.ToLower(filepath.Clean(dep.Path))
 		if seen[key] {
 			return 0, errors.New("duplicate executable dependency")
 		}
@@ -155,7 +156,7 @@ func run(args []string, stdout, stderr io.Writer) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		depPin, err := safedelete.OpenPinnedExecutablePath(dep.Executable, depDigest)
+		depPin, err := safedelete.OpenPinnedDependencyPath(dep.Path, depDigest)
 		if err != nil {
 			return 0, errors.New("Git dependency identity unavailable")
 		}

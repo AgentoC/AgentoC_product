@@ -44,8 +44,19 @@ func (p *PinnedExecutablePath) Close() error {
 // while allowing ordinary directory reads and writes. It must not be used as
 // proof that children cannot be added or replaced, or that DLLs are trusted.
 func OpenPinnedExecutablePath(name string, expected [sha256.Size]byte) (*PinnedExecutablePath, error) {
+	return openPinnedImagePath(name, expected, false)
+}
+
+// OpenPinnedDependencyPath also admits DLLs. A trusted, complete dependency
+// manifest and directory mutation protection remain the caller's obligation.
+func OpenPinnedDependencyPath(name string, expected [sha256.Size]byte) (*PinnedExecutablePath, error) {
+	return openPinnedImagePath(name, expected, true)
+}
+
+func openPinnedImagePath(name string, expected [sha256.Size]byte, allowDLL bool) (*PinnedExecutablePath, error) {
 	clean := filepath.Clean(name)
-	if !filepath.IsAbs(clean) || len(filepath.VolumeName(clean)) != 2 || !strings.EqualFold(filepath.Ext(clean), ".exe") || strings.Contains(clean[2:], ":") {
+	ext := strings.ToLower(filepath.Ext(clean))
+	if !filepath.IsAbs(clean) || len(filepath.VolumeName(clean)) != 2 || (ext != ".exe" && (!allowDLL || ext != ".dll")) || strings.Contains(clean[2:], ":") {
 		return nil, ErrExecutableIdentity
 	}
 	var chain []string
@@ -84,7 +95,7 @@ func OpenPinnedExecutablePath(name string, expected [sha256.Size]byte) (*PinnedE
 			return nil, ErrExecutableIdentity
 		}
 	}
-	image, err := openPinnedExecutable(clean, expected, true)
+	image, err := openPinnedImageFile(clean, expected, true, allowDLL)
 	if err != nil {
 		return nil, err
 	}

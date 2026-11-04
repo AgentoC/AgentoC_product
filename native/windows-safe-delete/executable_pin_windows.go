@@ -43,8 +43,13 @@ func OpenPinnedExecutable(name string, expected [sha256.Size]byte) (*PinnedExecu
 }
 
 func openPinnedExecutable(name string, expected [sha256.Size]byte, allowHardLinks bool) (*PinnedExecutable, error) {
+	return openPinnedImageFile(name, expected, allowHardLinks, false)
+}
+
+func openPinnedImageFile(name string, expected [sha256.Size]byte, allowHardLinks, allowDLL bool) (*PinnedExecutable, error) {
 	clean := filepath.Clean(name)
-	if !filepath.IsAbs(clean) || len(filepath.VolumeName(clean)) != 2 || !strings.EqualFold(filepath.Ext(clean), ".exe") ||
+	ext := strings.ToLower(filepath.Ext(clean))
+	if !filepath.IsAbs(clean) || len(filepath.VolumeName(clean)) != 2 || (ext != ".exe" && (!allowDLL || ext != ".dll")) ||
 		strings.Contains(clean[2:], ":") {
 		return nil, ErrExecutableIdentity
 	}

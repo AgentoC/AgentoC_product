@@ -115,17 +115,25 @@ func TestStatusExecutorUsesPinnedGitAndSuppressesFsmonitor(t *testing.T) {
 		t.Fatalf("installed Git core unavailable: %v", err)
 	}
 	coreDigest := sha256.Sum256(coreBytes)
-	r.Dependencies = []dependency{{Executable: core, SHA256: hex.EncodeToString(coreDigest[:])}}
+	r.Dependencies = []dependency{{Path: core, SHA256: hex.EncodeToString(coreDigest[:])}}
 	// Some distributions start the same hard-linked image through a second
 	// bin path. A pin of the git-core alias alone does not bind that name.
 	binGit := filepath.Join(filepath.Dir(filepath.Dir(coreDir)), "bin", "git.exe")
 	if !strings.EqualFold(binGit, git) && !strings.EqualFold(binGit, core) {
 		if image, err := os.ReadFile(binGit); err == nil {
 			binDigest := sha256.Sum256(image)
-			r.Dependencies = append(r.Dependencies, dependency{Executable: binGit, SHA256: hex.EncodeToString(binDigest[:])})
+			r.Dependencies = append(r.Dependencies, dependency{Path: binGit, SHA256: hex.EncodeToString(binDigest[:])})
 		}
 	}
-	t.Logf("Pinned %d Git executable dependencies", len(r.Dependencies))
+	if dlls, err := filepath.Glob(filepath.Join(filepath.Dir(binGit), "*.dll")); err == nil && len(dlls) > 0 {
+		dllBytes, err := os.ReadFile(dlls[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		dllDigest := sha256.Sum256(dllBytes)
+		r.Dependencies = append(r.Dependencies, dependency{Path: dlls[0], SHA256: hex.EncodeToString(dllDigest[:])})
+	}
+	t.Logf("Pinned %d Git dependencies", len(r.Dependencies))
 	var out, stderr bytes.Buffer
 	code, err := run(encodeRequest(t, r), &out, &stderr)
 	if err != nil || code != 0 {
@@ -142,7 +150,14 @@ func TestStatusExecutorUsesPinnedGitAndSuppressesFsmonitor(t *testing.T) {
 	if _, err := run(encodeRequest(t, r), &out, &stderr); err == nil || out.Len() != 0 {
 		t.Fatal("unverified core executable was run")
 	}
-	r.Dependencies = []dependency{{Executable: git, SHA256: hex.EncodeToString(digest[:])}}
+	if len(r.Dependencies) >= 3 {
+		r.Dependencies[0].SHA256 = hex.EncodeToString(coreDigest[:])
+		r.Dependencies[len(r.Dependencies)-1].SHA256 = strings.Repeat("0", 64)
+		if _, err := run(encodeRequest(t, r), &out, &stderr); err == nil || out.Len() != 0 {
+			t.Fatal("unverified DLL was accepted")
+		}
+	}
+	r.Dependencies = []dependency{{Path: git, SHA256: hex.EncodeToString(digest[:])}}
 	if _, err := run(encodeRequest(t, r), &out, &stderr); err == nil {
 		t.Fatal("duplicate executable accepted")
 	}

@@ -192,6 +192,41 @@ func TestPinnedExecutablePathRejectsReparseAndReleasesOnFailure(t *testing.T) {
 	}
 }
 
+func TestPinnedDependencyPathProtectsDLL(t *testing.T) {
+	root := t.TempDir()
+	name := filepath.Join(root, "依赖 file.dll")
+	if err := os.WriteFile(name, []byte("fixture DLL"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256([]byte("fixture DLL"))
+	if p, err := OpenPinnedExecutablePath(name, digest); err == nil {
+		p.Close()
+		t.Fatal("DLL accepted as main executable")
+	}
+	lease, err := OpenPinnedDependencyPath(name, digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(name, []byte("changed"), 0600); err == nil {
+		lease.Close()
+		t.Fatal("pinned DLL could be overwritten")
+	}
+	if err := os.Rename(name, name+".old"); err == nil {
+		lease.Close()
+		t.Fatal("pinned DLL could be renamed")
+	}
+	if err := lease.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(name, []byte("changed"), 0600); err != nil {
+		t.Fatalf("DLL remained locked: %v", err)
+	}
+	if p, err := OpenPinnedDependencyPath(filepath.Join(root, "file.txt"), digest); err == nil {
+		p.Close()
+		t.Fatal("unexpected dependency type accepted")
+	}
+}
+
 func TestPinnedExecutableRemainsLaunchable(t *testing.T) {
 	image, err := os.Executable()
 	if err != nil {
