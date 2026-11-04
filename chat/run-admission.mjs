@@ -55,6 +55,7 @@ import {
   USAGE_LEDGER_DIR,
 } from '../lib/config.mjs';
 import { resolvePrivilegedExecutorSocketPath } from '../lib/privileged-executor-protocol.mjs';
+import { ownerWindowsOsPaths } from '../lib/windows-owner-os-paths.mjs';
 import {
   RISK_POLICY_CONTEXT_VERSION,
   systemPathRootsForPlatform,
@@ -87,7 +88,7 @@ function uniqueRiskRoots(values, platform) {
  * trusted only when this exact Run snapshot binds it, while AgentoC's own
  * control roots remain protected by precedence.
  */
-export function buildRunRiskContext(executionScope, { protectedRoots = [] } = {}) {
+export function buildRunRiskContext(executionScope, { protectedRoots = [], windowsOsPaths = process.platform === 'win32' ? ownerWindowsOsPaths() : null } = {}) {
   const scope = executionScope && typeof executionScope === 'object' ? executionScope : {};
   const platform = typeof scope.platform === 'string' && scope.platform ? scope.platform : process.platform;
   const pathApi = pathApiForRiskPlatform(platform);
@@ -128,7 +129,13 @@ export function buildRunRiskContext(executionScope, { protectedRoots = [] } = {}
     trustedWorkspaceRoot,
     cwd,
     protectedRoots: allProtectedRoots,
-    systemPathRoots: uniqueRiskRoots(systemPathRootsForPlatform(platform), platform),
+    // Add OS-derived roots when available; retain environment-derived roots
+    // as additional restrictions for redirected or custom installations.
+    systemPathRoots: uniqueRiskRoots([
+      ...systemPathRootsForPlatform(platform),
+      ...(platform === 'win32' && windowsOsPaths
+        ? [windowsOsPaths.windows, windowsOsPaths.programData, windowsOsPaths.programFiles] : []),
+    ], platform),
   };
 }
 
