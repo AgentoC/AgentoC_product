@@ -19,12 +19,15 @@ if (process.platform === 'win32') {
     'Remove-LocalGroupMember -Group Administrators -Member fixture -WhatIf', 'New-Service -Name fixture -WhatIf',
     'sc.exe config fixture start= demand', 'net.exe user fixture /add', 'Restart-Service -Name fixture',
     'sc.exe start fixture', 'sc.exe stop fixture', 'net start fixture', 'net.exe stop fixture',
-    "& 'C:\\Windows\\System32\\sc.exe' start fixture", 'sc.exe start $env:SERVICE_NAME']) {
+    "& 'C:\\Windows\\System32\\sc.exe' start fixture", 'sc.exe start $env:SERVICE_NAME',
+    'New-NetFirewallRule -DisplayName fixture -WhatIf', 'Disable-NetFirewallRule -DisplayName fixture -WhatIf',
+    'Set-NetFirewallProfile -Enabled True -WhatIf', 'Add-MpPreference -ExclusionPath fixture -WhatIf']) {
     assert.equal(await needsWindowsElevationGuidance(command), true, command);
   }
   for (const command of ["Write-Output 'sudo whoami'", 'winget install Git.Git', 'Start-Process notepad.exe',
     'sudo --version', "Write-Output 'Start-Process -Verb RunAs'", 'Get-LocalUser', 'Get-Service',
-    'sc.exe query fixture', 'sc config fixture', 'sc.exe start', 'net.exe start', 'net.exe user fixture', "Write-Output 'New-LocalUser -Name fixture'"]) {
+    'sc.exe query fixture', 'sc config fixture', 'sc.exe start', 'net.exe start', 'net.exe user fixture', "Write-Output 'New-LocalUser -Name fixture'",
+    'Get-NetFirewallRule', 'Get-NetFirewallProfile', 'Get-MpPreference', "Write-Output 'Set-MpPreference'"]) {
     assert.equal(await needsWindowsElevationGuidance(command), false, command);
   }
   assert.equal(await needsWindowsElevationGuidance('sudo whoami', 'Bash'), true);
@@ -99,6 +102,11 @@ if (process.platform === 'win32') {
       request: { subtype: 'can_use_tool', tool_name: 'PowerShell', input: { command: 'sc.exe start agentoc-fixture' } } }, proc);
     assert.equal(sent[2].response.response.behavior, 'deny');
     assert.match(sent[2].response.response.message, /Start-Service or Stop-Service/);
+    await trackClaudeBidiApprovalRequest(run.id, state, { type: 'control_request', request_id: 'direct-firewall',
+      request: { subtype: 'can_use_tool', tool_name: 'PowerShell', input: { command: 'New-NetFirewallRule -DisplayName fixture -WhatIf' } } }, proc);
+    assert.equal(sent[3].response.response.behavior, 'deny');
+    assert.match(sent[3].response.response.message, /agentoc_request_actions/);
+    assert.equal(state.pendingApprovals.size, 0);
   } finally { await rm(root, { recursive: true, force: true }); }
 }
 console.log('Windows managed elevation guidance passed');
