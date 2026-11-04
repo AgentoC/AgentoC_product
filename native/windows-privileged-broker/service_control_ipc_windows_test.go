@@ -1,0 +1,113 @@
+//go:build windows
+
+package main
+
+import (
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"golang.org/x/sys/windows"
+)
+
+func TestServiceControlPipeRequiresSignatureAndRunsOnce(t *testing.T) {
+	user, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := openBrokerStore(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	if err := store.ConfigureAutoInstallSigner("key", base64.RawURLEncoding.EncodeToString(der), now); err != nil {
+		t.Fatal(err)
+	}
+	suffix, err := randomID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := `\\.\pipe\AgentoC.PrivilegedBroker.LocalTest.` + suffix
+	server, err := newBrokerIPCServerForPipeNames(store, user.User.Sid, base+".Health", base+".Request")
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap := store.Snapshot()
+	grant := serviceControlGrant{Version: 1, KeyID: "key", BrokerInstallationID: snap.InstallationID, PolicyGeneration: snap.PolicyGeneration,
+		RequestID: "request", SessionID: "session", RunID: "run", TurnID: "turn", ActionID: "action", Nonce: "abcdefghijklmnopqrstuvwx",
+		ServiceName: "测试服务", Action: "restart-service", DefinitionHash: strings.Repeat("a", 64), Authorization: "owner", IssuedMS: uint64(now.UnixMilli()), ExpiresMS: uint64(now.Add(time.Minute).UnixMilli())}
+	request := brokerRequest{Version: protocolVersion, Type: "service.execute", ServiceControl: &grant, Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(priv, serviceControlSigningBytes(grant)))}
+	raw, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response := server.handleRequest(raw, false); response.Code != "SERVICE_CONTROL_UNAVAILABLE" {
+		t.Fatalf("production controller was enabled: %+v", response)
+	}
+	release := make(chan struct{})
+	var calls atomic.Int32
+	server.serviceController = func(ctx context.Context, action serviceControlRequest) serviceControlOutcome {
+		calls.Add(1)
+		if action.Name != grant.ServiceName || action.Action != grant.Action || action.DefinitionHash != grant.DefinitionHash {
+			t.Error("wrong action")
+		}
+		select {
+		case <-release:
+			return serviceControlOutcome{Status: statusSucceeded, Code: "SERVICE_CONTROL_SUCCEEDED"}
+		case <-ctx.Done():
+			return serviceControlOutcome{Status: statusUnknown, Code: "SERVICE_CONTROL_CANCELLED"}
+		}
+	}
+	done := make(chan error, 1)
+	go func() { done <- server.Run(context.Background()) }()
+	t.Cleanup(func() {
+		server.Stop()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Error(err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Error("server did not stop")
+		}
+	})
+	bad := request
+	bad.Signature = base64.RawURLEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))
+	if got := exchangeTestPipeRequest(t, base+".Request", bad); got.Code != "SERVICE_CONTROL_AUTHORIZATION_DENIED" {
+		t.Fatalf("bad signature: %+v", got)
+	}
+	for i := 0; i < 2; i++ {
+		if got := exchangeTestPipeRequest(t, base+".Request", request); got.Status != statusExecuting {
+			t.Fatalf("claim %d: %+v", i, got)
+		}
+	}
+	close(release)
+	var status brokerResponse
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		status = exchangeTestPipeRequest(t, base+".Request", brokerRequest{Version: protocolVersion, Type: "status", RequestID: grant.RequestID})
+		if status.Status != statusExecuting {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if calls.Load() != 1 || status.Status != statusSucceeded || status.ServiceControl == nil || status.ServiceControl.ServiceName != grant.ServiceName {
+		t.Fatalf("calls=%d status=%+v", calls.Load(), status)
+	}
+}

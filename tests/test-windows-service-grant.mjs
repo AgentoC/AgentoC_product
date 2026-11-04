@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash, generateKeyPairSync, sign, verify } from 'node:crypto';
 import { windowsServiceControlSigningBytes } from '../chat/windows-service-grant.mjs';
+import { createWindowsPrivilegedBrokerClient } from '../chat/windows-privileged-broker.mjs';
 
 const grant = { version: 1, keyId: 'key', brokerInstallationId: 'broker', policyGeneration: 3, requestId: 'request',
   sessionId: 'session', runId: 'run', turnId: 'turn', actionId: 'action', nonce: '0123456789abcdefghijklmn',
@@ -15,4 +16,12 @@ assert.equal(verify(null, windowsServiceControlSigningBytes({ ...grant, serviceN
 for (const mutation of [{ serviceName: 'bad*' }, { action: 'delete' }, { authorization: 'policy-auto' }, { expiresMs: grant.issuedMs + 60001 }, { extra: true }]) {
   assert.throws(() => windowsServiceControlSigningBytes({ ...grant, ...mutation }), { code: 'SERVICE_CONTROL_GRANT_INVALID' });
 }
+let calls = 0;
+const client = createWindowsPrivilegedBrokerClient({ platform: 'win32', pipeExchange: async ({ pipe, request }) => {
+  calls++; assert.equal(pipe, 'request'); assert.equal(request.type, 'service.execute'); assert.deepEqual(request.serviceControl, grant);
+  return { type: 'result', version: 2, requestId: grant.requestId, status: 'executing', code: 'EXECUTION_STARTED' };
+} });
+assert.equal((await client.executeServiceControl({ grant, signature: signature.toString('base64url') })).status, 'executing');
+await assert.rejects(client.executeServiceControl({ grant: { ...grant, action: 'delete' }, signature: signature.toString('base64url') }), { code: 'BROKER_REQUEST_INVALID' });
+assert.equal(calls, 1);
 console.log('windows-service-grant: cross-language signing vector passed');

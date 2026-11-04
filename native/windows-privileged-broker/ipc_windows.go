@@ -37,24 +37,27 @@ type brokerIPCServer struct {
 	ownerPolicy      func() (ownerInstallPolicy, error)
 	ownerAvailable   func(string) bool
 	serviceInspector func(string) (string, error)
-	executionCtx     context.Context
-	controlPlaneSID  *windows.SID
-	testPipeOwner    *windows.SID
-	healthPipeName   string
-	requestPipeName  string
-	adminPipeName    string
-	stopEvent        windows.Handle
-	healthPipe       windows.Handle
-	requestPipe      windows.Handle
-	adminPipe        windows.Handle
-	stopOnce         sync.Once
-	stopCh           chan struct{}
-	workers          sync.WaitGroup
-	autoMu           sync.Mutex
-	autoCancel       map[string]context.CancelFunc
-	rateMu           sync.Mutex
-	rateWindowStart  time.Time
-	rateCount        int
+	// Production remains nil until the broker can independently verify the
+	// owner's approval. A control-plane signature alone is not owner proof.
+	serviceController func(context.Context, serviceControlRequest) serviceControlOutcome
+	executionCtx      context.Context
+	controlPlaneSID   *windows.SID
+	testPipeOwner     *windows.SID
+	healthPipeName    string
+	requestPipeName   string
+	adminPipeName     string
+	stopEvent         windows.Handle
+	healthPipe        windows.Handle
+	requestPipe       windows.Handle
+	adminPipe         windows.Handle
+	stopOnce          sync.Once
+	stopCh            chan struct{}
+	workers           sync.WaitGroup
+	autoMu            sync.Mutex
+	autoCancel        map[string]context.CancelFunc
+	rateMu            sync.Mutex
+	rateWindowStart   time.Time
+	rateCount         int
 }
 
 type pipeClientFacts struct {
@@ -712,6 +715,10 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 			response.Status, response.Code = owner.Status, owner.Code
 			grant := owner.Grant
 			response.OwnerInstall = &grant
+		} else if control, found := s.store.GetServiceControl(request.RequestID); found {
+			response.Status, response.Code = control.Status, control.Code
+			grant := control.Grant
+			response.ServiceControl = &grant
 		} else {
 			response.Code = "REQUEST_NOT_FOUND"
 		}
@@ -728,6 +735,42 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 		}
 		response := newResponse("service_inspection")
 		response.ServiceFacts = &serviceInspectFacts{ServiceName: name, DefinitionHash: digest}
+		return response
+	}
+	if request.Type == "service.execute" {
+		s.autoMu.Lock()
+		defer s.autoMu.Unlock()
+		if s.serviceController == nil {
+			return newErrorResponse("SERVICE_CONTROL_UNAVAILABLE")
+		}
+		record, duplicate, err := s.store.ClaimServiceControl(*request.ServiceControl, request.Signature, time.Now().UTC())
+		if err != nil {
+			if errors.Is(err, errRequestConflict) {
+				return newErrorResponse("REQUEST_ID_CONFLICT")
+			}
+			return newErrorResponse("SERVICE_CONTROL_AUTHORIZATION_DENIED")
+		}
+		if !duplicate {
+			parent := s.executionCtx
+			if parent == nil {
+				parent = context.Background()
+			}
+			ctx, cancel := context.WithCancel(parent)
+			if s.autoCancel == nil {
+				s.autoCancel = make(map[string]context.CancelFunc)
+			}
+			cancelKey := "service:" + record.Grant.Nonce
+			s.autoCancel[cancelKey] = cancel
+			s.workers.Add(1)
+			go func() {
+				defer s.workers.Done()
+				defer func() { cancel(); s.autoMu.Lock(); delete(s.autoCancel, cancelKey); s.autoMu.Unlock() }()
+				outcome := s.serviceController(ctx, serviceControlRequest{Name: record.Grant.ServiceName, Action: record.Grant.Action, DefinitionHash: record.Grant.DefinitionHash})
+				_, _ = s.store.FinishServiceControl(record.Grant.Nonce, outcome.Status, outcome.Code, time.Now().UTC())
+			}()
+		}
+		response := newResponse("result")
+		response.RequestID, response.Status, response.Code = record.Grant.RequestID, record.Status, record.Code
 		return response
 	}
 	if request.Type == "auto_install.inspect" {

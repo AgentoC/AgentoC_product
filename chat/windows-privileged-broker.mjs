@@ -2,6 +2,7 @@ import { createConnection } from 'node:net';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { validateWindowsSelectedInstallerFacts } from './windows-winget-installer-facts.mjs';
+import { windowsServiceControlSigningBytes } from './windows-service-grant.mjs';
 
 import { readBody } from '../lib/utils.mjs';
 import {
@@ -124,6 +125,12 @@ function validateRequest(request) {
     if (!hasOnlyKeys(request, ['version', 'type', 'serviceInspect']) || !hasOnlyKeys(query, ['serviceName']) ||
         typeof query.serviceName !== 'string' || !query.serviceName || query.serviceName !== query.serviceName.trim() ||
         query.serviceName.length > 256 || /[\\/*?\x00-\x1f]/.test(query.serviceName)) throw brokerError('BROKER_REQUEST_INVALID');
+    return;
+  }
+  if (request.type === 'service.execute') {
+    if (!hasOnlyKeys(request, ['version', 'type', 'serviceControl', 'signature']) ||
+        typeof request.signature !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(request.signature)) throw brokerError('BROKER_REQUEST_INVALID');
+    try { windowsServiceControlSigningBytes(request.serviceControl); } catch { throw brokerError('BROKER_REQUEST_INVALID'); }
     return;
   }
   if (request.type === 'owner_install.identity') {
@@ -397,6 +404,13 @@ export function createWindowsPrivilegedBrokerClient({
       if (response?.type !== 'service_inspection' || !hasOnlyKeys(facts, ['serviceName', 'definitionHash']) ||
           facts.serviceName !== serviceName || !/^[a-f0-9]{64}$/.test(facts.definitionHash || '')) throw brokerError('BROKER_RESPONSE_INVALID');
       return { platform: 'win32', manager: 'windows-service', serviceName, exists: true, definitionHash: facts.definitionHash };
+    },
+    executeServiceControl: async ({ grant, signature }) => {
+      const response = await rpc('request', { version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'service.execute', serviceControl: grant, signature });
+      if (response?.type === 'error') throw brokerError(response.code || 'SERVICE_CONTROL_REJECTED');
+      if (response?.type !== 'result' || response.requestId !== grant.requestId ||
+          !['executing', 'succeeded', 'failed', 'unknown'].includes(response.status)) throw brokerError('BROKER_RESPONSE_INVALID');
+      return response;
     },
   });
 }

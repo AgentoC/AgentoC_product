@@ -43,6 +43,7 @@ type brokerRequest struct {
 	OwnerInstall     *ownerInstallGrant         `json:"ownerInstall,omitempty"`
 	AutoInspect      *autoInstallInspectRequest `json:"autoInspect,omitempty"`
 	ServiceInspect   *serviceInspectRequest     `json:"serviceInspect,omitempty"`
+	ServiceControl   *serviceControlGrant       `json:"serviceControl,omitempty"`
 }
 
 type serviceInspectRequest struct {
@@ -82,6 +83,7 @@ type brokerResponse struct {
 	OwnerIdentity       *ownerInstallIdentity      `json:"ownerIdentity,omitempty"`
 	SelectedInstaller   *selectedInstallerFacts    `json:"selectedInstaller,omitempty"`
 	ServiceFacts        *serviceInspectFacts       `json:"serviceFacts,omitempty"`
+	ServiceControl      *serviceControlGrant       `json:"serviceControl,omitempty"`
 	Challenge           *brokerChallenge           `json:"challenge,omitempty"`
 	EnrollmentChallenge *brokerEnrollmentChallenge `json:"enrollmentChallenge,omitempty"`
 	Result              *brokerOperationResult     `json:"result,omitempty"`
@@ -165,6 +167,9 @@ func decodeBrokerRequest(payload []byte) (brokerRequest, error) {
 }
 
 func validateRequest(request brokerRequest) error {
+	if request.Type != "service.execute" && request.ServiceControl != nil {
+		return errInvalidRequest
+	}
 	if request.Type != "service.inspect" && request.ServiceInspect != nil {
 		return errInvalidRequest
 	}
@@ -269,6 +274,15 @@ func validateRequest(request brokerRequest) error {
 		}
 	case "service.inspect":
 		if request.ServiceInspect == nil || !validServiceControlName(request.ServiceInspect.ServiceName) || hasNonHealthFields(request) {
+			return errInvalidRequest
+		}
+	case "service.execute":
+		if request.ServiceControl == nil || request.Signature == "" || len(request.Signature) > 1024 {
+			return errInvalidRequest
+		}
+		copy := request
+		copy.Signature = ""
+		if hasNonHealthFields(copy) {
 			return errInvalidRequest
 		}
 	default:
