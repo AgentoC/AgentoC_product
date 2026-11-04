@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -23,8 +24,9 @@ import (
 // it to authorized requests, the caller must pin and verify the service image
 // and any service DLL, and bind their identities into the approval snapshot.
 type windowsServiceControlTarget struct {
-	name   string
-	handle windows.Handle
+	name      string
+	handle    windows.Handle
+	imagePins []*serviceImagePins
 }
 
 func openWindowsServiceControl(name, action string) (serviceControlTarget, error) {
@@ -55,13 +57,42 @@ func openWindowsServiceControl(name, action string) (serviceControlTarget, error
 	if err != nil {
 		return nil, err
 	}
-	return &windowsServiceControlTarget{name: name, handle: handle}, nil
+	config, err := (&mgr.Service{Name: name, Handle: handle}).Config()
+	if err != nil {
+		windows.CloseServiceHandle(handle)
+		return nil, err
+	}
+	pins, err := pinWindowsServiceImages(name, config)
+	if err != nil {
+		windows.CloseServiceHandle(handle)
+		return nil, err
+	}
+	return &windowsServiceControlTarget{name: name, handle: handle, imagePins: pins}, nil
 }
 
 func (s *windowsServiceControlTarget) Fingerprint() (string, error) {
+	config, err := (&mgr.Service{Name: s.name, Handle: s.handle}).Config()
+	if err != nil {
+		return "", err
+	}
+	images, _, err := snapshotWindowsServiceImages(s.name, config)
+	if err != nil || len(images) != len(s.imagePins) {
+		return "", errors.New("service images changed")
+	}
+	for i, image := range images {
+		if s.imagePins[i] == nil || !reflect.DeepEqual(image, s.imagePins[i].snapshot) {
+			return "", errors.New("service images changed")
+		}
+	}
 	return fingerprintWindowsServiceControlHandle(s.name, s.handle)
 }
-func (s *windowsServiceControlTarget) Close() error { return windows.CloseServiceHandle(s.handle) }
+func (s *windowsServiceControlTarget) Close() error {
+	for i := len(s.imagePins) - 1; i >= 0; i-- {
+		s.imagePins[i].Close()
+	}
+	s.imagePins = nil
+	return windows.CloseServiceHandle(s.handle)
+}
 
 func waitWindowsServiceControlState(ctx context.Context, handle windows.Handle, wanted uint32, timeout time.Duration) error {
 	ticker := time.NewTicker(100 * time.Millisecond)
