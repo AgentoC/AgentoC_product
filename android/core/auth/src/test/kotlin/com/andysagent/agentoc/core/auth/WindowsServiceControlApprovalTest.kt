@@ -4,6 +4,7 @@ import java.security.KeyPairGenerator
 import java.security.MessageDigest
 import java.security.Signature
 import java.security.spec.ECGenParameterSpec
+import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertFailsWith
@@ -21,6 +22,9 @@ class WindowsServiceControlApprovalTest {
         val digest = MessageDigest.getInstance("SHA-256").digest(bytes()).joinToString("") { "%02x".format(it.toInt() and 255) }
         assertTrue(digest == expected)
         assertContentEquals(bytes(), bytes())
+        val review = WindowsServiceControlApproval.brokerReviewSigningBytes(grant, grant.issuedMs)
+        val reviewDigest = MessageDigest.getInstance("SHA-256").digest(review).joinToString("") { "%02x".format(it.toInt() and 255) }
+        assertTrue(reviewDigest == "d98b2c6f1b2def03d2fffb8eb9d8375dd031ffc42f5a7ae4d861470ae7a026b9")
     }
 
     @Test fun signatureIsBoundToOperationAndExpiry() {
@@ -36,5 +40,18 @@ class WindowsServiceControlApprovalTest {
         assertFailsWith<IllegalArgumentException> { bytes(grant.copy(serviceName = "bad*")) }
         assertFailsWith<IllegalArgumentException> { bytes(grant.copy(serviceName = "bad\uD800")) }
         assertFailsWith<IllegalArgumentException> { bytes(grant.copy(authorization = "policy-auto")) }
+        assertFailsWith<IllegalArgumentException> { bytes(grant.copy(expiresMs = grant.issuedMs + 600_001)) }
+    }
+
+    @Test fun reviewRequiresPinnedBrokerAndExactGrant() {
+        val keys = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
+        val publicKey = Base64.getEncoder().encodeToString(keys.public.encoded)
+        val fingerprint = BrokerApprovalProtocol.fingerprint(publicKey)
+        val review = WindowsServiceControlApproval.brokerReviewSigningBytes(grant, grant.issuedMs)
+        val signature = Signature.getInstance("SHA256withECDSA").run { initSign(keys.private); update(review); Base64.getEncoder().encodeToString(sign()) }
+        assertTrue(WindowsServiceControlApproval.verifyBrokerReview(grant, publicKey, signature, fingerprint, grant.issuedMs))
+        assertFalse(WindowsServiceControlApproval.verifyBrokerReview(grant.copy(serviceName = "different"), publicKey, signature, fingerprint, grant.issuedMs))
+        assertFalse(WindowsServiceControlApproval.verifyBrokerReview(grant, publicKey, signature, "0".repeat(64), grant.issuedMs))
+        assertFalse(WindowsServiceControlApproval.verifyBrokerReview(grant, publicKey, signature, fingerprint, grant.expiresMs))
     }
 }

@@ -737,6 +737,25 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 		response.ServiceFacts = &serviceInspectFacts{ServiceName: name, DefinitionHash: digest}
 		return response
 	}
+	if request.Type == "service.review" {
+		if s.serviceController == nil || s.serviceInspector == nil {
+			return newErrorResponse("SERVICE_CONTROL_UNAVAILABLE")
+		}
+		grant := *request.ServiceControl
+		current, err := s.serviceInspector(grant.ServiceName)
+		if err != nil || current != grant.DefinitionHash {
+			return newErrorResponse("SERVICE_TARGET_CHANGED")
+		}
+		publicKey, signature, err := s.store.AttestServiceControl(grant, request.Signature, request.DeviceID, time.Now().UTC())
+		if err != nil {
+			return newErrorResponse("SERVICE_REVIEW_UNAVAILABLE")
+		}
+		response := newResponse("service_review")
+		response.ServiceControl = &grant
+		response.BrokerPublicKey = publicKey
+		response.BrokerSignature = signature
+		return response
+	}
 	if request.Type == "service.execute" {
 		s.autoMu.Lock()
 		defer s.autoMu.Unlock()

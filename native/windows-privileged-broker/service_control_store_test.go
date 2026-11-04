@@ -55,6 +55,13 @@ func TestServiceControlClaimIsAtomicAndCrashIsUnknown(t *testing.T) {
 		ServiceName: "测试服务", Action: "restart-service", DefinitionHash: strings.Repeat("a", 64), Authorization: "owner", IssuedMS: uint64(now.UnixMilli()), ExpiresMS: uint64(now.Add(time.Minute).UnixMilli())}
 	signature := base64.RawURLEncoding.EncodeToString(ed25519.Sign(private, serviceControlSigningBytes(grant)))
 	proof := serviceOwnerProof{DeviceID: deviceID, Signature: signApprovalMessage(t, deviceKey, serviceControlOwnerSigningBytes(grant))}
+	brokerKey, attestation, err := store.AttestServiceControl(grant, signature, deviceID, now)
+	if err != nil || verifyBrokerSignature(brokerKey, attestation, serviceControlBrokerSigningBytes(grant)) != nil {
+		t.Fatal("broker did not attest the exact review grant")
+	}
+	if _, _, err := store.AttestServiceControl(grant, signature, strings.Repeat("0", 64), now); err == nil {
+		t.Fatal("unenrolled device received review attestation")
+	}
 	if _, _, err := store.ClaimServiceControl(grant, signature, serviceOwnerProof{}, now); err == nil {
 		t.Fatal("missing owner proof accepted")
 	}
@@ -86,6 +93,9 @@ func TestServiceControlClaimIsAtomicAndCrashIsUnknown(t *testing.T) {
 	wg.Wait()
 	if claims != 1 || duplicates != 7 {
 		t.Fatalf("claims=%d duplicates=%d", claims, duplicates)
+	}
+	if _, _, err := store.AttestServiceControl(grant, signature, deviceID, now); err == nil {
+		t.Fatal("claimed operation was re-attested")
 	}
 	conflict := grant
 	conflict.Nonce = "otherabcdefghijklmnopqrstuvw"

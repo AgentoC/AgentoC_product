@@ -42,6 +42,10 @@ func serviceControlOwnerSigningBytes(grant serviceControlGrant) []byte {
 	return append([]byte("AgentoC Windows service owner approval v1\x00"), serviceControlSigningBytes(grant)...)
 }
 
+func serviceControlBrokerSigningBytes(grant serviceControlGrant) []byte {
+	return append([]byte("AgentoC Windows service review v1\x00"), serviceControlSigningBytes(grant)...)
+}
+
 func serviceControlSigningBytes(grant serviceControlGrant) []byte {
 	return encodeSigningFields("AgentoC Windows service control v1\x00", grant.Version, grant.KeyID, grant.BrokerInstallationID,
 		grant.PolicyGeneration, grant.RequestID, grant.SessionID, grant.RunID, grant.TurnID, grant.ActionID, grant.Nonce,
@@ -58,7 +62,7 @@ func verifyServiceControlGrant(grant serviceControlGrant, signature string, publ
 	if grant.Version != 1 || grant.KeyID != keyID || grant.BrokerInstallationID != installationID || generation == 0 || grant.PolicyGeneration != generation ||
 		!ownerGrantNonce.MatchString(grant.Nonce) || !validServiceControlName(grant.ServiceName) || !serviceDefinitionHash.MatchString(grant.DefinitionHash) ||
 		(grant.Action != "start-service" && grant.Action != "stop-service" && grant.Action != "restart-service") || grant.Authorization != "owner" ||
-		grant.IssuedMS == 0 || grant.ExpiresMS <= grant.IssuedMS || grant.ExpiresMS-grant.IssuedMS > 60000 ||
+		grant.IssuedMS == 0 || grant.ExpiresMS <= grant.IssuedMS || grant.ExpiresMS-grant.IssuedMS > 600000 ||
 		now.UnixMilli() < 0 || grant.IssuedMS > uint64(now.UnixMilli()) || grant.ExpiresMS <= uint64(now.UnixMilli()) || len(publicKey) != ed25519.PublicKeySize {
 		return errServiceControlGrant
 	}

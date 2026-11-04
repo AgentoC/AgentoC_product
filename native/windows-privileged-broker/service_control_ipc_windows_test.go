@@ -77,6 +77,12 @@ func TestServiceControlPipeRequiresSignatureAndRunsOnce(t *testing.T) {
 			return serviceControlOutcome{Status: statusUnknown, Code: "SERVICE_CONTROL_CANCELLED"}
 		}
 	}
+	server.serviceInspector = func(name string) (string, error) {
+		if name != grant.ServiceName {
+			t.Error("wrong inspection target")
+		}
+		return grant.DefinitionHash, nil
+	}
 	done := make(chan error, 1)
 	go func() { done <- server.Run(context.Background()) }()
 	t.Cleanup(func() {
@@ -94,6 +100,20 @@ func TestServiceControlPipeRequiresSignatureAndRunsOnce(t *testing.T) {
 	bad.Signature = base64.RawURLEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))
 	if got := exchangeTestPipeRequest(t, base+".Request", bad); got.Code != "SERVICE_CONTROL_AUTHORIZATION_DENIED" {
 		t.Fatalf("bad signature: %+v", got)
+	}
+	reviewRequest := request
+	reviewRequest.Type = "service.review"
+	reviewRequest.DeviceSignature = ""
+	review := exchangeTestPipeRequest(t, base+".Request", reviewRequest)
+	if review.Type != "service_review" || review.ServiceControl == nil || verifyBrokerSignature(review.BrokerPublicKey, review.BrokerSignature, serviceControlBrokerSigningBytes(grant)) != nil {
+		t.Fatalf("review attestation invalid: %+v", review)
+	}
+	changed := reviewRequest
+	changedGrant := grant
+	changedGrant.DefinitionHash = strings.Repeat("b", 64)
+	changed.ServiceControl = &changedGrant
+	if got := exchangeTestPipeRequest(t, base+".Request", changed); got.Code != "SERVICE_TARGET_CHANGED" {
+		t.Fatalf("stale review accepted: %+v", got)
 	}
 	badOwner := request
 	badOwner.DeviceSignature = base64.StdEncoding.EncodeToString([]byte("invalid"))

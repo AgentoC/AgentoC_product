@@ -136,6 +136,13 @@ function validateRequest(request) {
     try { windowsServiceControlSigningBytes(request.serviceControl); } catch { throw brokerError('BROKER_REQUEST_INVALID'); }
     return;
   }
+  if (request.type === 'service.review') {
+    if (!hasOnlyKeys(request, ['version', 'type', 'serviceControl', 'signature', 'deviceId']) ||
+        typeof request.signature !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(request.signature) ||
+        typeof request.deviceId !== 'string' || !DEVICE_ID_PATTERN.test(request.deviceId)) throw brokerError('BROKER_REQUEST_INVALID');
+    try { windowsServiceControlSigningBytes(request.serviceControl); } catch { throw brokerError('BROKER_REQUEST_INVALID'); }
+    return;
+  }
   if (request.type === 'owner_install.identity') {
     if (!hasOnlyKeys(request, ['version', 'type'])) throw brokerError('BROKER_REQUEST_INVALID');
     return;
@@ -413,6 +420,16 @@ export function createWindowsPrivilegedBrokerClient({
       if (response?.type === 'error') throw brokerError(response.code || 'SERVICE_CONTROL_REJECTED');
       if (response?.type !== 'result' || response.requestId !== grant.requestId ||
           !['executing', 'succeeded', 'failed', 'unknown'].includes(response.status)) throw brokerError('BROKER_RESPONSE_INVALID');
+      return response;
+    },
+    reviewServiceControl: async ({ grant, signature, deviceId }) => {
+      const response = await rpc('request', { version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'service.review', serviceControl: grant, signature, deviceId });
+      if (response?.type === 'error') throw brokerError(response.code || 'SERVICE_REVIEW_UNAVAILABLE');
+      let actual;
+      try { actual = windowsServiceControlSigningBytes(response?.serviceControl); } catch { throw brokerError('BROKER_RESPONSE_INVALID'); }
+      if (response?.type !== 'service_review' || !actual.equals(windowsServiceControlSigningBytes(grant)) ||
+          typeof response.brokerPublicKey !== 'string' || !response.brokerPublicKey ||
+          typeof response.brokerSignature !== 'string' || !response.brokerSignature || !SIGNATURE_PATTERN.test(response.brokerSignature)) throw brokerError('BROKER_RESPONSE_INVALID');
       return response;
     },
   });

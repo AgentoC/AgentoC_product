@@ -171,7 +171,7 @@ func validateRequest(request brokerRequest) error {
 	if request.Type != "service.execute" && request.DeviceSignature != "" {
 		return errInvalidRequest
 	}
-	if request.Type != "service.execute" && request.ServiceControl != nil {
+	if request.Type != "service.execute" && request.Type != "service.review" && request.ServiceControl != nil {
 		return errInvalidRequest
 	}
 	if request.Type != "service.inspect" && request.ServiceInspect != nil {
@@ -283,6 +283,16 @@ func validateRequest(request brokerRequest) error {
 	case "service.execute":
 		if request.ServiceControl == nil || request.Signature == "" || len(request.Signature) > 1024 ||
 			len(request.DeviceID) != 64 || !isLowerHex(request.DeviceID) || request.DeviceSignature == "" || len(request.DeviceSignature) > 1024 {
+			return errInvalidRequest
+		}
+		copy := request
+		copy.Signature = ""
+		copy.DeviceID = ""
+		if hasNonHealthFields(copy) {
+			return errInvalidRequest
+		}
+	case "service.review":
+		if request.ServiceControl == nil || request.Signature == "" || len(request.Signature) > 1024 || len(request.DeviceID) != 64 || !isLowerHex(request.DeviceID) {
 			return errInvalidRequest
 		}
 		copy := request
