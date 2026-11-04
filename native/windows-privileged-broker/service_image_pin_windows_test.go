@@ -129,3 +129,104 @@ func TestPowerShellServiceRejectsUnpinnableCode(t *testing.T) {
 		t.Fatalf("ordinary service executable was rejected: %v %v", dependencies, err)
 	}
 }
+
+func TestManagedServiceEntryFilesAreIncludedAndPinned(t *testing.T) {
+	for _, tc := range []struct{ host, entry, options string }{
+		{"node.exe", "server.mjs", ""},
+		{"python3.12.exe", "worker.py", "-I -u "},
+		{"dotnet.exe", "app.dll", "exec "},
+		{"java.exe", "app.jar", "-jar "},
+		{"cmd.exe", "start.cmd", "/c "},
+		{"cscript.exe", "worker.vbs", "//nologo "},
+	} {
+		t.Run(tc.host, func(t *testing.T) {
+			root := t.TempDir()
+			host := filepath.Join(root, tc.host)
+			entry := filepath.Join(root, tc.entry)
+			if err := os.WriteFile(host, []byte("host"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(entry, []byte("entry"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			suffix := " --service"
+			if tc.host == "cmd.exe" {
+				suffix = ""
+			}
+			config := mgr.Config{ServiceType: windows.SERVICE_WIN32_OWN_PROCESS,
+				BinaryPathName: `"` + host + `" ` + tc.options + `"` + entry + `"` + suffix}
+			images, _, err := snapshotWindowsServiceImages("Fixture", config)
+			if err != nil || len(images) != 2 || images[1].Path != entry {
+				t.Fatalf("entry not included: %+v %v", images, err)
+			}
+			if err := os.WriteFile(entry, []byte("changed before approval"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			changed, _, err := snapshotWindowsServiceImages("Fixture", config)
+			if err != nil || len(changed) != 2 || changed[1].Digest == images[1].Digest {
+				t.Fatalf("changed entry did not change snapshot: %+v %v", changed, err)
+			}
+			pins, err := pinWindowsServiceImages("Fixture", config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				for _, pin := range pins {
+					pin.Close()
+				}
+			}()
+			if err := os.WriteFile(entry, []byte("changed"), 0600); err == nil {
+				t.Fatal("managed service entry was writable")
+			}
+		})
+	}
+}
+
+func TestManagedServiceRejectsInlineAndAmbiguousEntry(t *testing.T) {
+	for _, args := range [][]string{
+		{`C:\tools\node.exe`, "-e", "run()"},
+		{`C:\tools\node.exe`, "relative.js"},
+		{`C:\tools\python.exe`, "-c", "run()"},
+		{`C:\tools\python3.exe`, "-m", "package"},
+		{`C:\tools\python.exe`, `C:\tools\entry.txt`},
+		{`C:\tools\dotnet.exe`, "exec", "--additionalprobingpath", `C:\evil`, `C:\app\app.dll`},
+		{`C:\tools\dotnet.exe`, "run"},
+		{`C:\tools\java.exe`, "-cp", `C:\app`, "Main"},
+		{`C:\Windows\System32\cmd.exe`, "/c", `C:\scripts\one.cmd & calc.exe`},
+		{`C:\Windows\System32\cmd.exe`, "/c", `C:\scripts\one.cmd`, "&", "calc.exe"},
+		{`C:\Windows\System32\wscript.exe`, "relative.vbs"},
+		{`C:\Windows\System32\rundll32.exe`, `C:\lib\plugin.dll,Run;calc`},
+	} {
+		if _, err := serviceCommandFileDependencies(args); err == nil {
+			t.Fatalf("accepted ambiguous entry: %v", args)
+		}
+	}
+}
+
+func TestRundllServicePinsLibrary(t *testing.T) {
+	root := t.TempDir()
+	host, library := filepath.Join(root, "rundll32.exe"), filepath.Join(root, "plugin.dll")
+	if err := os.WriteFile(host, []byte("host"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(library, []byte("library"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	config := mgr.Config{ServiceType: windows.SERVICE_WIN32_OWN_PROCESS, BinaryPathName: `"` + host + `" "` + library + `,Run"`}
+	images, _, err := snapshotWindowsServiceImages("Fixture", config)
+	if err != nil || len(images) != 2 || images[1].Path != library {
+		t.Fatalf("library not included: %+v %v", images, err)
+	}
+	pins, err := pinWindowsServiceImages("Fixture", config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		for _, pin := range pins {
+			pin.Close()
+		}
+	}()
+	if err := os.WriteFile(library, []byte("changed"), 0600); err == nil {
+		t.Fatal("service library was writable")
+	}
+}

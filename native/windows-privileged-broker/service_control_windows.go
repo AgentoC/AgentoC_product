@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
@@ -351,14 +352,36 @@ func snapshotWindowsServiceImages(name string, config mgr.Config) ([]serviceImag
 	return images, "", nil
 }
 
-// PowerShell can execute code from a file independent of its executable. Bind
-// that file too. Inline and encoded commands have no separately pinnable
-// target; they require a different execution boundary.
+var servicePythonHost = regexp.MustCompile(`^pythonw?(?:[0-9]+(?:\.[0-9]+)?)?\.exe$`)
+
+// File-based hosts execute code independently of their executable. Bind the
+// explicit entry file as well. Inline, dynamic or ambiguous commands require
+// a different execution boundary.
 func serviceCommandFileDependencies(arguments []string) ([]string, error) {
 	if len(arguments) == 0 {
 		return nil, errors.New("service image command is invalid")
 	}
-	switch strings.ToLower(filepath.Base(arguments[0])) {
+	host := strings.ToLower(filepath.Base(arguments[0]))
+	if servicePythonHost.MatchString(host) {
+		for i := 1; i < len(arguments); i++ {
+			switch arguments[i] {
+			case "-u", "-B", "-I", "-E", "-s", "-S":
+				continue
+			case "--":
+				i++
+				if i >= len(arguments) {
+					return nil, errors.New("service script is missing")
+				}
+			default:
+				if strings.HasPrefix(arguments[i], "-") {
+					return nil, errors.New("service host option is not verifiable")
+				}
+			}
+			return serviceExplicitCodeFile(arguments[i], ".py", ".pyw")
+		}
+		return nil, errors.New("service script is missing")
+	}
+	switch host {
 	case "powershell.exe", "pwsh.exe":
 		for i := 1; i < len(arguments); i++ {
 			option := strings.ToLower(arguments[i])
@@ -374,17 +397,79 @@ func serviceCommandFileDependencies(arguments []string) ([]string, error) {
 				if i >= len(arguments) {
 					return nil, errors.New("service script is missing")
 				}
-				expanded, err := registry.ExpandString(arguments[i])
-				if err != nil || !filepath.IsAbs(expanded) || !strings.EqualFold(filepath.Ext(expanded), ".ps1") {
-					return nil, errors.New("service script must be an absolute PowerShell file")
-				}
-				return []string{arguments[i]}, nil
+				return serviceExplicitCodeFile(arguments[i], ".ps1")
 			default:
 				return nil, errors.New("service host command is not a verifiable PowerShell file")
 			}
 		}
 		return nil, errors.New("service host command has no verifiable PowerShell file")
+	case "node.exe", "nodejs.exe":
+		i := 1
+		if i < len(arguments) && arguments[i] == "--" {
+			i++
+		}
+		if i >= len(arguments) || strings.HasPrefix(arguments[i], "-") {
+			return nil, errors.New("service JavaScript entry file is missing")
+		}
+		return serviceExplicitCodeFile(arguments[i], ".js", ".cjs", ".mjs")
+	case "dotnet.exe":
+		i := 1
+		if i < len(arguments) && strings.EqualFold(arguments[i], "exec") {
+			i++
+		}
+		if i >= len(arguments) || strings.HasPrefix(arguments[i], "-") {
+			return nil, errors.New("service assembly entry file is missing")
+		}
+		return serviceExplicitCodeFile(arguments[i], ".dll")
+	case "java.exe", "javaw.exe":
+		if len(arguments) < 3 || arguments[1] != "-jar" {
+			return nil, errors.New("service Java entry file is missing")
+		}
+		return serviceExplicitCodeFile(arguments[2], ".jar")
+	case "cmd.exe":
+		// Only a single literal batch file has an unambiguous code target.
+		// Shell expressions and argument expansion need a separate parser.
+		if len(arguments) != 3 || !strings.EqualFold(arguments[1], "/c") ||
+			strings.ContainsAny(arguments[2], "&|<>!^\r\n") {
+			return nil, errors.New("service batch command is ambiguous")
+		}
+		return serviceExplicitCodeFile(arguments[2], ".cmd", ".bat")
+	case "wscript.exe", "cscript.exe":
+		i := 1
+		for i < len(arguments) {
+			flag := strings.ToLower(arguments[i])
+			if flag != "//b" && flag != "//nologo" && flag != "/b" && flag != "/nologo" {
+				break
+			}
+			i++
+		}
+		if i >= len(arguments) || strings.HasPrefix(arguments[i], "/") {
+			return nil, errors.New("service script is missing")
+		}
+		return serviceExplicitCodeFile(arguments[i], ".vbs", ".js", ".wsf")
+	case "rundll32.exe":
+		if len(arguments) < 2 {
+			return nil, errors.New("service library is missing")
+		}
+		library, entry, ok := strings.Cut(arguments[1], ",")
+		if !ok || !regexp.MustCompile(`^(?:[A-Za-z_][A-Za-z0-9_]*|#[0-9]+)$`).MatchString(entry) {
+			return nil, errors.New("service library entry is invalid")
+		}
+		return serviceExplicitCodeFile(library, ".dll")
 	default:
 		return nil, nil
 	}
+}
+
+func serviceExplicitCodeFile(value string, extensions ...string) ([]string, error) {
+	expanded, err := registry.ExpandString(value)
+	if err != nil || !filepath.IsAbs(expanded) || len(filepath.VolumeName(expanded)) != 2 {
+		return nil, errors.New("service code file must be an absolute local path")
+	}
+	for _, extension := range extensions {
+		if strings.EqualFold(filepath.Ext(expanded), extension) {
+			return []string{value}, nil
+		}
+	}
+	return nil, errors.New("service code file type is invalid")
 }
