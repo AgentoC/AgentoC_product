@@ -3,12 +3,28 @@
 package main
 
 import (
+	"context"
 	"regexp"
 	"testing"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc/mgr"
 )
+
+func TestWindowsServiceControlRejectsInvalidAndCancelledRequests(t *testing.T) {
+	if _, err := openWindowsServiceControl("valid", "delete"); err == nil {
+		t.Fatal("unknown operation was accepted")
+	}
+	if _, err := openWindowsServiceControl("bad*", "start-service"); err == nil {
+		t.Fatal("invalid name was accepted")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	target := &windowsServiceControlTarget{}
+	if target.Start(ctx) == nil || target.Stop(ctx) == nil {
+		t.Fatal("cancelled operation was accepted")
+	}
+}
 
 // Uses whichever existing service this user can inspect. It does not start,
 // stop, install, or configure any service and is not tied to a specific host.
