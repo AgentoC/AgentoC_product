@@ -27,6 +27,7 @@ const { createRun, getRun, readRunSpoolRecords } = await import('../chat/runs.mj
 const { trackClaudeBidiApprovalRequest } = await import('../chat/runner-sidecar.mjs');
 const protectedCase = process.env.AGENTOC_QA_CLAUDE_PROTECTED === '1';
 const installCase = process.env.AGENTOC_QA_CLAUDE_INSTALL === '1';
+const uninstallCase = process.env.AGENTOC_QA_CLAUDE_UNINSTALL === '1';
 const deleteCase = process.env.AGENTOC_QA_CLAUDE_DELETE === '1';
 const outsideFileCase = process.env.AGENTOC_QA_CLAUDE_FILE_OUTSIDE === '1';
 const dotnetCase = process.env.AGENTOC_QA_CLAUDE_DOTNET === '1';
@@ -34,11 +35,12 @@ const guidanceCase = process.env.AGENTOC_QA_CLAUDE_ELEVATION === '1';
 const readCase = process.env.AGENTOC_QA_CLAUDE_READ || '';
 const outsideCase = deleteCase && process.env.AGENTOC_QA_CLAUDE_DELETE_OUTSIDE === '1';
 const conservativeOutside = outsideFileCase && process.env.AGENTOC_QA_MODE === 'conservative-auto';
-const reviewCase = protectedCase || outsideCase || conservativeOutside;
+const reviewCase = protectedCase || outsideCase || conservativeOutside || uninstallCase;
 const relativeDelete = deleteCase && process.env.AGENTOC_QA_CLAUDE_DELETE_RELATIVE === '1';
 if ((installCase && (protectedCase || deleteCase)) || (reviewCase && relativeDelete) || (outsideCase && protectedCase) || (outsideFileCase && (installCase || deleteCase || protectedCase)) || (dotnetCase && (installCase || deleteCase)) || (guidanceCase && (installCase || deleteCase || dotnetCase || protectedCase || outsideFileCase))) throw new Error('fixture modes are mutually exclusive');
 if (readCase && (!['numbered', 'list', 'git-status'].includes(readCase) || installCase || deleteCase || dotnetCase || guidanceCase || protectedCase || outsideFileCase)) throw new Error('invalid read fixture mode');
-if ((installCase || deleteCase || dotnetCase || guidanceCase || readCase) && !path.isAbsolute(process.env.AGENTOC_TEST_BASH_BINARY || '')) throw new Error('absolute Git Bash executable required');
+if (uninstallCase && (installCase || deleteCase || dotnetCase || guidanceCase || protectedCase || outsideFileCase || readCase)) throw new Error('uninstall fixture must be isolated');
+if ((installCase || uninstallCase || deleteCase || dotnetCase || guidanceCase || readCase) && !path.isAbsolute(process.env.AGENTOC_TEST_BASH_BINARY || '')) throw new Error('absolute Git Bash executable required');
 const safeDeleteHelper = process.env.AGENTOC_TEST_SAFE_DELETE_BINARY;
 if (deleteCase && !path.isAbsolute(safeDeleteHelper || '')) throw new Error('absolute safe deletion helper required');
 const installCommand = `winget ${process.env.AGENTOC_QA_CLAUDE_INSTALL_ALIAS === '1' ? 'add' : 'install'} --${process.env.AGENTOC_QA_CLAUDE_INSTALL_QUERY === '1' ? 'query' : 'id'}=Vendor.App --source=winget --scope=user`;
@@ -89,7 +91,7 @@ const server = createServer((req, res) => {
     if (req.method !== 'POST' || !req.url.startsWith('/v1/messages')) { res.writeHead(404).end(); return; }
     requests++;
     const tool = requests === 1 || (relativeDelete && requests === 2);
-    const toolName = installCase || deleteCase || dotnetCase || guidanceCase || readCase ? 'Bash' : 'Write';
+    const toolName = installCase || uninstallCase || deleteCase || dotnetCase || guidanceCase || readCase ? 'Bash' : 'Write';
     if (tool && !request.tools?.some((item) => item.name === toolName)) { res.writeHead(400).end(); return; }
     if (!tool && installCase) toolResultObserved ||= JSON.stringify(request.messages || []).includes('Installation completed successfully');
     if (relativeDelete && requests === 2 && !JSON.stringify(request.messages || []).includes('resolve each target against the command working directory')) { res.writeHead(400).end(); return; }
@@ -99,7 +101,8 @@ const server = createServer((req, res) => {
     const message = { id: `msg_fixture_${requests}`, type: 'message', role: 'assistant', content: [], model: 'claude-sonnet-4-5', stop_reason: null, stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } };
     const events = [{ type: 'message_start', message }];
     if (tool) {
-      const input = JSON.stringify(installCase ? { command: installCommand, description: 'Fixture installation' } : deleteCase
+      const input = JSON.stringify(installCase ? { command: installCommand, description: 'Fixture installation' } : uninstallCase
+        ? { command: 'winget uninstall --id AgentoC.Nonexistent.Test.Fixture --exact', description: 'Fixture uninstall' } : deleteCase
         ? { command: relativeDelete && requests === 1 ? 'rm -rf delete-fixture' : deleteCommand, description: 'Delete fixture' }
         : dotnetCase ? { command: dotnetCommand, description: 'Write isolated fixture' }
         : guidanceCase ? { command: guidanceCommand, description: 'Administrative fixture' }
@@ -129,7 +132,7 @@ const run = await createRun({ status: { sessionId: 'claude-local-fixture', reque
   manifest: { sessionId: 'claude-local-fixture', requestId: 'fixture', folder: root, tool: 'claude', runtimeFamily: 'claude-stream-json-bidi', prompt: 'fixture', options: {} } });
 const gateState = { riskMode: mode, permissionMode: 'default', cwd: root, projectRoot: root, turnActive: true, riskContextValid: boundContext?.valid ?? true,
   riskContext: boundContext?.riskContext ?? { platform: 'win32', trustedWorkspaceRoot: root, protectedRoots: protectedCase ? [protectedRoot] : [] }, pendingApprovals: new Map(), autoApprovedMcpRequestIds: new Set() };
-if (installCase || deleteCase || dotnetCase || guidanceCase || readCase) env.CLAUDE_CODE_GIT_BASH_PATH = process.env.AGENTOC_TEST_BASH_BINARY;
+if (installCase || uninstallCase || deleteCase || dotnetCase || guidanceCase || readCase) env.CLAUDE_CODE_GIT_BASH_PATH = process.env.AGENTOC_TEST_BASH_BINARY;
 if (guidanceCase) {
   gateState.windowsManagedActionChannel = true;
   gateState.windowsManagedActionBinding = { runId: run.id };
@@ -157,7 +160,14 @@ output.on('line', (line) => {
     const approval = readClaudeBidiApprovalRequest(event);
     if (approval) {
       approvals++;
-      await trackClaudeBidiApprovalRequest(run.id, gateState, event, child, deleteCase ? { safeDeleteHelperPath: safeDeleteHelper } : {});
+      // Never let a regression execute the uninstall, even for the nonexistent
+      // package: only a deny response can reach the real CLI in this fixture.
+      const gatedChild = uninstallCase ? { stdin: { writable: true, write(value) {
+        const response = JSON.parse(String(value));
+        assert.equal(response?.response?.response?.behavior, 'deny', 'uninstall must never be auto-approved');
+        return child.stdin.write(value);
+      } } } : child;
+      await trackClaudeBidiApprovalRequest(run.id, gateState, event, gatedChild, deleteCase ? { safeDeleteHelperPath: safeDeleteHelper } : {});
       if (readCase === 'git-status' && mode === 'recommended') {
         const current = await getRun(run.id);
         if (current.appServerPendingApprovals?.some((item) => item.approvalId === approval.approvalId)) {
@@ -200,7 +210,7 @@ try {
     assert.equal(await readFile(artifact, 'utf8'), 'local read fixture\n');
     if (readCase !== 'git-status' || approvals === 0) assert.ok(toolResultObserved, 'actual Claude must receive the read result');
     if (readCase === 'git-status' && approvals && mode === 'recommended') assert.ok(gitOwnerReviewObserved, 'Git must wait for owner when not auto-approved');
-  } else if (protectedCase || conservativeOutside) await assert.rejects(access(artifact), { code: 'ENOENT' });
+  } else if (protectedCase || conservativeOutside || uninstallCase) await assert.rejects(access(artifact), { code: 'ENOENT' });
   else assert.equal((await readFile(artifact, 'utf8')).replace(/^\uFEFF/, ''), dotnetCase ? 'dotnet fixture' : 'local fixture\n');
   assert.ok(requests >= 2, 'local model must receive the tool result');
   const spool = await readRunSpoolRecords(run.id);
