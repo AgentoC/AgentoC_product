@@ -10,6 +10,9 @@ import { publishWindowsBrokerApprovalInvalidation } from './windows-broker-appro
 const id = /^[A-Za-z0-9._:-]{1,128}$/;
 const statuses = new Set(['awaiting_device', 'executing', 'succeeded', 'failed', 'denied', 'expired', 'unknown']);
 function fail(code, message) { throw Object.assign(new Error(message), { code }); }
+function assertBrokerStatusAvailable(result) {
+  if (result?.type === 'error') fail(result.code || 'SERVICE_STATUS_UNAVAILABLE', 'Windows service status is temporarily unavailable');
+}
 
 function boundService(action, projection) {
   const projected = { ...action, semanticProjection: projection, semanticManifestHash: projection?.semanticManifestHash };
@@ -51,6 +54,7 @@ export async function queryWindowsServiceProposal({ action, projection, authenti
   const { requestId, actionId } = windowsServiceRequestIds(action);
   if (!client || typeof client.status !== 'function') fail('SERVICE_PROPOSAL_UNAVAILABLE', 'Service broker is unavailable');
   const result = await client.status(requestId);
+  assertBrokerStatusAvailable(result);
   if (result?.type === 'result' && result.requestId === requestId && result.code === 'REQUEST_NOT_FOUND' && !result.status) {
     return { requestId, status: 'unknown', code: 'SERVICE_REQUEST_NOT_FOUND' };
   }
@@ -77,6 +81,7 @@ export async function queryWindowsServiceProposalFromCommand({ action, trustedCo
       op.analysis?.effectsComplete !== true || op.analysis?.unknowns?.length) return null;
   if (!client || typeof client.status !== 'function') fail('SERVICE_PROPOSAL_UNAVAILABLE', 'Service broker is unavailable');
   const result = await client.status(requestId);
+  assertBrokerStatusAvailable(result);
   if (result?.type === 'result' && result.requestId === requestId && result.code === 'REQUEST_NOT_FOUND' && !result.status) {
     return { requestId, status: 'unknown', code: 'SERVICE_REQUEST_NOT_FOUND' };
   }
@@ -90,7 +95,7 @@ export async function queryWindowsServiceProposalFromCommand({ action, trustedCo
 // Observe only the original broker record. A cancelled wait or broken
 // transport cannot establish whether an operation has executed.
 export async function waitWindowsServiceProposal({ action, projection, authenticatedPrincipalKind, client, signal,
-  timeoutMs = 10 * 60_000 + 10_000, intervalMs = 1_000, monotonicNow = () => performance.now(),
+  timeoutMs = 10 * 60_000 + 10_000, intervalMs = 2_000, monotonicNow = () => performance.now(),
   delay = ms => new Promise(resolve => setTimeout(resolve, ms)), assertActive, onStatus } = {}) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || !Number.isFinite(intervalMs) || intervalMs <= 0 ||
       typeof monotonicNow !== 'function' || typeof delay !== 'function') {
@@ -100,13 +105,25 @@ export async function waitWindowsServiceProposal({ action, projection, authentic
   const deadline = monotonicNow() + timeoutMs;
   const unknown = () => ({ requestId, status: 'unknown', code: 'SERVICE_OUTCOME_UNKNOWN' });
   let previousStatus = '';
+  let transientFailures = 0;
+  const retryable = new Set(['RATE_LIMITED', 'BROKER_PIPE_TIMEOUT', 'BROKER_PIPE_UNAVAILABLE',
+    'BROKER_STORAGE_UNAVAILABLE', 'SERVICE_STATUS_UNAVAILABLE']);
   while (!signal?.aborted && monotonicNow() < deadline) {
     let result;
     try { result = await queryWindowsServiceProposal({ action, projection, authenticatedPrincipalKind, client }); }
     catch (error) {
       if (['SERVICE_BINDING_CONFLICT', 'SERVICE_PROJECTION_INVALID', 'SERVICE_PROFILE_DENIED'].includes(error?.code)) throw error;
-      return unknown();
+      if (!retryable.has(error?.code)) return unknown();
+      if (typeof assertActive === 'function') {
+        try { await assertActive(); } catch { return unknown(); }
+      }
+      const remaining = deadline - monotonicNow();
+      if (remaining <= 0 || signal?.aborted) break;
+      const retryMs = Math.min(10_000, intervalMs * (2 ** Math.min(transientFailures++, 4)));
+      await delay(Math.min(retryMs, remaining));
+      continue;
     }
+    transientFailures = 0;
     if (result.status !== previousStatus && typeof onStatus === 'function') {
       previousStatus = result.status;
       try { await onStatus(result.status); } catch { /* activity is advisory */ }
@@ -142,6 +159,7 @@ export async function submitOrResumeWindowsServiceProposal({ action, projection,
     return { ...result, expiresMs: result.serviceControl.expiresMs, duplicate: true };
   };
   let existing = await client.status(requestId);
+  assertBrokerStatusAvailable(existing);
   if (!(existing?.type === 'result' && existing.requestId === requestId && existing.code === 'REQUEST_NOT_FOUND' && !existing.status)) return resume(existing);
   const health = await client.health();
   if (health?.type !== 'health' || health.serviceControlReady !== true || health.autoInstallKeyId !== kid ||

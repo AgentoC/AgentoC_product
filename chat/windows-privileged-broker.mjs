@@ -502,6 +502,7 @@ function brokerHttpStatus(response) {
 
 function brokerHttpErrorStatus(error) {
   if (error?.code === 'BROKER_REQUEST_INVALID' || error?.code === 'BROKER_REQUEST_TOO_LARGE') return 400;
+  if (error?.code === 'RATE_LIMITED') return 429;
   if (error?.code === 'BODY_TOO_LARGE') return 413;
   if (error?.code === 'BROKER_PLATFORM_UNSUPPORTED') return 501;
   return 503;
@@ -536,6 +537,7 @@ function isOwner(authSession) {
 function writeUnavailable(writeJson, res, error) {
   const status = brokerHttpErrorStatus(error);
   const code = status === 400 ? 'BROKER_REQUEST_INVALID'
+    : status === 429 ? 'RATE_LIMITED'
     : status === 413 ? 'BROKER_REQUEST_TOO_LARGE'
       : status === 501 ? 'BROKER_PLATFORM_UNSUPPORTED'
         : error?.code === 'BROKER_PIPE_TIMEOUT' ? 'BROKER_PIPE_TIMEOUT'

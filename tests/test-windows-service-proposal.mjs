@@ -77,4 +77,18 @@ assert.equal((await waitWindowsServiceProposal({ ...options, client: stalledClie
 const aborted = new AbortController(); aborted.abort();
 assert.equal((await waitWindowsServiceProposal({ ...options, signal: aborted.signal })).status, 'unknown');
 assert.equal((await waitWindowsServiceProposal({ ...options, client: stalledClient, assertActive: async () => { throw new Error('run cancelled'); } })).status, 'unknown');
+clock = 0;
+let retryPolls = 0;
+const retryClient = { ...client, status: async id => {
+  assert.equal(id, requestId);
+  if (++retryPolls === 1) return { type: 'error', code: 'RATE_LIMITED' };
+  if (retryPolls === 2) throw Object.assign(new Error('temporary pipe failure'), { code: 'BROKER_PIPE_TIMEOUT' });
+  return { type: 'result', requestId: id, status: 'succeeded', serviceControl: submitted.grant };
+} };
+assert.equal((await waitWindowsServiceProposal({ ...options, client: retryClient, timeoutMs: 30_000, intervalMs: 1000,
+  monotonicNow: () => clock, delay: async ms => { clock += ms; } })).status, 'succeeded');
+assert.equal(retryPolls, 3);
+assert.equal(count, 1, 'status retries must not resubmit the operation');
+await assert.rejects(queryWindowsServiceProposal({ ...options, client: { ...client, status: async () => ({ type: 'error', code: 'RATE_LIMITED' }) } }),
+  { code: 'RATE_LIMITED' });
 console.log('windows-service-proposal: ok');
