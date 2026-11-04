@@ -67,6 +67,13 @@ assert.equal((await inspect('Get-Command -Name Get-Content; Remove-Item . -Recur
 result = await inspect('Set-Content -Path result.txt -Value hello');
 assert.equal(result.decision, 'allow');
 assert.equal(result.actions[0].kind, 'write');
+result = await inspect('Clear-Content -LiteralPath readme.txt -Force');
+assert.equal(result.decision, 'allow');
+assert.equal(result.actions[0].kind, 'write');
+assert.equal((await inspect('clc -LiteralPath readme.txt')).decision, 'allow');
+assert.equal((await inspect('Clear-Content -LiteralPath ..\\protected\\result.txt')).decision, 'review');
+assert.equal((await inspect('Clear-Content -Path *.txt')).decision, 'review');
+assert.equal((await inspect('Clear-Content -LiteralPath ordinary-link')).decision, 'review');
 assert.equal((await inspect('mkdir new-folder')).decision, 'allow');
 assert.equal((await inspect('mkdir -Path ..\\outside-new -Force')).decision, 'allow');
 assert.equal((await inspect('mkdir -Path ..\\protected\\new-folder')).decision, 'review');
@@ -109,6 +116,8 @@ assert.equal((await inspect('Move-Item -Path readme.txt -Destination linked-dest
 for (const riskMode of ['recommended', 'full-auto']) {
   const approval = (script) => ({ kind: 'command', params: { command: [resolveWindowsSystemPaths().powershell, '-NoProfile', '-Command', script] } });
   const state = { riskMode, cwd: workspace, riskContext: context };
+  assert.equal((await decideWindowsApproval(approval('Clear-Content -LiteralPath ..\\ordinary.txt'), state)).decision, 'auto-allow', `${riskMode}: ordinary outside file`);
+  assert.equal((await decideWindowsApproval(approval('Clear-Content -LiteralPath ..\\protected\\result.txt'), state)).decision, 'prompt', `${riskMode}: protected file`);
   assert.equal((await decideWindowsApproval(approval('Copy-Item readme.txt -Destination linked-dest'), state)).decision, 'prompt');
   assert.equal((await decideWindowsApproval(approval('Copy-Item readme.txt -Destination ordinary-output.txt'), state)).decision, 'auto-allow');
   for (const script of [

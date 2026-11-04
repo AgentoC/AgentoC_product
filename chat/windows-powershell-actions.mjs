@@ -6,12 +6,13 @@ import { systemPathRootsForPlatform } from './risk-policy.mjs';
 const win = path.win32;
 const FILE_COMMANDS = new Map([
   ['get-content', 'read'], ['get-item', 'read'], ['get-childitem', 'read'], ['get-filehash', 'read'], ['test-path', 'read'], ['resolve-path', 'read'],
-  ['set-content', 'write'], ['add-content', 'write'], ['new-item', 'write'], ['out-file', 'write'], ['remove-item', 'delete'],
+  ['set-content', 'write'], ['add-content', 'write'], ['clear-content', 'write'], ['new-item', 'write'], ['out-file', 'write'], ['remove-item', 'delete'],
   ['mkdir', 'write'],
   ['copy-item', 'copy'], ['move-item', 'move'],
 ]);
 const BUILTIN_ALIASES = new Map([
   ['cat', 'get-content'], ['gc', 'get-content'], ['type', 'get-content'],
+  ['clc', 'clear-content'],
   ['ls', 'get-childitem'], ['dir', 'get-childitem'], ['gci', 'get-childitem'],
   ['cp', 'copy-item'], ['copy', 'copy-item'], ['cpi', 'copy-item'],
   ['mv', 'move-item'], ['move', 'move-item'], ['mi', 'move-item'],
