@@ -11,7 +11,9 @@ try {
   await page.setContent(`<body class="desktop-manager" data-desktop-manager-tab="account">
     <nav class="desktop-manager-nav"><button data-desktop-manager-tab="pairing">Pairing</button></nav>
     <div id="desktopManagerAccountStatus"></div><div id="desktopManagerGoogleAccountContent"></div>
-    <div id="desktopManagerDevicesContent"></div></body>`);
+    <div id="desktopManagerDevicesContent"></div>
+    <div id="crossDeviceOverlay" hidden><section id="crossDeviceSheet"><div id="crossDeviceStatus"></div>
+    <div data-cross-device-panel="register"><div id="crossDeviceRegisterContent"></div></div></section></div></body>`);
   await page.addStyleTag({ content: managerStyles });
   await page.evaluate(() => {
     window.agentocT = (key) => key;
@@ -21,7 +23,8 @@ try {
     window.open = (url) => window.__opened.push(url);
     window.fetchJsonOrRedirect = async (path) => {
       if (path === '/api/auth/google/status') return { enabled: true, bound: window.__bound, mode: 'accounts', capabilities: { accountJoin: true } };
-      if (path === '/api/device-pairing/invitations') return { invitation: { pairingUri: 'agentoc://pair?v=3&i=fixture&t=fixture', expiresAt: new Date(Date.now() + 120000).toISOString() } };
+      if (path === '/api/device-pairing/invitations') return { invitation: { id: 'inv_fixture', shortCode: '123456', accountHandoff: window.__bound, pairingUri: 'agentoc://pair?v=3&i=fixture&t=fixture', expiresAt: new Date(Date.now() + 120000).toISOString() } };
+      if (path === '/api/device-pairing/account-invitations/inv_fixture') return { status: 'PENDING' };
       if (path === '/api/auth/google/devices') return { devices: [] };
       throw new Error(`Unexpected request ${path}`);
     };
@@ -41,7 +44,16 @@ try {
   await page.evaluate(() => { window.__bound = true; window.AgentoCCrossDevicePanel.refreshManager(); });
   await page.getByText('Account connected', { exact: true }).waitFor();
   assert.equal(await page.locator('.desktop-manager-claim-qr').count(), 0);
-  assert.equal(await page.locator('[data-desktop-manager-tab="pairing"]').isHidden(), true);
+  assert.equal(await page.locator('[data-desktop-manager-tab="pairing"]').isVisible(), true);
+  await page.evaluate(() => window.AgentoCCrossDevicePanel.open({ view: 'register' }));
+  await page.getByRole('button', { name: 'Create pairing code' }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Temporary · no sign-in' }).count(), 0, 'bound accounts hide temporary pairing');
+  assert.equal(await page.getByRole('button', { name: 'Trusted · Google sign-in' }).count(), 1);
+  await page.getByRole('button', { name: 'Create pairing code' }).click();
+  await page.locator('.cross-device-pair-qr canvas').waitFor();
+  assert.equal(await page.getByText('Scanning this code automatically authorizes your phone for this account. Only share it with your own phone.').count(), 1);
+  await page.evaluate(() => { window.AgentoCCrossDevicePanel.close(); window.__bound = false; window.AgentoCCrossDevicePanel.open({ view: 'register' }); });
+  await page.getByRole('button', { name: 'Temporary · no sign-in' }).waitFor();
   assert.equal(await page.getByText('Switch work computer').count(), 0);
   console.log('Desktop account claim QR, login order, and bound state passed');
 } finally { await browser.close(); }

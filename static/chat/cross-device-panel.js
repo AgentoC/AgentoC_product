@@ -27,6 +27,8 @@
   let temporaryPairingState = null;
   let temporaryPairingPollTimer = null;
   let pairingMode = "formal";
+  let pairingAccountBound = null;
+  let pairingStatusRequest = 0;
   let managerClaim = null;
   let managerClaimTimer = null;
   // 入口健康探测的短缓存（P1-⑤）：探测失败不阻塞展示，60s 内复用结果。
@@ -245,7 +247,19 @@
     if (content) content.scrollTop = 0;
     if (next === "account") void renderAccount();
     if (next === "devices") void renderDevices();
-    if (next === "register") renderPairing();
+    if (next === "register") {
+      // Fail closed while status is loading: do not expose temporary mode for
+      // an already bound owner, including when opening this view directly.
+      pairingAccountBound = null;
+      const request = ++pairingStatusRequest;
+      pairingMode = "formal";
+      renderPairing();
+      void api("/api/auth/google/status").then((status) => {
+        if (request !== pairingStatusRequest || activeView !== "register" || overlay?.hidden) return;
+        pairingAccountBound = typeof status?.bound === "boolean" ? status.bound : null;
+        renderPairing();
+      }).catch(() => {});
+    }
   }
 
   function appendCardTitle(card, title, note = "") {
@@ -271,7 +285,8 @@
       if (activeView !== "account") return;
       clear(accountContent);
       const pairingNav = managerMode && document.querySelector('[data-desktop-manager-tab="pairing"]');
-      if (pairingNav) pairingNav.hidden = Boolean(status?.bound);
+      if (pairingNav) pairingNav.hidden = false;
+      pairingAccountBound = typeof status?.bound === "boolean" ? status.bound : null;
       if (managerMode && status?.bound) {
         if (managerClaimTimer) root.clearTimeout(managerClaimTimer);
         managerClaimTimer = null;
@@ -1017,7 +1032,7 @@
       modes.appendChild(button);
     };
     addMode("formal", fallback("crossDevice.pair.mode.google", "Trusted · Google sign-in"));
-    addMode("temporary", fallback("crossDevice.pair.mode.temporary", "Temporary · no sign-in"));
+    if (pairingAccountBound === false) addMode("temporary", fallback("crossDevice.pair.mode.temporary", "Temporary · no sign-in"));
     stack.appendChild(modes);
     if (pairingMode === "temporary") {
       renderTemporaryPairing(stack);
