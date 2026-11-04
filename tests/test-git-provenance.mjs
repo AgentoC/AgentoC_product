@@ -6,7 +6,7 @@
 import assert from 'assert/strict';
 import { execFileSync } from 'child_process';
 import { EventEmitter } from 'events';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { spawn as realSpawn } from 'child_process';
@@ -152,6 +152,17 @@ try {
   writeFileSync(hookScript, '#!/bin/sh\ntouch hook-ran.txt\n');
   chmodSync(hookScript, 0o755);
   git(repo, ['config', 'core.hooksPath', hooksDir]);
+  // Git's fsmonitor is a separate executable hook, not covered by hooksPath.
+  // First prove this actual Git invokes our harmless fixture on status, then
+  // ensure AgentoC's background read-only capture does not invoke it.
+  const fsmonitorMarker = join(repo, 'fsmonitor-ran.txt');
+  const fsmonitorScript = join(repo, '.git', 'fsmonitor-fixture');
+  writeFileSync(fsmonitorScript, '#!/bin/sh\necho invoked > fsmonitor-ran.txt\nexit 0\n');
+  chmodSync(fsmonitorScript, 0o755);
+  git(repo, ['config', 'core.fsmonitor', '.git/fsmonitor-fixture']);
+  git(repo, ['status', '--porcelain']);
+  assert.equal(existsSync(fsmonitorMarker), true, 'fixture must demonstrate fsmonitor execution');
+  unlinkSync(fsmonitorMarker);
 
   const seenSpawns = [];
   const wrappingSpawn = (command, args, options) => {
@@ -165,6 +176,7 @@ try {
   for (const entry of seenSpawns) {
     assert.equal(entry.command, 'git');
     assert.ok(entry.args.includes('core.hooksPath=/dev/null'), 'every git call must disable hooks');
+    assert.ok(entry.args.includes('core.fsmonitor=false'), 'every git call must disable fsmonitor');
     assert.ok(entry.args.includes('--no-optional-locks'), 'every git call must disable optional locks');
     assert.equal(entry.env.GIT_OPTIONAL_LOCKS, '0', 'every git call must set GIT_OPTIONAL_LOCKS=0');
   }
@@ -175,6 +187,7 @@ try {
     assert.ok(entry.args.includes('--no-textconv'), 'git diff must disable textconv');
   }
   assert.equal(existsSync(hookMarker), false, 'no hook should have run during provenance');
+  assert.equal(existsSync(fsmonitorMarker), false, 'no fsmonitor should run during provenance');
 
   // ── injectable timeout → partial, never clean ────────────────────────────
   const hangOnDiff = (command, args, options) => {

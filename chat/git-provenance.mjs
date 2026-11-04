@@ -6,10 +6,10 @@
 // promising undo or bit-for-bit restore.
 //
 // Rules:
-// - Every git invocation is read-only with hooks, external diff drivers and
-//   textconv disabled:
-//     git -c core.hooksPath=/dev/null -c diff.external= -c textconv=false
+// - Every git invocation is read-only with hooks and fsmonitor disabled:
+//     git -c core.hooksPath=/dev/null -c core.fsmonitor=false
 //         --no-optional-locks ...
+//   Diff commands additionally disable external diff drivers and textconv.
 //   plus GIT_OPTIONAL_LOCKS=0 in the environment.
 // - `git diff HEAD` is piped into a streaming sha256 — the patch is never
 //   materialized in memory. Output over the byte cap (default 512MB) or a
@@ -30,6 +30,7 @@ const GIT_PROVENANCE_MAX_STDERR_BYTES = 2 * 1024 * 1024;
 
 const GIT_READONLY_ARGS = [
   '-c', 'core.hooksPath=/dev/null',
+  '-c', 'core.fsmonitor=false',
   '--no-optional-locks',
 ];
 // External diff drivers and textconv must be disabled for the diff invocation:
