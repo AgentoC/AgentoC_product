@@ -49,6 +49,11 @@ type autoInstallInspectRequest struct {
 	PackageVersion string `json:"packageVersion"`
 }
 
+type ownerInstallIdentity struct {
+	InstanceID string `json:"instanceId"`
+	OwnerSID   string `json:"ownerSid"`
+}
+
 type brokerResponse struct {
 	Version             int                        `json:"version"`
 	Type                string                     `json:"type"`
@@ -65,6 +70,7 @@ type brokerResponse struct {
 	AutoInstallKeyID    string                     `json:"autoInstallKeyId,omitempty"`
 	AutoInstall         *autoInstallGrant          `json:"autoInstall,omitempty"`
 	OwnerInstall        *ownerInstallGrant         `json:"ownerInstall,omitempty"`
+	OwnerIdentity       *ownerInstallIdentity      `json:"ownerIdentity,omitempty"`
 	SelectedInstaller   *selectedInstallerFacts    `json:"selectedInstaller,omitempty"`
 	Challenge           *brokerChallenge           `json:"challenge,omitempty"`
 	EnrollmentChallenge *brokerEnrollmentChallenge `json:"enrollmentChallenge,omitempty"`
@@ -237,6 +243,10 @@ func validateRequest(request brokerRequest) error {
 		if request.OwnerInstall == nil || request.Signature == "" || len(request.Signature) > 1024 || request.RequestID != "" || request.Cursor != "" ||
 			request.SessionID != "" || request.RunID != "" || request.TurnID != "" || request.ActionID != "" || request.Operation != "" || request.TargetID != "" ||
 			request.OwnerID != "" || request.DeviceID != "" || request.PublicKey != "" || request.EnrollmentID != "" || request.VerificationCode != "" || request.Choice != "" {
+			return errInvalidRequest
+		}
+	case "owner_install.identity":
+		if hasNonHealthFields(request) {
 			return errInvalidRequest
 		}
 	case "auto_install.inspect":

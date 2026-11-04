@@ -773,6 +773,22 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 		response.RequestID, response.Status, response.Code = record.Grant.RequestID, record.Status, record.Code
 		return response
 	}
+	if request.Type == "owner_install.identity" {
+		if s.ownerPolicy == nil {
+			return newErrorResponse("OWNER_INSTALL_POLICY_UNAVAILABLE")
+		}
+		policy, err := s.ownerPolicy()
+		if err != nil {
+			return newErrorResponse("OWNER_INSTALL_POLICY_UNAVAILABLE")
+		}
+		state := s.store.Snapshot()
+		if state.AutoInstallSigner == nil || state.AutoInstallSigner.KeyID != policy.InstanceID {
+			return newErrorResponse("OWNER_INSTALL_POLICY_UNAVAILABLE")
+		}
+		response := newResponse("owner_install_identity")
+		response.OwnerIdentity = &ownerInstallIdentity{InstanceID: policy.InstanceID, OwnerSID: policy.OwnerSID}
+		return response
+	}
 	if request.Type == "owner_install.execute" {
 		s.autoMu.Lock()
 		defer s.autoMu.Unlock()

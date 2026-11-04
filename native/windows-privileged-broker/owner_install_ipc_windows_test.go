@@ -54,6 +54,11 @@ func TestOwnerInstallIPCClaimsOnceAndReportsStatus(t *testing.T) {
 			}
 			return ownerInstallResult{Status: "succeeded", Code: "OWNER_INSTALL_SUCCEEDED"}
 		}}
+	identityRequest, _ := json.Marshal(brokerRequest{Version: protocolVersion, Type: "owner_install.identity"})
+	identity := server.handleRequest(identityRequest, false)
+	if identity.Type != "owner_install_identity" || identity.OwnerIdentity == nil || identity.OwnerIdentity.InstanceID != policy.InstanceID || identity.OwnerIdentity.OwnerSID != policy.OwnerSID {
+		t.Fatalf("invalid policy identity: %+v", identity)
+	}
 	first := server.handleRequest(payload, false)
 	second := server.handleRequest(payload, false)
 	if first.Status != statusExecuting || second.Type == "error" {
