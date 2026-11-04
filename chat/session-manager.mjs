@@ -203,6 +203,7 @@ import { getWindowsManagedAutoInstallStatus, loadWindowsAutoInstallPublicIdentit
 import { createWindowsPrivilegedBrokerClient } from './windows-privileged-broker.mjs';
 import { queryWindowsServiceProposalFromCommand, submitOrResumeWindowsServiceProposal, waitWindowsServiceProposal } from './windows-service-proposal.mjs';
 import { activeWindowsServiceRequest } from './windows-service-activity.mjs';
+import { dispatchApprovedActionProposal } from './approved-action-queue.mjs';
 import { createWindowsUserInstallStore } from './windows-user-install-store.mjs';
 import { windowsUserInstallOperationFingerprint } from './windows-user-install-executor.mjs';
 import { resolvePrivilegedBatchPolicy, deferWindowsLegacyInstallBatch } from './privileged-permission-profile.mjs';
@@ -4296,8 +4297,7 @@ async function proposeApprovedActionsUnlocked({
 }
 
 export async function proposeApprovedActions(options = {}) {
-  const key = `${trimString(options.runId)}:${trimString(options.requestKey)}`;
-  return approvedActionProposalQueue(key, () => proposeApprovedActionsUnlocked(options));
+  return dispatchApprovedActionProposal(options, { queue: approvedActionProposalQueue, execute: proposeApprovedActionsUnlocked });
 }
 
 function createApprovedActionSessionStore(run) {
