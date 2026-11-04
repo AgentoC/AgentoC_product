@@ -8,9 +8,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
@@ -162,16 +167,115 @@ func fingerprintWindowsServiceControlHandle(name string, handle windows.Handle) 
 	if err != nil || descriptor == nil {
 		return "", errors.New("service security descriptor unavailable")
 	}
+	images, registrySecurity, err := snapshotWindowsServiceImages(name, config)
+	if err != nil {
+		return "", err
+	}
 	raw, err := json.Marshal(struct {
-		Name     string     `json:"name"`
-		Config   mgr.Config `json:"config"`
-		Security string     `json:"security"`
+		Name             string                 `json:"name"`
+		Config           mgr.Config             `json:"config"`
+		Security         string                 `json:"security"`
+		Images           []serviceImageSnapshot `json:"images"`
+		RegistrySecurity string                 `json:"registrySecurity"`
 	}{
-		Name: name, Config: config, Security: descriptor.String(),
+		Name: name, Config: config, Security: descriptor.String(), Images: images, RegistrySecurity: registrySecurity,
 	})
 	if err != nil {
 		return "", err
 	}
 	digest := sha256.Sum256(raw)
 	return hex.EncodeToString(digest[:]), nil
+}
+
+type serviceImageSnapshot struct {
+	Path      string `json:"path"`
+	Digest    string `json:"digest"`
+	Security  string `json:"security"`
+	Volume    uint32 `json:"volume"`
+	FileIndex uint64 `json:"fileIndex"`
+}
+
+// Read through a single file handle; reject reparse points and aliases. The
+// image is observed here, not authorized or pinned for later execution.
+func snapshotWindowsServiceImage(raw string) (serviceImageSnapshot, error) {
+	var result serviceImageSnapshot
+	expanded, err := registry.ExpandString(raw)
+	if err != nil {
+		return result, err
+	}
+	path := filepath.Clean(expanded)
+	if !filepath.IsAbs(path) || len(filepath.VolumeName(path)) != 2 || strings.Contains(path, "%") {
+		return result, errors.New("service image path is not an absolute local path")
+	}
+	name, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return result, err
+	}
+	handle, err := windows.CreateFile(name, windows.GENERIC_READ, windows.FILE_SHARE_READ, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+	if err != nil {
+		return result, err
+	}
+	file := os.NewFile(uintptr(handle), path)
+	if file == nil {
+		windows.CloseHandle(handle)
+		return result, errors.New("service image handle unavailable")
+	}
+	defer file.Close()
+	var info windows.ByHandleFileInformation
+	if windows.GetFileInformationByHandle(handle, &info) != nil || info.FileAttributes&(windows.FILE_ATTRIBUTE_DIRECTORY|windows.FILE_ATTRIBUTE_REPARSE_POINT) != 0 || info.NumberOfLinks != 1 {
+		return result, errors.New("service image identity is unsafe")
+	}
+	buffer := make([]uint16, 32768)
+	n, err := windows.GetFinalPathNameByHandle(handle, &buffer[0], uint32(len(buffer)), 0)
+	if err != nil || n == 0 || n >= uint32(len(buffer)) || !strings.EqualFold(windows.UTF16ToString(buffer[:n]), `\\?\`+path) {
+		return result, errors.New("service image path changed")
+	}
+	size := int64(info.FileSizeHigh)<<32 | int64(info.FileSizeLow)
+	if size <= 0 || size > targetBinaryMaxBytes {
+		return result, errors.New("service image size is invalid")
+	}
+	sd, err := windows.GetSecurityInfo(handle, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+	if err != nil || sd == nil {
+		return result, errors.New("service image security unavailable")
+	}
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return result, err
+	}
+	return serviceImageSnapshot{Path: path, Digest: hex.EncodeToString(hash.Sum(nil)), Security: sd.String(), Volume: info.VolumeSerialNumber,
+		FileIndex: uint64(info.FileIndexHigh)<<32 | uint64(info.FileIndexLow)}, nil
+}
+
+func snapshotWindowsServiceImages(name string, config mgr.Config) ([]serviceImageSnapshot, string, error) {
+	arguments, err := windows.DecomposeCommandLine(config.BinaryPathName)
+	if err != nil || len(arguments) == 0 {
+		return nil, "", errors.New("service image command is invalid")
+	}
+	image, err := snapshotWindowsServiceImage(arguments[0])
+	if err != nil {
+		return nil, "", err
+	}
+	images := []serviceImageSnapshot{image}
+	if config.ServiceType&windows.SERVICE_WIN32_SHARE_PROCESS != 0 {
+		key, err := registry.OpenKey(registry.LOCAL_MACHINE, `SYSTEM\CurrentControlSet\Services\`+name+`\Parameters`, registry.QUERY_VALUE|windows.READ_CONTROL)
+		if err != nil {
+			return nil, "", err
+		}
+		defer key.Close()
+		sd, err := windows.GetSecurityInfo(windows.Handle(key), windows.SE_REGISTRY_KEY, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+		if err != nil || sd == nil {
+			return nil, "", errors.New("shared service registry security unavailable")
+		}
+		dll, valueType, err := key.GetStringValue("ServiceDll")
+		if err != nil || (valueType != registry.SZ && valueType != registry.EXPAND_SZ) {
+			return nil, "", errors.New("shared service DLL unavailable")
+		}
+		shared, err := snapshotWindowsServiceImage(dll)
+		if err != nil {
+			return nil, "", err
+		}
+		images = append(images, shared)
+		return images, sd.String(), nil
+	}
+	return images, "", nil
 }
