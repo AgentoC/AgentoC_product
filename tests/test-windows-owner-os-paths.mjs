@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { resolveOwnerWindowsOsPaths } from '../lib/windows-owner-os-paths.mjs';
-import { ownerLayoutForOs } from '../lib/windows-owner-discovery.mjs';
+import { ownerLayoutForOs, ownerInstallRootFromModule } from '../lib/windows-owner-discovery.mjs';
 
 const windows = 'D:\\Operating Systems\\Windows';
 const programData = 'E:\\Shared Data';
@@ -17,6 +17,10 @@ assert.deepEqual(paths, { windows, programData, programFiles, programFilesX86, p
 assert.deepEqual(ownerLayoutForOs(paths), { instanceRoot: 'E:/Shared Data/AgentoC/instances/owner', root: 'F:/Applications/AgentoC' });
 assert.deepEqual(ownerLayoutForOs(paths, 'G:\\Installed App'), { instanceRoot: 'E:/Shared Data/AgentoC/instances/owner', root: 'G:/Installed App' });
 assert.deepEqual(ownerLayoutForOs(null), { instanceRoot: '', root: '' });
+assert.equal(ownerInstallRootFromModule('G:\\Installed App\\payload\\lib\\windows-owner-discovery.mjs'), 'G:\\Installed App');
+for (const invalid of ['G:\\source\\lib\\windows-owner-discovery.mjs', 'G:\\payload\\lib\\windows-owner-discovery.mjs', String.raw`\\server\app\payload\lib\windows-owner-discovery.mjs`, 'relative\\payload\\lib\\windows-owner-discovery.mjs']) {
+  assert.equal(ownerInstallRootFromModule(invalid), '', invalid);
+}
 assert.equal(invocation.executable, paths.powershell);
 assert.deepEqual(invocation.options.env, { SystemRoot: windows, WINDIR: windows, SystemDrive: 'D:' });
 assert.ok(invocation.args.includes('-NoProfile') && invocation.args.includes('-EncodedCommand'));
