@@ -34,7 +34,7 @@ try{
     $info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true;$info.EnvironmentVariables.Clear()
     $windowsRoot=[Environment]::GetFolderPath([Environment+SpecialFolder]::Windows)
     if(-not $windowsRoot -or -not [IO.Path]::IsPathRooted($windowsRoot)){throw 'OSV_WINDOWS_DIRECTORY_UNAVAILABLE'}
-    $info.EnvironmentVariables['SystemRoot']=$windowsRoot;$info.EnvironmentVariables['WINDIR']=$windowsRoot
+    $info.EnvironmentVariables['SystemRoot']=$windowsRoot;$info.EnvironmentVariables['WINDIR']=$windowsRoot;$info.EnvironmentVariables['SystemDrive']=[IO.Path]::GetPathRoot($windowsRoot).TrimEnd('\')
     $process=[Diagnostics.Process]::new();$process.StartInfo=$info
     try{
       [void]$process.Start()

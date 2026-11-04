@@ -18,7 +18,7 @@ assert.deepEqual(ownerLayoutForOs(paths), { instanceRoot: 'E:/Shared Data/Agento
 assert.deepEqual(ownerLayoutForOs(paths, 'G:\\Installed App'), { instanceRoot: 'E:/Shared Data/AgentoC/instances/owner', root: 'G:/Installed App' });
 assert.deepEqual(ownerLayoutForOs(null), { instanceRoot: '', root: '' });
 assert.equal(invocation.executable, paths.powershell);
-assert.deepEqual(invocation.options.env, { SystemRoot: windows, WINDIR: windows });
+assert.deepEqual(invocation.options.env, { SystemRoot: windows, WINDIR: windows, SystemDrive: 'D:' });
 assert.ok(invocation.args.includes('-NoProfile') && invocation.args.includes('-EncodedCommand'));
 const script = Buffer.from(invocation.args.at(-1), 'base64').toString('utf16le');
 assert.match(script, /GetFolderPath/);

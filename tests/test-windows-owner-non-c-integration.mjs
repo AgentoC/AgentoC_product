@@ -46,6 +46,6 @@ assert.equal(calls.length, 3);
 for (const call of calls) {
   assert.equal(call.executable, osPaths.powershell);
   assert.ok(call.args.includes('-ExecutionPolicy') && call.args.includes('Bypass'));
-  assert.deepEqual(call.options.env, { SystemRoot: osPaths.windows, WINDIR: osPaths.windows, AGENTOC_INSTALL_ROOT: 'F:\\Apps\\AgentoC' });
+  assert.deepEqual(call.options.env, { SystemRoot: osPaths.windows, WINDIR: osPaths.windows, SystemDrive: 'D:', AGENTOC_INSTALL_ROOT: 'F:\\Apps\\AgentoC' });
 }
 console.log('windows-owner-non-c-integration: consumer paths and inspector invocations passed (simulated OS facts)');

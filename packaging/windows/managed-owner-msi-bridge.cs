@@ -543,7 +543,8 @@ static class ManagedOwnerMsiBridge {
    // the protected temporary root above; machine execution policy stays intact.
    string windowsRoot=Environment.GetFolderPath(Environment.SpecialFolder.Windows);Need(!String.IsNullOrWhiteSpace(windowsRoot)&&Path.IsPathRooted(windowsRoot),"OMI_WINDOWS_DIRECTORY_UNAVAILABLE");
    var info=new ProcessStartInfo{FileName=Path.Combine(Environment.SystemDirectory,@"WindowsPowerShell\v1.0\powershell.exe"),Arguments="-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \""+Path.Combine(root,script)+"\""+scriptArguments,UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true};
-   info.EnvironmentVariables.Clear();foreach(string key in new[]{"SystemRoot","WINDIR"})info.EnvironmentVariables[key]=windowsRoot;info.EnvironmentVariables["AGENTOC_INSTALL_ROOT"]=Product;info.EnvironmentVariables["TEMP"]=info.EnvironmentVariables["TMP"]=root;
+   string systemDrive=Path.GetPathRoot(windowsRoot).TrimEnd('\\');Need(Regex.IsMatch(systemDrive,@"\A[A-Za-z]:\z"),"OMI_SYSTEM_DRIVE_UNAVAILABLE");
+   info.EnvironmentVariables.Clear();foreach(string key in new[]{"SystemRoot","WINDIR"})info.EnvironmentVariables[key]=windowsRoot;info.EnvironmentVariables["SystemDrive"]=systemDrive;info.EnvironmentVariables["AGENTOC_INSTALL_ROOT"]=Product;info.EnvironmentVariables["TEMP"]=info.EnvironmentVariables["TMP"]=root;
    using(var child=new Process{StartInfo=info})using(var outputDone=new System.Threading.ManualResetEventSlim())using(var errorDone=new System.Threading.ManualResetEventSlim()){
     var output=new StringBuilder();int errorBytes=0,overflow=0;
     child.OutputDataReceived+=(s,e)=>{if(e.Data==null){outputDone.Set();return;}lock(output){if(output.Length+e.Data.Length>65536)System.Threading.Interlocked.Exchange(ref overflow,1);else output.AppendLine(e.Data);}};
