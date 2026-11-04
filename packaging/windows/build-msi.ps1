@@ -19,7 +19,8 @@ param(
     [string]$PreviousMsiSha256 = '',
     [string]$WingetClientPackagePath = '',
     [string]$PowerShellRuntimeArchivePath = '',
-    [switch]$CommittedTree
+    [switch]$CommittedTree,
+    [ValidateRange(0, [long]::MaxValue)] [long]$MinimumFreeBytes = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -67,6 +68,16 @@ $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $buildInputRoot = $SourceRoot
 $frozenRevision = ''
 $staging = Join-Path ([IO.Path]::GetTempPath()) ('agentoc-msi-' + [guid]::NewGuid().ToString('N'))
+function Assert-BuildFreeSpace([string]$Phase) {
+    if ($MinimumFreeBytes -eq 0) { return }
+    foreach ($root in @([IO.Path]::GetPathRoot([IO.Path]::GetFullPath($staging)), [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($OutputPath))) | Select-Object -Unique) {
+        $drive = [IO.DriveInfo]::new($root)
+        if (-not $drive.IsReady -or $drive.AvailableFreeSpace -lt $MinimumFreeBytes) {
+            throw ("MSI_BUILD_FREE_SPACE_INSUFFICIENT: {0} at {1} requires {2} available bytes" -f $Phase, $root, $MinimumFreeBytes)
+        }
+    }
+}
+Assert-BuildFreeSpace 'before staging'
 New-Item -ItemType Directory -Force $staging | Out-Null
 try {
     $payloadRoot = Join-Path $staging 'payload'
@@ -118,6 +129,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Windows approval payload inputs are incomplete.' }
     & (Join-Path $payloadRoot 'packaging\windows\build-safe-delete.ps1') -SourceRoot $payloadRoot -OutputPath (Join-Path $payloadRoot 'bin\agentoc-safe-delete.exe')
     if ($LASTEXITCODE -ne 0) { throw 'Windows safe deletion helper could not be built.' }
+    Assert-BuildFreeSpace 'after runtime staging'
     # Keep the host's displayed build version aligned with the actual package.
     & (Join-Path $scriptRoot 'write-package-version.ps1') -PayloadRoot $payloadRoot -Version $Version
     # Build Electron in a temporary, locked install so npm never mutates the
@@ -139,6 +151,7 @@ try {
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $desktopPayloadRoot 'AgentoC.exe') -PathType Leaf)) {
         throw 'Branded, unelevated Electron runtime staging failed.'
     }
+    Assert-BuildFreeSpace 'after desktop staging'
     # Keep the Windows payload self-contained and in parity with the Debian
     # builder: install only locked production dependencies in the staging tree.
     $payloadLock = Join-Path $payloadRoot 'package-lock.json'
@@ -157,6 +170,7 @@ try {
             if ($LASTEXITCODE -ne 0) { throw 'Windows production dependency staging failed.' }
         } finally { Pop-Location }
     }
+    Assert-BuildFreeSpace 'after dependency staging'
     # npm ci prunes packages absent from the app lock, including npm/corepack.
     # Stage the self-contained installer toolchain after ci, then smoke-test it.
     if ($CommittedTree) {
@@ -241,6 +255,7 @@ try {
             }
         }
         & (Join-Path $payloadRoot 'packaging\windows\stage-powershell-runtime.ps1') -ArchivePath $runtimeArchive -PayloadRoot $payloadRoot -Architecture x64
+        Assert-BuildFreeSpace 'after PowerShell staging'
         $runtimeManifestOutput = & $node.Source (Join-Path $payloadRoot 'scripts\create-windows-runtime-manifest.mjs') $payloadRoot
         if ($LASTEXITCODE -ne 0) { throw 'Windows runtime integrity manifest generation failed.' }
         $runtimeManifest = $runtimeManifestOutput | ConvertFrom-Json
@@ -290,6 +305,7 @@ try {
     if ($payloadBytes -gt $maxPayloadBytes) {
         throw ('Staged MSI payload is {0:N0} MiB, above the {1:N0} MiB runtime budget.' -f ($payloadBytes / 1MB), ($maxPayloadBytes / 1MB))
     }
+    Assert-BuildFreeSpace 'before MSI compilation'
     # Compile the service host from the same frozen staged source, never reuse
     # an untracked developer executable from SourceRoot.
     $installScriptRoot = Join-Path $payloadRoot 'packaging\windows'
