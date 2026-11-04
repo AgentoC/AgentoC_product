@@ -31,7 +31,9 @@ jobs:
           $out = Join-Path $env:RUNNER_TEMP 'agentoc-release'
           New-Item -ItemType Directory -Force $out | Out-Null
           $msi = Join-Path $out 'AgentoC-inner.msi'
-          & "$source\packaging\windows\build-msi.ps1" -SourceRoot $source -OutputPath $msi -Version '0.0.1.0' -MsiProductVersion '0.0.13'
+          # Keep the public version at 0.0.1 while advancing MSI's internal
+          # upgrade order beyond the already installed 0.0.15 package.
+          & "$source\packaging\windows\build-msi.ps1" -SourceRoot $source -OutputPath $msi -Version '0.0.1.0' -MsiProductVersion '0.0.16'
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $msi)) { throw 'MSI build failed' }
           $brand = Join-Path $env:TEMP ('brand-' + [guid]::NewGuid().ToString('N'))
           & "$source\packaging\windows\generate-brand-assets.ps1" -SourceRoot $source -OutputDirectory $brand
