@@ -43,6 +43,7 @@ export const SEMANTIC_CAPABILITY_AUTH_MODE_OWNER_CLICK = 'owner-click';
 // operation bindings remain mandatory and are revalidated by the executor.
 export const SEMANTIC_CAPABILITY_AUTH_MODE_POLICY_AUTO = 'policy-auto';
 export const SEMANTIC_ADAPTER_APT_INSTALL_V1 = 'linux-apt-install/v1';
+export const SEMANTIC_ADAPTER_WINDOWS_SERVICE_CONTROL_V1 = 'windows-service-control/v1';
 
 export const SEMANTIC_CAPABILITY_ERROR = Object.freeze({
   ADAPTER_DENIED: 'SEMANTIC_CAPABILITY_ADAPTER_DENIED',
@@ -161,6 +162,19 @@ function canonicalBoundOperation(policyDecision) {
       fail(SEMANTIC_CAPABILITY_ERROR.REVALIDATION_FAILED, 'Windows package artifact snapshot does not match the requested target');
     }
   }
+  if (operation.target?.kind === 'windows_service') {
+    const target = operation.target;
+    const snapshot = target.resourceSnapshot;
+    if (target.platform !== 'win32' || target.manager !== 'windows-service' ||
+        typeof target.serviceName !== 'string' || target.serviceName !== target.serviceName.trim() ||
+        !target.serviceName || target.serviceName.length > 256 || /[\\/*?\x00-\x1f]/.test(target.serviceName) ||
+        !['start-service', 'stop-service', 'restart-service'].includes(target.action) ||
+        snapshot.serviceName !== target.serviceName || !/^[a-f0-9]{64}$/.test(snapshot.definitionHash || '') ||
+        operation.scope?.serviceName !== target.serviceName || operation.scope?.action !== target.action ||
+        operation.scope?.definitionHash !== snapshot.definitionHash) {
+      fail(SEMANTIC_CAPABILITY_ERROR.REVALIDATION_FAILED, 'Windows service snapshot does not match the requested operation');
+    }
+  }
   const manifestHash = computeSemanticManifestHash(operation);
   if (manifestHash !== trimString(policyDecision?.operationManifestHash)) {
     fail(SEMANTIC_CAPABILITY_ERROR.MANIFEST_MISMATCH, 'policy operation manifest does not match its operation');
@@ -223,11 +237,26 @@ function canonicalBoundOperation(policyDecision) {
         artifactIdentity: trimString(operation.target?.resourceSnapshot?.artifactIdentity),
         artifactDigest: trimString(operation.target?.resourceSnapshot?.artifactDigest),
       } : {}),
+      ...(operation.target?.kind === 'windows_service' ? {
+        serviceName: operation.target.serviceName,
+        serviceAction: operation.target.action,
+        definitionHash: operation.target.resourceSnapshot.definitionHash,
+      } : {}),
     },
   };
 }
 
 function adapterAllows(adapter, operations) {
+  if (adapter === SEMANTIC_ADAPTER_WINDOWS_SERVICE_CONTROL_V1) {
+    return operations.length === 1 && operations.every(entry => {
+      const input = entry?.adapterInput || {};
+      return entry.primaryAction === 'service.control' && entry.platform === 'win32' && entry.executionClass === 'host' &&
+        JSON.stringify(entry.effects) === JSON.stringify(['process.execute']) && input.manager === 'windows-service' &&
+        typeof input.serviceName === 'string' && input.serviceName === input.serviceName.trim() && input.serviceName.length > 0 &&
+        input.serviceName.length <= 256 && !/[\\/*?\x00-\x1f]/.test(input.serviceName) &&
+        ['start-service', 'stop-service', 'restart-service'].includes(input.serviceAction) && /^[a-f0-9]{64}$/.test(input.definitionHash || '');
+    });
+  }
   if (adapter === SEMANTIC_ADAPTER_APT_INSTALL_V1) {
     return operations.length > 0 && operations.every((entry) => (
       entry.primaryAction === 'package.install'

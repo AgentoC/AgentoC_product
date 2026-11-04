@@ -13,6 +13,7 @@ import { parsePowerShellCommandFacts, mapPowerShellFactsToCandidates } from '../
 import {
   SEMANTIC_ADAPTER_MSI_INSTALL_V1,
   SEMANTIC_ADAPTER_WINGET_INSTALL_V1,
+  SEMANTIC_ADAPTER_WINDOWS_SERVICE_CONTROL_V1,
   createSemanticCapability,
   signSemanticCapability,
   verifySemanticCapability,
@@ -262,11 +263,35 @@ const proposedServiceProjection = await prepareApprovedActionSemanticProjection(
   action: proposedService,
   trustedContext,
   resolverOptions: { windowsFactsProvider: { name: 'windows-service-fixture', async serviceFacts(query) {
-    return { platform: 'win32', manager: 'windows-service', serviceName: query.serviceName, exists: true, definitionHash: 'definition-1' };
+    return { platform: 'win32', manager: 'windows-service', serviceName: query.serviceName, exists: true, definitionHash: 'a'.repeat(64) };
   } } },
 });
 eq('service action reaches owner review with an exact server snapshot', proposedServiceProjection.decision, 'ASK');
 eq('review binds the selected service name', proposedServiceProjection.decisions[0].operation.target.serviceName, 'FixtureService');
+const serviceCapability = createSemanticCapability({ selectedDecisions: proposedServiceProjection.decisions,
+  adapter: SEMANTIC_ADAPTER_WINDOWS_SERVICE_CONTROL_V1, sessionId: binding.sessionId, runId: binding.runId,
+  turnId: binding.turnId, credentialId: 'fixture-credential', kid: 'fixture-key' });
+check('service control capability is valid', validateSemanticCapability(serviceCapability).ok);
+eq('service capability binds its exact operation and definition',
+  [serviceCapability.operations[0].adapterInput.serviceName, serviceCapability.operations[0].adapterInput.serviceAction,
+    serviceCapability.operations[0].adapterInput.definitionHash], ['FixtureService', 'restart-service', 'a'.repeat(64)]);
+for (const modification of [{ serviceName: 'OtherService' }, { serviceAction: 'stop-service' }, { definitionHash: 'b'.repeat(64) }]) {
+  const changed = { ...serviceCapability, operations: [{ ...serviceCapability.operations[0],
+    adapterInput: { ...serviceCapability.operations[0].adapterInput, ...modification } }] };
+  check('altered service capability fails integrity validation', !validateSemanticCapability(changed).ok);
+}
+check('service control cannot impersonate automatic package authorization', !validateSemanticCapability({ ...serviceCapability, authMode: 'policy-auto', credentialId: '' }).ok);
+const wrongService = structuredClone(proposedServiceProjection.decisions[0]);
+wrongService.operation.target.serviceName = 'OtherService';
+assert.throws(() => createSemanticCapability({ selectedDecisions: [wrongService], adapter: SEMANTIC_ADAPTER_WINDOWS_SERVICE_CONTROL_V1,
+  sessionId: binding.sessionId, runId: binding.runId, turnId: binding.turnId, credentialId: 'fixture-credential', kid: 'fixture-key' }),
+  /snapshot does not match/);
+passed++;
+const serviceKeys = generateKeyPairSync('ed25519');
+const signedService = signSemanticCapability(serviceCapability, serviceKeys.privateKey);
+check('service capability signature verifies', verifySemanticCapability(signedService, { publicKey: serviceKeys.publicKey }).ok);
+check('signature prevents changing a service operation', !verifySemanticCapability({ ...signedService, operations: [{ ...signedService.operations[0],
+  adapterInput: { ...signedService.operations[0].adapterInput, serviceName: 'OtherService' } }] }, { publicKey: serviceKeys.publicKey }).ok);
 
 const packageOperation = compile('winget install --id Git.Git --exact --source winget --scope machine').operations[0];
 const packageResolution = await resolveSemanticContext({
