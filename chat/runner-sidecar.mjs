@@ -389,7 +389,7 @@ export function resolveRunRiskContext(manifest, { platform = process.platform, w
     }
     const roots = new Set(context.systemPathRoots.filter((value) => typeof value === 'string')
       .map((value) => win32.normalize(value).toLowerCase()));
-    if (![windowsOsPaths.windows, windowsOsPaths.programData, windowsOsPaths.programFiles]
+    if (![windowsOsPaths.windows, windowsOsPaths.programData, windowsOsPaths.programFiles, windowsOsPaths.programFilesX86]
       .every((value) => typeof value === 'string' && value && roots.has(win32.normalize(value).toLowerCase()))) {
       return { riskContext: null, valid: false, reason: 'windows-system-paths-unavailable' };
     }

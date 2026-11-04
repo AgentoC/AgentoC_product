@@ -8,7 +8,7 @@ import { resolveRunRiskContext } from '../chat/runner-sidecar.mjs';
 import { decideWindowsApproval } from '../chat/windows-approval-gate.mjs';
 
 test('run admission protects OS-derived roots across drives for every file operation', async () => {
-  const windowsOsPaths = { windows: 'D:\\Windows', programData: 'E:\\Shared Data', programFiles: 'F:\\Applications' };
+  const windowsOsPaths = { windows: 'D:\\Windows', programData: 'E:\\Shared Data', programFiles: 'F:\\Applications', programFilesX86: 'H:\\Apps32' };
   const context = buildRunRiskContext({
     platform: 'win32',
     workspaceRoot: { realPath: 'G:\\work' },
@@ -35,7 +35,7 @@ test('run admission protects OS-derived roots across drives for every file opera
 });
 
 test('Windows sidecar refuses automatic approval when OS roots cannot be verified', () => {
-  const windowsOsPaths = { windows: 'D:\\Windows', programData: 'E:\\Shared Data', programFiles: 'F:\\Applications' };
+  const windowsOsPaths = { windows: 'D:\\Windows', programData: 'E:\\Shared Data', programFiles: 'F:\\Applications', programFilesX86: 'H:\\Apps32' };
   const scope = {
     platform: 'win32',
     workspaceRoot: { realPath: 'G:\\work' },
@@ -47,6 +47,7 @@ test('Windows sidecar refuses automatic approval when OS roots cannot be verifie
   const options = { platform: 'win32', windowsOsPaths };
   assert.equal(resolveRunRiskContext(manifest, options).valid, true);
   assert.equal(resolveRunRiskContext(manifest, { ...options, windowsOsPaths: null }).reason, 'windows-system-paths-unavailable');
+  assert.equal(resolveRunRiskContext(manifest, { ...options, windowsOsPaths: { ...windowsOsPaths, programFilesX86: '' } }).reason, 'windows-system-paths-unavailable');
   const omittedRootScope = { ...scope, riskContext: { ...scope.riskContext,
     systemPathRoots: scope.riskContext.systemPathRoots.filter(root => root.toLowerCase() !== windowsOsPaths.programData.toLowerCase()) } };
   assert.equal(resolveRunRiskContext({ executionScope: omittedRootScope,

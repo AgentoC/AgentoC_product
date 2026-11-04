@@ -134,7 +134,7 @@ export function buildRunRiskContext(executionScope, { protectedRoots = [], windo
     systemPathRoots: uniqueRiskRoots([
       ...systemPathRootsForPlatform(platform),
       ...(platform === 'win32' && windowsOsPaths
-        ? [windowsOsPaths.windows, windowsOsPaths.programData, windowsOsPaths.programFiles] : []),
+        ? [windowsOsPaths.windows, windowsOsPaths.programData, windowsOsPaths.programFiles, windowsOsPaths.programFilesX86] : []),
     ], platform),
   };
 }

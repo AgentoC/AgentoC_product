@@ -5,14 +5,15 @@ import { ownerLayoutForOs } from '../lib/windows-owner-discovery.mjs';
 const windows = 'D:\\Operating Systems\\Windows';
 const programData = 'E:\\Shared Data';
 const programFiles = 'F:\\Applications';
+const programFilesX86 = 'H:\\Applications 32';
 let invocation;
 const output = (...values) => values.map(value => Buffer.from(value).toString('base64')).join('\r\n') + '\r\n';
 const resolve = overrides => resolveOwnerWindowsOsPaths({ platform: 'win32',
   realpath: name => { assert.equal(name, String.raw`\\?\GLOBALROOT\SystemRoot`); return windows; },
-  run: (executable, args, options) => { invocation = { executable, args, options }; return { status: 0, stdout: output(windows, programData, programFiles) }; },
+  run: (executable, args, options) => { invocation = { executable, args, options }; return { status: 0, stdout: output(windows, programData, programFiles, programFilesX86) }; },
   ...overrides });
 const paths = resolve();
-assert.deepEqual(paths, { windows, programData, programFiles, powershell: `${windows}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe` });
+assert.deepEqual(paths, { windows, programData, programFiles, programFilesX86, powershell: `${windows}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe` });
 assert.deepEqual(ownerLayoutForOs(paths), { instanceRoot: 'E:/Shared Data/AgentoC/instances/owner', root: 'F:/Applications/AgentoC' });
 assert.deepEqual(ownerLayoutForOs(paths, 'G:\\Installed App'), { instanceRoot: 'E:/Shared Data/AgentoC/instances/owner', root: 'G:/Installed App' });
 assert.deepEqual(ownerLayoutForOs(null), { instanceRoot: '', root: '' });
@@ -28,14 +29,17 @@ for (const raw of ['D:relative', String.raw`\\server\windows`, 'D:\\', 'D:\\Win:
 assert.equal(resolve({ realpath: () => { throw new Error('unavailable'); } }), null);
 for (const result of [
   { status: 1, stdout: '' }, { status: 0, stdout: '{}' },
-  { status: 0, stdout: output('C:\\Windows', programData, programFiles) },
-  { status: 0, stdout: output(windows, String.raw`\\server\share`, programFiles) },
-  { status: 0, stdout: output(windows, programData, programFiles, 'extra') },
-  { status: 0, stdout: output(windows, 'E:\\folder\\..\\other', programFiles) },
+  { status: 0, stdout: output('C:\\Windows', programData, programFiles, programFilesX86) },
+  { status: 0, stdout: output(windows, String.raw`\\server\share`, programFiles, programFilesX86) },
+  { status: 0, stdout: output(windows, programData, programFiles, programFilesX86, 'extra') },
+  { status: 0, stdout: output(windows, 'E:\\folder\\..\\other', programFiles, programFilesX86) },
+  { status: 0, stdout: output(windows, programData, programFiles, String.raw`\\server\share`) },
   { status: 0, stdout: 'x'.repeat(8193) },
 ]) assert.equal(resolve({ run: () => result }), null);
 assert.equal(resolve({ run: () => ({ error: new Error('timeout'), status: null, stdout: '' }) }), null);
-assert.equal(resolve({ run: () => ({ status: 0, stdout: output(windows, 'E:\\共享 数据', programFiles) }) }).programData, 'E:\\共享 数据');
+assert.equal(resolve({ run: () => ({ status: 0, stdout: output(windows, 'E:\\共享 数据', programFiles, programFilesX86) }) }).programData, 'E:\\共享 数据');
+assert.equal(resolve({ run: () => ({ status: 0, stdout: output(windows, programData, programFiles) + '-\r\n' }) }).programFilesX86, '');
+assert.equal(resolve({ run: () => ({ status: 0, stdout: output(windows, programData, programFiles, programFiles) }) }).programFilesX86, programFiles);
 
 if (process.platform === 'win32') {
   const actual = resolveOwnerWindowsOsPaths();
