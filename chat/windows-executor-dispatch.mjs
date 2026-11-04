@@ -17,7 +17,8 @@ import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import { SEMANTIC_ADAPTER_MSI_INSTALL_V1, SEMANTIC_ADAPTER_WINGET_INSTALL_V1, revalidateWindowsMsiInstall, revalidateWindowsWingetInstall } from './semantic-windows-adapter.mjs';
-import { SEMANTIC_CAPABILITY_AUTH_MODE_POLICY_AUTO, revalidateSemanticCapability, verifySemanticCapability } from './semantic-capability.mjs';
+import { SEMANTIC_ADAPTER_WINDOWS_SERVICE_CONTROL_V1, SEMANTIC_CAPABILITY_AUTH_MODE_POLICY_AUTO, revalidateSemanticCapability, verifySemanticCapability } from './semantic-capability.mjs';
+import { revalidateWindowsServiceControl } from './windows-service-control.mjs';
 import {
   PERMISSION_MODES,
   CAPABILITY_AUTHORIZATION_CLASSES,
@@ -44,7 +45,7 @@ function fail(code, error) {
   return { ok: false, code, error };
 }
 
-async function defaultRevalidate(capability, { execFile, artifactFacts } = {}) {
+async function defaultRevalidate(capability, { execFile, artifactFacts, serviceFactsProvider, now } = {}) {
   const adapter = trimString(capability.adapter);
   if (adapter === SEMANTIC_ADAPTER_WINGET_INSTALL_V1) {
     if (typeof execFile !== 'function') return fail('WINDOWS_REVALIDATION_REQUIRED', 'winget metadata revalidation provider is required');
@@ -53,6 +54,9 @@ async function defaultRevalidate(capability, { execFile, artifactFacts } = {}) {
   if (adapter === SEMANTIC_ADAPTER_MSI_INSTALL_V1) {
     if (typeof artifactFacts !== 'function') return fail('WINDOWS_REVALIDATION_REQUIRED', 'MSI artifact revalidation provider is required');
     return revalidateWindowsMsiInstall(capability, { artifactFacts });
+  }
+  if (adapter === SEMANTIC_ADAPTER_WINDOWS_SERVICE_CONTROL_V1) {
+    return revalidateWindowsServiceControl(capability, { provider: serviceFactsProvider, now });
   }
   return fail('SEMANTIC_CAPABILITY_ADAPTER_DENIED', `unsupported Windows adapter: ${adapter}`);
 }
@@ -175,8 +179,15 @@ export function buildWindowsDispatchPermissionFacts(operation, capability = {}) 
       artifact: trimString(input?.artifactPath) || trimString(target?.root) || 'unknown',
       exact: target?.exact === true,
     };
+  } else if (kind === 'windows_service') {
+    if (input.serviceName !== target.serviceName || input.serviceName !== snapshot.serviceName ||
+        input.serviceAction !== target.action || input.definitionHash !== snapshot.definitionHash) {
+      throw new Error('Windows service authorization does not match the resolved target');
+    }
+    resource = { kind, manager: 'windows-service', serviceName: input.serviceName, definitionHash: input.definitionHash };
+    selection = { serviceName: input.serviceName, action: input.serviceAction, exact: true };
   } else {
-    throw new Error(`Windows dispatch permission facts require a package or package_artifact target, got ${kind || 'unknown'}`);
+    throw new Error(`Windows dispatch permission facts require a supported target, got ${kind || 'unknown'}`);
   }
 
   return buildPermissionFacts({
@@ -312,7 +323,7 @@ function buildCapabilityRevalidationDecisions(capability, policyContext) {
   const operations = entries
     ? entries.map((entry) => entry?.operation)
     : [policyContext?.operation];
-  const supportedAdapters = [SEMANTIC_ADAPTER_WINGET_INSTALL_V1, SEMANTIC_ADAPTER_MSI_INSTALL_V1];
+  const supportedAdapters = [SEMANTIC_ADAPTER_WINGET_INSTALL_V1, SEMANTIC_ADAPTER_MSI_INSTALL_V1, SEMANTIC_ADAPTER_WINDOWS_SERVICE_CONTROL_V1];
   const boundOperations = Array.isArray(capability?.operations) ? capability.operations : [];
   if (boundOperations.length !== 1
     || !supportedAdapters.includes(trimString(capability?.adapter))
@@ -384,6 +395,7 @@ export async function dispatchWindowsSemanticExec({
   nonceState = null,
   execFile = defaultExecFile,
   artifactFacts = null,
+  serviceFactsProvider = null,
   now = Date.now(),
   timeoutMs = 120_000,
   policyGate = null,
@@ -493,7 +505,7 @@ export async function dispatchWindowsSemanticExec({
     }
   }
 
-  const revalidation = await revalidate(capability, { execFile, artifactFacts });
+  const revalidation = await revalidate(capability, { execFile, artifactFacts, serviceFactsProvider, now });
   if (!revalidation?.ok) {
     return fail(
       revalidation?.code || 'WINDOWS_REVALIDATION_FAILED',

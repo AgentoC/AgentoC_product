@@ -276,7 +276,7 @@ function serviceCandidate(program, params) {
     primaryAction: modify ? 'service.modify' : 'service.control',
     effects: dedupe([...(modify ? ['privilege.elevate'] : []), ...(control ? ['process.execute'] : [])]),
     confidence: 'high',
-    target: { kind: 'windows_service', platform: 'win32', manager: 'windows-service', serviceName, action: program },
+    target: { kind: 'windows_service', platform: 'win32', manager: 'windows-service', serviceName, action: program, exact: true },
     evidence: [program, `service:${serviceName}`],
     reasons: modify ? [reason(RC.SERVICE_MODIFY), reason(RC.PRIVILEGE_ELEVATE)] : [reason(RC.ORDINARY_OPERATION)],
     unknowns: [],

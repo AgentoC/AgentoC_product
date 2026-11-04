@@ -46,7 +46,9 @@ import {
   computeApprovedActionSemanticManifestHash,
   prepareApprovedActionSemanticProjection,
 } from '../chat/approved-action-semantic.mjs';
-import { executeApprovedAction } from '../chat/approved-action-executor.mjs';
+import { buildHostPermissionFacts, executeApprovedAction } from '../chat/approved-action-executor.mjs';
+import { revalidateWindowsServiceControl } from '../chat/windows-service-control.mjs';
+import { buildWindowsDispatchPermissionFacts, dispatchWindowsSemanticExec } from '../chat/windows-executor-dispatch.mjs';
 
 let passed = 0;
 function check(label, value) {
@@ -292,6 +294,28 @@ const signedService = signSemanticCapability(serviceCapability, serviceKeys.priv
 check('service capability signature verifies', verifySemanticCapability(signedService, { publicKey: serviceKeys.publicKey }).ok);
 check('signature prevents changing a service operation', !verifySemanticCapability({ ...signedService, operations: [{ ...signedService.operations[0],
   adapterInput: { ...signedService.operations[0].adapterInput, serviceName: 'OtherService' } }] }, { publicKey: serviceKeys.publicKey }).ok);
+const serviceProvider = { async serviceFacts({ serviceName }) { return { platform: 'win32', manager: 'windows-service',
+  serviceName, exists: true, definitionHash: 'a'.repeat(64) }; } };
+const serviceRevalidation = await revalidateWindowsServiceControl(signedService, { provider: serviceProvider });
+eq('service revalidation produces a typed, shell-free operation', serviceRevalidation.invocation,
+  { kind: 'windows-service-control', serviceName: 'FixtureService', action: 'restart-service', definitionHash: 'a'.repeat(64) });
+check('missing service facts provider refuses', !(await revalidateWindowsServiceControl(signedService)).ok);
+check('changed service definition refuses', !(await revalidateWindowsServiceControl(signedService, { provider: {
+  async serviceFacts({ serviceName }) { return { platform: 'win32', manager: 'windows-service', serviceName, exists: true, definitionHash: 'b'.repeat(64) }; },
+} })).ok);
+const servicePolicyOperation = proposedServiceProjection.decisions[0].operation;
+const approvedServiceFacts = buildHostPermissionFacts(proposedServiceProjection.decisions[0]);
+const dispatchServiceFacts = buildWindowsDispatchPermissionFacts(servicePolicyOperation, signedService);
+eq('approval and dispatch agree on exact service resource', dispatchServiceFacts.resource, approvedServiceFacts.resource);
+eq('approval and dispatch agree on exact service selection', dispatchServiceFacts.selection, approvedServiceFacts.selection);
+let consumedServiceNonce = false; let executedService = false;
+const serviceDispatch = await dispatchWindowsSemanticExec({ request: { capability: signedService },
+  publicKeyByKid: async () => serviceKeys.publicKey, policyContext: { operation: servicePolicyOperation, facts: dispatchServiceFacts },
+  policyGate: async () => ({ ok: true }), serviceFactsProvider: serviceProvider,
+  nonceState: { isUsed: () => false, consume: async () => { consumedServiceNonce = true; return true; } },
+  execInvocation: async () => { executedService = true; return { ok: true }; } });
+eq('missing native service executor refuses before claiming authorization', serviceDispatch.code, 'WINDOWS_REVALIDATION_FAILED');
+check('service action is neither consumed nor executed without native executor', !consumedServiceNonce && !executedService);
 
 const packageOperation = compile('winget install --id Git.Git --exact --source winget --scope machine').operations[0];
 const packageResolution = await resolveSemanticContext({

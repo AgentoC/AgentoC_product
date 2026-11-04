@@ -273,6 +273,12 @@ function deriveHostResourceSelection(target = {}, snapshot = {}) {
       },
     };
   }
+  if (kind === 'windows_service') {
+    return {
+      resource: { kind, manager: trimString(target.manager), serviceName: trimString(target.serviceName), definitionHash: trimString(snapshot.definitionHash) },
+      selection: { serviceName: trimString(target.serviceName), action: trimString(target.action), exact: true },
+    };
+  }
   const paths = targetPaths.length ? targetPaths : snapshotPaths;
   if (String(kind).startsWith('filesystem') || ['credential_dir', 'systemd_unit', 'systemd_manager', 'systemd_unit_file', 'git_remote', 'git_remote_config'].includes(kind)) {
     const resource = { paths: paths.length ? paths : ['unresolved'] };
