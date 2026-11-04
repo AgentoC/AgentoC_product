@@ -1,6 +1,7 @@
 import { formatToolCall } from './tool-call-formatters.mjs';
 import { buildCanonicalToolCall, redactSensitiveText } from './tool-call-schema.mjs';
 import { normalizeProviderLiveness } from './provider-liveness.mjs';
+import { activeWindowsServiceRequest } from './windows-service-activity.mjs';
 
 function trimString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -229,6 +230,19 @@ export function buildRunActivityProjection(displayEvents = [], options = {}) {
       actionRequired: false,
       adaptiveCapacityWait: true,
       ...activityCapabilities(run),
+    }, null);
+  }
+
+  const serviceRequest = activeWindowsServiceRequest(run, observedAt);
+  if (serviceRequest) {
+    const waiting = serviceRequest.status === 'awaiting_device';
+    return present({
+      state: waiting ? 'waiting_user' : 'working',
+      kind: waiting ? 'approval' : 'execute',
+      label: waiting ? 'Waiting for approval' : 'Running Windows service action',
+      detail: '', operationId: serviceRequest.requestId,
+      since: serviceRequest.startedMs, elapsedMs: Math.max(0, observedAt - serviceRequest.startedMs),
+      actionRequired: waiting, ...activityCapabilities(run),
     }, null);
   }
 

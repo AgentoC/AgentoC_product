@@ -202,6 +202,7 @@ import { createApprovedActionStore } from './approved-action-store.mjs';
 import { getWindowsManagedAutoInstallStatus, loadWindowsAutoInstallPublicIdentity, loadWindowsAutoInstallSigningKey, prepareWindowsManagedUserInstall, tryWindowsManagedAutoInstall, verifyWindowsManagedUserInstallAuthorization } from './windows-managed-auto-install.mjs';
 import { createWindowsPrivilegedBrokerClient } from './windows-privileged-broker.mjs';
 import { queryWindowsServiceProposalFromCommand, submitOrResumeWindowsServiceProposal, waitWindowsServiceProposal } from './windows-service-proposal.mjs';
+import { activeWindowsServiceRequest } from './windows-service-activity.mjs';
 import { createWindowsUserInstallStore } from './windows-user-install-store.mjs';
 import { windowsUserInstallOperationFingerprint } from './windows-user-install-executor.mjs';
 import { resolvePrivilegedBatchPolicy, deferWindowsLegacyInstallBatch } from './privileged-permission-profile.mjs';
@@ -839,7 +840,7 @@ const synthesizeDetachedRunTermination = createDetachedRunReconciler({
   isTerminalRunState,
   nowIso,
   stallAfterMs: resolveRunHeartbeatStaleMs(),
-  shouldSkipRunnerStall: (run) => hasPendingApprovedActionPause(run),
+  shouldSkipRunnerStall: (run) => hasPendingApprovedActionPause(run) || Boolean(activeWindowsServiceRequest(run)),
   onRunnerStalled: async ({
     runId,
     run,
@@ -4210,8 +4211,32 @@ async function proposeApprovedActionsUnlocked({
       client, kid: key.kid, privateKey: key.privateKey, assertActive: assertInstallActive,
     };
     const proposal = await submitOrResumeWindowsServiceProposal(serviceOptions);
-    const result = await waitWindowsServiceProposal(serviceOptions);
-    return { kind: 'windows_service_control', ...result, requestKey: trimString(requestKey), duplicate: proposal.duplicate === true };
+    const updateServiceActivity = async (status) => {
+      const updated = await updateRun(normalizedRunId, (current) => {
+        const existing = current.windowsServiceRequests && typeof current.windowsServiceRequests === 'object'
+          ? current.windowsServiceRequests : {};
+        if (isTerminalRunState(current.state) || current.cancelRequested === true) return current;
+        if (status === null) {
+          if (!existing[proposal.requestId]) return current;
+          const next = { ...existing }; delete next[proposal.requestId];
+          return { ...current, windowsServiceRequests: next };
+        }
+        if (!['awaiting_device', 'executing'].includes(status)) return current;
+        const prior = existing[proposal.requestId];
+        if (prior?.status === status) return current;
+        return { ...current, windowsServiceRequests: { ...existing, [proposal.requestId]: {
+          requestId: proposal.requestId, status, startedMs: prior?.startedMs || Date.now(), expiresMs: proposal.expiresMs,
+        } } };
+      });
+      if (updated) broadcastSessionInvalidation(run.sessionId);
+    };
+    try {
+      await updateServiceActivity(proposal.status).catch(() => {});
+      const result = await waitWindowsServiceProposal({ ...serviceOptions, onStatus: updateServiceActivity });
+      return { kind: 'windows_service_control', ...result, requestKey: trimString(requestKey), duplicate: proposal.duplicate === true };
+    } finally {
+      await updateServiceActivity(null).catch(() => {});
+    }
   }
 
   const store = createApprovedActionStore({

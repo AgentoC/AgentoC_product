@@ -5,6 +5,20 @@ import { buildRunActivityProjection } from '../chat/run-activity-projection.mjs'
 
 assert.equal(buildRunActivityProjection([], { sessionRunning: false }).state, 'idle');
 
+const serviceRun = { id: 'run', windowsServiceRequests: {
+  request: { requestId: 'request', status: 'awaiting_device', startedMs: 1000, expiresMs: 5000 },
+} };
+const serviceWaiting = buildRunActivityProjection([], { sessionRunning: true, run: serviceRun, nowMs: 2000 });
+assert.equal(serviceWaiting.state, 'waiting_user');
+assert.equal(serviceWaiting.actionRequired, true);
+assert.equal(serviceWaiting.operationId, 'request');
+const serviceExecuting = buildRunActivityProjection([], { sessionRunning: true,
+  run: { ...serviceRun, windowsServiceRequests: { request: { ...serviceRun.windowsServiceRequests.request, status: 'executing' } } }, nowMs: 2000 });
+assert.equal(serviceExecuting.state, 'working');
+assert.equal(serviceExecuting.actionRequired, false);
+assert.notEqual(buildRunActivityProjection([], { sessionRunning: true, run: serviceRun, nowMs: 5000 }).state, 'waiting_user');
+assert.notEqual(buildRunActivityProjection([], { sessionRunning: true, run: { ...serviceRun, cancelRequested: true }, nowMs: 2000 }).state, 'waiting_user');
+
 const agyProviderSlotActivity = buildRunActivityProjection([], {
   sessionRunning: true,
   run: {

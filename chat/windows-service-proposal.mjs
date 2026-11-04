@@ -91,7 +91,7 @@ export async function queryWindowsServiceProposalFromCommand({ action, trustedCo
 // transport cannot establish whether an operation has executed.
 export async function waitWindowsServiceProposal({ action, projection, authenticatedPrincipalKind, client, signal,
   timeoutMs = 10 * 60_000 + 10_000, intervalMs = 1_000, monotonicNow = () => performance.now(),
-  delay = ms => new Promise(resolve => setTimeout(resolve, ms)), assertActive } = {}) {
+  delay = ms => new Promise(resolve => setTimeout(resolve, ms)), assertActive, onStatus } = {}) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || !Number.isFinite(intervalMs) || intervalMs <= 0 ||
       typeof monotonicNow !== 'function' || typeof delay !== 'function') {
     fail('SERVICE_STATUS_INVALID', 'Invalid service status wait');
@@ -99,12 +99,17 @@ export async function waitWindowsServiceProposal({ action, projection, authentic
   const { requestId } = windowsServiceRequestIds(action);
   const deadline = monotonicNow() + timeoutMs;
   const unknown = () => ({ requestId, status: 'unknown', code: 'SERVICE_OUTCOME_UNKNOWN' });
+  let previousStatus = '';
   while (!signal?.aborted && monotonicNow() < deadline) {
     let result;
     try { result = await queryWindowsServiceProposal({ action, projection, authenticatedPrincipalKind, client }); }
     catch (error) {
       if (['SERVICE_BINDING_CONFLICT', 'SERVICE_PROJECTION_INVALID', 'SERVICE_PROFILE_DENIED'].includes(error?.code)) throw error;
       return unknown();
+    }
+    if (result.status !== previousStatus && typeof onStatus === 'function') {
+      previousStatus = result.status;
+      try { await onStatus(result.status); } catch { /* activity is advisory */ }
     }
     if (['succeeded', 'failed', 'denied', 'expired', 'unknown'].includes(result.status)) return result;
     if (!['awaiting_device', 'executing'].includes(result.status)) return unknown();
@@ -134,7 +139,7 @@ export async function submitOrResumeWindowsServiceProposal({ action, projection,
   const matches = result => matchesServiceResult(result, action, target, requestId, actionId);
   const resume = result => {
     if (!matches(result)) fail('SERVICE_BINDING_CONFLICT', 'Existing service request does not match this operation');
-    return { ...result, duplicate: true };
+    return { ...result, expiresMs: result.serviceControl.expiresMs, duplicate: true };
   };
   let existing = await client.status(requestId);
   if (!(existing?.type === 'result' && existing.requestId === requestId && existing.code === 'REQUEST_NOT_FOUND' && !existing.status)) return resume(existing);
@@ -151,7 +156,7 @@ export async function submitOrResumeWindowsServiceProposal({ action, projection,
   try {
     const result = await client.proposeServiceControl({ grant, signature });
     publishWindowsBrokerApprovalInvalidation(result, { action: 'propose', requestId });
-    return { ...result, duplicate: false };
+    return { ...result, expiresMs: grant.expiresMs, duplicate: false };
   } catch (cause) {
     if (cause?.code === 'REQUEST_ID_CONFLICT') {
       try { existing = await client.status(requestId); } catch { /* ambiguous; caller must query the same ID */ }

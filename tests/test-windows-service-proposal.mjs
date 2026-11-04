@@ -63,10 +63,12 @@ const racingClient = { ...client, status: async id => ++lookups === 1
   proposeServiceControl: async () => { throw Object.assign(new Error('race'), { code: 'REQUEST_ID_CONFLICT' }); } };
 assert.equal((await submitOrResumeWindowsServiceProposal({ ...options, client: racingClient })).duplicate, true);
 let clock = 0, polls = 0;
+const observedStatuses = [];
 const pollingClient = { ...client, status: async id => ({ type: 'result', requestId: id,
   status: ++polls < 3 ? 'awaiting_device' : 'denied', code: polls < 3 ? 'DEVICE_APPROVAL_REQUIRED' : 'DEVICE_DENIED', serviceControl: submitted.grant }) };
 assert.deepEqual(await waitWindowsServiceProposal({ ...options, client: pollingClient, timeoutMs: 5000, intervalMs: 1000,
-  monotonicNow: () => clock, delay: async ms => { clock += ms; } }), { requestId, status: 'denied', code: 'DEVICE_DENIED' });
+  monotonicNow: () => clock, delay: async ms => { clock += ms; }, onStatus: status => observedStatuses.push(status) }), { requestId, status: 'denied', code: 'DEVICE_DENIED' });
+assert.deepEqual(observedStatuses, ['awaiting_device', 'denied']);
 assert.equal(count, 1);
 clock = 0;
 const stalledClient = { ...client, status: async id => ({ type: 'result', requestId: id, status: 'executing', serviceControl: submitted.grant }) };
