@@ -1,4 +1,7 @@
 <resources>
+    <string name="journey_choose_connection">Choose a connection type</string>
+    <string name="journey_long_term_summary">For everyday use</string>
+    <string name="journey_temporary_summary">10-minute access</string>
     <string name="journey_setup_computer">Set up my computer</string>
     <string name="journey_install_step">Install on your computer</string>
     <string name="journey_code_step">Show the computer code</string>

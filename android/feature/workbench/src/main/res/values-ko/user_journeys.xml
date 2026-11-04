@@ -1,4 +1,7 @@
 <resources>
+    <string name="journey_choose_connection">연결 방식 선택</string>
+    <string name="journey_long_term_summary">일상적인 사용</string>
+    <string name="journey_temporary_summary">10분간 이용</string>
     <string name="journey_setup_computer">내 컴퓨터 설정</string>
     <string name="journey_install_step">먼저 컴퓨터에 설치</string>
     <string name="journey_code_step">컴퓨터에 연결 코드 표시</string>

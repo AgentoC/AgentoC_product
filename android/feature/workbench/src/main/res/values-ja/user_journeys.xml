@@ -1,4 +1,7 @@
 <resources>
+    <string name="journey_choose_connection">接続方法を選択</string>
+    <string name="journey_long_term_summary">日常的な利用に</string>
+    <string name="journey_temporary_summary">10分間のアクセス</string>
     <string name="journey_setup_computer">自分のコンピュータを設定</string>
     <string name="journey_install_step">まずパソコンにインストール</string>
     <string name="journey_code_step">パソコンにコードを表示</string>

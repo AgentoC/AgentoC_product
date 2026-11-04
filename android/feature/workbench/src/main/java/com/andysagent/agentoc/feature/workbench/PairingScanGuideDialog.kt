@@ -93,11 +93,24 @@ fun PairingScanGuideDialog(onScan: () -> Unit, onDismiss: () -> Unit) {
                     }
                 }
                 1 -> {
-                    Column(Modifier.selectableGroup()) {
-                        SetupConnectionChoice(stringResource(R.string.journey_long_term), !temporary,
-                            "setup-long-term") { temporary = false }
-                        SetupConnectionChoice(stringResource(R.string.journey_temporary), temporary,
-                            "setup-temporary") { temporary = true }
+                    Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(stringResource(R.string.journey_choose_connection),
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.semantics { heading() })
+                        AgentoRadioOption(
+                            title = stringResource(R.string.journey_long_term),
+                            description = stringResource(R.string.journey_long_term_summary),
+                            selected = !temporary,
+                            modifier = Modifier.testTag("setup-long-term"),
+                            onClick = { temporary = false },
+                        )
+                        AgentoRadioOption(
+                            title = stringResource(R.string.journey_temporary),
+                            description = stringResource(R.string.journey_temporary_summary),
+                            selected = temporary,
+                            modifier = Modifier.testTag("setup-temporary"),
+                            onClick = { temporary = true },
+                        )
                     }
                     Text(stringResource(if (temporary) R.string.journey_temporary_instructions else R.string.journey_account_instructions),
                         style = MaterialTheme.typography.bodyLarge,
@@ -107,16 +120,4 @@ fun PairingScanGuideDialog(onScan: () -> Unit, onDismiss: () -> Unit) {
             }
         }
     }
-}
-
-@Composable
-private fun SetupConnectionChoice(label: String, isSelected: Boolean, tag: String, onClick: () -> Unit) {
-    AgentoSettingRow(title = label, showChevron = false, showDivider = false,
-        contentHorizontalPadding = 4.dp,
-        modifier = Modifier.testTag(tag).semantics { selected = isSelected; role = Role.RadioButton },
-        trailing = {
-            if (isSelected) AgentoWebIcon(AgentoWebGlyph.Check, null,
-                Modifier.size(24.dp), tint = LocalAgentocColors.current.actionPrimary)
-            else Spacer(Modifier.size(24.dp))
-        }, onClick = onClick)
 }

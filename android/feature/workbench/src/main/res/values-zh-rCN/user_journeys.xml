@@ -1,4 +1,7 @@
 <resources>
+    <string name="journey_choose_connection">选择连接方式</string>
+    <string name="journey_long_term_summary">适合日常使用</string>
+    <string name="journey_temporary_summary">仅访问 10 分钟</string>
     <string name="journey_setup_computer">设置我的电脑</string>
     <string name="journey_install_step">先在电脑上安装</string>
     <string name="journey_code_step">让电脑显示配对码</string>

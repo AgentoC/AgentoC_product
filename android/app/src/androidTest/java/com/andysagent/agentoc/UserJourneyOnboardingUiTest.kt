@@ -9,7 +9,10 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.andysagent.agentoc.core.designsystem.AgentocTheme
 import com.andysagent.agentoc.feature.workbench.PairingScanGuideDialog
@@ -72,6 +75,26 @@ class UserJourneyOnboardingUiTest {
         compose.runOnIdle { assertTrue(!scanned) }
     }
 
+    @Test fun connectionMethodsAreMutuallyExclusiveRadioTargets() {
+        compose.setContent { AgentocTheme { PairingScanGuideDialog({}, {}) } }
+        compose.onNodeWithTag("computer-setup-next").performClick()
+        compose.onNodeWithText(text(WorkbenchR.string.journey_choose_connection)).assertIsDisplayed()
+        val longTerm = compose.onNodeWithTag("setup-long-term")
+        val temporary = compose.onNodeWithTag("setup-temporary")
+        for (option in listOf(longTerm, temporary)) {
+            option.assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
+                .assertHasClickAction().assertHeightIsAtLeast(48.dp)
+        }
+        longTerm.assertIsSelected()
+        temporary.assertIsNotSelected().performScrollTo().performClick().assertIsSelected()
+        longTerm.assertIsNotSelected()
+        compose.onNodeWithText(text(WorkbenchR.string.journey_temporary_instructions)).performScrollTo().assertIsDisplayed()
+        temporary.performScrollTo().performClick().assertIsSelected()
+        longTerm.performScrollTo().performClick().assertIsSelected()
+        temporary.assertIsNotSelected()
+        compose.onNodeWithText(text(WorkbenchR.string.journey_account_instructions)).performScrollTo().assertIsDisplayed()
+    }
+
     @Test fun setupProgressAndConnectionChoiceSurviveStateRestoration() {
         val restoration = StateRestorationTester(compose)
         restoration.setContent { AgentocTheme { PairingScanGuideDialog({}, {}) } }
@@ -79,6 +102,8 @@ class UserJourneyOnboardingUiTest {
         compose.onNodeWithTag("setup-temporary").performScrollTo().performClick()
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithText(text(WorkbenchR.string.journey_code_step)).assertIsDisplayed()
+        compose.onNodeWithTag("setup-temporary").assertIsSelected()
+        compose.onNodeWithTag("setup-long-term").assertIsNotSelected()
         compose.onNodeWithText(text(WorkbenchR.string.journey_temporary_instructions)).performScrollTo().assertIsDisplayed()
     }
 
@@ -122,7 +147,7 @@ class UserJourneyOnboardingUiTest {
             val bitmap = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
             val directory = File(context.getExternalFilesDir(null), "journey-evidence").apply { mkdirs() }
             val config = context.resources.configuration
-            File(directory, "setup-$locale-$dark-${config.fontScale}-${config.screenWidthDp}dp-$step.png").outputStream().use {
+            File(directory, "choice-$locale-$dark-${config.fontScale}-${config.screenWidthDp}dp-$step.png").outputStream().use {
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
             }
             bitmap.recycle()
