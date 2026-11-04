@@ -39,7 +39,6 @@ internal fun AccountConnectionIllustration(compact: Boolean, modifier: Modifier 
             drawArc(Brush.linearGradient(listOf(blue.copy(alpha = 0.16f), violet.copy(alpha = 0.26f))),
                 startAngle = 200f, sweepAngle = 205f, useCenter = false,
                 topLeft = Offset(49f, 7f), size = Size(184f, 150f), style = Stroke(1.2f))
-            drawCircle(violet.copy(alpha = 0.6f), 3f, Offset(225f, 45f))
             drawOval(blue.copy(alpha = if (dark) 0.08f else 0.045f), Offset(16f, 164f), Size(218f, 14f))
 
             // Computer: a fine rim, a softly tinted screen, and a restrained stand.
