@@ -17,7 +17,7 @@ process.env.HOME = home;
 process.env.AGENTOC_CONFIG_DIR = join(home, '.config', 'agentoc');
 process.env.AGENTOC_MEMORY_DIR = join(home, 'memory');
 process.env.AGENTOC_WORK_ROOT_DIR = join(home, 'workspace');
-delete process.env.AGENTOC_INSTANCE_ROOT;
+process.env.AGENTOC_INSTANCE_ROOT = home;
 
 const {
   appendEvents,
