@@ -523,6 +523,17 @@ private fun timelineMergeKey(item: TimelineItem): String {
 }
 
 private fun preferTimelineItem(current: TimelineItem, incoming: TimelineItem): TimelineItem {
+    if (current is TimelineItem.Operation && incoming is TimelineItem.Operation && current.isReasoning && incoming.isReasoning) {
+        val terminal = setOf(TimelineOperationStatus.Completed, TimelineOperationStatus.Failed)
+        val newer = when {
+            current.status in terminal && incoming.status !in terminal -> current
+            incoming.status in terminal && current.status !in terminal -> incoming
+            incoming.detail.length > current.detail.length -> incoming
+            else -> current
+        }
+        return newer.copy(seq = minOf(current.seq, incoming.seq),
+            beforeAssistantAtSameSeq = current.beforeAssistantAtSameSeq || incoming.beforeAssistantAtSameSeq)
+    }
     if (current !is TimelineItem.Message || incoming !is TimelineItem.Message) return current
     val newer = when {
         current.completed && !incoming.completed -> current

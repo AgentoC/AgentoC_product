@@ -5,6 +5,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class RunActionFormatterTest {
+    @Test fun localActionDoesNotExposeCommonCredentialAssignments() {
+        val operation = TimelineItem.Operation("search", 1, TimelineOperationKind.Command, "Search", "rg API_TOKEN=secretvalue .",
+            TimelineOperationStatus.InProgress)
+        val sentence = RunActionFormatter.forRun(RunActionFormatter.RunActionStatus.Working, null, listOf(operation))!!.sentence
+        assertTrue(!sentence.contains("secretvalue"))
+    }
     @Test fun modelProvidedActivityDescriptionIsShownOnlyWhileRunning() {
         val json = kotlinx.serialization.json.Json
         val running = json.parseToJsonElement("""{"state":"working","kind":"execute","activityDescription":"Checking project instructions"}""") as kotlinx.serialization.json.JsonObject
@@ -21,6 +27,8 @@ class RunActionFormatterTest {
             inputJson = """{"command":"cat README.md"}""", runId = "run-a")
         assertEquals("Reading README.md", RunActionFormatter.project(
             RunActionFormatter.RunActionStatus.Working, null, listOf(tool), activity, "run-a")?.sentence)
+        assertEquals("Working on the task", RunActionFormatter.project(
+            RunActionFormatter.RunActionStatus.Working, null, emptyList(), activity, "run-a")?.sentence)
     }
     @Test fun claudeToolsUseTheirStructuredInputsInsteadOfRawToolNames() {
         fun action(name: String, input: String, reasoning: Boolean = false): String? {

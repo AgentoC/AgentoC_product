@@ -11,6 +11,26 @@ import com.andysagent.agentoc.core.protocol.SessionEventDto
 import com.andysagent.agentoc.core.model.Message
 
 class TimelineEngineTest {
+    @Test fun matchingThinkingSurfacesKeepNewestTextAndTerminalStatus() {
+        val snapshot = TimelineItem.Operation("thought", 4, TimelineOperationKind.Tool, "Thinking", "First",
+            TimelineOperationStatus.InProgress, isReasoning = true)
+        val live = snapshot.copy(seq = 8, detail = "First second")
+        val merged = mergeTimelineItems(listOf(snapshot), listOf(live)).single() as TimelineItem.Operation
+        assertEquals("First second", merged.detail)
+        assertEquals(4L, merged.seq)
+        val finished = merged.copy(status = TimelineOperationStatus.Completed)
+        assertEquals(TimelineOperationStatus.Completed,
+            (mergeTimelineItems(listOf(finished), listOf(live)).single() as TimelineItem.Operation).status)
+    }
+    @Test fun messagePhaseSurvivesLiveCompletionAndDurableProjection() {
+        val live = LiveTimelineProjector()
+        live.apply(listOf(SessionEventDto(seq = 1, type = "text_delta", providerMessageId = "m", runId = "r", text = "Done")))
+        val result = live.apply(listOf(SessionEventDto(seq = 2, type = "message", providerMessageId = "m", runId = "r",
+            messagePhase = "final_answer", content = JsonPrimitive("Done"))))
+        assertEquals("final_answer", TimelineProjector.project(emptyList(), result.events).filterIsInstance<TimelineItem.Message>().single().messagePhase)
+        val durable = Message("m", "s", "assistant", "Done", seq = 1, runId = "r", messagePhase = "final_answer")
+        assertEquals("final_answer", TimelineProjector.fromMessages(listOf(durable)).filterIsInstance<TimelineItem.Message>().single().messagePhase)
+    }
     @Test fun reasoningStreamUpdatesAndSettlesAtBlockCompletion() {
         val projector = LiveTimelineProjector()
         projector.apply(listOf(SessionEventDto(seq = 1, type = "reasoning", runId = "run-1", state = "running", content = JsonPrimitive("First "))))

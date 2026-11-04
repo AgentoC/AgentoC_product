@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createClaudeAdapter } from '../chat/adapters/claude.mjs';
 import { createCodexAppServerAdapter } from '../chat/adapters/codex-app-server.mjs';
+import { buildSessionDisplayEvents } from '../chat/session-display-events.mjs';
 
 for (const [stopReason, phase] of [['tool_use', 'commentary'], ['end_turn', 'final_answer'], [null, undefined]]) {
   const events = createClaudeAdapter().parseLine(JSON.stringify({ type: 'assistant', message: {
@@ -20,5 +21,8 @@ for (const phase of ['commentary', 'final_answer']) {
     item: { id: 'item-1', type: 'agentMessage', phase, text: 'Example' },
   } }));
   assert.equal(events.find((event) => event.type === 'message')?.messagePhase, phase);
+  const message = events.find((event) => event.type === 'message');
+  const visible = buildSessionDisplayEvents([{ ...message, seq: 1, runId: 'r' }]);
+  assert.equal(visible.find((event) => event.type === 'message')?.messagePhase, phase);
 }
 console.log('Provider message phases preserved');

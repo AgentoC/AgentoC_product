@@ -32,8 +32,9 @@ object RunActionFormatter {
         }
         val sourceSeq = (activity?.get("sourceSeq") as? JsonPrimitive)?.contentOrNull?.toLongOrNull() ?: 0L
         val liveToolIsNewer = active != null && (sourceSeq == 0L || active.seq == 0L || active.seq > sourceSeq)
-        val genericTool = canonical?.kind in setOf("tool", "mcp", "other") &&
-            canonical?.sentence?.trim()?.lowercase() in setOf("using execute", "using exec", "using tool")
+        val genericSubject = (activity?.get("subject") as? JsonPrimitive)?.contentOrNull.orEmpty().trim().lowercase()
+            .substringAfterLast("__").substringAfterLast('/')
+        val genericTool = canonical?.kind in setOf("tool", "mcp", "other") && genericSubject in setOf("execute", "exec", "tool")
         if ((liveToolIsNewer || genericTool) && active != null &&
             (canonical == null || genericTool || canonical.kind in setOf("working", "thinking", "think", "responding", "other", "tool"))) {
             return fromOperation(active!!)
@@ -89,9 +90,13 @@ object RunActionFormatter {
         val modelDescription = value("activityDescription").takeIf {
             lifecycle in setOf("running", "working", "started", "in_progress") && it.isNotBlank()
         }
-        val sentence = (modelDescription ?: listOf(action, subject.takeUnless { groupedExploration }.orEmpty()).filter { it.isNotBlank() }.joinToString(" ")) +
+        val genericName = subject.lowercase().substringAfterLast("__").substringAfterLast('/')
+        val isGenericTool = kind in setOf("tool", "mcp", "other") && genericName in setOf("execute", "exec", "tool")
+        val sentence = (modelDescription ?: if (isGenericTool && lifecycle in setOf("running", "working", "started", "in_progress")) {
+            "Working on the task"
+        } else listOf(action, subject.takeUnless { groupedExploration }.orEmpty()).filter { it.isNotBlank() }.joinToString(" ")) +
             if (waiting) " · waiting for provider output" else ""
-        return RunActionUiState(kind, sentence, detail, value("operationId").takeIf { it.isNotBlank() }, count,
+        return RunActionUiState(kind, sentence.safeDisplay(), detail.safeDisplay(), value("operationId").takeIf { it.isNotBlank() }, count,
             value("since").toLongOrNull()?.takeIf { it > 0 })
     }
 
@@ -176,7 +181,7 @@ object RunActionFormatter {
             "thinking" -> "Thinking through the task"
             else -> "Working on $subject"
         }
-        return RunActionUiState(kind, sentence, operation.detail.compact(), operation.id)
+        return RunActionUiState(kind, sentence.safeDisplay(), operation.detail.compact().safeDisplay(), operation.id)
     }
 
     private fun TimelineItem.Operation.commandText(): String? {
@@ -271,6 +276,10 @@ object RunActionFormatter {
     }
     private fun basename(value: String) = value.trim().trimEnd('/', '\\').substringAfterLast('/').substringAfterLast('\\').ifBlank { value.trim() }
     private fun String.compact() = replace(Regex("\\s+"), " ").trim().take(160)
+    private fun String.safeDisplay() = replace(
+        Regex("(?i)(\\b(?:[a-z0-9_-]*)(?:token|password|passwd|secret|api[_-]?key)\\s*(?:=|:)\\s*)[^\\s,;]+"),
+        "$1[redacted]",
+    ).replace(Regex("(?i)(\\bBearer\\s+)\\S+"), "$1[redacted]")
 
     private val READ = setOf("cat", "head", "tail", "sed", "awk", "less", "more", "bat", "type", "get-content", "gc")
     private val LIST = setOf("ls", "dir", "tree", "exa", "eza", "get-childitem", "gci")
