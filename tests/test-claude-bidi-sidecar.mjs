@@ -6,13 +6,15 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import http from 'http';
 import { spawn } from 'child_process';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 
 import { computeBatchManifestHash } from '../chat/privileged-ops.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = dirname(__dirname);
 const cookie = 'session_token=test-session';
+const fixtureSessions = new Set();
+const fixtureRuns = new Set();
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -46,6 +48,8 @@ function request(port, method, path, body = null) {
       res.on('end', () => {
         let json = null;
         try { json = data ? JSON.parse(data) : null; } catch {}
+        if (method === 'POST' && path === '/api/sessions' && json?.session?.id) fixtureSessions.add(json.session.id);
+        if (method === 'POST' && /^\/api\/sessions\/[^/]+\/messages$/.test(path) && json?.run?.id) fixtureRuns.add(json.run.id);
         resolve({ status: res.statusCode, json, text: data });
       });
     });
@@ -61,6 +65,8 @@ function setupTempHome() {
   const memoryDir = join(home, '.agentoc', 'memory');
   const workDir = join(home, '.agentoc', 'workspace');
   const localBin = join(home, '.local', 'bin');
+  const fakeScript = join(localBin, process.platform === 'win32' ? 'fake-claude-bidi.js' : 'fake-claude-bidi');
+  const fakeCommand = process.platform === 'win32' ? join(localBin, 'fake-claude-bidi.cmd') : fakeScript;
   const recordPath = join(home, 'fake-claude-bidi-messages.jsonl');
   for (const path of [configDir, memoryDir, workDir, localBin]) mkdirSync(path, { recursive: true });
 
@@ -73,17 +79,17 @@ function setupTempHome() {
   writeFileSync(join(configDir, 'tools.json'), JSON.stringify([{
     id: 'fake-claude-bidi',
     name: 'Fake Claude Bidi',
-    command: join(localBin, 'fake-claude-bidi'),
+    command: fakeCommand,
     runtimeFamily: 'claude-stream-json-bidi',
     models: [{ id: 'fake-model', label: 'Fake Model' }],
     reasoning: { kind: 'enum', levels: ['low', 'high'], default: 'low' },
   }], null, 2));
 
-  writeFileSync(join(localBin, 'fake-claude-bidi'), `#!/usr/bin/env node
+  writeFileSync(fakeScript, `#!/usr/bin/env node
 const fs = require('fs');
 const crypto = require('crypto');
 const readline = require('readline');
-const recordPath = process.env.FAKE_CLAUDE_BIDI_RECORD;
+const recordPath = ${JSON.stringify(recordPath)};
 const messages = [];
 let userTurn = 0;
 let pendingApproval = null;
@@ -200,6 +206,12 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
       });
       return;
     }
+    if (String(message.message?.content || '').includes('__CLAUDE_WINDOWS_REVIEW_TEST__')) {
+      pendingApproval = { requestId: 'claude-windows-review-1' };
+      send({ type: 'control_request', request_id: pendingApproval.requestId, request: { subtype: 'can_use_tool',
+        tool_name: 'PowerShell', input: { command: 'Uninstall-Package -Name Fixture' }, tool_use_id: 'tool-windows-review-1' } });
+      return;
+    }
     if (userTurn === 1) return;
     const text = 'redirected reply';
     send({
@@ -217,7 +229,10 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   }
 });
 `, 'utf8');
-  chmodSync(join(localBin, 'fake-claude-bidi'), 0o755);
+  chmodSync(fakeScript, 0o755);
+  if (process.platform === 'win32') {
+    writeFileSync(fakeCommand, `@"${process.execPath}" "%~dp0fake-claude-bidi.js" %*\r\n`);
+  }
   return { home, configDir, memoryDir, workDir, recordPath };
 }
 
@@ -243,29 +258,49 @@ const fixture = setupTempHome();
 const port = 52000 + Math.floor(Math.random() * 1000);
 let stdout = '';
 let stderr = '';
-const server = spawn(process.execPath, ['chat-server.mjs'], {
-  cwd: repoRoot,
-  env: {
+let supervisorOutput = '';
+const supervisorPipe = process.platform === 'win32'
+  ? `\\\\.\\pipe\\agentoc-test-claude-${randomBytes(12).toString('hex')}` : '';
+const childEnv = {
     ...process.env,
     HOME: fixture.home,
+    USERPROFILE: fixture.home,
+    LOCALAPPDATA: join(fixture.home, 'local-appdata'),
+    APPDATA: join(fixture.home, 'roaming-appdata'),
+    ...(process.platform === 'win32' ? { AGENTOC_INSTANCE_ROOT: fixture.home } : {}),
     AGENTOC_CONFIG_DIR: fixture.configDir,
     AGENTOC_MEMORY_DIR: fixture.memoryDir,
     AGENTOC_WORK_ROOT_DIR: fixture.workDir,
+    ...(supervisorPipe ? { AGENTOC_RUN_SPOOL_DIR: join(fixture.home, 'data', 'chat-runs') } : {}),
     AGENTOC_DISABLE_SYSTEMD_DETACHED_RUNNER: '1',
-    AGENTOC_RUNNER_SUPERVISOR_SOCKET: '',
+    AGENTOC_RUNNER_SUPERVISOR_SOCKET: supervisorPipe,
+    ...(supervisorPipe ? { AGENTOC_PROVIDER_HOMES_DIR: join(fixture.home, 'provider-homes') } : {}),
     AGENTOC_AUTH_SESSION_SECRET: 'test-secret-agentoc-sidecar',
     CHAT_PORT: String(port),
     SECURE_COOKIES: '0',
     AGENTOC_REPLY_SELF_CHECK: 'off',
     AGENTOC_AGENT_CREATE_APPROVED_ACTION_ENABLED: '1',
     FAKE_CLAUDE_BIDI_RECORD: fixture.recordPath,
-  },
+};
+const supervisor = supervisorPipe ? spawn(process.execPath, ['chat/runner-supervisor-daemon.mjs'], {
+  cwd: repoRoot,
+  env: childEnv,
+  stdio: ['ignore', 'pipe', 'pipe'],
+}) : null;
+if (supervisor) {
+  supervisor.stdout.on('data', (chunk) => { supervisorOutput += chunk.toString('utf8'); });
+  supervisor.stderr.on('data', (chunk) => { supervisorOutput += chunk.toString('utf8'); });
+}
+const server = spawn(process.execPath, ['chat-server.mjs'], {
+  cwd: repoRoot,
+  env: childEnv,
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 server.stdout.on('data', (chunk) => { stdout += chunk.toString('utf8'); });
 server.stderr.on('data', (chunk) => { stderr += chunk.toString('utf8'); });
 
 try {
+  if (supervisor) await waitFor(() => supervisorOutput.includes('[runner-supervisor] listening'), 'supervisor startup');
   await waitFor(async () => {
     try {
       return (await request(port, 'GET', '/api/auth/me')).status === 200;
@@ -504,6 +539,7 @@ try {
     && message.response?.response?.behavior === 'allow'
   )));
 
+  if (process.platform !== 'win32') {
   writeFileSync(fixture.recordPath, '', 'utf8');
   const privilegedSessionRes = await request(port, 'POST', '/api/sessions', {
     folder: repoRoot,
@@ -529,7 +565,11 @@ try {
   const privilegedRunId = privilegedStartRes.json.run.id;
   const privilegedBatch = await waitFor(async () => {
     const res = await request(port, 'GET', `/api/sessions/${privilegedSessionId}/events?filter=all`);
-    return res.json?.events?.find((event) => event.type === 'privileged_batch_request' && event.runId === privilegedRunId) || false;
+    const batch = res.json?.events?.find((event) => event.type === 'privileged_batch_request' && event.runId === privilegedRunId);
+    if (batch) return batch;
+    const state = await request(port, 'GET', `/api/runs/${privilegedRunId}`);
+    if (state.json?.run?.state === 'failed') throw new Error(`Privileged fixture run failed: ${JSON.stringify(state.json.run)}`);
+    return false;
   }, 'Claude bidi privileged batch request');
   assert.equal(privilegedBatch.other.length, 1);
   assert.equal(privilegedBatch.other[0].command, 'echo real-command');
@@ -634,14 +674,51 @@ try {
   assert.ok(deniedReply, `provider should receive privileged denial response; got ${JSON.stringify(deniedRecorded)}`);
   assert.equal(deniedReply.response.response.behavior, 'deny');
   assert.equal(deniedReply.response.response.updatedInput, undefined);
+  } else {
+    writeFileSync(fixture.recordPath, '', 'utf8');
+    const created = await request(port, 'POST', '/api/sessions', { folder: repoRoot, tool: 'fake-claude-bidi', name: 'Windows review fixture' });
+    assert.equal(created.status, 201, created.text);
+    const reviewSession = created.json.session.id;
+    assert.equal((await request(port, 'PATCH', `/api/sessions/${reviewSession}`, { riskMode: 'recommended' })).status, 200);
+    const started = await request(port, 'POST', `/api/sessions/${reviewSession}/messages`, { requestId: 'req-windows-review',
+      text: '__CLAUDE_WINDOWS_REVIEW_TEST__', tool: 'fake-claude-bidi', model: 'fake-model' });
+    assert.ok(started.status === 200 || started.status === 202, started.text);
+    const runId = started.json.run.id;
+    const approval = await waitFor(async () => {
+      const res = await request(port, 'GET', `/api/sessions/${reviewSession}/events?filter=all`);
+      return res.json?.events?.find((event) => event.type === 'approval_request' && event.runId === runId) || false;
+    }, 'Windows Claude dangerous action approval');
+    const denied = await request(port, 'POST', `/api/runs/${runId}/approvals/${encodeURIComponent(approval.approvalId)}`,
+      { requestId: 'req-windows-review-deny', decision: 'deny' });
+    assert.ok(denied.status === 200 || denied.status === 202, denied.text);
+    await waitFor(() => readRecorded(fixture.recordPath).some((message) => message.type === 'control_response' &&
+      message.response?.request_id === 'claude-windows-review-1' && message.response?.response?.behavior === 'deny'), 'Windows denial delivered to Claude');
+  }
 
   console.log('test-claude-bidi-sidecar: ok');
 } catch (error) {
-  throw new Error(`${error.message}\nstdout:\n${stdout || '(empty)'}\nstderr:\n${stderr || '(empty)'}`);
+  const replies = readRecorded(fixture.recordPath).filter((message) => message.type === 'control_response');
+  throw new Error(`${error.message}\nfixture replies:\n${JSON.stringify(replies)}\nstdout:\n${stdout || '(empty)'}\nstderr:\n${stderr || '(empty)'}\nsupervisor:\n${supervisorOutput || '(empty)'}`);
 } finally {
-  if (server.exitCode === null) {
-    server.kill('SIGTERM');
-    await waitFor(() => server.exitCode !== null, 'server shutdown').catch(() => {});
+  let runsStopped = fixtureRuns.size === 0;
+  if (server.exitCode === null && server.signalCode === null) {
+    await Promise.allSettled([...fixtureSessions].map((id) => request(port, 'POST', `/api/sessions/${id}/cancel`)));
+    try {
+      await waitFor(async () => {
+        const results = await Promise.all([...fixtureRuns].map((id) => request(port, 'GET', `/api/runs/${id}`)));
+        return results.every((result) => ['completed', 'failed', 'cancelled'].includes(result.json?.run?.state));
+      }, 'fixture runs to stop', 15000);
+      runsStopped = true;
+    } catch { runsStopped = false; }
   }
-  rmSync(fixture.home, { recursive: true, force: true });
+  if (server.exitCode === null && server.signalCode === null) {
+    server.kill('SIGTERM');
+    await waitFor(() => server.exitCode !== null || server.signalCode !== null, 'server shutdown').catch(() => {});
+  }
+  if (supervisor && supervisor.exitCode === null && supervisor.signalCode === null) {
+    supervisor.kill();
+    await waitFor(() => supervisor.exitCode !== null || supervisor.signalCode !== null, 'supervisor shutdown').catch(() => {});
+  }
+  if (runsStopped) rmSync(fixture.home, { recursive: true, force: true });
+  else console.error(`Fixture runs did not stop; retained isolated fixture ${fixture.home}`);
 }
