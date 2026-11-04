@@ -26,6 +26,15 @@ function directAdminProgram(name, args) {
     return (['start', 'stop'].includes(subcommand) && args.length > 1) ||
       (['user', 'localgroup'].includes(subcommand) && args.slice(1).some(arg => /^\/(?:add|delete)$/i.test(String(arg))));
   }
+  // Registry machine-hive writes normally need an administrator. Limit this
+  // guidance to literal machine targets; queries and user-hive changes keep
+  // their existing approval handling.
+  if (name === 'reg.exe' || name === 'reg') {
+    const verb = String(args[0] || '').toLowerCase();
+    if (!['add', 'delete', 'copy', 'restore', 'load', 'unload'].includes(verb)) return false;
+    const target = args[verb === 'copy' ? 2 : 1];
+    return /^(?:hklm|hkey_local_machine)(?:\\|$)/i.test(String(target || ''));
+  }
   return false;
 }
 
@@ -39,7 +48,7 @@ export function isWindowsAdministrativeArgv(argv) {
 // This is guidance for explicit elevation, not a privilege or risk classifier.
 // Unrecognized and dynamic commands remain with the existing approval policy.
 export async function needsWindowsElevationGuidance(command, shell = 'PowerShell', parse = parseWindowsPowerShellAst) {
-  if (typeof command !== 'string' || !/runas|gsudo|sudo|localuser|localgroup|netfirewall|mppreference|(?:^|[\\/\s'\"])(?:sc|net)(?:\.exe)?['\"]?(?:\s|$)|(?:new|remove|set|start|stop|restart)-service/i.test(command)) return false;
+  if (typeof command !== 'string' || !/runas|gsudo|sudo|localuser|localgroup|netfirewall|mppreference|(?:^|[\\/\s'\"])(?:sc|net|reg)(?:\.exe)?['\"]?(?:\s|$)|(?:new|remove|set|start|stop|restart)-service/i.test(command)) return false;
   if (shell === 'Bash') {
     const words = parseLiteralBashWords(command);
     if (!words || words.length < 2) return false;
