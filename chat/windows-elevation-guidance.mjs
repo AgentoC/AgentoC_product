@@ -3,15 +3,34 @@ import { parseWindowsPowerShellAst } from './windows-powershell-ast.mjs';
 import { parseLiteralBashWords } from './windows-bash-actions.mjs';
 
 const elevationPrograms = new Set(['runas', 'runas.exe', 'gsudo', 'gsudo.exe', 'sudo', 'sudo.exe']);
+// These cmdlets are Windows account/service administration, rather than
+// ordinary file or package commands. Read-only counterparts remain untouched.
+const adminCmdlets = new Set(['new-localuser', 'set-localuser', 'remove-localuser', 'enable-localuser', 'disable-localuser',
+  'new-localgroup', 'set-localgroup', 'remove-localgroup', 'add-localgroupmember', 'remove-localgroupmember',
+  'new-service', 'remove-service']);
 const nameOf = value => path.win32.basename(String(value || '').replaceAll('/', '\\')).toLowerCase();
+
+function directAdminProgram(name, args) {
+  if (adminCmdlets.has(name)) return true;
+  // Avoid treating queries such as `sc query` and `net user` as writes.
+  // In Windows PowerShell, bare `sc` is an alias for Set-Content.
+  if (name === 'sc.exe') return ['create', 'delete', 'config', 'failure', 'sdset'].includes(String(args[0] || '').toLowerCase());
+  if (name === 'net.exe' || name === 'net') {
+    const subcommand = String(args[0] || '').toLowerCase();
+    return ['user', 'localgroup'].includes(subcommand) && args.slice(1).some(arg => /^\/(?:add|delete)$/i.test(String(arg)));
+  }
+  return false;
+}
 
 // This is guidance for explicit elevation, not a privilege or risk classifier.
 // Unrecognized and dynamic commands remain with the existing approval policy.
 export async function needsWindowsElevationGuidance(command, shell = 'PowerShell', parse = parseWindowsPowerShellAst) {
-  if (typeof command !== 'string' || !/runas|gsudo|sudo/i.test(command)) return false;
+  if (typeof command !== 'string' || !/runas|gsudo|sudo|localuser|localgroup|(?:^|[\\/\s])(?:sc|net)(?:\.exe)?(?:\s|$)|(?:new|remove)-service/i.test(command)) return false;
   if (shell === 'Bash') {
     const words = parseLiteralBashWords(command);
-    return !!words && words.length > 1 && elevationPrograms.has(nameOf(words[0])) && !/^--?(help|version)$/i.test(words[1]);
+    if (!words || words.length < 2) return false;
+    const name = nameOf(words[0]);
+    return (elevationPrograms.has(name) && !/^--?(help|version)$/i.test(words[1])) || directAdminProgram(name, words.slice(1));
   }
   let ast;
   try { ast = await parse(command); } catch { return false; }
@@ -19,6 +38,7 @@ export async function needsWindowsElevationGuidance(command, shell = 'PowerShell
   return ast.commands.some(item => {
     const name = nameOf(item.name);
     const elements = item.elements || [];
+    if (directAdminProgram(name, elements.slice(1).map(element => element.kind === 'literal' ? element.value : ''))) return true;
     if (elevationPrograms.has(name)) {
       const arg = elements[1];
       return !!arg && !(arg.kind === 'literal' && /^--?(help|version)$/i.test(arg.value));

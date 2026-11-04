@@ -15,11 +15,14 @@ for (const overrides of [{ platform: 'linux' }, { runtimeFamily: 'claude' }, { i
 if (process.platform === 'win32') {
   for (const command of ['runas /user:admin cmd.exe', 'gsudo.exe whoami', 'sudo whoami',
     'Start-Process notepad.exe -Verb RunAs', 'Start-Process -Verb:RunAs notepad.exe',
-    "Write-Output hello; Start-Process notepad.exe -Verb RunAs"]) {
+    "Write-Output hello; Start-Process notepad.exe -Verb RunAs", 'New-LocalUser -Name fixture -WhatIf',
+    'Remove-LocalGroupMember -Group Administrators -Member fixture -WhatIf', 'New-Service -Name fixture -WhatIf',
+    'sc.exe config fixture start= demand', 'net.exe user fixture /add']) {
     assert.equal(await needsWindowsElevationGuidance(command), true, command);
   }
   for (const command of ["Write-Output 'sudo whoami'", 'winget install Git.Git', 'Start-Process notepad.exe',
-    'sudo --version', "Write-Output 'Start-Process -Verb RunAs'"]) {
+    'sudo --version', "Write-Output 'Start-Process -Verb RunAs'", 'Get-LocalUser', 'Get-Service',
+    'sc.exe query fixture', 'sc config fixture', 'net.exe user fixture', "Write-Output 'New-LocalUser -Name fixture'"]) {
     assert.equal(await needsWindowsElevationGuidance(command), false, command);
   }
   assert.equal(await needsWindowsElevationGuidance('sudo whoami', 'Bash'), true);
@@ -69,6 +72,10 @@ if (process.platform === 'win32') {
     assert.equal(sent[0].response.response.behavior, 'deny');
     assert.match(sent[0].response.response.message, /agentoc_request_actions/);
     assert.equal(state.pendingApprovals.size, 0);
+    await trackClaudeBidiApprovalRequest(run.id, state, { type: 'control_request', request_id: 'direct-admin',
+      request: { subtype: 'can_use_tool', tool_name: 'PowerShell', input: { command: 'New-LocalUser -Name agentoc-fixture -WhatIf' } } }, proc);
+    assert.equal(sent[1].response.response.behavior, 'deny');
+    assert.match(sent[1].response.response.message, /agentoc_request_actions/);
   } finally { await rm(root, { recursive: true, force: true }); }
 }
 console.log('Windows managed elevation guidance passed');
