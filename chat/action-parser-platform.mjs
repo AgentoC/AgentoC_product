@@ -102,6 +102,15 @@ export function parsePowerShellCommand(command, { cwd = '' } = {}) {
   }
   const executable = normalizeExecutable(tokens[index]);
   const args = argsAfter(tokens, index);
+  if (['rg', 'ripgrep', 'grep'].includes(executable)) {
+    const query = args[0] || '';
+    const searchPath = args[1] || text(cwd);
+    return action('search', [query, searchPath].filter(Boolean).join(' in '), [query, searchPath].filter(Boolean).join(' · '), raw);
+  }
+  if (executable === 'git' && ['status', 'diff', 'log', 'branch'].includes(args[0])) {
+    const subjects = { status: 'workspace status', diff: 'workspace changes', log: 'commit history', branch: 'branches' };
+    return action('inspect', subjects[args[0]], raw, raw, 'medium');
+  }
   const path = args.find((arg) => !arg.startsWith('-')) || text(cwd) || '.';
   if (['get-content', 'gc', 'cat', 'get-item', 'gi', 'get-filehash'].includes(executable)) {
     return action('read', basename(path), path, raw);
@@ -120,7 +129,7 @@ export function parsePowerShellCommand(command, { cwd = '' } = {}) {
   if (['copy-item'].includes(executable)) return action('execute', 'copy item', raw, raw, 'medium', false);
   if (['move-item'].includes(executable)) return action('execute', 'move item', raw, raw, 'medium', false);
   if (['remove-item'].includes(executable)) return action('execute', 'remove item', raw, raw, 'low', false);
-  return action('execute', executable || 'PowerShell command', raw, raw, 'low', false);
+  return action('execute', raw, raw, raw, 'low', false);
 }
 
 export function parseCmdCommand(command, { cwd = '' } = {}) {
@@ -144,7 +153,7 @@ export function parseCmdCommand(command, { cwd = '' } = {}) {
     return action('search', query, [query, path].filter(Boolean).join(' · '), raw);
   }
   if (['cd', 'chdir', 'where', 'ver', 'set', 'echo'].includes(executable)) return action('inspect', executable, raw, raw, 'medium');
-  return action('execute', executable || 'CMD command', raw, raw, 'low', false);
+  return action('execute', raw, raw, raw, 'low', false);
 }
 
 export function parsePlatformShellCommand(command, options = {}) {

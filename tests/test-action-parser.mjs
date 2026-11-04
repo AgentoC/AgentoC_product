@@ -15,6 +15,11 @@ assert.equal(parseShellCommand('cat package.json && ls src').composite, true);
 
 assert.equal(inferShellKind({ executionPlatform: 'win32' }), 'powershell');
 assert.equal(inferShellKind({ executionPlatform: 'win32', command: 'dir src' }), 'cmd');
+assert.equal(parsePowerShellCommand('rg timeout src').subject, 'timeout in src');
+assert.equal(parsePowerShellCommand('git status --short').subject, 'workspace status');
+assert.equal(parsePowerShellCommand('npm test').subject, 'npm test');
+assert.equal(parseCmdCommand('npm test').subject, 'npm test');
+assert.equal(parsePowerShellCommand('tool --token secret').subject, 'tool --token [redacted]');
 assert.equal(parsePowerShellCommand('Get-Content C:\\workspace\\package.json').semanticKind, 'read');
 assert.equal(parsePowerShellCommand('Get-Content C:\\workspace\\package.json').subject, 'package.json');
 assert.equal(parsePowerShellCommand('Get-ChildItem C:\\workspace\\src').semanticKind, 'list');
