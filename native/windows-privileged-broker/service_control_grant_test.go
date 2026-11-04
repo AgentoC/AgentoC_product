@@ -21,6 +21,9 @@ func TestServiceControlGrantBindsExactOperation(t *testing.T) {
 	if got := fmt.Sprintf("%x", sha256.Sum256(serviceControlSigningBytes(grant))); got != "3df9a07c89afdafc1f87f75ba2e2cb7cfcb335153c35a8fb2aa99d0826c6b412" {
 		t.Fatalf("cross-language signing bytes differ: %s", got)
 	}
+	if got := fmt.Sprintf("%x", sha256.Sum256(serviceControlOwnerSigningBytes(grant))); got != "e0cb3610783fd33fdc745e5059474811b3dac76415ef91a283cf110df0af9bf1" {
+		t.Fatalf("owner proof bytes differ: %s", got)
+	}
 	signature := base64.RawURLEncoding.EncodeToString(ed25519.Sign(private, serviceControlSigningBytes(grant)))
 	verify := func(g serviceControlGrant) error {
 		return verifyServiceControlGrant(g, signature, public, "key", "broker", 3, now)

@@ -39,6 +39,7 @@ func TestServiceControlPipeRequiresSignatureAndRunsOnce(t *testing.T) {
 	if err := store.ConfigureAutoInstallSigner("key", base64.RawURLEncoding.EncodeToString(der), now); err != nil {
 		t.Fatal(err)
 	}
+	deviceKey, deviceID := enrollServiceTestDevice(t, store, now)
 	suffix, err := randomID()
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +53,9 @@ func TestServiceControlPipeRequiresSignatureAndRunsOnce(t *testing.T) {
 	grant := serviceControlGrant{Version: 1, KeyID: "key", BrokerInstallationID: snap.InstallationID, PolicyGeneration: snap.PolicyGeneration,
 		RequestID: "request", SessionID: "session", RunID: "run", TurnID: "turn", ActionID: "action", Nonce: "abcdefghijklmnopqrstuvwx",
 		ServiceName: "测试服务", Action: "restart-service", DefinitionHash: strings.Repeat("a", 64), Authorization: "owner", IssuedMS: uint64(now.UnixMilli()), ExpiresMS: uint64(now.Add(time.Minute).UnixMilli())}
-	request := brokerRequest{Version: protocolVersion, Type: "service.execute", ServiceControl: &grant, Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(priv, serviceControlSigningBytes(grant)))}
+	request := brokerRequest{Version: protocolVersion, Type: "service.execute", ServiceControl: &grant,
+		Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(priv, serviceControlSigningBytes(grant))),
+		DeviceID:  deviceID, DeviceSignature: signApprovalMessage(t, deviceKey, serviceControlOwnerSigningBytes(grant))}
 	raw, err := json.Marshal(request)
 	if err != nil {
 		t.Fatal(err)
@@ -91,6 +94,11 @@ func TestServiceControlPipeRequiresSignatureAndRunsOnce(t *testing.T) {
 	bad.Signature = base64.RawURLEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))
 	if got := exchangeTestPipeRequest(t, base+".Request", bad); got.Code != "SERVICE_CONTROL_AUTHORIZATION_DENIED" {
 		t.Fatalf("bad signature: %+v", got)
+	}
+	badOwner := request
+	badOwner.DeviceSignature = base64.StdEncoding.EncodeToString([]byte("invalid"))
+	if got := exchangeTestPipeRequest(t, base+".Request", badOwner); got.Code != "SERVICE_CONTROL_AUTHORIZATION_DENIED" {
+		t.Fatalf("bad owner proof: %+v", got)
 	}
 	for i := 0; i < 2; i++ {
 		if got := exchangeTestPipeRequest(t, base+".Request", request); got.Status != statusExecuting {

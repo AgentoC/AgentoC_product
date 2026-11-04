@@ -743,7 +743,8 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 		if s.serviceController == nil {
 			return newErrorResponse("SERVICE_CONTROL_UNAVAILABLE")
 		}
-		record, duplicate, err := s.store.ClaimServiceControl(*request.ServiceControl, request.Signature, time.Now().UTC())
+		record, duplicate, err := s.store.ClaimServiceControl(*request.ServiceControl, request.Signature,
+			serviceOwnerProof{DeviceID: request.DeviceID, Signature: request.DeviceSignature}, time.Now().UTC())
 		if err != nil {
 			if errors.Is(err, errRequestConflict) {
 				return newErrorResponse("REQUEST_ID_CONFLICT")

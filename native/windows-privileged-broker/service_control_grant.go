@@ -31,6 +31,17 @@ type serviceControlGrant struct {
 
 var errServiceControlGrant = errors.New("APB_SERVICE_CONTROL_GRANT_INVALID")
 
+type serviceOwnerProof struct {
+	DeviceID  string
+	Signature string
+}
+
+// A separate enrolled-device signature prevents the control-plane's install
+// signing key from claiming an owner approval by itself.
+func serviceControlOwnerSigningBytes(grant serviceControlGrant) []byte {
+	return append([]byte("AgentoC Windows service owner approval v1\x00"), serviceControlSigningBytes(grant)...)
+}
+
 func serviceControlSigningBytes(grant serviceControlGrant) []byte {
 	return encodeSigningFields("AgentoC Windows service control v1\x00", grant.Version, grant.KeyID, grant.BrokerInstallationID,
 		grant.PolicyGeneration, grant.RequestID, grant.SessionID, grant.RunID, grant.TurnID, grant.ActionID, grant.Nonce,

@@ -39,6 +39,7 @@ type brokerRequest struct {
 	VerificationCode string                     `json:"verificationCode,omitempty"`
 	Choice           string                     `json:"choice,omitempty"`
 	Signature        string                     `json:"signature,omitempty"`
+	DeviceSignature  string                     `json:"deviceSignature,omitempty"`
 	AutoInstall      *autoInstallGrant          `json:"autoInstall,omitempty"`
 	OwnerInstall     *ownerInstallGrant         `json:"ownerInstall,omitempty"`
 	AutoInspect      *autoInstallInspectRequest `json:"autoInspect,omitempty"`
@@ -167,6 +168,9 @@ func decodeBrokerRequest(payload []byte) (brokerRequest, error) {
 }
 
 func validateRequest(request brokerRequest) error {
+	if request.Type != "service.execute" && request.DeviceSignature != "" {
+		return errInvalidRequest
+	}
 	if request.Type != "service.execute" && request.ServiceControl != nil {
 		return errInvalidRequest
 	}
@@ -277,11 +281,13 @@ func validateRequest(request brokerRequest) error {
 			return errInvalidRequest
 		}
 	case "service.execute":
-		if request.ServiceControl == nil || request.Signature == "" || len(request.Signature) > 1024 {
+		if request.ServiceControl == nil || request.Signature == "" || len(request.Signature) > 1024 ||
+			len(request.DeviceID) != 64 || !isLowerHex(request.DeviceID) || request.DeviceSignature == "" || len(request.DeviceSignature) > 1024 {
 			return errInvalidRequest
 		}
 		copy := request
 		copy.Signature = ""
+		copy.DeviceID = ""
 		if hasNonHealthFields(copy) {
 			return errInvalidRequest
 		}

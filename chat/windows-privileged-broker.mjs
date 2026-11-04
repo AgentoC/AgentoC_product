@@ -128,8 +128,11 @@ function validateRequest(request) {
     return;
   }
   if (request.type === 'service.execute') {
-    if (!hasOnlyKeys(request, ['version', 'type', 'serviceControl', 'signature']) ||
-        typeof request.signature !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(request.signature)) throw brokerError('BROKER_REQUEST_INVALID');
+    if (!hasOnlyKeys(request, ['version', 'type', 'serviceControl', 'signature', 'deviceId', 'deviceSignature']) ||
+        typeof request.signature !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(request.signature) ||
+        typeof request.deviceId !== 'string' || !DEVICE_ID_PATTERN.test(request.deviceId) ||
+        typeof request.deviceSignature !== 'string' || request.deviceSignature.length === 0 || request.deviceSignature.length > 1024 ||
+        !SIGNATURE_PATTERN.test(request.deviceSignature)) throw brokerError('BROKER_REQUEST_INVALID');
     try { windowsServiceControlSigningBytes(request.serviceControl); } catch { throw brokerError('BROKER_REQUEST_INVALID'); }
     return;
   }
@@ -405,8 +408,8 @@ export function createWindowsPrivilegedBrokerClient({
           facts.serviceName !== serviceName || !/^[a-f0-9]{64}$/.test(facts.definitionHash || '')) throw brokerError('BROKER_RESPONSE_INVALID');
       return { platform: 'win32', manager: 'windows-service', serviceName, exists: true, definitionHash: facts.definitionHash };
     },
-    executeServiceControl: async ({ grant, signature }) => {
-      const response = await rpc('request', { version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'service.execute', serviceControl: grant, signature });
+    executeServiceControl: async ({ grant, signature, deviceId, deviceSignature }) => {
+      const response = await rpc('request', { version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'service.execute', serviceControl: grant, signature, deviceId, deviceSignature });
       if (response?.type === 'error') throw brokerError(response.code || 'SERVICE_CONTROL_REJECTED');
       if (response?.type !== 'result' || response.requestId !== grant.requestId ||
           !['executing', 'succeeded', 'failed', 'unknown'].includes(response.status)) throw brokerError('BROKER_RESPONSE_INVALID');

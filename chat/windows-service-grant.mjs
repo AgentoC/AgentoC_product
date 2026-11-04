@@ -25,3 +25,7 @@ export function windowsServiceControlSigningBytes(grant) {
   num(grant.issuedMs); num(grant.expiresMs);
   return Buffer.concat(parts);
 }
+
+export function windowsServiceOwnerSigningBytes(grant) {
+  return Buffer.concat([Buffer.from('AgentoC Windows service owner approval v1\0', 'utf8'), windowsServiceControlSigningBytes(grant)]);
+}

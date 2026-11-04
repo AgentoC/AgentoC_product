@@ -16,7 +16,7 @@ type serviceControlRecord struct {
 	UpdatedAt time.Time           `json:"updatedAt"`
 }
 
-func (s *brokerStore) ClaimServiceControl(grant serviceControlGrant, signature string, now time.Time) (serviceControlRecord, bool, error) {
+func (s *brokerStore) ClaimServiceControl(grant serviceControlGrant, signature string, proof serviceOwnerProof, now time.Time) (serviceControlRecord, bool, error) {
 	digest := fmt.Sprintf("%x", sha256.Sum256(serviceControlSigningBytes(grant)))
 	var result serviceControlRecord
 	duplicate := false
@@ -26,6 +26,11 @@ func (s *brokerStore) ClaimServiceControl(grant serviceControlGrant, signature s
 		}
 		key, err := parseAutoInstallPublicKey(state.AutoInstallSigner.PublicKey)
 		if err != nil || verifyServiceControlGrant(grant, signature, key, state.AutoInstallSigner.KeyID, state.InstallationID, state.PolicyGeneration, now) != nil {
+			return errServiceControlGrant
+		}
+		device, ok := state.Devices[proof.DeviceID]
+		if !ok || state.OwnerID == "" || device.DeviceID != proof.DeviceID || device.OwnerID != state.OwnerID ||
+			verifyDeviceSignature(device.PublicKey, proof.Signature, serviceControlOwnerSigningBytes(grant)) != nil {
 			return errServiceControlGrant
 		}
 		if state.ServiceControls == nil {
