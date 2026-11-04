@@ -21,7 +21,8 @@ func TestOwnerInstallScriptUserScope(t *testing.T) {
 function Get-WinGetSource { param($Name) [pscustomobject]@{ Name='winget'; Type='Microsoft.PreIndexed.Package'; Argument=$env:MOCK_URL; TrustLevel='Trusted' } }
 function Find-WinGetPackage { param($Id,$Source,$MatchOption) [pscustomobject]@{ Id=$Id; Source=$Source; AvailableVersions=@('1.2.3') } }
 function Install-WinGetPackage { [CmdletBinding(SupportsShouldProcess)] param($Id,$Version,$Source,$MatchOption,$Mode,$Scope)
-  if ($Id -cne 'Vendor.App' -or $Version -cne '1.2.3' -or $Source -cne 'winget' -or $Mode -cne 'Silent' -or $Scope -cne 'User') { throw 'bad parameters' }
+  if ($Id -cne 'Vendor.App' -or $Version -cne '1.2.3' -or $Source -cne 'winget' -or $Mode -cne 'Silent') { throw 'bad parameters' }
+  if (($env:AGENTOC_INSTALL_SCOPE -ceq 'user' -and $Scope -cne 'User') -or ($env:AGENTOC_INSTALL_SCOPE -ceq 'default' -and $PSBoundParameters.ContainsKey('Scope'))) { throw 'bad scope' }
   [IO.File]::WriteAllText($env:MOCK_MARKER, 'called')
   [pscustomobject]@{ Id=$Id; Source=$Source; Status='Ok'; InstallerErrorCode=0; RebootRequired=$false }
 }
@@ -31,19 +32,21 @@ Export-ModuleMember -Function Get-WinGetSource,Find-WinGetPackage,Install-WinGet
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
-		name, url, version string
-		exit               int
-		called             bool
+		name, url, version, scope string
+		exit                      int
+		called                    bool
 	}{
-		{"user installation", "https://cdn.winget.microsoft.com/cache", "1.2.3", 0, true},
-		{"untrusted source", "https://malicious.example/cache", "1.2.3", 21, false},
-		{"unknown version", "https://cdn.winget.microsoft.com/cache", "9.9.9", 22, false},
+		{"user installation", "https://cdn.winget.microsoft.com/cache", "1.2.3", "user", 0, true},
+		{"default installation", "https://cdn.winget.microsoft.com/cache", "1.2.3", "default", 0, true},
+		{"untrusted source", "https://malicious.example/cache", "1.2.3", "user", 21, false},
+		{"unknown version", "https://cdn.winget.microsoft.com/cache", "9.9.9", "user", 22, false},
+		{"invalid scope", "https://cdn.winget.microsoft.com/cache", "1.2.3", "machine", 23, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_ = os.Remove(marker)
 			cmd := exec.Command(pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", ownerInstallScript)
 			cmd.Env = append(os.Environ(), "AGENTOC_INSTALL_PACKAGE_ID=Vendor.App", "AGENTOC_INSTALL_PACKAGE_VERSION="+tc.version,
-				"AGENTOC_INSTALL_MODULE="+module, "MOCK_URL="+tc.url, "MOCK_MARKER="+marker)
+				"AGENTOC_INSTALL_MODULE="+module, "AGENTOC_INSTALL_SCOPE="+tc.scope, "MOCK_URL="+tc.url, "MOCK_MARKER="+marker)
 			output, err := cmd.CombinedOutput()
 			exit := 0
 			if err != nil {

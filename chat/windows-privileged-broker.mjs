@@ -133,7 +133,7 @@ function validateRequest(request) {
         !/^inst_[a-f0-9]{32}$/.test(grant.instanceId || '') || grant.keyId !== grant.instanceId || !/^S-1-5-21-(?:\d+-){3}\d+$/.test(grant.ownerSid || '') ||
         !Number.isSafeInteger(grant.policyGeneration) || grant.policyGeneration < 1 || !/^[A-Za-z0-9_-]{24,128}$/.test(grant.nonce || '') ||
         !/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(grant.packageId || '') || !/^[A-Za-z0-9][A-Za-z0-9._+:-]{0,127}$/.test(grant.packageVersion || '') ||
-        grant.source !== 'winget' || grant.installScope !== 'user' || !Number.isSafeInteger(grant.issuedMs) || !Number.isSafeInteger(grant.expiresMs) ||
+        grant.source !== 'winget' || !['user', 'default'].includes(grant.installScope) || !Number.isSafeInteger(grant.issuedMs) || !Number.isSafeInteger(grant.expiresMs) ||
         grant.issuedMs <= 0 || grant.expiresMs <= grant.issuedMs || grant.expiresMs - grant.issuedMs > 60000 ||
         typeof request.signature !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(request.signature)) throw brokerError('BROKER_REQUEST_INVALID');
     return;

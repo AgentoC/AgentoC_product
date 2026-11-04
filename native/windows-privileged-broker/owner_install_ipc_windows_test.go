@@ -49,9 +49,9 @@ func TestOwnerInstallIPCClaimsOnceAndReportsStatus(t *testing.T) {
 	}
 	var calls atomic.Int32
 	server := &brokerIPCServer{store: store, ownerPolicy: func() (ownerInstallPolicy, error) { return policy, nil }, ownerAvailable: func(string) bool { return true },
-		ownerInstaller: func(_ context.Context, sid, id, version string) ownerInstallResult {
+		ownerInstaller: func(_ context.Context, sid, id, version, scope string) ownerInstallResult {
 			calls.Add(1)
-			if sid != policy.OwnerSID || id != grant.PackageID || version != grant.PackageVersion {
+			if sid != policy.OwnerSID || id != grant.PackageID || version != grant.PackageVersion || scope != grant.InstallScope {
 				t.Error("wrong execution binding")
 			}
 			return ownerInstallResult{Status: "succeeded", Code: "OWNER_INSTALL_SUCCEEDED"}
@@ -118,9 +118,9 @@ func TestOwnerInstallRealNamedPipe(t *testing.T) {
 	var calls atomic.Int32
 	server.ownerPolicy = func() (ownerInstallPolicy, error) { return policy, nil }
 	server.ownerAvailable = func(string) bool { return true }
-	server.ownerInstaller = func(ctx context.Context, sid, id, version string) ownerInstallResult {
+	server.ownerInstaller = func(ctx context.Context, sid, id, version, scope string) ownerInstallResult {
 		calls.Add(1)
-		if sid != policy.OwnerSID || id != "Vendor.App" || version != "1.2.3" {
+		if sid != policy.OwnerSID || id != "Vendor.App" || version != "1.2.3" || scope != "user" {
 			return ownerInstallResult{Status: "failed", Code: "OWNER_INSTALL_INVALID"}
 		}
 		select {

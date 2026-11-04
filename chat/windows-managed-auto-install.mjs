@@ -81,7 +81,7 @@ export async function tryWindowsManagedAutoInstall({ actions, binding, riskMode,
     request: { ...requestBinding, rawCommand: actions[0].command, executionClass: 'host', tool: 'approved-action', commandForm: 'argv' },
     trustedContext: { ...trustedContext, platform: 'win32' }, callerEvidence: {},
   });
-  const ownerScope = runExecutionIsService === true && prepared?.projection?.decisions?.[0]?.operation?.target?.requestedInstallScope === 'user';
+  const ownerScope = runExecutionIsService === true && ['', 'user'].includes(prepared?.projection?.decisions?.[0]?.operation?.target?.requestedInstallScope);
   try {
     // Only the shared, server-derived policy can make this eligible.
     (ownerScope ? authorizeWindowsUserInstall : authorizeWindowsAutomaticInstall)({ prepared, riskMode, kid: 'eligibility-check' });

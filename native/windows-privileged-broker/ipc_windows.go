@@ -33,7 +33,7 @@ type brokerIPCServer struct {
 	store           *brokerStore
 	target          brokerTargetController
 	autoInstaller   autoInstaller
-	ownerInstaller  func(context.Context, string, string, string) ownerInstallResult
+	ownerInstaller  func(context.Context, string, string, string, string) ownerInstallResult
 	ownerPolicy     func() (ownerInstallPolicy, error)
 	ownerAvailable  func(string) bool
 	executionCtx    context.Context
@@ -828,7 +828,7 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 				state := s.store.Snapshot()
 				if policyErr == nil && currentPolicy == policy && state.PolicyGeneration == record.Grant.PolicyGeneration &&
 					state.AutoInstallSigner != nil && state.AutoInstallSigner.KeyID == record.Grant.KeyID && time.Now().UnixMilli() < record.Grant.ExpiresMS && ctx.Err() == nil {
-					result = s.ownerInstaller(ctx, policy.OwnerSID, record.Grant.PackageID, record.Grant.PackageVersion)
+					result = s.ownerInstaller(ctx, policy.OwnerSID, record.Grant.PackageID, record.Grant.PackageVersion, record.Grant.InstallScope)
 				}
 				_, _ = s.store.FinishOwnerInstall(record.Grant.Nonce, requestStatus(result.Status), result.Code, time.Now().UTC())
 			}()

@@ -30,9 +30,9 @@ type ownerInstallRunner struct {
 // install is private and does not authorize, claim, or persist a request. Its
 // caller must first verify the exact operation and derive ownerSID from the
 // protected installation policy; no request may supply that identity.
-func (runner ownerInstallRunner) install(parent context.Context, ownerSID, packageID, version string) ownerInstallResult {
+func (runner ownerInstallRunner) install(parent context.Context, ownerSID, packageID, version, scope string) ownerInstallResult {
 	failed := func(code string) ownerInstallResult { return ownerInstallResult{Status: "failed", Code: code} }
-	if parent == nil || !ownerPackageIDPattern.MatchString(packageID) || !ownerPackageVersionPattern.MatchString(version) || runner.acquireRuntime == nil || runner.paths == nil || runner.environment == nil || runner.run == nil {
+	if parent == nil || !ownerPackageIDPattern.MatchString(packageID) || !ownerPackageVersionPattern.MatchString(version) || (scope != "user" && scope != "default") || runner.acquireRuntime == nil || runner.paths == nil || runner.environment == nil || runner.run == nil {
 		return failed("OWNER_INSTALL_INVALID")
 	}
 	vendor, release, err := runner.acquireRuntime()
@@ -60,7 +60,7 @@ func (runner ownerInstallRunner) install(parent context.Context, ownerSID, packa
 	if err != nil {
 		return failed("OWNER_INSTALL_ENVIRONMENT_UNAVAILABLE")
 	}
-	env = append(env, "AGENTOC_INSTALL_PACKAGE_ID="+packageID, "AGENTOC_INSTALL_PACKAGE_VERSION="+version)
+	env = append(env, "AGENTOC_INSTALL_PACKAGE_ID="+packageID, "AGENTOC_INSTALL_PACKAGE_VERSION="+version, "AGENTOC_INSTALL_SCOPE="+scope)
 	// Check once more after environment construction, immediately before the
 	// child starts. A vanished or ambiguous session cannot be silently reused.
 	current, err := runner.tokens.discover(ownerSID)

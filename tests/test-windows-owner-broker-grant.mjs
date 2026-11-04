@@ -28,7 +28,7 @@ for (const riskMode of ['recommended', 'full-auto']) {
   assert.equal(grant.installScope, 'user');
 }
 const unspecified = await prepare('winget install Vendor.App');
-assert.throws(() => createWindowsOwnerBrokerGrant({ prepared: unspecified, riskMode: 'recommended', kid, privateKey: keys.privateKey, health, identity }), { code: 'OWNER_INSTALL_AUTHORIZATION_INVALID' });
+assert.equal(createWindowsOwnerBrokerGrant({ prepared: unspecified, riskMode: 'recommended', kid, privateKey: keys.privateKey, health, identity }).grant.installScope, 'default');
 const prepared = await prepare('winget install Vendor.App --scope user');
 let stored, sends = 0, activeChecks = 0;
 const client = { health: async () => health, ownerInstallIdentity: async () => identity,
@@ -48,6 +48,12 @@ for (const riskMode of ['recommended', 'full-auto']) {
   const deps = { prepare: async () => prepared, client, getKey: async () => ({ kid, privateKey: keys.privateKey }), assertActive: async () => {} };
   assert.equal((await tryWindowsManagedAutoInstall({ ...managed, preflight: true }, deps)).ready, true);
   assert.equal((await tryWindowsManagedAutoInstall(managed, deps)).status, 'succeeded');
+  assert.equal(sends, 1);
+  stored = null; sends = 0;
+  const defaultDeps = { ...deps, prepare: async () => unspecified };
+  const defaultManaged = { ...managed, actions: [{ command: 'winget install Vendor.App' }] };
+  assert.equal((await tryWindowsManagedAutoInstall(defaultManaged, defaultDeps)).status, 'succeeded');
+  assert.equal(stored.ownerInstall.installScope, 'default');
   assert.equal(sends, 1);
 }
 console.log('windows-owner-broker-grant: signed binding and scope checks passed');

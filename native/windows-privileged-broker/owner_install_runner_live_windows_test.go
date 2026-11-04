@@ -28,7 +28,7 @@ func main(){
  if len(os.Args)!=8 || os.Args[6]!="-EncodedCommand" { os.Exit(31) }
  raw,e:=base64.StdEncoding.DecodeString(os.Args[7]);if e!=nil || len(raw)%2!=0 {os.Exit(32)}
  units:=make([]uint16,len(raw)/2);for i:=range units { units[i]=binary.LittleEndian.Uint16(raw[i*2:]) }
- if !strings.Contains(string(utf16.Decode(units)),"-Scope User") || os.Getenv("AGENTOC_INSTALL_PACKAGE_ID")!="Vendor.App" || os.Getenv("AGENTOC_INSTALL_PACKAGE_VERSION")!="1.2.3" {os.Exit(33)}
+ if !strings.Contains(string(utf16.Decode(units)),"$arguments.Scope = 'User'") || os.Getenv("AGENTOC_INSTALL_SCOPE")!="user" || os.Getenv("AGENTOC_INSTALL_PACKAGE_ID")!="Vendor.App" || os.Getenv("AGENTOC_INSTALL_PACKAGE_VERSION")!="1.2.3" {os.Exit(33)}
  if os.WriteFile(filepath.Join(os.Getenv("TEMP"),"owner-install-receipt"),[]byte("mock"),0600)!=nil {os.Exit(34)}
 }`
 	if err := os.WriteFile(source, []byte(program), 0600); err != nil {
@@ -84,7 +84,7 @@ func main(){
 		},
 		run: runOwnerProcess,
 	}
-	result := runner.install(context.Background(), ownerSID, "Vendor.App", "1.2.3")
+	result := runner.install(context.Background(), ownerSID, "Vendor.App", "1.2.3", "user")
 	if result.Status != "succeeded" {
 		t.Fatalf("mock owner install failed: %+v", result)
 	}

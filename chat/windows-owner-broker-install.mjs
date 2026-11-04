@@ -13,9 +13,7 @@ export function createWindowsOwnerBrokerGrant({ prepared, riskMode, kid, private
       !Number.isSafeInteger(now) || now <= 0) fail();
   const capability = authorizeWindowsUserInstall({ prepared, riskMode, kid, now });
   const input = capability.operations?.[0]?.adapterInput;
-  // An unspecified scope must preserve WinGet's selection semantics; this
-  // executor is only for an explicit user-scope request.
-  if (input?.requestedInstallScope !== 'user' || input?.source !== 'winget' || input?.packages?.length !== 1 || input?.resolvedVersions?.length !== 1 ||
+  if (!['', 'user'].includes(input?.requestedInstallScope) || input?.source !== 'winget' || input?.packages?.length !== 1 || input?.resolvedVersions?.length !== 1 ||
       !/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(input.packages[0] || '') || !/^[A-Za-z0-9][A-Za-z0-9._+:-]{0,127}$/.test(input.resolvedVersions[0] || '')) fail();
   const binding = prepared.binding;
   const { requestId, actionId } = windowsBrokerInstallRequestIds(binding);
@@ -25,7 +23,7 @@ export function createWindowsOwnerBrokerGrant({ prepared, riskMode, kid, private
   const grant = { version: 1, keyId: kid, brokerInstallationId: health.installationId, policyGeneration: health.policyGeneration,
     instanceId: identity.instanceId, ownerSid: identity.ownerSid, requestId, sessionId: binding.sessionId, runId: binding.runId,
     turnId: binding.turnId, actionId, nonce: randomBytes(24).toString('base64url'), packageId: input.packages[0],
-    packageVersion: input.resolvedVersions[0], source: 'winget', installScope: 'user', issuedMs: now, expiresMs };
+    packageVersion: input.resolvedVersions[0], source: 'winget', installScope: input.requestedInstallScope || 'default', issuedMs: now, expiresMs };
   const bytes = Buffer.concat([Buffer.from('AgentoC Windows owner auto install v1\0'), Buffer.from(JSON.stringify(grant))]);
   return { grant, signature: sign(null, bytes, privateKey).toString('base64url') };
 }
@@ -36,7 +34,7 @@ export async function submitOrResumeWindowsOwnerBrokerInstall({ client, prepared
   }
   const capability = authorizeWindowsUserInstall({ prepared, riskMode, kid });
   const input = capability.operations?.[0]?.adapterInput;
-  if (input?.requestedInstallScope !== 'user') throw Object.assign(new Error('Explicit user scope is required'), { code: 'OWNER_INSTALL_AUTHORIZATION_INVALID' });
+  if (!['', 'user'].includes(input?.requestedInstallScope)) throw Object.assign(new Error('Unsupported installation scope'), { code: 'OWNER_INSTALL_AUTHORIZATION_INVALID' });
   const binding = prepared.binding;
   const { requestId, actionId } = windowsBrokerInstallRequestIds(binding);
   const validateExisting = (result) => {
@@ -44,7 +42,7 @@ export async function submitOrResumeWindowsOwnerBrokerInstall({ client, prepared
     if (result?.type !== 'result' || result.requestId !== requestId || !['executing', 'succeeded', 'failed', 'unknown'].includes(result.status) ||
         !grant || grant.requestId !== requestId || grant.actionId !== actionId || grant.sessionId !== binding.sessionId || grant.runId !== binding.runId ||
         grant.turnId !== binding.turnId || grant.packageId !== input.packages?.[0] || grant.packageVersion !== input.resolvedVersions?.[0] ||
-        grant.installScope !== 'user' || grant.source !== 'winget' || grant.keyId !== kid) {
+        grant.installScope !== (input.requestedInstallScope || 'default') || grant.source !== 'winget' || grant.keyId !== kid) {
       throw Object.assign(new Error('Existing installation does not match the run'), { code: 'AUTO_INSTALL_BINDING_CONFLICT', requestId });
     }
     return { ...result, duplicate: true };

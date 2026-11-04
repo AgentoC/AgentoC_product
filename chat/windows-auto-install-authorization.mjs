@@ -184,7 +184,7 @@ export async function queryWindowsBrokerAutoInstall({ client, binding } = {}) {
   }
   const grant = result?.autoInstall || result?.ownerInstall;
   if (result?.type !== 'result' || result.requestId !== requestId || !['executing', 'succeeded', 'failed', 'unknown'].includes(result.status) ||
-      !grant || !['machine', 'user'].includes(grant.installScope) || grant.requestId !== requestId || grant.actionId !== actionId || grant.sessionId !== binding.sessionId ||
+      !grant || !['machine', 'user', 'default'].includes(grant.installScope) || grant.requestId !== requestId || grant.actionId !== actionId || grant.sessionId !== binding.sessionId ||
       grant.runId !== binding.runId || grant.turnId !== binding.turnId || grant.source !== 'winget') {
     throw Object.assign(new Error('Existing installation request does not match this run'), { code: 'AUTO_INSTALL_BINDING_CONFLICT', requestId });
   }

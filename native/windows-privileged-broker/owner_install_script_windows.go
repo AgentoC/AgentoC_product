@@ -24,7 +24,10 @@ try {
   $matches = @(Find-WinGetPackage -Id $id -Source 'winget' -MatchOption Equals -ErrorAction Stop)
   if ($matches.Count -ne 1 -or $matches[0].Id -cne $id -or $matches[0].Source -ine 'winget' -or
       @($matches[0].AvailableVersions) -cnotcontains $version) { exit 22 }
-  $result = @(Install-WinGetPackage -Id $id -Version $version -Source 'winget' -MatchOption Equals -Mode Silent -Scope User -Confirm:$false -ErrorAction Stop)
+  $arguments = @{ Id=$id; Version=$version; Source='winget'; MatchOption='Equals'; Mode='Silent'; Confirm=$false; ErrorAction='Stop' }
+  if ($env:AGENTOC_INSTALL_SCOPE -ceq 'user') { $arguments.Scope = 'User' }
+  elseif ($env:AGENTOC_INSTALL_SCOPE -cne 'default') { exit 23 }
+  $result = @(Install-WinGetPackage @arguments)
   if ($result.Count -ne 1 -or $result[0].Id -cne $id -or $result[0].Source -ine 'winget' -or
       $result[0].Status -cne 'Ok' -or $result[0].InstallerErrorCode -ne 0) { exit 23 }
   if ($result[0].RebootRequired) { exit 24 }

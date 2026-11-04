@@ -10,7 +10,7 @@ import (
 
 // Only the service-created runner has access to the protected runtime lease.
 // The request cannot supply a path, token, environment or executable.
-func runInstalledOwnerInstall(ctx context.Context, ownerSID, packageID, version string) ownerInstallResult {
+func runInstalledOwnerInstall(ctx context.Context, ownerSID, packageID, version, scope string) ownerInstallResult {
 	runner := ownerInstallRunner{
 		acquireRuntime: func() (string, func(), error) {
 			lease, err := acquireInstalledAutoRuntime()
@@ -28,5 +28,5 @@ func runInstalledOwnerInstall(ctx context.Context, ownerSID, packageID, version 
 		},
 		run: runOwnerProcess,
 	}
-	return runner.install(ctx, ownerSID, packageID, version)
+	return runner.install(ctx, ownerSID, packageID, version, scope)
 }

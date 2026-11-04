@@ -61,7 +61,7 @@ func TestOwnerInstallRunner(t *testing.T) {
 					return tc.exit, nil
 				},
 			}
-			result := runner.install(context.Background(), "S-1-5-21-1-2-3-1001", "Vendor.App", "1.2.3")
+			result := runner.install(context.Background(), "S-1-5-21-1-2-3-1001", "Vendor.App", "1.2.3", "user")
 			if result.Status != tc.want || handles != 0 || leases != 0 {
 				t.Fatalf("result=%+v handles=%d leases=%d", result, handles, leases)
 			}

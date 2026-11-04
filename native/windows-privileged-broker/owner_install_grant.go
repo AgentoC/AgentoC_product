@@ -56,7 +56,7 @@ func verifyOwnerInstallGrant(grant ownerInstallGrant, signature string, publicKe
 	if grant.Version != 1 || grant.KeyID != keyID || keyID != policy.InstanceID || grant.BrokerInstallationID != brokerInstallationID || generation == 0 || grant.PolicyGeneration != generation ||
 		grant.InstanceID != policy.InstanceID || grant.OwnerSID != policy.OwnerSID || !ownerPolicyInstance.MatchString(policy.InstanceID) || !ownerPolicyAccountSID.MatchString(policy.OwnerSID) ||
 		!ownerGrantNonce.MatchString(grant.Nonce) || !ownerGrantPackage.MatchString(grant.PackageID) || !ownerGrantVersion.MatchString(grant.PackageVersion) ||
-		grant.Source != "winget" || grant.InstallScope != "user" || grant.IssuedMS <= 0 || grant.ExpiresMS <= grant.IssuedMS ||
+		grant.Source != "winget" || (grant.InstallScope != "user" && grant.InstallScope != "default") || grant.IssuedMS <= 0 || grant.ExpiresMS <= grant.IssuedMS ||
 		grant.ExpiresMS-grant.IssuedMS > 60000 || grant.IssuedMS > now.UnixMilli() || grant.ExpiresMS <= now.UnixMilli() || len(publicKey) != ed25519.PublicKeySize {
 		return errOwnerSessionUnavailable
 	}
