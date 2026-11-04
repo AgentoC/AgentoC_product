@@ -75,6 +75,7 @@ data class WorkbenchUiState(
     val connection: AgentConnectionStatus = AgentConnectionStatus.Disconnected,
     val runStatus: AgentRunStatus = AgentRunStatus.Idle,
     val currentAction: RunActionUiState? = null,
+    val serverRunActivity: JsonObject? = null,
     val sessionTitle: String = "New session",
     val timelineItems: List<TimelineItem> = emptyList(),
     val pendingTurn: PendingTurnUiState? = null,

@@ -49,6 +49,7 @@ function withPresentation(activity, events, sourceEvent = null) {
         : trimString(activity?.detail),
     ),
     ...(formatted ? { presentation: formatted } : {}),
+    ...(formatted?.activityDescription ? { activityDescription: formatted.activityDescription } : {}),
     ...(formatted?.group ? { group: formatted.group } : {}),
     sourceSeq,
     outputBoundarySeq,
@@ -187,9 +188,16 @@ export function buildRunActivityProjection(displayEvents = [], options = {}) {
   if (options.sessionRunning !== true) return buildIdleActivity();
   const events = Array.isArray(displayEvents) ? displayEvents : [];
   const run = options.run && typeof options.run === 'object' ? options.run : {};
+  const runStart = parseTimestamp(run.startedAt) || parseTimestamp(run.createdAt);
+  const observedAt = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
+  const runId = trimString(run.id || run.runId);
+  const requestId = trimString(run.requestId);
   const providerLiveness = normalizeProviderLiveness(run.providerLiveness);
   const present = (activity, sourceEvent) => withPresentation({
     ...activity,
+    ...(runId ? { runId } : {}),
+    ...(requestId ? { requestId } : {}),
+    ...(runStart && observedAt >= runStart ? { runElapsedMs: observedAt - runStart } : {}),
     ...(providerLiveness ? { providerLiveness } : {}),
   }, events, sourceEvent);
 

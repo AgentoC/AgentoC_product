@@ -5,6 +5,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class RunActionFormatterTest {
+    @Test fun modelProvidedActivityDescriptionIsShownOnlyWhileRunning() {
+        val json = kotlinx.serialization.json.Json
+        val running = json.parseToJsonElement("""{"state":"working","kind":"execute","activityDescription":"Checking project instructions"}""") as kotlinx.serialization.json.JsonObject
+        assertEquals("Checking project instructions", RunActionFormatter.fromServer(running)?.sentence)
+        val finished = json.parseToJsonElement("""{"state":"completed","kind":"execute","activityDescription":"Checking project instructions"}""") as kotlinx.serialization.json.JsonObject
+        assertEquals("Completed", RunActionFormatter.fromServer(finished)?.sentence)
+    }
     @Test fun genericExecuteSnapshotUsesStructuredLiveCommand() {
         val activity = kotlinx.serialization.json.Json.parseToJsonElement(
             """{"state":"working","kind":"mcp","subject":"execute","sourceSeq":20,"runId":"run-a"}"""

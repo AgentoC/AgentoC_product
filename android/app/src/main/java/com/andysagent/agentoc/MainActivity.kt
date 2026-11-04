@@ -1064,6 +1064,7 @@ class MainActivity : ComponentActivity() {
                     connection = shellState.connection,
                     runStatus = chatState.runStatus,
                     currentAction = chatState.currentAction,
+                    serverRunActivity = chatState.serverRunActivity,
                     sessionTitle = chatState.sessionTitle,
                     timelineItems = chatState.timelineItems,
                     pendingTurn = chatState.pendingTurn,

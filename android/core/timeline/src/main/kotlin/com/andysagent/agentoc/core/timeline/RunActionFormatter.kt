@@ -86,7 +86,10 @@ object RunActionFormatter {
         val waiting = (liveness?.get("phase") as? JsonPrimitive)?.contentOrNull == "awaiting_provider_output"
             && kind !in setOf("approval", "responding", "waiting")
         val groupedExploration = (group?.get("kind") as? JsonPrimitive)?.contentOrNull == "exploring" && count > 1
-        val sentence = listOf(action, subject.takeUnless { groupedExploration }.orEmpty()).filter { it.isNotBlank() }.joinToString(" ") +
+        val modelDescription = value("activityDescription").takeIf {
+            lifecycle in setOf("running", "working", "started", "in_progress") && it.isNotBlank()
+        }
+        val sentence = (modelDescription ?: listOf(action, subject.takeUnless { groupedExploration }.orEmpty()).filter { it.isNotBlank() }.joinToString(" ")) +
             if (waiting) " · waiting for provider output" else ""
         return RunActionUiState(kind, sentence, detail, value("operationId").takeIf { it.isNotBlank() }, count,
             value("since").toLongOrNull()?.takeIf { it > 0 })

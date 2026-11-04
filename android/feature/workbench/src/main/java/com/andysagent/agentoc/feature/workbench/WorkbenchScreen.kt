@@ -1563,22 +1563,25 @@ private fun ChatSurface(
     val showActiveRunAction = state.pendingTurn?.state == PendingTurnState.Sending ||
         state.runStatus == AgentRunStatus.Working || state.runStatus == AgentRunStatus.WaitingApproval
     val durationTurnKey = turnGroups.lastOrNull()?.requestId ?: turnGroups.lastOrNull()?.userPrompt?.id
-    var runStartedElapsed by remember(state.sessionId, durationTurnKey) { mutableLongStateOf(0L) }
-    var runElapsedSeconds by remember(state.sessionId, durationTurnKey) { mutableLongStateOf(0L) }
+    var runStartedElapsed by remember(state.sessionId, durationTurnKey) { mutableLongStateOf(Long.MAX_VALUE) }
+    var runElapsedSeconds by remember(state.sessionId, durationTurnKey) { mutableLongStateOf(-1L) }
     val lastUserIndex = state.timelineItems.indexOfLast { it is TimelineItem.Message && it.role == com.andysagent.agentoc.core.timeline.TimelineRole.User }
-    val currentRunId = state.timelineItems.drop(lastUserIndex.coerceAtLeast(0))
-        .filterIsInstance<TimelineItem.Operation>().lastOrNull { !it.runId.isNullOrBlank() }?.runId
-    val authoritativeStart = state.runMetrics.startedAtMillis.takeIf { currentRunId != null && currentRunId == state.runMetrics.runId }
-    LaunchedEffect(state.sessionId, durationTurnKey, showActiveRunAction, authoritativeStart) {
+    val currentRunId = (state.timelineItems.getOrNull(lastUserIndex) as? TimelineItem.Message)?.runId
+        ?: state.timelineItems.drop(lastUserIndex.coerceAtLeast(0))
+            .filterIsInstance<TimelineItem.Operation>().lastOrNull { !it.runId.isNullOrBlank() }?.runId
+    val activityRunId = (state.serverRunActivity?.get("runId") as? kotlinx.serialization.json.JsonPrimitive)?.content
+    val activityRequestId = (state.serverRunActivity?.get("requestId") as? kotlinx.serialization.json.JsonPrimitive)?.content
+    val activityMatchesTurn = (currentRunId != null && activityRunId == currentRunId) ||
+        (durationTurnKey != null && activityRequestId == durationTurnKey)
+    val serverElapsed = (state.serverRunActivity?.get("runElapsedMs") as? kotlinx.serialization.json.JsonPrimitive)
+        ?.content?.toLongOrNull()?.takeIf { it >= 0 && activityMatchesTurn }
+    LaunchedEffect(state.sessionId, durationTurnKey, showActiveRunAction, serverElapsed) {
         if (!showActiveRunAction) return@LaunchedEffect
         val now = android.os.SystemClock.elapsedRealtime()
-        if (runStartedElapsed == 0L) runStartedElapsed = now
-        if (authoritativeStart != null) {
-            val age = (System.currentTimeMillis() - authoritativeStart).coerceAtLeast(0L)
-            runStartedElapsed = minOf(runStartedElapsed, now - age)
-        }
+        runStartedElapsed = updateRunElapsedAnchor(runStartedElapsed, serverElapsed, now)
+        if (runStartedElapsed == Long.MAX_VALUE) return@LaunchedEffect
         while (true) {
-            runElapsedSeconds = maxOf(runElapsedSeconds, (android.os.SystemClock.elapsedRealtime() - runStartedElapsed) / 1000)
+            runElapsedSeconds = runElapsedSeconds(runStartedElapsed, android.os.SystemClock.elapsedRealtime(), runElapsedSeconds)
             kotlinx.coroutines.delay(1_000)
         }
     }
@@ -2717,9 +2720,13 @@ private fun ChatSurface(
                             onOpenFileDiff = { diff -> onSetSelectedDiffFile(diff) },
                             onReport = { text -> onEvent(WorkbenchEvent.ReportAgentContent(text)) },
                             showMessageActions = canMessageAction,
-                            runDuration = if (isLastTurn && (showActiveRunAction || runElapsedSeconds > 0L)) {{
-                                val duration = if (runElapsedSeconds < 60) "${runElapsedSeconds}s" else "${runElapsedSeconds / 60}m ${runElapsedSeconds % 60}s"
-                                Text(stringResource(if (showActiveRunAction) R.string.workbench_run_elapsed else R.string.workbench_run_finished, duration),
+                            runDuration = if (isLastTurn && (showActiveRunAction || runElapsedSeconds >= 0L ||
+                                (currentRunId != null && currentRunId == state.runMetrics.runId && state.runMetrics.durationFormatted != "N/A"))) {{
+                                val duration = if (!showActiveRunAction && currentRunId == state.runMetrics.runId && state.runMetrics.durationFormatted != "N/A") state.runMetrics.durationFormatted
+                                    else if (runElapsedSeconds < 0) "" else if (runElapsedSeconds < 60) "${runElapsedSeconds}s" else "${runElapsedSeconds / 60}m ${runElapsedSeconds % 60}s"
+                                val label = if (duration.isEmpty()) stringResource(R.string.workbench_status_processing) else
+                                    stringResource(if (showActiveRunAction) R.string.workbench_run_elapsed else R.string.workbench_run_finished, duration)
+                                Text(label,
                                     style = MaterialTheme.typography.labelSmall, color = colors.secondaryContent,
                                     modifier = Modifier.testTag("run-elapsed"))
                             }} else null,
