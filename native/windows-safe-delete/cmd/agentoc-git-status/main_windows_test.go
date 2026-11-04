@@ -39,7 +39,7 @@ func TestStatusExecutorUsesPinnedGitAndSuppressesFsmonitor(t *testing.T) {
 			continue
 		}
 		candidateDigest := sha256.Sum256(image)
-		pin, err := safedelete.OpenPinnedExecutable(candidate, candidateDigest)
+		pin, err := safedelete.OpenPinnedExecutablePath(candidate, candidateDigest)
 		if err != nil {
 			continue
 		}
@@ -50,6 +50,7 @@ func TestStatusExecutorUsesPinnedGitAndSuppressesFsmonitor(t *testing.T) {
 	if git == "" {
 		t.Skip("no independently pinnable Git for Windows on PATH")
 	}
+	t.Logf("Git fixture executable: %s", git)
 	root := t.TempDir()
 	old, err := os.Getwd()
 	if err != nil {

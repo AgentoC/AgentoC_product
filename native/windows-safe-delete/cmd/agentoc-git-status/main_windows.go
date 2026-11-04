@@ -117,7 +117,7 @@ func run(args []string, stdout, stderr io.Writer) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	pin, err := safedelete.OpenPinnedExecutable(input.Executable, digest)
+	pin, err := safedelete.OpenPinnedExecutablePath(input.Executable, digest)
 	if err != nil {
 		return 0, errors.New("Git executable identity unavailable")
 	}

@@ -39,6 +39,10 @@ func (p *PinnedExecutable) Close() error {
 // OpenPinnedExecutable binds a previously authorized image and digest to the
 // file handle used throughout a later execution. No process is started here.
 func OpenPinnedExecutable(name string, expected [sha256.Size]byte) (*PinnedExecutable, error) {
+	return openPinnedExecutable(name, expected, false)
+}
+
+func openPinnedExecutable(name string, expected [sha256.Size]byte, allowHardLinks bool) (*PinnedExecutable, error) {
 	clean := filepath.Clean(name)
 	if !filepath.IsAbs(clean) || len(filepath.VolumeName(clean)) != 2 || !strings.EqualFold(filepath.Ext(clean), ".exe") ||
 		strings.Contains(clean[2:], ":") {
@@ -65,7 +69,7 @@ func OpenPinnedExecutable(name string, expected [sha256.Size]byte) (*PinnedExecu
 		}
 	}()
 	var info windows.ByHandleFileInformation
-	if windows.GetFileInformationByHandle(h, &info) != nil || info.FileAttributes&(windows.FILE_ATTRIBUTE_REPARSE_POINT|windows.FILE_ATTRIBUTE_DIRECTORY) != 0 || info.NumberOfLinks != 1 {
+	if windows.GetFileInformationByHandle(h, &info) != nil || info.FileAttributes&(windows.FILE_ATTRIBUTE_REPARSE_POINT|windows.FILE_ATTRIBUTE_DIRECTORY) != 0 || info.NumberOfLinks == 0 || (!allowHardLinks && info.NumberOfLinks != 1) {
 		return nil, ErrExecutableIdentity
 	}
 	buf := make([]uint16, 32768)
