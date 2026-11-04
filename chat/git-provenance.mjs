@@ -23,6 +23,9 @@
 //   simulate timeouts and failures without a mock library.
 import { createHash } from 'crypto';
 import { spawn as defaultSpawn } from 'child_process';
+import { realpath } from 'fs/promises';
+import { win32 as win } from 'path';
+import { collectPathDirs, resolveWin32ExecutablePathAsync } from '../lib/executable-resolution.mjs';
 
 export const GIT_PROVENANCE_DEFAULT_TIMEOUT_MS = 5000;
 export const GIT_PROVENANCE_DEFAULT_MAX_OUTPUT_BYTES = 512 * 1024 * 1024;
@@ -76,11 +79,38 @@ function buildGitEnv(extraEnv) {
   return { ...process.env, ...GIT_READONLY_ENV, ...(extraEnv || {}) };
 }
 
-function runGitCapture(args, { cwd, timeoutMs, maxBytes, env }) {
+// Windows CreateProcess can search cwd before PATH for a bare executable.
+// Resolve an absolute executable outside the work directory (including its
+// real path) so a repository-provided git.exe cannot hijack background capture.
+// This binds the selected name, not the contents or all of Git's dependencies.
+async function resolveWindowsGit(cwd, env) {
+  const work = await realpath(cwd);
+  const related = (a, b) => {
+    const relative = win.relative(a, b);
+    return !relative || (relative !== '..' && !relative.startsWith(`..${win.sep}`) && !win.isAbsolute(relative));
+  };
+  // Windows environment names are case-insensitive; Node selects the first
+  // lexicographically sorted spelling when duplicate keys are supplied.
+  const pathKey = Object.keys(env).sort().find(key => key.toLowerCase() === 'path');
+  for (const dir of collectPathDirs(pathKey ? env[pathKey] : '').filter(item => win.isAbsolute(item))) {
+    let actualDir;
+    try { actualDir = await realpath(dir); } catch { continue; }
+    if (related(work, actualDir) || related(actualDir, work)) continue;
+    const candidate = await resolveWin32ExecutablePathAsync('git', { env: { PATH: actualDir, PATHEXT: '.EXE' } });
+    if (!candidate) continue;
+    let actual;
+    try { actual = await realpath(candidate); } catch { continue; }
+    if (related(work, actual) || !win.isAbsolute(actual)) continue;
+    return actual;
+  }
+  return '';
+}
+
+function runGitCapture(args, { cwd, timeoutMs, maxBytes, env, executable }) {
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawnImpl('git', gitArgs(args), {
+      child = spawnImpl(executable, gitArgs(args), {
         cwd,
         env: buildGitEnv(env),
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -146,11 +176,11 @@ function runGitCapture(args, { cwd, timeoutMs, maxBytes, env }) {
   });
 }
 
-function streamGitToHash(args, { cwd, timeoutMs, maxBytes, env }) {
+function streamGitToHash(args, { cwd, timeoutMs, maxBytes, env, executable }) {
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawnImpl('git', gitArgs(args), {
+      child = spawnImpl(executable, gitArgs(args), {
         cwd,
         env: buildGitEnv(env),
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -250,7 +280,13 @@ export async function collectGitProvenance(cwd, options = {}) {
   const maxBytes = Number.isInteger(options.maxOutputBytes) && options.maxOutputBytes > 0
     ? options.maxOutputBytes
     : GIT_PROVENANCE_DEFAULT_MAX_OUTPUT_BYTES;
-  const runOptions = { cwd, timeoutMs, maxBytes, env: options.env };
+  let executable = 'git';
+  if (process.platform === 'win32') {
+    try { executable = await resolveWindowsGit(cwd, buildGitEnv(options.env)); }
+    catch { return partialResult('git-resolution-failed'); }
+    if (!executable) return { state: 'not_git', dirty: false, partial: false, reason: 'git-not-found' };
+  }
+  const runOptions = { cwd, timeoutMs, maxBytes, env: options.env, executable };
 
   const probe = await runGitCapture(['rev-parse', '--is-inside-work-tree'], runOptions);
   if (probe.timedOut || probe.exceeded) {

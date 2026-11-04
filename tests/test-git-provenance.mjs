@@ -6,9 +6,9 @@
 import assert from 'assert/strict';
 import { execFileSync } from 'child_process';
 import { EventEmitter } from 'events';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, win32 } from 'path';
 import { spawn as realSpawn } from 'child_process';
 
 const configDir = mkdtempSync(join(tmpdir(), 'agentoc-git-prov-'));
@@ -98,6 +98,24 @@ try {
   assert.ok(clean.branch && clean.branch !== 'HEAD', 'a named branch should be reported');
   assert.match(clean.headCommit, /^[0-9a-f]{40}$/, 'headCommit should be a full sha');
   assert.equal(clean.baseCommit, clean.headCommit, 'v1 baseCommit equals headCommit (diff base is HEAD)');
+
+  if (process.platform === 'win32') {
+    // CreateProcess resolves a bare git name from the cwd before PATH. A copy
+    // of Node is a harmless executable that demonstrates this shadowing.
+    const shadow = join(repo, 'git.exe');
+    copyFileSync(process.execPath, shadow);
+    try {
+      assert.equal(git(repo, ['--version']).trim(), process.version, 'fixture must shadow the bare Git executable');
+      const capture = await collectGitProvenance(repo);
+      assert.equal(capture.state, 'available', 'background capture must use Git outside the workspace');
+      assert.equal(capture.headCommit, clean.headCommit);
+      const pathName = Object.keys(process.env).find(key => key.toLowerCase() === 'path');
+      assert.ok(pathName, 'Windows PATH must be available for the fixture');
+      const withWorkspacePath = await collectGitProvenance(repo, { env: { PATH: `${repo};${process.env[pathName]}` } });
+      assert.equal(withWorkspacePath.state, 'available', 'workspace PATH entry must not select the shadow executable');
+      assert.equal(withWorkspacePath.headCommit, clean.headCommit);
+    } finally { unlinkSync(shadow); }
+  }
   assert.ok(clean.trackedDiffHash.startsWith('sha256:'), 'trackedDiffHash should be present even when clean');
 
   const cleanAgain = await collectGitProvenance(repo);
@@ -174,7 +192,11 @@ try {
   resetGitProvenanceSpawn();
   assert.ok(seenSpawns.length >= 3, 'provenance should spawn several git commands');
   for (const entry of seenSpawns) {
-    assert.equal(entry.command, 'git');
+    if (process.platform === 'win32') {
+      assert.ok(win32.isAbsolute(entry.command), 'Windows capture must spawn an absolute Git path');
+      assert.equal(win32.basename(entry.command).toLowerCase(), 'git.exe');
+      assert.notEqual(entry.command.toLowerCase(), join(repo, 'git.exe').toLowerCase());
+    } else assert.equal(entry.command, 'git');
     assert.ok(entry.args.includes('core.hooksPath=/dev/null'), 'every git call must disable hooks');
     assert.ok(entry.args.includes('core.fsmonitor=false'), 'every git call must disable fsmonitor');
     assert.ok(entry.args.includes('--no-optional-locks'), 'every git call must disable optional locks');
