@@ -11,6 +11,18 @@ import com.andysagent.agentoc.core.protocol.SessionEventDto
 import com.andysagent.agentoc.core.model.Message
 
 class TimelineEngineTest {
+    @Test fun historyThinkingAnchorRemainsBeforeAssistantAtSamePosition() {
+        val events = listOf(
+            SessionEventDto(seq = 4, displaySeq = 3, blockStartSeq = 4, blockEndSeq = 4, type = "thinking_block", runId = "r",
+                providerMessageId = "m", providerBlockId = "thinking:0", state = "completed",
+                beforeAssistantAtSameSeq = true, content = JsonPrimitive("Before")),
+            SessionEventDto(seq = 3, firstSeq = 3, lastEventSeq = 8, type = "message", role = "assistant",
+                runId = "r", providerMessageId = "m", content = JsonPrimitive("Reply")),
+        )
+        val items = TimelineProjector.project(emptyList(), LiveTimelineProjector().projectPage(events))
+        assertIs<TimelineItem.Operation>(items[0])
+        assertIs<TimelineItem.Message>(items[1])
+    }
     @Test fun matchingThinkingSurfacesKeepNewestTextAndTerminalStatus() {
         val snapshot = TimelineItem.Operation("thought", 4, TimelineOperationKind.Tool, "Thinking", "First",
             TimelineOperationStatus.InProgress, isReasoning = true)

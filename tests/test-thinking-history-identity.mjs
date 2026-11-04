@@ -15,4 +15,17 @@ assert.deepEqual(display.map((event) => event.type), ['message', 'thinking_block
 assert.deepEqual(display.filter((event) => event.type === 'thinking_block').map((event) => [event.runId, event.content]),
   [['r', 'Hello'], ['r', 'Later'], ['r2', 'Other run']]);
 assert.equal(display[1].providerBlockId, 'thinking:0');
+const rebased = buildSessionDisplayEvents([
+  { seq: 4, type: 'reasoning', runId: 'r', providerMessageId: 'm', providerBlockId: 'thinking:0', state: 'completed', content: 'Before' },
+  { seq: 8, firstSeq: 3, type: 'message', role: 'assistant', runId: 'r', providerMessageId: 'm', providerContentBlockIndex: 1, content: 'Reply' },
+]);
+assert.deepEqual(rebased.map((event) => event.type), ['message', 'thinking_block']);
+assert.equal(rebased[1].seq, 4);
+assert.equal(rebased[1].displaySeq, 3);
+assert.equal(rebased[1].beforeAssistantAtSameSeq, true);
+const differentRun = buildSessionDisplayEvents([
+  { seq: 4, type: 'reasoning', runId: 'other', providerMessageId: 'm', providerBlockId: 'thinking:0', state: 'completed', content: 'Other' },
+  { seq: 8, firstSeq: 3, type: 'message', role: 'assistant', runId: 'r', providerMessageId: 'm', providerContentBlockIndex: 1, content: 'Reply' },
+]);
+assert.deepEqual(differentRun.map((event) => event.type), ['message', 'thinking_block']);
 console.log('Thinking blocks preserve identity, order and complete snapshots');

@@ -467,9 +467,26 @@ export function buildSessionDisplayEvents(history = [], { projectRoot = '', home
     if (isVisible(next)) timeline.push(next);
   }
   flushReasoning();
-  return annotateEntities(mergeMessageSnapshots(timeline))
-    .map((event) => event.canonicalMessageId ? { ...event, seq: event.firstSeq || event.seq } : event)
-    .sort((left, right) => seqOf(left) - seqOf(right));
+  const projected = annotateEntities(mergeMessageSnapshots(timeline))
+    .map((event) => event.canonicalMessageId ? { ...event, seq: event.firstSeq || event.seq } : event);
+  // A provider may announce an empty assistant message before it emits its
+  // first text block. Block indexes prove that an earlier thinking block came
+  // first even when that empty message anchor has a smaller sequence.
+  for (const thought of projected) {
+    const block = /^thinking:(\d+)$/.exec(text(thought?.providerBlockId));
+    if (thought?.type !== 'thinking_block' || !block || !text(thought.runId) || !text(thought.providerMessageId)) continue;
+    const target = projected.find((event) => event?.type === 'message' && event.role === 'assistant'
+      && event.runId === thought.runId && event.providerMessageId === thought.providerMessageId
+      && Number.isInteger(event.providerContentBlockIndex)
+      && Number(block[1]) < event.providerContentBlockIndex && seqOf(event) < seqOf(thought));
+    if (target) {
+      // Keep protocol/pagination sequence intact; only the client render
+      // position is rebased to the matching message anchor.
+      thought.displaySeq = target.seq;
+      thought.beforeAssistantAtSameSeq = true;
+    }
+  }
+  return projected.sort((left, right) => seqOf(left) - seqOf(right));
 }
 
 export function buildEventBlockEvents(history = [], startSeq = 0, endSeq = 0) {

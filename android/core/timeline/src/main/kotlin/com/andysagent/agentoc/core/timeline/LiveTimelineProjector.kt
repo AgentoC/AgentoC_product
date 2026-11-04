@@ -424,6 +424,7 @@ class LiveTimelineProjector {
             outputJson = outputJson,
             exitCode = exitCode,
             durationMs = event.durationMs ?: previous?.durationMs,
+            beforeAssistantAtSameSeq = event.beforeAssistantAtSameSeq || previous?.beforeAssistantAtSameSeq == true,
             options = options,
             isMultiSelect = isMultiSelect,
             attachments = attachments,
@@ -500,7 +501,7 @@ class LiveTimelineProjector {
             .sortedBy { it.boundarySeq() }.forEach { event ->
             val key = projector.renderKey(event)
             val first = projector.renderedEvents[key]?.seq
-                ?: event.firstSeq?.takeIf { it > 0 } ?: event.seq ?: event.boundarySeq()
+                ?: event.displaySeq?.takeIf { it > 0 } ?: event.firstSeq?.takeIf { it > 0 } ?: event.seq ?: event.boundarySeq()
             projector.upsertRenderedEvent(event, first)
         }
         return projector.snapshotEvents()

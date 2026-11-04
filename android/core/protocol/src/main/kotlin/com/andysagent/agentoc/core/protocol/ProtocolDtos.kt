@@ -683,6 +683,8 @@ data class SessionEventDto(
     val lastEventSeq: Long? = null,
     val messageState: String? = null,
     val messagePhase: String? = null,
+    val beforeAssistantAtSameSeq: Boolean = false,
+    val displaySeq: Long? = null,
     val textMode: String? = null,
     val runState: String? = null,
     val seq: Long? = null,
