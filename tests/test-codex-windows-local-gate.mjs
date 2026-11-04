@@ -28,7 +28,7 @@ process.env.AGENTOC_PROVIDER_HOMES_DIR = path.join(home, 'instance', 'provider-h
 process.env.AGENTOC_RUN_SPOOL_DIR = path.join(home, 'instance', 'data', 'chat-runs');
 const { createRun, getRun } = await import('../chat/runs.mjs');
 const { trackCodexAppServerApprovalRequest, handleCodexAppServerInitializeResponse } = await import('../chat/runner-sidecar.mjs');
-const riskMode = process.env.AGENTOC_QA_MODE === 'full-auto' ? 'full-auto' : 'recommended';
+const riskMode = ['full-auto', 'conservative-auto'].includes(process.env.AGENTOC_QA_MODE) ? process.env.AGENTOC_QA_MODE : 'recommended';
 const boundContext = process.env.AGENTOC_QA_BOUND_CONTEXT === '1'
   ? await (await import('./fixtures/windows-admitted-context.mjs')).admittedWindowsContext(home, 'fixture-session') : null;
 const managedInstall = process.env.AGENTOC_QA_HOOK_MANAGED_INSTALL === '1';
@@ -236,7 +236,7 @@ createInterface({ input: child.stdout }).on('line', async line => {
       const sent = [];
       await trackCodexAppServerApprovalRequest(run.id, state, msg, { stdin: { writable: true, write(value) { sent.push(JSON.parse(value)); return true; } } }, { safeDeleteHelperPath: safeDeleteBinary });
       const pending = (await getRun(run.id)).appServerPendingApprovals || [];
-      const routed = riskMode === 'full-auto' ? sent[0]?.result?.decision === 'decline' : sent.length === 0 && pending.length === 1;
+      const routed = riskMode !== 'recommended' ? sent[0]?.result?.decision === 'decline' : sent.length === 0 && pending.length === 1;
       if (!routed || await readFile(path.join(outsideFixture, 'target', 'keep.txt'), 'utf8') !== 'keep') { fixtureError('outside target was not routed to review or denial'); return; }
       process.stdout.write(`codex-windows-local-gate: relative outside deletion routed safely for ${riskMode}\n`);
       stage = 3; child.stdin.write(JSON.stringify({ id: msg.id, result: { decision: 'decline' } }) + '\n'); child.kill(); server.close(); return;
@@ -263,7 +263,7 @@ createInterface({ input: child.stdout }).on('line', async line => {
         await trackCodexAppServerApprovalRequest(run.id, state, msg, { stdin: { writable: true, write(value) { sent.push(JSON.parse(value)); return true; } } }, managedDelete ? { safeDeleteHelperPath: safeDeleteBinary } : undefined);
         if (failSecondPreflight) {
           const pending = (await getRun(run.id)).appServerPendingApprovals || [];
-          const stopped = preflights === 2 && submissions === 0 && (riskMode === 'full-auto' ? sent[0]?.result?.decision === 'decline' : sent.length === 0 && pending.length === 1);
+          const stopped = preflights === 2 && submissions === 0 && (riskMode !== 'recommended' ? sent[0]?.result?.decision === 'decline' : sent.length === 0 && pending.length === 1);
           if (!stopped) { fixtureError('second preflight failure did not stop the managed bridge'); return; }
           process.stdout.write(`codex-windows-local-gate: second preflight failure stopped ${riskMode}\n`);
           stage = 3; child.stdin.write(JSON.stringify({ id: msg.id, result: { decision: 'decline' } }) + '\n'); child.kill(); server.close(); return;
@@ -286,7 +286,7 @@ createInterface({ input: child.stdout }).on('line', async line => {
     const expected = process.env.AGENTOC_QA_EXPECT_DECISION || 'auto-allow';
     const pending = (await getRun(run.id)).appServerPendingApprovals || [];
     const routed = expected === 'auto-allow' ? sent[0]?.result?.decision === 'accept'
-      : riskMode === 'full-auto' ? sent[0]?.result?.decision === 'decline'
+      : riskMode !== 'recommended' ? sent[0]?.result?.decision === 'decline'
         : sent.length === 0 && pending.length === 1;
     if (!recognized || policy.decision !== expected || !routed) {
       process.stderr.write(`unexpected gate result: recognized=${recognized} decision=${policy.decision} routed=${routed}\n`); process.exitCode = 1;

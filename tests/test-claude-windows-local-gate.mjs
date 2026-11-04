@@ -33,7 +33,8 @@ const dotnetCase = process.env.AGENTOC_QA_CLAUDE_DOTNET === '1';
 const guidanceCase = process.env.AGENTOC_QA_CLAUDE_ELEVATION === '1';
 const readCase = process.env.AGENTOC_QA_CLAUDE_READ || '';
 const outsideCase = deleteCase && process.env.AGENTOC_QA_CLAUDE_DELETE_OUTSIDE === '1';
-const reviewCase = protectedCase || outsideCase;
+const conservativeOutside = outsideFileCase && process.env.AGENTOC_QA_MODE === 'conservative-auto';
+const reviewCase = protectedCase || outsideCase || conservativeOutside;
 const relativeDelete = deleteCase && process.env.AGENTOC_QA_CLAUDE_DELETE_RELATIVE === '1';
 if ((installCase && (protectedCase || deleteCase)) || (reviewCase && relativeDelete) || (outsideCase && protectedCase) || (outsideFileCase && (installCase || deleteCase || protectedCase)) || (dotnetCase && (installCase || deleteCase)) || (guidanceCase && (installCase || deleteCase || dotnetCase || protectedCase || outsideFileCase))) throw new Error('fixture modes are mutually exclusive');
 if (readCase && (!['numbered', 'list', 'git-status'].includes(readCase) || installCase || deleteCase || dotnetCase || guidanceCase || protectedCase || outsideFileCase)) throw new Error('invalid read fixture mode');
@@ -121,7 +122,7 @@ const env = { ...process.env, HOME: root, USERPROFILE: root, APPDATA: root, LOCA
   HTTP_PROXY: 'http://127.0.0.1:9', HTTPS_PROXY: 'http://127.0.0.1:9', ALL_PROXY: 'http://127.0.0.1:9', NO_PROXY: '127.0.0.1,localhost',
   http_proxy: 'http://127.0.0.1:9', https_proxy: 'http://127.0.0.1:9', all_proxy: 'http://127.0.0.1:9', no_proxy: '127.0.0.1,localhost' };
 delete env.ANTHROPIC_AUTH_TOKEN;
-const mode = process.env.AGENTOC_QA_MODE === 'full-auto' ? 'full-auto' : 'recommended';
+const mode = ['full-auto', 'conservative-auto'].includes(process.env.AGENTOC_QA_MODE) ? process.env.AGENTOC_QA_MODE : 'recommended';
 const boundContext = process.env.AGENTOC_QA_BOUND_CONTEXT === '1'
   ? await (await import('./fixtures/windows-admitted-context.mjs')).admittedWindowsContext(root, 'claude-local-fixture') : null;
 const run = await createRun({ status: { sessionId: 'claude-local-fixture', requestId: 'fixture', state: 'running', tool: 'claude' },
@@ -199,15 +200,15 @@ try {
     assert.equal(await readFile(artifact, 'utf8'), 'local read fixture\n');
     if (readCase !== 'git-status' || approvals === 0) assert.ok(toolResultObserved, 'actual Claude must receive the read result');
     if (readCase === 'git-status' && approvals && mode === 'recommended') assert.ok(gitOwnerReviewObserved, 'Git must wait for owner when not auto-approved');
-  } else if (protectedCase) await assert.rejects(access(artifact), { code: 'ENOENT' });
+  } else if (protectedCase || conservativeOutside) await assert.rejects(access(artifact), { code: 'ENOENT' });
   else assert.equal((await readFile(artifact, 'utf8')).replace(/^\uFEFF/, ''), dotnetCase ? 'dotnet fixture' : 'local fixture\n');
   assert.ok(requests >= 2, 'local model must receive the tool result');
   const spool = await readRunSpoolRecords(run.id);
   if (deleteCase && !reviewCase) assert.ok(spool.some((record) => record.json?.reason === 'handle-bound workspace deletion'), 'actual sidecar must use the handle-bound deletion helper');
   else if (guidanceCase) assert.ok(spool.some((record) => record.json?.type === 'agentoc.approval_response' && record.json?.autoDenied === true && record.json?.reason?.includes('agentoc_request_actions')), 'actual sidecar must persist managed executor guidance');
-  else if (readCase === 'git-status' && approvals && mode === 'full-auto') assert.ok(spool.some((record) => record.json?.type === 'agentoc.approval_response' && record.json?.autoDenied === true), 'unattended Git request must be denied when not auto-approved');
+  else if (readCase === 'git-status' && approvals && mode !== 'recommended') assert.ok(spool.some((record) => record.json?.type === 'agentoc.approval_response' && record.json?.autoDenied === true), 'unattended Git request must be denied when not auto-approved');
   else if (!reviewCase && (!readCase || approvals) && readCase !== 'git-status') assert.ok(spool.some((record) => record.json?.type === 'agentoc.approval_response' && record.json?.autoApproved === true), 'actual sidecar must persist the automatic decision');
-  else if (reviewCase && mode === 'full-auto') assert.ok(spool.some((record) => record.json?.type === 'agentoc.approval_response' && record.json?.autoDenied === true), 'unattended protected write must be denied');
+  else if (reviewCase && mode !== 'recommended') assert.ok(spool.some((record) => record.json?.type === 'agentoc.approval_response' && record.json?.autoDenied === true), 'unattended protected write must be denied');
   if (relativeDelete) assert.ok(spool.some((record) => record.json?.autoDenied === true && record.json?.reason?.includes('resolve each target against the command working directory')), 'relative target must be denied with an actionable retry');
   console.log(`claude-windows-local-gate: ${mode} real CLI ${installCase ? 'controlled install reached mock service' : reviewCase ? 'dangerous operation denied' : deleteCase ? 'handle-bound fixture deletion completed' : guidanceCase ? 'managed executor guidance received' : readCase ? `${readCase} ${approvals ? 'approval observed' : 'read completed without approval request'}` : dotnetCase ? 'trusted PowerShell wrapped file write completed' : outsideFileCase ? 'outside-workspace file write completed' : 'file approval completed'}`);
 } finally {
