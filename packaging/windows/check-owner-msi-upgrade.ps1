@@ -149,6 +149,11 @@ function Invoke-OwnerUpgradeAdmission {
 }
 if(-not $upgradeLibraryOnly){
  try{Initialize-OwnerUpgradeTokenReader;$result=Invoke-OwnerUpgradeAdmission;$result|ConvertTo-Json -Compress}
- catch{$code=$_.Exception.GetBaseException().Message;if($code -cnotmatch '^OUG_[A-Z_]+$'){$code='OUG_UPGRADE_ADMISSION_FAILED'};@{ok=$false;code=$code;readOnly=$true;upgradeAdmitted=$false;credentialContentsRead=$false;authorityIssued=$false}|ConvertTo-Json -Compress;exit 1}
+ catch{$failure=$_;$exception=$failure.Exception.GetBaseException();$code=$exception.Message;if($code -cnotmatch '^OUG_[A-Z_]+$'){$code='OUG_UPGRADE_ADMISSION_FAILED'}
+  # Retain only numeric diagnostics: raw exception messages and script paths
+  # may contain private installation information. The first stack location is
+  # the actual failing statement, rather than this outer catch.
+  $line=0;if($failure.ScriptStackTrace -match '(?i)\bline\s+(\d+)'){$parsed=0;if([int]::TryParse($Matches[1],[ref]$parsed) -and $parsed -gt 0 -and $parsed -le 10000){$line=$parsed}}
+  @{ok=$false;code=$code;failureLine=$line;failureHResult=[int]$exception.HResult;readOnly=$true;upgradeAdmitted=$false;credentialContentsRead=$false;authorityIssued=$false}|ConvertTo-Json -Compress;exit 1}
  finally{for($index=$pins.Count-1;$index -ge 0;$index--){$pins[$index].Dispose()}}
 }

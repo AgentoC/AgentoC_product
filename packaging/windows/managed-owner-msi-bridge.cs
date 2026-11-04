@@ -596,7 +596,12 @@ static class ManagedOwnerMsiBridge {
      // Keep a safe, typed failure reason in the existing application event
      // channel so MSI logs can be correlated with deferred Owner actions.
      // This deliberately records no path, identity, credential or payload.
-     try{EventLog.WriteEntry("AgentoC","Owner MSI "+action+" failed: "+(string)result["code"],EventLogEntryType.Error,4101);}catch{}
+     try{
+      string detail="";
+      if(action=="UpgradeAdmission"&&result.ContainsKey("failureLine")&&result["failureLine"] is int&&result.ContainsKey("failureHResult")&&result["failureHResult"] is int)
+       detail=" line="+((int)result["failureLine"]).ToString(System.Globalization.CultureInfo.InvariantCulture)+" hresult="+((int)result["failureHResult"]).ToString(System.Globalization.CultureInfo.InvariantCulture);
+      EventLog.WriteEntry("AgentoC","Owner MSI "+action+" failed: "+(string)result["code"]+detail,EventLogEntryType.Error,4101);
+     }catch{}
     }
     Console.Out.Write(value);if(errorBytes>0)Console.Error.WriteLine("OMI_SCRIPT_STDERR");return child.ExitCode;
    }
