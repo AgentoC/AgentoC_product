@@ -29,6 +29,8 @@ process.env.AGENTOC_RUN_SPOOL_DIR = path.join(home, 'instance', 'data', 'chat-ru
 const { createRun, getRun } = await import('../chat/runs.mjs');
 const { trackCodexAppServerApprovalRequest, handleCodexAppServerInitializeResponse } = await import('../chat/runner-sidecar.mjs');
 const riskMode = process.env.AGENTOC_QA_MODE === 'full-auto' ? 'full-auto' : 'recommended';
+const boundContext = process.env.AGENTOC_QA_BOUND_CONTEXT === '1'
+  ? await (await import('./fixtures/windows-admitted-context.mjs')).admittedWindowsContext(home, 'fixture-session') : null;
 const managedInstall = process.env.AGENTOC_QA_HOOK_MANAGED_INSTALL === '1';
 const managedElevation = process.env.AGENTOC_QA_HOOK_ELEVATION === '1';
 const pinnedIdentity = managedInstall && process.env.AGENTOC_QA_PIN_INSTALL_KEY === '1'
@@ -275,7 +277,7 @@ createInterface({ input: child.stdout }).on('line', async line => {
     stage = 3;
     const argv = decodeCodexShlexArgv(msg.params?.command);
     const recognized = !!readWindowsPowerShellInvocation({ params: { command: argv } });
-    const state = { riskMode, cwd: home, riskContextValid: true, riskContext: { trustedWorkspaceRoot: home },
+    const state = { riskMode, cwd: home, riskContextValid: boundContext?.valid ?? true, riskContext: boundContext?.riskContext ?? { trustedWorkspaceRoot: home },
       threadId: msg.params.threadId, turnId: msg.params.turnId, pendingApprovals: new Map(), activeItems: new Map(), autoApprovedMcpRequestIds: new Set(), startedTurn: true };
     const policy = await decideWindowsApproval({ kind: 'command', providerMethod: msg.method, params: msg.params }, state);
     const sent = [];

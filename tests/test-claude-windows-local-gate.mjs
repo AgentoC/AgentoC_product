@@ -120,10 +120,12 @@ const env = { ...process.env, HOME: root, USERPROFILE: root, APPDATA: root, LOCA
   http_proxy: 'http://127.0.0.1:9', https_proxy: 'http://127.0.0.1:9', all_proxy: 'http://127.0.0.1:9', no_proxy: '127.0.0.1,localhost' };
 delete env.ANTHROPIC_AUTH_TOKEN;
 const mode = process.env.AGENTOC_QA_MODE === 'full-auto' ? 'full-auto' : 'recommended';
+const boundContext = process.env.AGENTOC_QA_BOUND_CONTEXT === '1'
+  ? await (await import('./fixtures/windows-admitted-context.mjs')).admittedWindowsContext(root, 'claude-local-fixture') : null;
 const run = await createRun({ status: { sessionId: 'claude-local-fixture', requestId: 'fixture', state: 'running', tool: 'claude' },
   manifest: { sessionId: 'claude-local-fixture', requestId: 'fixture', folder: root, tool: 'claude', runtimeFamily: 'claude-stream-json-bidi', prompt: 'fixture', options: {} } });
-const gateState = { riskMode: mode, permissionMode: 'default', cwd: root, projectRoot: root, turnActive: true, riskContextValid: true,
-  riskContext: { platform: 'win32', trustedWorkspaceRoot: root, protectedRoots: protectedCase ? [protectedRoot] : [] }, pendingApprovals: new Map(), autoApprovedMcpRequestIds: new Set() };
+const gateState = { riskMode: mode, permissionMode: 'default', cwd: root, projectRoot: root, turnActive: true, riskContextValid: boundContext?.valid ?? true,
+  riskContext: boundContext?.riskContext ?? { platform: 'win32', trustedWorkspaceRoot: root, protectedRoots: protectedCase ? [protectedRoot] : [] }, pendingApprovals: new Map(), autoApprovedMcpRequestIds: new Set() };
 if (installCase || deleteCase || dotnetCase || guidanceCase || readCase) env.CLAUDE_CODE_GIT_BASH_PATH = process.env.AGENTOC_TEST_BASH_BINARY;
 if (guidanceCase) {
   gateState.windowsManagedActionChannel = true;
