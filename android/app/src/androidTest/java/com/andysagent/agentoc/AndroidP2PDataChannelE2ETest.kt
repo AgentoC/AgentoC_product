@@ -3,6 +3,7 @@ package com.andysagent.agentoc
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.andysagent.agentoc.core.p2p.P2PCandidate
+import com.andysagent.agentoc.core.p2p.IceServer
 import com.andysagent.agentoc.core.p2p.P2PHttpRequest
 import com.andysagent.agentoc.core.p2p.P2PProtocol
 import com.andysagent.agentoc.core.p2p.WebRTCDataChannelTransport
@@ -29,6 +30,7 @@ class AndroidP2PDataChannelE2ETest {
         val signalingUrl = args.getString("p2pSignalingUrl")
         val roomId = args.getString("p2pRoomId")
         val secret = args.getString("p2pSecret")
+        val stunUrl = args.getString("p2pStunUrl")?.takeIf { it.startsWith("stun:") }
         assumeTrue("P2P E2E requires p2pSignalingUrl", !signalingUrl.isNullOrBlank())
         assumeTrue("P2P E2E requires p2pRoomId", !roomId.isNullOrBlank())
         assumeTrue("P2P E2E requires p2pSecret", !secret.isNullOrBlank())
@@ -39,8 +41,9 @@ class AndroidP2PDataChannelE2ETest {
                 signalingUrl = signalingUrl!!,
                 roomId = roomId!!,
                 secret = secret!!,
-                // The local harness deliberately exercises host candidates.
-                iceServers = emptyList(),
+                // A supplied STUN server permits cross-network testing; with
+                // no argument this remains the original host-candidate test.
+                iceServers = stunUrl?.let { listOf(IceServer(it)) } ?: emptyList(),
             ),
             appContext = context,
             connectTimeoutMs = 30_000L,
