@@ -66,6 +66,20 @@ try {
   });
   assert.ok(wrapped.events.length < 7, 'session wrapper should preserve the response budget');
   assert.equal(wrapped.pagination.truncatedByBytes, true, 'wrapper should expose byte-budget truncation');
+  const thoughtSession = `${sessionId}-thinking`;
+  const thoughtBodies = Array.from({ length: 3 }, (_, index) => `${index}:${'t'.repeat(100 * 1024)}`);
+  await appendEvents(thoughtSession, thoughtBodies.map((content, index) => ({ type: 'reasoning',
+    runId: 'r', providerMessageId: `m-${index}`, reasoningLifecycle: 'completed', content })));
+  const deferred = await readEventsPage(thoughtSession, { limit: 5, includeBodies: false });
+  assert.ok(deferred.events.every((event) => event.bodyLoaded === false), 'ordinary reads keep thinking bodies deferred');
+  const thoughtPage = await getSessionEventsPage(thoughtSession, { includeReasoningBodies: true,
+    limit: 5, maxBodyBytes: 128 * 1024, maxResponseBytes: 256 * 1024 });
+  assert.ok(thoughtPage.events.length >= 2 && thoughtPage.events.length < 3);
+  assert.equal(thoughtPage.pagination.truncatedByBytes, true, 'thinking respects the aggregate page budget');
+  assert.deepEqual(thoughtPage.events.map((event) => event.content), thoughtBodies.slice(0, thoughtPage.events.length));
+  const nextThoughtPage = await getSessionEventsPage(thoughtSession, { includeReasoningBodies: true,
+    afterSeq: thoughtPage.events.at(-1).seq, limit: 5, maxResponseBytes: 256 * 1024 });
+  assert.equal(nextThoughtPage.events.at(-1)?.content, thoughtBodies.at(-1), 'remaining thinking is reachable after pagination');
   console.log('history-page-response-budget: ok');
 } finally {
   rmSync(home, { recursive: true, force: true });
