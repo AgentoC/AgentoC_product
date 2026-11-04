@@ -210,6 +210,8 @@ class LiveTimelineProjector {
                 role = when (next.role) { "user" -> TimelineRole.User; "system" -> TimelineRole.System; else -> TimelineRole.Agent },
                 messageState = next.state, lastEventSeq = if (event.boundarySeq() == 0L) 0L else next.lastEventSeq,
                 messagePhase = next.messagePhase,
+                providerMessageId = event.providerMessageId ?: previous?.providerMessageId,
+                providerContentBlockIndex = event.providerContentBlockIndex ?: event.messageBlockIndex ?: previous?.providerContentBlockIndex,
                 operationStatus = if (next.completed) TimelineOperationStatus.Completed else TimelineOperationStatus.InProgress,
                 attachments = event.allAttachments().map { AttachmentItem(
                     assetId = it.assetId, filename = it.filename, originalName = it.originalName,
@@ -432,7 +434,8 @@ class LiveTimelineProjector {
             riskLevel = event.riskLevel ?: event.severity ?: previous?.riskLevel,
             runId = event.runId ?: previous?.runId,
             streamItemId = event.streamItemId,
-            providerMessageId = event.providerMessageId,
+            providerMessageId = event.providerMessageId ?: previous?.providerMessageId,
+            providerBlockId = event.providerBlockId ?: previous?.providerBlockId,
             providerItemId = event.providerItemId,
             providerToolUseId = event.providerToolUseId,
             responseId = event.responseId,

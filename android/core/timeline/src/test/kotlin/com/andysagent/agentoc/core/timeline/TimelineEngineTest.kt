@@ -23,6 +23,26 @@ class TimelineEngineTest {
         assertIs<TimelineItem.Operation>(items[0])
         assertIs<TimelineItem.Message>(items[1])
     }
+    @Test fun separatelyFetchedProviderBlocksRestoreOrderOnlyWithinSameMessageAndRun() {
+        val thinking = SessionEventDto(seq = 7, type = "thinking_block", runId = "r", providerMessageId = "m",
+            providerBlockId = "thinking:0", state = "completed", content = JsonPrimitive("Before"))
+        val reply = SessionEventDto(seq = 3, firstSeq = 3, type = "message", role = "assistant", runId = "r",
+            providerMessageId = "m", providerContentBlockIndex = 1, content = JsonPrimitive("Reply"))
+        val firstPage = LiveTimelineProjector().projectPage(listOf(thinking))
+        val secondPage = LiveTimelineProjector().projectPage(listOf(reply))
+        val events = firstPage + secondPage
+        val items = TimelineProjector.project(emptyList(), events)
+        assertIs<TimelineItem.Operation>(items[0])
+        assertIs<TimelineItem.Message>(items[1])
+        assertEquals(7L, firstPage.single().seq)
+        assertEquals(7L, anchorProviderThinking(listOf(firstPage.single().copy(runId = "other")) + secondPage).first().seq)
+        assertEquals(7L, anchorProviderThinking(firstPage + listOf(secondPage.single().copy(providerContentBlockIndex = 0))).first().seq)
+        val incremental = IncrementalTimelineProjector()
+        incremental.project(emptyList(), firstPage)
+        val afterMerge = incremental.project(emptyList(), events)
+        assertIs<TimelineItem.Operation>(afterMerge[0])
+        assertIs<TimelineItem.Message>(afterMerge[1])
+    }
     @Test fun matchingThinkingSurfacesKeepNewestTextAndTerminalStatus() {
         val snapshot = TimelineItem.Operation("thought", 4, TimelineOperationKind.Tool, "Thinking", "First",
             TimelineOperationStatus.InProgress, isReasoning = true)

@@ -704,6 +704,8 @@ data class SessionEventDto(
     val streamItemId: String? = null,
     val providerMessageId: String? = null,
     val providerBlockId: String? = null,
+    val providerContentBlockIndex: Int? = null,
+    val messageBlockIndex: Int? = null,
     val providerItemId: String? = null,
     val providerToolUseId: String? = null,
     val type: String? = null,

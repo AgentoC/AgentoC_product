@@ -150,6 +150,8 @@ data class TimelineEvent(
     val source: String? = null,
     val streamItemId: String? = null,
     val providerMessageId: String? = null,
+    val providerBlockId: String? = null,
+    val providerContentBlockIndex: Int? = null,
     val providerItemId: String? = null,
     val providerToolUseId: String? = null,
     val responseId: String? = null,
@@ -226,13 +228,14 @@ class IncrementalTimelineProjector {
             }
             if (position != null && position > 0) event.copy(seq = position, beforeAssistantAtSameSeq = true) else event
         }
-        val liveIds = orderedLive.asSequence().map { it.id }.toSet()
+        val anchoredLive = anchorProviderThinking(orderedLive)
+        val liveIds = anchoredLive.asSequence().map { it.id }.toSet()
         // Room emits immutable list instances. Referential comparison avoids a
         // full message-body equality scan every time only the live overlay
         // changes, while still rebuilding whenever the durable query emits.
         val durableChanged = durableMessages == null || durableMessages !== messages
         val liveOverlayShrank = !liveIds.containsAll(previousLiveIds)
-        val liveEventUpdated = orderedLive.any { event ->
+        val liveEventUpdated = anchoredLive.any { event ->
             previousLiveById[event.id]?.let { it != event } == true
         }
 
@@ -242,15 +245,15 @@ class IncrementalTimelineProjector {
             previousLiveEvents = emptyList()
             previousLiveById = emptyMap()
             previousLiveIds = emptySet()
-        } else if (orderedLive == previousLiveEvents) {
+        } else if (anchoredLive == previousLiveEvents) {
             return cachedItems
         }
 
-        engine.apply(orderedLive)
+        engine.apply(anchoredLive)
         cachedItems = engine.snapshot()
         durableMessages = messages
-        previousLiveEvents = orderedLive
-        previousLiveById = orderedLive.associateBy { it.id }
+        previousLiveEvents = anchoredLive
+        previousLiveById = anchoredLive.associateBy { it.id }
         previousLiveIds = liveIds
         return cachedItems
     }
@@ -419,6 +422,25 @@ class TimelineEngine {
     }
 }
 
+/** Reconcile provider block order after separately fetched history pages are merged. */
+internal fun anchorProviderThinking(events: List<TimelineEvent>): List<TimelineEvent> {
+    val messages = events.filter {
+        it.role == TimelineRole.Agent && it.messageState != null &&
+            !it.runId.isNullOrBlank() && !it.providerMessageId.isNullOrBlank() &&
+            it.providerContentBlockIndex != null
+    }.groupBy { it.runId to it.providerMessageId }
+    return events.map { event ->
+        if (event.type !in setOf("reasoning", "thinking_block") ||
+            event.runId.isNullOrBlank() || event.providerMessageId.isNullOrBlank()) return@map event
+        val block = event.providerBlockId?.removePrefix("thinking:")?.toIntOrNull()
+            ?.takeIf { event.providerBlockId.startsWith("thinking:") } ?: return@map event
+        val message = messages[event.runId to event.providerMessageId].orEmpty()
+            .filter { it.providerContentBlockIndex!! > block }
+            .minByOrNull { it.providerContentBlockIndex!! } ?: return@map event
+        if (event.seq >= message.seq) event.copy(seq = message.seq, beforeAssistantAtSameSeq = true) else event
+    }
+}
+
 /** The only adapter from a durable message snapshot to renderable timeline items. */
 object TimelineProjector {
     fun fromMessages(messages: List<com.andysagent.agentoc.core.model.Message>): List<TimelineItem> = project(messages, emptyList())
@@ -429,7 +451,7 @@ object TimelineProjector {
     ): List<TimelineItem> {
         val engine = TimelineEngine()
         engine.apply(durableEvents(messages, liveEvents))
-        engine.apply(liveEvents)
+        engine.apply(anchorProviderThinking(liveEvents))
         return engine.snapshot()
     }
 
