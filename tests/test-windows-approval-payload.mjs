@@ -21,6 +21,9 @@ await assert.rejects(verifyWindowsApprovalPayload(root), /windows-user-install-s
 await writeFile(path.join(root, 'chat', 'windows-user-install-store.mjs'), 'fixture');
 await unlink(path.join(root, 'lib', 'windows-owner-identity-paths.mjs'));
 await assert.rejects(verifyWindowsApprovalPayload(root), /windows-owner-identity-paths/);
+await writeFile(path.join(root, 'lib', 'windows-owner-identity-paths.mjs'), 'fixture');
+await unlink(path.join(root, 'lib', 'windows-owner-os-paths.mjs'));
+await assert.rejects(verifyWindowsApprovalPayload(root), /windows-owner-os-paths/);
 console.log('windows-approval-payload: incomplete package is rejected');
 } finally {
   const actualRoot = await realpath(root);

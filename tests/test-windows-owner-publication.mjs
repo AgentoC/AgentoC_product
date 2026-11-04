@@ -7,6 +7,9 @@ import {randomUUID,randomBytes} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {createOwnerDiscoveryController,createOwnerDiscoveryFileStore,ownerDiscoveryDescriptor} from '../lib/windows-owner-discovery-publication.mjs';
 import {validateOwnerDiscoveryEvidence} from '../lib/windows-owner-discovery.mjs';
+test('missing owner publication path fails before creating a lock',()=>{
+  assert.throws(()=>createOwnerDiscoveryFileStore({filePath:''}),{code:'OBP_PATH_INVALID'});
+});
 function configuration(){const controlSid='S-1-5-80-1-2-3-4-5',ownerSid='S-1-5-21-1-2-3-1001',instanceId=randomUUID();
   const releaseJson=JSON.stringify({version:1,protocolVersion:1,helperFile:'AgentoC.OwnerBootstrap.exe',helperSha256:'a'.repeat(64),publisherSha256:'b'.repeat(64)}),
     installationJson=JSON.stringify({version:1,instanceId,controlSid,ownerSid,executorSid:'S-1-5-80-6-7-8-9-10',port:7690});

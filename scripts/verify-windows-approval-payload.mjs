@@ -7,7 +7,7 @@ export const WINDOWS_APPROVAL_PAYLOAD_FILES = Object.freeze([
   'chat/windows-bash-actions.mjs', 'chat/windows-elevation-guidance.mjs', 'chat/windows-service-control.mjs', 'chat/windows-service-grant.mjs', 'chat/windows-service-proposal.mjs', 'chat/windows-service-activity.mjs', 'chat/windows-system-paths.mjs', 'chat/windows-winget-discovery.mjs',
   'chat/windows-managed-auto-install.mjs', 'chat/windows-auto-install-authorization.mjs', 'chat/windows-auto-install-bridge.mjs', 'chat/codex-managed-hook-setup.mjs',
   'chat/windows-user-install-store.mjs', 'chat/windows-user-install-executor.mjs', 'chat/windows-user-install-bridge.mjs', 'chat/windows-run-identity.mjs',
-  'lib/windows-execution-identity.mjs', 'lib/windows-owner-identity-paths.mjs', 'lib/windows-job-object.mjs', 'lib/executable-resolution.mjs',
+  'lib/windows-execution-identity.mjs', 'lib/windows-owner-identity-paths.mjs', 'lib/windows-owner-os-paths.mjs', 'lib/windows-job-object.mjs', 'lib/executable-resolution.mjs',
   'scripts/initialize-windows-owner-identity.mjs', 'scripts/windows-job-object-host.cmd', 'scripts/windows-job-object-host.ps1',
   'chat/codex-windows-install-hook.mjs', 'scripts/agentoc-codex-windows-install-hook.mjs',
   'scripts/agentoc-windows-install-bridge.mjs', 'scripts/create-windows-runtime-manifest.mjs',
