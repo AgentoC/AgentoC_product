@@ -6,6 +6,10 @@ import android.content.ContextWrapper
 import android.content.ComponentName
 import android.content.Intent
 import android.os.ParcelFileDescriptor
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -22,6 +26,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.andysagent.agentoc.core.appapi.*
 import com.andysagent.agentoc.feature.appapi.CaptureEvent
@@ -48,6 +53,7 @@ import com.andysagent.agentoc.core.model.AppLanguage
 import com.andysagent.agentoc.core.network.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
@@ -58,8 +64,11 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.Assert.*
+import org.junit.Assume.assumeTrue
 import org.junit.runner.RunWith
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -141,6 +150,85 @@ class AppApiRuntimeGraphTest {
     private suspend fun computers() {
         config.upsertComputer(LinkedComputer("pc-a", "", "Office", autoConnect = false), select = true)
         config.upsertComputer(LinkedComputer("pc-b", "", "Home", autoConnect = false))
+    }
+
+    /** Uses the real app controller and runtime graph against an isolated live Broker fixture. */
+    @Test fun liveWindowsBrokerDecisionThroughAppController() = runBlocking {
+        val port = InstrumentationRegistry.getArguments().getString("agentocBrokerTestPort")?.toIntOrNull()
+        assumeTrue(port != null && port in 1025..65535)
+        val fixturePort = requireNotNull(port)
+        val pc = Pc("pc-a").apply { brokerPort = fixturePort }
+        pcs[pc.id] = pc
+        config.upsertComputer(LinkedComputer(pc.id, "", "Isolated Windows fixture", autoConnect = false), select = true)
+        val graph = graph()
+        withContext(Dispatchers.Main) { graph.onStart(owner) }
+        until { carriers[pc.id]?.connectionState?.value == RuntimeConnectionState.Connected }
+
+        val controller = WindowsBrokerApprovalController(application, graph)
+        val material = controller.enrollmentMaterial()
+        val register = JSONObject().put("deviceId", material.deviceId).put("publicKey", material.publicKeyBase64).toString()
+        assertEquals(200, fixtureRequest(fixturePort, ApiRequest("POST", "/register", register)).statusCode)
+        val pendingEnrollment = withTimeout(80_000) {
+            while (true) {
+                try { return@withTimeout controller.enrollmentChallenge(pc.id) }
+                catch (error: ApiException) { if (error.statusCode != 503) throw error; delay(100) }
+            }
+            error("unreachable")
+        }
+        controller.completeEnrollment(pc.id, pendingEnrollment.challenge.enrollmentId, pendingEnrollment.challenge.verificationCode)
+
+        val viewModel = withContext(Dispatchers.Main) {
+            com.andysagent.agentoc.feature.workbench.AttentionCenterViewModel(graph.sessions, controller)
+        }
+        val itemId = withTimeout(80_000) {
+            while (viewModel.state.value.activeItemId == null) {
+                carriers[pc.id]?.invalidations?.tryEmit(InvalidationHint("windows_broker_approvals_invalidated"))
+                delay(250)
+            }
+            requireNotNull(viewModel.state.value.activeItemId)
+        }
+        val scenario = ActivityScenario.launch(ComponentActivity::class.java)
+        try {
+            scenario.onActivity { activity ->
+                activity.setContent {
+                    val state by viewModel.state.collectAsState()
+                    com.andysagent.agentoc.core.designsystem.AgentocTheme {
+                        com.andysagent.agentoc.feature.workbench.AttentionSurface(state, viewModel::onEvent, onOpenSession = {})
+                    }
+                }
+            }
+            withContext(Dispatchers.Main) {
+                viewModel.onEvent(com.andysagent.agentoc.feature.workbench.AttentionEvent.SetExpanded(itemId, true))
+            }
+            val approve = application.getString(com.andysagent.agentoc.feature.workbench.R.string.attention_approve)
+            compose.onNodeWithText(approve).assertIsDisplayed().performClick()
+            withTimeout(30_000) {
+                while (viewModel.state.value.items.any { it.id == itemId }) {
+                    viewModel.state.value.error?.let { error(it) }
+                    delay(100)
+                }
+            }
+            assertNull(viewModel.state.value.error)
+        } finally {
+            scenario.close()
+        }
+    }
+
+    private suspend fun fixtureRequest(port: Int, request: ApiRequest): ApiResponse = withContext(Dispatchers.IO) {
+        val connection = URL("http://127.0.0.1:$port${request.path}").openConnection() as HttpURLConnection
+        connection.requestMethod = request.method
+        connection.connectTimeout = 3_000
+        connection.readTimeout = 3_000
+        try {
+            request.body?.let {
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.outputStream.use { output -> output.write(it.toByteArray(Charsets.UTF_8)) }
+            }
+            val status = connection.responseCode
+            val input = if (status >= 400) connection.errorStream else connection.inputStream
+            ApiResponse(status, input?.bufferedReader()?.use { it.readText() }.orEmpty())
+        } finally { connection.disconnect() }
     }
     private suspend fun until(predicate: () -> Boolean) = withTimeout(5_000) { while (!predicate()) delay(10) }
     private suspend fun deniedBy(code: ApiErrorCode, block: suspend () -> Unit) {
@@ -1562,6 +1650,7 @@ class AppApiRuntimeGraphTest {
     }
 
     private class Pc(val id: String) {
+        var brokerPort: Int = 0
         val healthReads = AtomicInteger()
         var healthCode = 200
         var healthBody = """{"ok":true,"status":"ready"}"""
@@ -1614,10 +1703,10 @@ class AppApiRuntimeGraphTest {
         val exportBinary = ByteArray(180_000) { it.toByte() }
         var badExportIdentity = false
     }
-    private class Carrier(private val pc: Pc, private val onStart: () -> Unit = {}) : AgentoCTransport, TargetConnectionController {
+    private inner class Carrier(private val pc: Pc, private val onStart: () -> Unit = {}) : AgentoCTransport, TargetConnectionController {
         var beforeStop: (() -> Unit)? = null
         val starts = AtomicInteger(); val closes = AtomicInteger(); val refreshes = AtomicInteger()
-        override val invalidations = emptyFlow<InvalidationHint>()
+        override val invalidations = MutableSharedFlow<InvalidationHint>(extraBufferCapacity = 1)
         override val connectionState = MutableStateFlow<RuntimeConnectionState>(RuntimeConnectionState.Disconnected)
         override fun start() { starts.incrementAndGet(); onStart(); connectionState.value = if (pc.connects) RuntimeConnectionState.Connected else RuntimeConnectionState.Connecting }
         override suspend fun stop() { beforeStop?.invoke() }
@@ -1661,6 +1750,9 @@ class AppApiRuntimeGraphTest {
         }
         override suspend fun execute(request: ApiRequest): ApiResponse {
             check(connectionState.value == RuntimeConnectionState.Connected)
+            if (pc.brokerPort != 0 && request.path.startsWith("/api/windows-privileged-broker/")) {
+                return fixtureRequest(pc.brokerPort, request)
+            }
             if (request.path == "/healthz") {
                 check(request.method == "GET")
                 pc.healthReads.incrementAndGet()

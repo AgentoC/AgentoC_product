@@ -39,6 +39,15 @@ try {
   if (phonePort) {
     assert.ok(Number.isInteger(phonePort) && phonePort > 1024 && phonePort < 65536);
     phoneServer = createServer((req, res) => {
+      // The app controller reads both legacy and service approvals. This
+      // isolated fixture only creates service requests, so its legacy feed
+      // must explicitly be empty rather than returning an unrelated 404.
+      if (req.method === 'GET' && req.url?.startsWith('/api/windows-privileged-broker/requests/pending?')) {
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({
+          type: 'pending', pendingRequests: [], hasMore: false,
+        }));
+        return;
+      }
       const serviceRoute = req.url?.startsWith('/api/windows-privileged-broker/service-requests/');
       const enrollmentRoute = req.url?.startsWith('/api/windows-privileged-broker/enrollments/');
       if (serviceRoute || enrollmentRoute) {

@@ -46,8 +46,9 @@ import java.util.concurrent.ConcurrentHashMap
 /** Adapts signed Windows Broker requests into the app's shared approval queue. */
 internal class WindowsBrokerApprovalController(
     context: Context,
-    private val app: AgentoCApplication,
+    private val runtime: AndroidRuntimeGraph,
 ) : BrokerApprovalController, BrokerEnrollmentController {
+    constructor(context: Context, app: AgentoCApplication) : this(context, app.runtime)
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
     private val decisionJournal = BrokerDecisionJournal(
@@ -57,35 +58,35 @@ internal class WindowsBrokerApprovalController(
     )
     private val pendingRetryGate = BrokerApprovalRetryGate(SystemClock::elapsedRealtime)
     private val pendingRevisions = ConcurrentHashMap<String, String>()
-    private val identity: AndroidDeviceIdentityStore = app.runtime.identityStore
+    private val identity: AndroidDeviceIdentityStore = runtime.identityStore
     private val trustUpdates = MutableSharedFlow<String>(extraBufferCapacity = 1)
     private val decisionUpdates = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
     /** A target switch cancels the old fetch and clears its cards before reading the new target. */
     override fun observePendingApprovals(): Flow<List<Approval>> =
         observeBrokerApprovalFeed(
-            targetIds = app.runtime.configStore.directory
+            targetIds = runtime.configStore.directory
                 .map { it.activeTarget?.instanceId }.distinctUntilChanged()
                 .onEach { pendingRevisions.clear() },
             refreshSignals = { targetId ->
                 merge(
-                    app.runtime.targetConnectionStates
+                    runtime.targetConnectionStates
                         .map { it[targetId] }.distinctUntilChanged().drop(1)
                         .onEach { pendingRevisions.remove(targetId) }
                         .filter { it == RuntimeConnectionState.Connected }.map { Unit },
-                    app.runtime.transport.invalidations
+                    runtime.transport.invalidations
                         .filter { it.type == BROKER_APPROVAL_INVALIDATION }.map { Unit },
                     foregroundStarts().onEach { pendingRevisions.remove(targetId) },
                     trustUpdates.filter { it == targetId }.map { Unit },
                     decisionUpdates.filter { it == targetId }.map { Unit },
                     brokerApprovalReconciliationSignals(
                         intervalMs = {
-                            if (app.runtime.transport.requiresEventPolling) BROKER_APPROVAL_CARRIER_TICK_MS
+                            if (runtime.transport.requiresEventPolling) BROKER_APPROVAL_CARRIER_TICK_MS
                             else BROKER_APPROVAL_RECONCILE_MS
                         },
                         shouldRefresh = {
                             ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) &&
-                                app.runtime.targetConnectionStates.value[targetId] == RuntimeConnectionState.Connected &&
+                                runtime.targetConnectionStates.value[targetId] == RuntimeConnectionState.Connected &&
                                 preferences.contains(pinKey(targetId))
                         },
                     ),
@@ -95,10 +96,10 @@ internal class WindowsBrokerApprovalController(
             onFailure = { targetId, failure ->
                 if (failure is ApiException && failure.statusCode == 429) {
                     pendingRetryGate.defer(targetId, failure.retryAfterMs ?: BROKER_APPROVAL_DEFAULT_RATE_LIMIT_MS)
-                } else if (app.runtime.transport.requiresEventPolling) {
+                } else if (runtime.transport.requiresEventPolling) {
                     pendingRetryGate.defer(targetId, BROKER_APPROVAL_FAILURE_RETRY_MS)
                 }
-                if (app.runtime.targetConnectionStates.value[targetId] == RuntimeConnectionState.Connected) {
+                if (runtime.targetConnectionStates.value[targetId] == RuntimeConnectionState.Connected) {
                     Log.w("WindowsBrokerApproval", "Pending refresh failed: ${failure.javaClass.simpleName}")
                 }
             },
@@ -116,16 +117,16 @@ internal class WindowsBrokerApprovalController(
         )
 
     private suspend fun pendingApprovalsForTarget(targetInstanceId: String): List<Approval> {
-        val target = app.runtime.configStore.directory.first().activeTarget
+        val target = runtime.configStore.directory.first().activeTarget
             ?.takeIf { it.instanceId == targetInstanceId } ?: return emptyList()
         val pinnedFingerprint = preferences.getString(pinKey(target.instanceId), null) ?: return emptyList()
         pendingRetryGate.await(target.instanceId)
         val deviceId = BrokerApprovalProtocol.deviceIdForPublicKey(identity.brokerPublicKey())
-        val remote = BrokerApprovalRemote { request -> app.runtime.executeOnTarget(target.instanceId, request) }
+        val remote = BrokerApprovalRemote { request -> runtime.executeOnTarget(target.instanceId, request) }
         val snapshot = readAllPending(
             remote,
             deviceId,
-            if (app.runtime.transport.requiresEventPolling) pendingRevisions[target.instanceId] else null,
+            if (runtime.transport.requiresEventPolling) pendingRevisions[target.instanceId] else null,
         )
         // Carrier polling can queue several hints during one slow read. Pace
         // the next GET even if those hints drain immediately afterward.
@@ -134,7 +135,7 @@ internal class WindowsBrokerApprovalController(
         } else {
             pendingRevisions.remove(target.instanceId)
         }
-        if (app.runtime.transport.requiresEventPolling && snapshot.revision == null) {
+        if (runtime.transport.requiresEventPolling && snapshot.revision == null) {
             pendingRetryGate.defer(target.instanceId, BROKER_APPROVAL_CARRIER_RECONCILE_MS)
         }
         val label = target.label.ifBlank { target.instanceId }
@@ -208,7 +209,7 @@ internal class WindowsBrokerApprovalController(
             ?: error("This Windows request has no computer binding. Refresh the approval list.")
         val boundDigest = approval.brokerChallengeDigest
             ?: error("This Windows request has no challenge binding. Refresh the approval list.")
-        val target = app.runtime.configStore.directory.first().activeTarget
+        val target = runtime.configStore.directory.first().activeTarget
             ?: error("Connect to the Windows computer again before resolving this request.")
         require(target.instanceId == boundTargetId) {
             "The selected computer changed. Return to the original computer and refresh the approval list."
@@ -216,7 +217,7 @@ internal class WindowsBrokerApprovalController(
         val pinnedFingerprint = preferences.getString(pinKey(target.instanceId), null)
             ?: error("The Windows Broker identity is not trusted on this phone.")
         val deviceId = BrokerApprovalProtocol.deviceIdForPublicKey(identity.brokerPublicKey())
-        val remote = BrokerApprovalRemote { request -> app.runtime.executeOnTarget(target.instanceId, request) }
+        val remote = BrokerApprovalRemote { request -> runtime.executeOnTarget(target.instanceId, request) }
         if (approval.channel == SERVICE_CONTROL_CHANNEL) {
             resolveServiceControl(approval, approve, target.instanceId, pinnedFingerprint, deviceId, remote)
             return
@@ -289,7 +290,7 @@ internal class WindowsBrokerApprovalController(
     }
 
     override suspend fun enrollmentChallenge(targetInstanceId: String): BrokerPendingEnrollment {
-        val remote = BrokerApprovalRemote { request -> app.runtime.executeOnTarget(targetInstanceId, request) }
+        val remote = BrokerApprovalRemote { request -> runtime.executeOnTarget(targetInstanceId, request) }
         val deviceId = BrokerApprovalProtocol.deviceIdForPublicKey(identity.brokerPublicKey())
         val pending = remote.pendingEnrollment(deviceId)
         verifyEnrollmentChallenge(pending, deviceId)
@@ -302,7 +303,7 @@ internal class WindowsBrokerApprovalController(
         enrollmentId: String,
         confirmedCode: String,
     ): String {
-        val remote = BrokerApprovalRemote { request -> app.runtime.executeOnTarget(targetInstanceId, request) }
+        val remote = BrokerApprovalRemote { request -> runtime.executeOnTarget(targetInstanceId, request) }
         val deviceId = BrokerApprovalProtocol.deviceIdForPublicKey(identity.brokerPublicKey())
         val pending = remote.pendingEnrollment(deviceId)
         verifyEnrollmentChallenge(pending, deviceId)
