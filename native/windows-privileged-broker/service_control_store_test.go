@@ -198,7 +198,7 @@ func TestPendingServiceControlPaginationAndExpiration(t *testing.T) {
 	if err := store.ConfigureAutoInstallSigner("key", base64.RawURLEncoding.EncodeToString(der), now); err != nil {
 		t.Fatal(err)
 	}
-	_, deviceID := enrollServiceTestDevice(t, store, now)
+	deviceKey, deviceID := enrollServiceTestDevice(t, store, now)
 	snapshot := store.Snapshot()
 	for i := 0; i < maxPendingPageSize+1; i++ {
 		id := fmt.Sprintf("request-%02d", i)
@@ -221,10 +221,28 @@ func TestPendingServiceControlPaginationAndExpiration(t *testing.T) {
 	if _, _, _, err := store.PendingServiceControls(strings.Repeat("0", 64), "", now); err != errDeviceNotEnrolled {
 		t.Fatal("unenrolled device saw pending approvals")
 	}
+	denied, ok := store.GetServiceControl("request-00")
+	if !ok {
+		t.Fatal("missing request")
+	}
+	approval := serviceOwnerProof{DeviceID: deviceID, Signature: signApprovalMessage(t, deviceKey, serviceControlOwnerSigningBytes(denied.Grant))}
+	if _, _, err := store.DenyServiceControl("request-00", approval, now); err == nil {
+		t.Fatal("approval accepted as denial")
+	}
+	proof := serviceOwnerProof{DeviceID: deviceID, Signature: signApprovalMessage(t, deviceKey, serviceControlOwnerDenialSigningBytes(denied.Grant))}
+	if result, duplicate, err := store.DenyServiceControl("request-00", proof, now); err != nil || duplicate || result.Status != statusDenied {
+		t.Fatal("denial failed", err)
+	}
+	if result, duplicate, err := store.DenyServiceControl("request-00", proof, now); err != nil || !duplicate || result.Status != statusDenied {
+		t.Fatal("denial not idempotent", err)
+	}
+	if _, _, err := store.AttestServiceControl(denied.Grant, denied.Signature, deviceID, now); err == nil {
+		t.Fatal("denied request still reviewable")
+	}
 	if expired, _, _, err := store.PendingServiceControls(deviceID, "", now.Add(time.Minute)); err != nil || len(expired) != 0 {
 		t.Fatal("expired approvals remained visible")
 	}
-	if record, ok := store.GetServiceControl("request-00"); !ok || record.Status != statusExpired {
+	if record, ok := store.GetServiceControl("request-01"); !ok || record.Status != statusExpired {
 		t.Fatal("expiry was not persisted")
 	}
 }

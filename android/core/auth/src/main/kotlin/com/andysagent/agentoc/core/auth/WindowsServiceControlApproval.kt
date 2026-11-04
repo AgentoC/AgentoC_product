@@ -26,6 +26,7 @@ data class WindowsServiceControlGrant(
 
 object WindowsServiceControlApproval {
     private const val OWNER_DOMAIN = "AgentoC Windows service owner approval v1\u0000"
+    private const val DENIAL_DOMAIN = "AgentoC Windows service owner denial v1\u0000"
     private const val GRANT_DOMAIN = "AgentoC Windows service control v1\u0000"
     private const val REVIEW_DOMAIN = "AgentoC Windows service review v1\u0000"
     private val id = Regex("^[A-Za-z0-9._:-]{1,128}$")
@@ -59,6 +60,11 @@ object WindowsServiceControlApproval {
             }
             output.toByteArray()
         }
+    }
+
+    fun ownerDenialSigningBytes(grant: WindowsServiceControlGrant, nowMs: Long = System.currentTimeMillis()): ByteArray {
+        val ownerBytes = ownerSigningBytes(grant, nowMs)
+        return DENIAL_DOMAIN.toByteArray(Charsets.UTF_8) + ownerBytes.copyOfRange(OWNER_DOMAIN.toByteArray(Charsets.UTF_8).size, ownerBytes.size)
     }
 
     /** Verify this with the pinned Broker identity before presenting the grant. */

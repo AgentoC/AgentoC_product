@@ -175,7 +175,7 @@ func decodeBrokerRequest(payload []byte) (brokerRequest, error) {
 }
 
 func validateRequest(request brokerRequest) error {
-	if request.Type != "service.execute" && request.DeviceSignature != "" {
+	if request.Type != "service.execute" && request.Type != "service.deny" && request.DeviceSignature != "" {
 		return errInvalidRequest
 	}
 	if request.Type != "service.execute" && request.Type != "service.review" && request.Type != "service.propose" && request.ServiceControl != nil {
@@ -285,6 +285,15 @@ func validateRequest(request brokerRequest) error {
 		}
 	case "service.inspect":
 		if request.ServiceInspect == nil || !validServiceControlName(request.ServiceInspect.ServiceName) || hasNonHealthFields(request) {
+			return errInvalidRequest
+		}
+	case "service.deny":
+		if !validRequestID(request.RequestID) || len(request.DeviceID) != 64 || !isLowerHex(request.DeviceID) || request.DeviceSignature == "" || len(request.DeviceSignature) > 1024 {
+			return errInvalidRequest
+		}
+		copy := request
+		copy.RequestID, copy.DeviceID = "", ""
+		if hasNonHealthFields(copy) {
 			return errInvalidRequest
 		}
 	case "service.execute":

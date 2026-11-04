@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash, generateKeyPairSync, sign, verify } from 'node:crypto';
-import { windowsServiceControlSigningBytes, windowsServiceOwnerSigningBytes, windowsServiceReviewSigningBytes } from '../chat/windows-service-grant.mjs';
+import { windowsServiceControlSigningBytes, windowsServiceOwnerSigningBytes, windowsServiceOwnerDenialSigningBytes, windowsServiceReviewSigningBytes } from '../chat/windows-service-grant.mjs';
 import { createWindowsPrivilegedBrokerClient } from '../chat/windows-privileged-broker.mjs';
 
 const grant = { version: 1, keyId: 'key', brokerInstallationId: 'broker', policyGeneration: 3, requestId: 'request',
@@ -10,6 +10,7 @@ const grant = { version: 1, keyId: 'key', brokerInstallationId: 'broker', policy
 const bytes = windowsServiceControlSigningBytes(grant);
 assert.equal(createHash('sha256').update(bytes).digest('hex'), '3df9a07c89afdafc1f87f75ba2e2cb7cfcb335153c35a8fb2aa99d0826c6b412');
 assert.equal(createHash('sha256').update(windowsServiceOwnerSigningBytes(grant)).digest('hex'), 'e0cb3610783fd33fdc745e5059474811b3dac76415ef91a283cf110df0af9bf1');
+assert.equal(createHash('sha256').update(windowsServiceOwnerDenialSigningBytes(grant)).digest('hex'), '2685876afa9faa33edcd29a2ca1dea674a646ad69cfb3143f291614bda1a7363');
 assert.equal(createHash('sha256').update(windowsServiceReviewSigningBytes(grant)).digest('hex'), 'd98b2c6f1b2def03d2fffb8eb9d8375dd031ffc42f5a7ae4d861470ae7a026b9');
 const keys = generateKeyPairSync('ed25519');
 const signature = sign(null, bytes, keys.privateKey);
@@ -26,6 +27,7 @@ let calls = 0;
 const client = createWindowsPrivilegedBrokerClient({ platform: 'win32', pipeExchange: async ({ pipe, request }) => {
   calls++; assert.equal(pipe, 'request');
   if (request.type === 'service.pending') return { version: 2, type: 'service_pending', servicePending: [{ grant, brokerPublicKey: 'fixture', brokerSignature: 'eA==' }], hasMore: false };
+  if (request.type === 'service.deny') return { version: 2, type: 'result', requestId: request.requestId, status: 'denied', code: 'DEVICE_DENIED' };
   assert.deepEqual(request.serviceControl, grant);
   if (request.type === 'service.propose') return { version: 2, type: 'result', requestId: grant.requestId, status: 'awaiting_device' };
   if (request.type === 'service.review') return { version: 2, type: 'service_review', serviceControl: grant, brokerPublicKey: 'fixture', brokerSignature: 'eA==' };
@@ -36,7 +38,10 @@ assert.equal((await client.proposeServiceControl({ grant, signature: signature.t
 assert.equal((await client.pendingServiceControls({ deviceId })).items[0].grant.serviceName, grant.serviceName);
 assert.equal((await client.reviewServiceControl({ grant, signature: signature.toString('base64url'), deviceId })).type, 'service_review');
 assert.equal((await client.executeServiceControl({ grant, signature: signature.toString('base64url'), deviceId, deviceSignature })).status, 'executing');
+const denialSignature = sign('sha256', windowsServiceOwnerDenialSigningBytes(grant), ownerKeys.privateKey).toString('base64');
+assert.equal((await client.denyServiceControl({ requestId: grant.requestId, deviceId, deviceSignature: denialSignature })).status, 'denied');
+assert.equal(verify('sha256', windowsServiceOwnerSigningBytes(grant), ownerKeys.publicKey, Buffer.from(denialSignature, 'base64')), false);
 await assert.rejects(client.executeServiceControl({ grant: { ...grant, action: 'delete' }, signature: signature.toString('base64url'), deviceId, deviceSignature }), { code: 'BROKER_REQUEST_INVALID' });
 await assert.rejects(client.executeServiceControl({ grant, signature: signature.toString('base64url') }), { code: 'BROKER_REQUEST_INVALID' });
-assert.equal(calls, 4);
+assert.equal(calls, 5);
 console.log('windows-service-grant: cross-language signing vector passed');

@@ -30,6 +30,10 @@ export function windowsServiceOwnerSigningBytes(grant) {
   return Buffer.concat([Buffer.from('AgentoC Windows service owner approval v1\0', 'utf8'), windowsServiceControlSigningBytes(grant)]);
 }
 
+export function windowsServiceOwnerDenialSigningBytes(grant) {
+  return Buffer.concat([Buffer.from('AgentoC Windows service owner denial v1\0', 'utf8'), windowsServiceControlSigningBytes(grant)]);
+}
+
 export function windowsServiceReviewSigningBytes(grant) {
   return Buffer.concat([Buffer.from('AgentoC Windows service review v1\0', 'utf8'), windowsServiceControlSigningBytes(grant)]);
 }

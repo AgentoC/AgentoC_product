@@ -1026,7 +1026,7 @@ func validateState(state persistedBrokerState) error {
 			signatureErr != nil || len(signature) != ed25519.SignatureSize ||
 			autoRequests[record.Grant.RequestID] || state.Requests[record.Grant.RequestID].Request.RequestID != "" ||
 			!isSHA256Hex(record.Digest) || record.Digest != fmt.Sprintf("%x", sha256.Sum256(message)) ||
-			!(record.Status == statusAwaitingDevice || record.Status == statusExpired || record.Status == statusExecuting || record.Status == statusSucceeded || record.Status == statusFailed || record.Status == statusUnknown) ||
+			!(record.Status == statusAwaitingDevice || record.Status == statusDenied || record.Status == statusExpired || record.Status == statusExecuting || record.Status == statusSucceeded || record.Status == statusFailed || record.Status == statusUnknown) ||
 			!validAuditCode(record.Code) || !record.CreatedAt.Equal(record.CreatedAt.UTC()) || !record.UpdatedAt.Equal(record.UpdatedAt.UTC()) {
 			return errStateInvalid
 		}

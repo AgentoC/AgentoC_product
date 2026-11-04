@@ -105,6 +105,27 @@ func TestServiceControlPipeRequiresSignatureAndRunsOnce(t *testing.T) {
 			t.Fatalf("proposal: %+v", got)
 		}
 	}
+	deniedGrant := grant
+	deniedGrant.RequestID, deniedGrant.Nonce = "request-denied", "zyxwvutsrqponmlkjihgfedc"
+	deniedProposal := proposal
+	deniedProposal.ServiceControl = &deniedGrant
+	deniedProposal.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(priv, serviceControlSigningBytes(deniedGrant)))
+	if got := exchangeTestPipeRequest(t, base+".Request", deniedProposal); got.Status != statusAwaitingDevice {
+		t.Fatalf("denial proposal: %+v", got)
+	}
+	denial := brokerRequest{Version: protocolVersion, Type: "service.deny", RequestID: deniedGrant.RequestID, DeviceID: deviceID, DeviceSignature: signApprovalMessage(t, deviceKey, serviceControlOwnerSigningBytes(deniedGrant))}
+	if got := exchangeTestPipeRequest(t, base+".Request", denial); got.Code != "SERVICE_CONTROL_AUTHORIZATION_DENIED" {
+		t.Fatalf("approval replayed as denial: %+v", got)
+	}
+	denial.DeviceSignature = signApprovalMessage(t, deviceKey, serviceControlOwnerDenialSigningBytes(deniedGrant))
+	for i := 0; i < 2; i++ {
+		if got := exchangeTestPipeRequest(t, base+".Request", denial); got.Status != statusDenied {
+			t.Fatalf("denial: %+v", got)
+		}
+	}
+	if calls.Load() != 0 {
+		t.Fatal("denial ran service controller")
+	}
 	pending := exchangeTestPipeRequest(t, base+".Request", brokerRequest{Version: protocolVersion, Type: "service.pending", DeviceID: deviceID})
 	if pending.Type != "service_pending" || len(pending.ServicePending) != 1 || verifyBrokerSignature(pending.ServicePending[0].BrokerPublicKey, pending.ServicePending[0].BrokerSignature, serviceControlBrokerSigningBytes(grant)) != nil {
 		t.Fatalf("pending approval invalid: %+v", pending)

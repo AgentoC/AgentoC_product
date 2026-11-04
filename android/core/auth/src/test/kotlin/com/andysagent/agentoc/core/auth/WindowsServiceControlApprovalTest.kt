@@ -22,6 +22,10 @@ class WindowsServiceControlApprovalTest {
         val digest = MessageDigest.getInstance("SHA-256").digest(bytes()).joinToString("") { "%02x".format(it.toInt() and 255) }
         assertTrue(digest == expected)
         assertContentEquals(bytes(), bytes())
+        val denial = WindowsServiceControlApproval.ownerDenialSigningBytes(grant, grant.issuedMs)
+        val denialDigest = MessageDigest.getInstance("SHA-256").digest(denial).joinToString("") { "%02x".format(it.toInt() and 255) }
+        assertTrue(denialDigest == "2685876afa9faa33edcd29a2ca1dea674a646ad69cfb3143f291614bda1a7363")
+        assertFalse(denial.contentEquals(bytes()))
         val review = WindowsServiceControlApproval.brokerReviewSigningBytes(grant, grant.issuedMs)
         val reviewDigest = MessageDigest.getInstance("SHA-256").digest(review).joinToString("") { "%02x".format(it.toInt() and 255) }
         assertTrue(reviewDigest == "d98b2c6f1b2def03d2fffb8eb9d8375dd031ffc42f5a7ae4d861470ae7a026b9")

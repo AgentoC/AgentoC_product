@@ -139,6 +139,38 @@ func (s *brokerStore) PendingServiceControls(deviceID, cursor string, now time.T
 	return records, "", false, nil
 }
 
+// Denials are bound to the persisted grant and cannot be replayed as approvals.
+func (s *brokerStore) DenyServiceControl(requestID string, proof serviceOwnerProof, now time.Time) (serviceControlRecord, bool, error) {
+	var result serviceControlRecord
+	duplicate := false
+	err := s.transact(func(state *persistedBrokerState) error {
+		device, ok := state.Devices[proof.DeviceID]
+		if !ok || state.OwnerID == "" || device.DeviceID != proof.DeviceID || device.OwnerID != state.OwnerID {
+			return errServiceControlGrant
+		}
+		for nonce, record := range state.ServiceControls {
+			if record.Grant.RequestID != requestID {
+				continue
+			}
+			if state.AutoInstallSigner == nil || state.AutoInstallSigner.KeyID != record.Grant.KeyID || record.Grant.PolicyGeneration != state.PolicyGeneration || record.Grant.BrokerInstallationID != state.InstallationID || verifyDeviceSignature(device.PublicKey, proof.Signature, serviceControlOwnerDenialSigningBytes(record.Grant)) != nil {
+				return errServiceControlGrant
+			}
+			if record.Status == statusDenied {
+				result, duplicate = record, true
+				return nil
+			}
+			if record.Status != statusAwaitingDevice || now.UnixMilli() < 0 || uint64(now.UnixMilli()) < record.Grant.IssuedMS || uint64(now.UnixMilli()) >= record.Grant.ExpiresMS {
+				return errRequestConflict
+			}
+			record.Status, record.Code, record.UpdatedAt = statusDenied, "DEVICE_DENIED", now.UTC()
+			state.ServiceControls[nonce], result = record, record
+			return s.appendAudit(state, "service_control.denied", requestID, record.Code, record.Digest)
+		}
+		return errServiceControlGrant
+	})
+	return result, duplicate, err
+}
+
 func (s *brokerStore) ClaimServiceControl(grant serviceControlGrant, signature string, proof serviceOwnerProof, now time.Time) (serviceControlRecord, bool, error) {
 	digest := fmt.Sprintf("%x", sha256.Sum256(serviceControlSigningBytes(grant)))
 	var result serviceControlRecord

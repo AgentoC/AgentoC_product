@@ -797,6 +797,18 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 		response.BrokerSignature = signature
 		return response
 	}
+	if request.Type == "service.deny" {
+		if s.serviceController == nil {
+			return newErrorResponse("SERVICE_CONTROL_UNAVAILABLE")
+		}
+		record, _, err := s.store.DenyServiceControl(request.RequestID, serviceOwnerProof{DeviceID: request.DeviceID, Signature: request.DeviceSignature}, time.Now().UTC())
+		if err != nil {
+			return newErrorResponse("SERVICE_CONTROL_AUTHORIZATION_DENIED")
+		}
+		response := newResponse("result")
+		response.RequestID, response.Status, response.Code = record.Grant.RequestID, record.Status, record.Code
+		return response
+	}
 	if request.Type == "service.execute" {
 		s.autoMu.Lock()
 		defer s.autoMu.Unlock()

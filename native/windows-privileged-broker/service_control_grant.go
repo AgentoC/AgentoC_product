@@ -42,6 +42,10 @@ func serviceControlOwnerSigningBytes(grant serviceControlGrant) []byte {
 	return append([]byte("AgentoC Windows service owner approval v1\x00"), serviceControlSigningBytes(grant)...)
 }
 
+func serviceControlOwnerDenialSigningBytes(grant serviceControlGrant) []byte {
+	return append([]byte("AgentoC Windows service owner denial v1\x00"), serviceControlSigningBytes(grant)...)
+}
+
 func serviceControlBrokerSigningBytes(grant serviceControlGrant) []byte {
 	return append([]byte("AgentoC Windows service review v1\x00"), serviceControlSigningBytes(grant)...)
 }
