@@ -4,14 +4,14 @@ import { pathToFileURL } from 'node:url';
 
 export const WINDOWS_APPROVAL_PAYLOAD_FILES = Object.freeze([
   'chat/windows-approval-gate.mjs', 'chat/windows-powershell-ast.mjs', 'chat/windows-powershell-actions.mjs',
-  'chat/windows-bash-actions.mjs', 'chat/windows-elevation-guidance.mjs', 'chat/windows-service-control.mjs', 'chat/windows-system-paths.mjs', 'chat/windows-winget-discovery.mjs',
+  'chat/windows-bash-actions.mjs', 'chat/windows-elevation-guidance.mjs', 'chat/windows-service-control.mjs', 'chat/windows-service-grant.mjs', 'chat/windows-system-paths.mjs', 'chat/windows-winget-discovery.mjs',
   'chat/windows-managed-auto-install.mjs', 'chat/windows-auto-install-authorization.mjs', 'chat/windows-auto-install-bridge.mjs', 'chat/codex-managed-hook-setup.mjs',
   'chat/windows-user-install-store.mjs', 'chat/windows-user-install-executor.mjs', 'chat/windows-user-install-bridge.mjs', 'chat/windows-run-identity.mjs',
   'lib/windows-execution-identity.mjs', 'lib/windows-owner-identity-paths.mjs', 'lib/windows-job-object.mjs', 'lib/executable-resolution.mjs',
   'scripts/initialize-windows-owner-identity.mjs', 'scripts/windows-job-object-host.cmd', 'scripts/windows-job-object-host.ps1',
   'chat/codex-windows-install-hook.mjs', 'scripts/agentoc-codex-windows-install-hook.mjs',
   'scripts/agentoc-windows-install-bridge.mjs', 'scripts/create-windows-runtime-manifest.mjs',
-  'native/windows-privileged-broker/auto_install.go', 'native/windows-privileged-broker/auto_install_windows.go', 'native/windows-privileged-broker/service_control.go', 'native/windows-privileged-broker/service_control_windows.go', 'native/windows-privileged-broker/service_image_pin_windows.go', 'native/windows-privileged-broker/service_security_windows.go',
+  'native/windows-privileged-broker/auto_install.go', 'native/windows-privileged-broker/auto_install_windows.go', 'native/windows-privileged-broker/service_control.go', 'native/windows-privileged-broker/service_control_grant.go', 'native/windows-privileged-broker/service_control_windows.go', 'native/windows-privileged-broker/service_image_pin_windows.go', 'native/windows-privileged-broker/service_security_windows.go',
   'native/windows-safe-delete/go.mod', 'native/windows-safe-delete/go.sum', 'native/windows-safe-delete/pinned_windows.go',
   'native/windows-safe-delete/tree_windows.go', 'native/windows-safe-delete/cmd/agentoc-safe-delete/main_windows.go',
   'packaging/windows/build-safe-delete.ps1', 'chat/windows-safe-delete-plan.mjs', 'chat/windows-safe-delete-bridge.mjs', 'chat/codex-windows-safe-delete-hook.mjs',
