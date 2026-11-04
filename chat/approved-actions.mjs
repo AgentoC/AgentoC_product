@@ -93,6 +93,16 @@ function sha256(value) {
   return createHash('sha256').update(String(value || ''), 'utf8').digest('hex');
 }
 
+function commandBinding(command, argv) {
+  if (typeof command !== 'string' || !Array.isArray(argv) || argv.length === 0 || argv.some(arg => typeof arg !== 'string')) return '';
+  return sha256(JSON.stringify({ command, argv }));
+}
+
+function reviewedCommand(action) {
+  if (!action?.commandBinding || !Array.isArray(action.argv)) return trimString(action?.canonicalCommand);
+  return action.argv.map(arg => /^[A-Za-z0-9_./:@=+\\-]+$/.test(arg) ? arg : JSON.stringify(arg)).join(' ');
+}
+
 function normalizeCwd(value) {
   const cwd = trimString(value);
   if (!cwd || !isAbsolute(cwd)) {
@@ -159,6 +169,7 @@ export function computeApprovedActionManifestHash({
   semanticManifestHash = '',
   operation = '',
   agentPayloadHash = '',
+  commandBinding: binding = '',
   expiresAt = '',
 } = {}) {
   const manifest = {
@@ -181,6 +192,10 @@ export function computeApprovedActionManifestHash({
     manifest.operation = trimString(operation);
     manifest.agentPayloadHash = trimString(agentPayloadHash);
   }
+  // Older in-flight approvals used the original manifest encoding. New
+  // command actions add an exact argument-vector binding without changing
+  // the identity of already-persisted records.
+  if (trimString(binding)) manifest.commandBinding = trimString(binding);
   return sha256(canonicalJson(manifest));
 }
 
@@ -326,6 +341,7 @@ export function buildApprovedAction(input = {}, context = {}) {
     },
     canonicalCommand: canonical.command,
     argv: canonical.argv,
+    commandBinding: commandBinding(canonical.command, canonical.argv),
     cwd,
     declaredCategory: boundedText(input.category || input.declaredCategory, 'category', 128),
     sawLeadingSudo: canonical.sawLeadingSudo,
@@ -375,6 +391,8 @@ export function isApprovedActionExpired(action, now = Date.now()) {
 
 export function isApprovedActionManifestIntact(action) {
   if (!action || typeof action !== 'object') return false;
+  if (action.commandBinding !== undefined && (!/^[a-f0-9]{64}$/.test(action.commandBinding) ||
+      commandBinding(action.canonicalCommand, action.argv) !== action.commandBinding)) return false;
   if (isAgentCreateApprovedAction(action)) {
     try {
       if (computeAgentCreatePayloadHash(action.agentPayload) !== trimString(action.agentPayloadHash)) return false;
@@ -460,7 +478,7 @@ export function createApprovedActionClientProjection(action) {
     description: trimString(action?.originalRequest?.description),
     summary: trimString(action?.reviewSummary),
     reason: trimString(action?.originalRequest?.reason),
-    command: trimString(action?.canonicalCommand),
+    command: reviewedCommand(action),
     cwd: trimString(action?.cwd),
     category: trimString(action?.category),
     executionClass: trimString(action?.executionClass),

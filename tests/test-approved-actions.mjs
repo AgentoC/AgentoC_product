@@ -19,6 +19,7 @@ import {
   buildApprovedAction,
   buildApprovedActionBatch,
   computeApprovedActionManifestHash,
+  createApprovedActionClientProjection,
   isApprovedActionManifestIntact,
   isApprovedActionExpired,
   redactApprovedActionText,
@@ -37,7 +38,7 @@ function throwsCode(label, fn, code) {
 }
 
 check('risk mode enables routing', isPrivilegeRoutingEnabled({ riskMode: 'recommended' }));
-check('full-auto leaves routing off', !isPrivilegeRoutingEnabled({ riskMode: 'full-auto' }));
+check('Windows full-auto enables managed routing', isPrivilegeRoutingEnabled({ riskMode: 'full-auto' }) === (process.platform === 'win32'));
 assert.deepEqual(getApprovedActionCapability({
   session: { riskMode: 'recommended' },
   runtime: { runtimeFamily: 'codex-app-server-json', supportsManagedActionMcp: true },
@@ -109,7 +110,13 @@ const legacyManifest = {
   expiresAt: host.expiresAt,
 };
 const legacyManifestHash = createHash('sha256').update(JSON.stringify(legacyManifest), 'utf8').digest('hex');
-check('command action hash remains compatible with pre-product manifests', computeApprovedActionManifestHash(host) === legacyManifestHash);
+check('old command action hash remains readable', computeApprovedActionManifestHash({ ...host, commandBinding: '' }) === legacyManifestHash);
+check('new action binds canonical command and argv', isApprovedActionManifestIntact(host));
+check('altered command invalidates action', !isApprovedActionManifestIntact({ ...host, canonicalCommand: 'systemctl restart sshd' }));
+check('altered argv invalidates action', !isApprovedActionManifestIntact({ ...host, argv: ['systemctl', 'restart', 'sshd'] }));
+const ambiguous = buildApprovedAction({ command: 'sudo systemctl restart "a b"' }, context);
+check('argument boundaries are bound', !isApprovedActionManifestIntact({ ...ambiguous, argv: ['systemctl', 'restart', 'a', 'b'] }));
+check('review shows argument boundaries', createApprovedActionClientProjection(ambiguous).command === 'systemctl restart "a b"');
 
 const sessionAction = buildApprovedAction({ command: 'rm -f /tmp/project/cache.db', description: 'Remove a generated cache' }, context);
 check('dangerous non-root action stays in session class', sessionAction.executionClass === APPROVED_ACTION_EXECUTION_CLASS.SESSION);
