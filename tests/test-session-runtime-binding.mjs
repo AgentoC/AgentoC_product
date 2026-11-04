@@ -3,17 +3,22 @@ import assert from 'assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { randomBytes } from 'crypto';
 
 const home = mkdtempSync(join(tmpdir(), 'agentoc-session-runtime-binding-'));
 const workspace = join(home, 'workspace');
 const configDir = join(home, '.config', 'agentoc');
 
 process.env.HOME = home;
+process.env.AGENTOC_INSTANCE_ROOT = home;
 process.env.AGENTOC_CONFIG_DIR = configDir;
 process.env.AGENTOC_WORK_ROOT_DIR = workspace;
 process.env.AGENTOC_MEMORY_DIR = join(home, '.agentoc', 'memory');
+process.env.AGENTOC_PROVIDER_HOMES_DIR = join(home, 'provider-homes');
+process.env.AGENTOC_RUN_SPOOL_DIR = join(home, 'data', 'chat-runs');
 process.env.AGENTOC_DISABLE_SYSTEMD_DETACHED_RUNNER = '1';
-process.env.AGENTOC_RUNNER_SUPERVISOR_SOCKET = '';
+process.env.AGENTOC_RUNNER_SUPERVISOR_SOCKET = process.platform === 'win32'
+  ? `\\\\.\\pipe\\agentoc-test-binding-${randomBytes(12).toString('hex')}` : '';
 process.env.AGENTOC_RUNNER_SUPERVISOR_REQUIRED = '';
 process.env.AGENTOC_MEMORY_WRITEBACK = 'off';
 
@@ -37,6 +42,14 @@ writeFileSync(join(configDir, 'tools.json'), JSON.stringify([
     models: [{ id: 'classic-claude-model', label: 'Classic Claude model' }],
     reasoning: { kind: 'toggle', label: 'Thinking' },
   },
+  {
+    id: 'runtime-gated',
+    name: 'Fake Gated Runtime',
+    command: process.execPath,
+    runtimeFamily: 'codex-app-server-json',
+    models: [{ id: 'fake-model', label: 'Fake model', defaultEffort: 'low' }],
+    reasoning: { kind: 'enum', label: 'Reasoning', levels: ['low'], default: 'low' },
+  },
 ], null, 2));
 
 const { createApp } = await import('../chat/apps.mjs');
@@ -53,6 +66,10 @@ const { resolveSessionRuntimeTool } = await import('../chat/session-runtime-bind
 const { appendEvents } = await import('../chat/history.mjs');
 const { flushSessionsMetaNow, mutateSessionMeta } = await import('../chat/session-meta-store.mjs');
 const { createRun, getRun, getRunManifest } = await import('../chat/runs.mjs');
+const supervisor = process.platform === 'win32'
+  ? await (await import('../chat/runner-supervisor-daemon.mjs')).createRunnerSupervisorServer({
+    spawnRunner: async () => ({ pid: null }),
+  }) : null;
 
 async function markHistoricalAgentTool(sessionId, agentId) {
   await mutateSessionMeta(sessionId, (draft) => {
@@ -64,7 +81,7 @@ async function markHistoricalAgentTool(sessionId, agentId) {
 try {
   const agent = await createApp({
     name: 'Runtime binding test Agent',
-    tool: 'runtime-fake',
+    tool: 'runtime-gated',
   });
 
   const builtInClaudeBinding = await resolveSessionRuntimeTool(
@@ -75,6 +92,15 @@ try {
     'risk-gated built-in Claude must upgrade to the bidirectional runtime');
   assert.equal(builtInClaudeBinding?.definition?.runtimeFamily, 'claude-stream-json-bidi',
     'the upgraded built-in Claude binding must expose the bidi runtime family');
+
+  const windowsAutoClaude = await resolveSessionRuntimeTool({ tool: 'claude' }, { riskMode: 'full-auto', platform: 'win32' });
+  assert.equal(windowsAutoClaude?.definition?.runtimeFamily, 'claude-stream-json-bidi',
+    'Windows full-auto must use the same gated built-in Claude runtime as approval');
+  const linuxAutoClaude = await resolveSessionRuntimeTool({ tool: 'claude' }, { riskMode: 'full-auto', platform: 'linux' });
+  assert.equal(linuxAutoClaude?.definition?.runtimeFamily, 'claude-stream-json',
+    'the Windows change must not change the existing Linux full-auto binding');
+  const customAutoClaude = await resolveSessionRuntimeTool({ tool: 'custom-claude-classic' }, { riskMode: 'full-auto', platform: 'win32' });
+  assert.equal(customAutoClaude?.tool, 'custom-claude-classic', 'custom runtime definitions must not be silently replaced');
 
   const classicClaudeBinding = await resolveSessionRuntimeTool(
     { tool: 'custom-claude-classic' },
@@ -122,11 +148,11 @@ try {
   assert.equal(parent.tool, agent.id, 'fixture should start with the historical Agent id in session.tool');
 
   const repaired = await getSession(parent.id);
-  assert.equal(repaired.tool, 'runtime-fake', 'loading a historical Agent session should repair its Runtime tool');
+  assert.equal(repaired.tool, 'runtime-gated', 'loading a historical Agent session should repair its Runtime tool');
   await flushSessionsMetaNow();
   const storedAfterRepair = JSON.parse(readFileSync(join(configDir, 'chat-sessions.json'), 'utf8'))
     .find((session) => session.id === parent.id);
-  assert.equal(storedAfterRepair?.tool, 'runtime-fake', 'Runtime repair should persist the canonical tool id');
+  assert.equal(storedAfterRepair?.tool, 'runtime-gated', 'Runtime repair should persist the canonical tool id');
 
   await appendEvents(parent.id, [
     { type: 'message', role: 'user', content: 'Start the branch.', timestamp: 1 },
@@ -135,7 +161,7 @@ try {
 
   await markHistoricalAgentTool(parent.id, agent.id);
   const forked = await forkSession(parent.id);
-  assert.equal(forked?.tool, 'runtime-fake', 'fork should resolve the Agent id to the executable Runtime tool');
+  assert.equal(forked?.tool, 'runtime-gated', 'fork should resolve the Agent id to the executable Runtime tool');
   assert.equal(forked?.templateId, agent.id, 'fork should preserve the Agent template scope');
 
   await markHistoricalAgentTool(parent.id, agent.id);
@@ -144,7 +170,7 @@ try {
     mode: 'assistant-continue',
     idempotencyKey: 'runtime-binding-fork-at',
   });
-  assert.equal(forkedAt?.tool, 'runtime-fake', 'fork-at should resolve the Agent id to the executable Runtime tool');
+  assert.equal(forkedAt?.tool, 'runtime-gated', 'fork-at should resolve the Agent id to the executable Runtime tool');
   assert.equal(forkedAt?.templateId, agent.id, 'fork-at should preserve the Agent template scope');
 
   const sendSession = await createSession(workspace, agent.id, 'Historical send session', {
@@ -159,9 +185,9 @@ try {
     queueIfBusy: false,
   });
   const manifest = await getRunManifest(submitted.run.id);
-  assert.equal(manifest?.tool, 'runtime-fake', 'submitted Run manifest should carry the Runtime tool');
-  assert.equal(manifest?.runtimeFamily, 'codex-json', 'submitted Run manifest should carry runtimeFamily');
-  assert.equal(manifest?.options?.runtimeFamily, 'codex-json', 'Run options should carry runtimeFamily');
+  assert.equal(manifest?.tool, 'runtime-gated', 'submitted Run manifest should carry the Runtime tool');
+  assert.equal(manifest?.runtimeFamily, 'codex-app-server-json', 'submitted Run manifest should carry runtimeFamily');
+  assert.equal(manifest?.options?.runtimeFamily, 'codex-app-server-json', 'Run options should carry runtimeFamily');
 
   const orphanSession = await createSession(workspace, 'missing-tool', 'Orphan Run session');
   const orphanRun = await createRun({
@@ -197,5 +223,6 @@ try {
   console.log('test-session-runtime-binding: ok');
 } finally {
   killAll();
+  await supervisor?.close();
   rmSync(home, { recursive: true, force: true });
 }
