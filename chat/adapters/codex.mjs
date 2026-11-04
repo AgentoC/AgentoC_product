@@ -203,7 +203,9 @@ function parseItem(item, lifecycle = 'item.completed') {
       break;
 
     case 'reasoning':
-      events.push(reasoningEvent(item.text || '', messageFields));
+      events.push(reasoningEvent(item.text || '', { ...messageFields,
+        reasoningLifecycle: lifecycle === 'item.completed' ? 'completed' : 'delta',
+        state: lifecycle === 'item.completed' ? 'completed' : 'running' }));
       break;
 
     case 'command_execution':

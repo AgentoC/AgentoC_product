@@ -26,6 +26,8 @@ for (const runtimeFamily of runtimeFamilies) {
 
 assert.equal(isHarnessEphemeralEvent({ type: 'text_delta' }), true);
 assert.equal(isHarnessEphemeralEvent({ type: 'reasoning' }), true);
+assert.equal(isHarnessEphemeralEvent({ type: 'reasoning', reasoningLifecycle: 'delta' }), true);
+assert.equal(isHarnessEphemeralEvent({ type: 'reasoning', reasoningLifecycle: 'completed' }), false);
 assert.equal(isHarnessEphemeralEvent({
   type: 'tool_result', runId: 'run-1', runtimeFamily: 'codex-app-server-json',
   operationLifecycle: 'delta', providerItemId: 'call-1', output: 'partial',

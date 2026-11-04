@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createCodexAdapter } from '../chat/adapters/codex.mjs';
 import { createClaudeAdapter } from '../chat/adapters/claude.mjs';
 import { createCodexAppServerAdapter } from '../chat/adapters/codex-app-server.mjs';
 import { buildSessionDisplayEvents } from '../chat/session-display-events.mjs';
@@ -25,4 +26,13 @@ for (const phase of ['commentary', 'final_answer']) {
   const visible = buildSessionDisplayEvents([{ ...message, seq: 1, runId: 'r' }]);
   assert.equal(visible.find((event) => event.type === 'message')?.messagePhase, phase);
 }
-console.log('Provider message phases preserved');
+const codexThinking = createCodexAppServerAdapter().parseLine(JSON.stringify({ method: 'item/completed', params: {
+  item: { id: 'reasoning-1', type: 'reasoning', summary: ['Inspecting the results'] },
+} })).find((event) => event.type === 'reasoning');
+assert.equal(codexThinking?.reasoningLifecycle, 'completed');
+assert.equal(codexThinking?.providerMessageId, 'reasoning-1');
+const codexCliThinking = createCodexAdapter().parseLine(JSON.stringify({ type: 'item.completed',
+  item: { id: 'reasoning-cli', type: 'reasoning', text: 'Inspecting changes' },
+})).find((event) => event.type === 'reasoning');
+assert.equal(codexCliThinking?.reasoningLifecycle, 'completed');
+console.log('Provider message phases and completed reasoning preserved');

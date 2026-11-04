@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { buildSessionDisplayEvents } from '../chat/session-display-events.mjs';
+import { getProviderEventReplayKey } from '../chat/provider-event-dedup.mjs';
 
 const events = [
   { seq: 1, type: 'message', role: 'user', content: 'Question', runId: 'r' },
@@ -28,4 +29,7 @@ const differentRun = buildSessionDisplayEvents([
   { seq: 8, firstSeq: 3, type: 'message', role: 'assistant', runId: 'r', providerMessageId: 'm', providerContentBlockIndex: 1, content: 'Reply' },
 ]);
 assert.deepEqual(differentRun.map((event) => event.type), ['message', 'thinking_block']);
+const reasoningKey = (block) => getProviderEventReplayKey({ type: 'reasoning', runId: 'r',
+  providerMessageId: 'm', providerBlockId: block, content: 'same text' });
+assert.notEqual(reasoningKey('thinking:0'), reasoningKey('thinking:1'));
 console.log('Thinking blocks preserve identity, order and complete snapshots');

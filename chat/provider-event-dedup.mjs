@@ -138,7 +138,7 @@ export function getProviderEventDedupKey(event) {
       runId,
       'reasoning',
       providerMessageId,
-      contentBlockIndex,
+      trimString(event.providerBlockId) || contentBlockIndex,
       readEventBody(event, ['content', 'bodyPreview']),
     ]);
   }

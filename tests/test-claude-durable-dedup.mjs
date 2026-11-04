@@ -11,6 +11,7 @@ import { dirname, join, delimiter } from 'path';
 import { fileURLToPath } from 'url';
 import http from 'http';
 import { spawn } from 'child_process';
+import { randomBytes } from 'crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = dirname(__dirname);
@@ -31,7 +32,7 @@ async function waitFor(predicate, description, timeoutMs = 20000, intervalMs = 1
 }
 
 function randomPort() {
-  return 49000 + Math.floor(Math.random() * 1000);
+  return 52000 + Math.floor(Math.random() * 1000);
 }
 
 function request(port, method, path, body = null) {
@@ -101,8 +102,8 @@ function setupTempHome() {
       {
         id: 'fake-claude-dedup',
         name: 'Fake Claude Dedup',
-        command: 'fake-claude-dedup',
-        runtimeFamily: 'claude-stream-json',
+        command: process.platform === 'win32' ? join(localBin, 'fake-claude-dedup.cmd') : 'fake-claude-dedup',
+        runtimeFamily: process.platform === 'win32' ? 'claude-stream-json-bidi' : 'claude-stream-json',
         promptMode: 'bare-user',
         models: [{ id: 'sonnet', label: 'Claude Sonnet' }],
       },
@@ -115,17 +116,17 @@ function setupTempHome() {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const sid = 'fake-claude-dedup-session';
 const j = (o) => console.log(JSON.stringify(o));
-(async () => {
+async function run() {
   j({ type: 'system', subtype: 'init', session_id: sid });
   // Snapshot 1: reasoning + first parallel tool_use.
   j({ type: 'assistant', session_id: sid, message: { id: 'msg_snap', model: 'sonnet', content: [
-    { type: 'thinking', thinking: 'Run two checks.' },
+    { type: 'thinking', thinking: 'Run two checks. ' + 'x'.repeat(1500) },
     { type: 'tool_use', id: 'toolu_A', name: 'Bash', input: { command: 'ls' } },
   ] } });
   await sleep(250); // land in a separate observer sync window
   // Snapshot 2: re-emits reasoning + toolu_A (duplicate) and adds toolu_B.
   j({ type: 'assistant', session_id: sid, message: { id: 'msg_snap', model: 'sonnet', content: [
-    { type: 'thinking', thinking: 'Run two checks.' },
+    { type: 'thinking', thinking: 'Run two checks. ' + 'x'.repeat(1500) },
     { type: 'tool_use', id: 'toolu_A', name: 'Bash', input: { command: 'ls' } },
     { type: 'tool_use', id: 'toolu_B', name: 'Bash', input: { command: 'pwd' } },
   ] } });
@@ -177,7 +178,16 @@ const j = (o) => console.log(JSON.stringify(o));
   ] } });
   j({ type: 'result', subtype: 'success', is_error: false, session_id: sid, result: 'Done.',
     usage: { input_tokens: 5, output_tokens: 3, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 } });
-})();
+}
+if (process.platform === 'win32') {
+  const readline = require('readline');
+  readline.createInterface({ input: process.stdin }).on('line', (line) => {
+    const message = JSON.parse(line);
+    if (message.type === 'control_request' && message.request?.subtype === 'initialize') {
+      j({ type: 'control_response', response: { subtype: 'success', request_id: message.request_id, response: {} } });
+    } else if (message.type === 'user') { void run(); }
+  });
+} else { void run(); }
 `,
     'utf8',
   );
@@ -188,11 +198,10 @@ const j = (o) => console.log(JSON.stringify(o));
 }
 
 async function startServer({ home, configDir, memoryDir, workDir, localBin, port }) {
-  const child = spawn(process.execPath, ['chat-server.mjs'], {
-    cwd: repoRoot,
-    env: {
+  const supervisorPipe = process.platform === 'win32' ? `\\\\.\\pipe\\agentoc-test-dedup-${randomBytes(12).toString('hex')}` : '';
+  const env = {
       ...process.env,
-      AGENTOC_RUNNER_SUPERVISOR_SOCKET: "",
+      AGENTOC_RUNNER_SUPERVISOR_SOCKET: supervisorPipe,
       AGENTOC_RUNNER_SUPERVISOR_REQUIRED: "",
       AGENTOC_RUNNER_LIFECYCLE_SOCKET: "",
       AGENTOC_RUNNER_LIFECYCLE_REQUIRED: "",
@@ -201,10 +210,13 @@ async function startServer({ home, configDir, memoryDir, workDir, localBin, port
       AGENTOC_AUTH_SESSION_SECRET: 'test-auth-session-secret',
       AGENTOC_INSTANCE_ROOT: home,
       AGENTOC_PROJECT_ROOT: repoRoot,
-      AGENTOC_PROVIDER_HOMES_DIR: '',
-      AGENTOC_RUN_SPOOL_DIR: '',
+      AGENTOC_PROVIDER_HOMES_DIR: supervisorPipe ? join(home, 'provider-homes') : '',
+      AGENTOC_RUN_SPOOL_DIR: supervisorPipe ? join(home, 'data', 'chat-runs') : '',
       AGENTOC_USER_SHELL_ENV_B64: '',
       HOME: home,
+      USERPROFILE: home,
+      LOCALAPPDATA: join(home, 'local-appdata'),
+      APPDATA: join(home, 'roaming-appdata'),
       AGENTOC_CONFIG_DIR: configDir,
       AGENTOC_MEMORY_DIR: memoryDir,
       AGENTOC_WORK_ROOT_DIR: workDir,
@@ -212,13 +224,22 @@ async function startServer({ home, configDir, memoryDir, workDir, localBin, port
       CHAT_PORT: String(port),
       SECURE_COOKIES: '0',
       PATH: `${localBin}${delimiter}${process.env.PATH || ''}`,
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
+  };
+  let supervisorOutput = '';
+  const supervisor = supervisorPipe ? spawn(process.execPath, ['chat/runner-supervisor-daemon.mjs'], {
+    cwd: repoRoot, env, stdio: ['ignore', 'pipe', 'pipe'],
+  }) : null;
+  supervisor?.stdout.on('data', data => { supervisorOutput += data.toString(); });
+  supervisor?.stderr.on('data', data => { supervisorOutput += data.toString(); });
+  const child = spawn(process.execPath, ['chat-server.mjs'], {
+    cwd: repoRoot, env, stdio: ['ignore', 'pipe', 'pipe'],
   });
 
   let childError = '';
   child.stderr.on('data', data => { childError = (childError + data).slice(-8000); });
-  try { await waitFor(async () => {
+  try {
+    if (supervisor) await waitFor(() => supervisorOutput.includes('[runner-supervisor] listening'), 'supervisor startup');
+    await waitFor(async () => {
     if (child.exitCode !== null) throw new Error(`Fixture server exited ${child.exitCode}: ${childError}`);
     try {
       const res = await request(port, 'GET', '/api/auth/me');
@@ -228,16 +249,19 @@ async function startServer({ home, configDir, memoryDir, workDir, localBin, port
     }
   }, 'server startup'); } catch (error) {
     if (child.exitCode === null) child.kill('SIGTERM');
+    if (supervisor && supervisor.exitCode === null) supervisor.kill('SIGTERM');
     throw new Error(`${error.message}\n${childError}`);
   }
 
-  return { child };
+  return { child, supervisor };
 }
 
 async function stopServer(server) {
-  if (!server?.child || server.child.exitCode !== null || server.child.signalCode !== null) return;
-  server.child.kill('SIGTERM');
-  await waitFor(() => server.child.exitCode !== null || server.child.signalCode !== null, 'server shutdown');
+  for (const process of [server?.child, server?.supervisor]) {
+    if (!process || process.exitCode !== null || process.signalCode !== null) continue;
+    process.kill('SIGTERM');
+    await waitFor(() => process.exitCode !== null || process.signalCode !== null, 'fixture shutdown');
+  }
 }
 
 async function createSession(port) {
@@ -260,7 +284,7 @@ async function submitMessage(port, sessionId) {
     tool: 'fake-claude-dedup',
     model: 'sonnet',
   });
-  assert.ok(res.status === 202 || res.status === 200, 'submit message should succeed');
+  assert.ok(res.status === 202 || res.status === 200, `submit message should succeed: ${res.status} ${JSON.stringify(res.json)}`);
   return res.json.run;
 }
 
@@ -356,6 +380,12 @@ try {
   const displayRes = await request(port, 'GET', `/api/sessions/${session.id}/events`);
   assert.equal(displayRes.status, 200, 'display events request should succeed');
   assert.equal(displayRes.json.filter, 'visible', 'default events endpoint returns the display projection');
+  const displayEvents = displayRes.json.events || [];
+  const thoughtIndex = displayEvents.findIndex((event) => event.type === 'thinking_block' && String(event.content).includes('Run two checks.'));
+  const answerIndex = displayEvents.findIndex((event) => event.type === 'message' && event.content === 'Done.');
+  assert.ok(thoughtIndex >= 0 && answerIndex > thoughtIndex, 'persisted thinking remains before the final reply');
+  assert.equal(displayEvents[thoughtIndex].content, 'Run two checks. ' + 'x'.repeat(1500), 'full thinking body is restored from durable storage');
+  assert.equal(displayEvents[answerIndex].messagePhase, 'final_answer', 'the final reply retains its explicit phase');
   const displayMessages = (displayRes.json.events || []).filter(
     (event) => event.type === 'message' && event.role === 'assistant',
   );

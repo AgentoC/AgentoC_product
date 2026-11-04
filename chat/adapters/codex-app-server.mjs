@@ -721,7 +721,11 @@ function parseThreadItem(item, lifecycle = 'completed', params = {}, state = {})
         ...(Array.isArray(item.summary) ? item.summary : []),
         ...(Array.isArray(item.content) ? item.content : []),
       ].filter(Boolean);
-      if (parts.length > 0) events.push(reasoningEvent(parts.join('\n\n')));
+      if (parts.length > 0) events.push(reasoningEvent(parts.join('\n\n'), {
+        ...(providerItemId ? { providerMessageId: providerItemId, providerBlockId: providerItemId } : {}),
+        reasoningLifecycle: lifecycle === 'completed' ? 'completed' : 'delta',
+        state: lifecycle === 'completed' ? 'completed' : 'running',
+      }));
       break;
     }
 

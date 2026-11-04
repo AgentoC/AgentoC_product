@@ -35,12 +35,12 @@ const RUNTIME_FAMILY_POLICIES = Object.freeze({
   'kilo-json': DEFAULT_HARNESS_EVENT_POLICY,
 });
 
-const PROVIDER_TRANSIENT_TYPES = new Set(['text_delta', 'reasoning']);
+const PROVIDER_TRANSIENT_TYPES = new Set(['text_delta']);
 const RUNTIME_PROGRESS_TYPES = new Set(['status', 'usage']);
 const IMPORTANT_HARNESS_EVENT_TYPES = new Set([
   'message', 'tool_result', 'approval_request', 'approval_response',
   'privileged_batch_request', 'privileged_batch_response', 'privileged_exec_result',
-  'file_change', 'plan',
+  'file_change', 'plan', 'reasoning',
 ]);
 
 function trimString(value) {
@@ -74,6 +74,7 @@ export function getHarnessEventPolicy(runtimeFamily = '') {
 
 export function isProviderTransientEvent(event) {
   if (PROVIDER_TRANSIENT_TYPES.has(event?.type)) return true;
+  if (event?.type === 'reasoning') return event.reasoningLifecycle !== 'completed' && event.state !== 'completed';
   // Codex app-server streams tool output as a sequence of operation deltas.
   // Those deltas are live UI updates, not durable tool results.  Persisting
   // every fragment turns a single command into thousands of history files.
@@ -99,7 +100,7 @@ export function prepareHarnessEventForPersistence(event, policy = null) {
   const resolved = policy || getHarnessEventPolicy(event.runtimeFamily);
   const next = { ...event };
   let changed = false;
-  if (typeof next.content === 'string' && next.type === 'message') {
+  if (typeof next.content === 'string' && (next.type === 'message' || next.type === 'reasoning')) {
     const clipped = clipMiddle(next.content, resolved.maxPersistedMessageBytes);
     if (clipped !== next.content) {
       next.content = clipped;

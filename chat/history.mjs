@@ -970,6 +970,7 @@ function inlineLimitFor(event) {
 function shouldDeferEventBodyInIndex(event, options = {}) {
   if (options.includeBodies === true) return false;
   if (event?.type === 'message' && options.includeMessageBodies === true) return false;
+  if (event?.type === 'reasoning' && options.includeReasoningBodies === true) return false;
   return DEFERRED_INDEX_BODY_TYPES.has(event?.type);
 }
 
@@ -1822,7 +1823,8 @@ async function hydrateEvent(sessionId, event) {
 // contract; everything else stays deferred.
 function shouldHydrateLogicalEventBody(event, options = {}) {
   if (options.includeBodies === true) return true;
-  return event?.type === 'message' && options.includeMessageBodies === true;
+  return (event?.type === 'message' && options.includeMessageBodies === true)
+    || (event?.type === 'reasoning' && options.includeReasoningBodies === true);
 }
 
 function incrementCounts(counts, event) {

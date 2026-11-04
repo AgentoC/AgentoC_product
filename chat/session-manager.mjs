@@ -6038,8 +6038,8 @@ async function syncDetachedRunUnlocked(sessionId, runId) {
     run = firstDeltaRun;
   }
   // Persist user-visible and recovery-relevant events, then reconstruct the
-  // WebSocket push in normalized order. Detailed reasoning remains available in
-  // provider-native logs/spool but is no longer duplicated into chat history.
+  // WebSocket push in normalized order. Finalized reasoning blocks are retained
+  // once so historical timelines can restore their original position.
   const eventPolicy = getHarnessEventPolicy(run.runtimeFamily || manifest?.runtimeFamily);
   const durableEvents = limitHarnessDurableEvents(
     normalizedEvents.filter(isDurableChatHistoryEvent),
@@ -9742,6 +9742,7 @@ export async function getSessionEventsPage(sessionId, options = {}) {
   const page = await readEventsPage(sessionId, {
     includeBodies: options?.includeBodies === true,
     includeMessageBodies: options?.includeMessageBodies === true,
+    includeReasoningBodies: options?.includeReasoningBodies === true,
     limit: options?.limit,
     afterSeq: options?.afterSeq,
     beforeSeq: options?.beforeSeq,
@@ -9832,6 +9833,7 @@ export async function getSessionTimelinePage(sessionId, options = {}) {
     const page = await getSessionEventsPage(sessionId, {
       includeBodies: false,
       includeMessageBodies: true,
+      includeReasoningBodies: true,
       limit: rawLimit,
       beforeSeq: rawBeforeSeq,
       afterSeq: rawBeforeSeq > 0 ? 0 : afterSeq,
