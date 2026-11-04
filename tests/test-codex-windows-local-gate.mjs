@@ -42,12 +42,14 @@ const installCommand = process.env.AGENTOC_QA_HOOK_WRAPPED_INSTALL === '1'
   : packageCommand;
 const managedDelete = process.env.AGENTOC_QA_HOOK_MANAGED_DELETE === '1';
 const fileCommand = process.env.AGENTOC_QA_FILE_COMMAND || '';
-if (fileCommand && (!['rename', 'clear'].includes(fileCommand) || managedDelete || managedInstall || process.env.AGENTOC_QA_HOOK_REWRITE === '1' || process.env.AGENTOC_QA_SENSITIVE === '1')) throw new Error('invalid file command fixture mode');
+if (fileCommand && (!['rename', 'clear', 'dotnet'].includes(fileCommand) || managedDelete || managedInstall || process.env.AGENTOC_QA_HOOK_REWRITE === '1' || process.env.AGENTOC_QA_SENSITIVE === '1')) throw new Error('invalid file command fixture mode');
 const fileFixture = path.join(home, 'ordinary-fixture.txt');
 if (fileCommand) await writeFile(fileFixture, 'fixture content');
 const safeFileCommand = fileCommand === 'rename'
   ? `Rename-Item -LiteralPath '${fileFixture.replace(/'/g, "''")}' -NewName renamed-fixture.txt`
-  : `Clear-Content -LiteralPath '${fileFixture.replace(/'/g, "''")}'`;
+  : fileCommand === 'dotnet'
+    ? `[System.IO.File]::WriteAllText('${fileFixture.replace(/'/g, "''")}', 'dotnet fixture')`
+    : `Clear-Content -LiteralPath '${fileFixture.replace(/'/g, "''")}'`;
 const managedDeleteRelative = managedDelete && process.env.AGENTOC_QA_RELATIVE_DELETE === '1';
 const dangerousRetry = managedDeleteRelative && process.env.AGENTOC_QA_RELATIVE_DANGEROUS === '1';
 const safeDeleteBinary = process.env.AGENTOC_TEST_SAFE_DELETE_BINARY;
@@ -311,7 +313,8 @@ createInterface({ input: child.stdout }).on('line', async line => {
     if (managedDelete && (await readFile(path.join(alternateCwd, 'build', 'keep.txt'), 'utf8')) !== 'keep') { fixtureError('unrelated workdir target was changed'); return; }
     const fileResult = fileCommand === 'rename'
       ? await readFile(path.join(home, 'renamed-fixture.txt'), 'utf8').catch(() => null) === 'fixture content' && !await access(fileFixture).then(() => true, () => false)
-      : fileCommand === 'clear' ? await readFile(fileFixture, 'utf8').catch(() => null) === '' : true;
+      : fileCommand === 'clear' ? await readFile(fileFixture, 'utf8').catch(() => null) === ''
+        : fileCommand === 'dotnet' ? await readFile(fileFixture, 'utf8').catch(() => null) === 'dotnet fixture' : true;
     if (msg.params.item.exitCode !== 0 || !fileResult || (!fileCommand && !String(msg.params.item.aggregatedOutput || '').includes(managedDelete ? '"deleted":2' : managedInstall ? 'Installation completed successfully' : hookExpectedRun ? 'agentoc-rewritten' : 'agentoc-fixture')) || (!hookExpectedRun && hookCompleted) || (managedInstall && submissions !== 1)) {
       process.stderr.write('approved harmless command failed\n'); process.exitCode = 1;
     } else process.stdout.write(fileCommand ? `codex-windows-local-gate: ${fileCommand} executed on isolated fixture\n` : managedDelete ? 'codex-windows-local-gate: bound deletion used the approved absolute target\n' : managedInstall ? 'codex-windows-local-gate: managed install bridge reached mock control plane\n' : hookShouldFail ? 'codex-windows-local-gate: failed hook; original passed gate\n' : hookExpectedRun ? 'codex-windows-local-gate: hook rewrote approved harmless command\n' : hookExperiment ? 'codex-windows-local-gate: untrusted hook skipped; original passed gate\n' : 'codex-windows-local-gate: auto-allow executed harmless command\n');
