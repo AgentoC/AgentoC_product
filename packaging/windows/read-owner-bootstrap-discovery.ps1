@@ -4,12 +4,19 @@ param([switch]$LibraryOnly,[ValidateSet('cli','browser','activation')][string]$P
 $ErrorActionPreference='Stop'
 function Get-OwnerProductRoot {
   $candidate=$env:AGENTOC_INSTALL_ROOT
-  if([string]::IsNullOrWhiteSpace($candidate)){$candidate='C:\Program Files\AgentoC'}
+  if([string]::IsNullOrWhiteSpace($candidate)){$candidate=Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles)) 'AgentoC'}
   if($candidate -notmatch '\A[A-Za-z]:\\'){throw 'OBD_INSTALL_ROOT_INVALID'}
   $full=[IO.Path]::GetFullPath($candidate).TrimEnd('\')
   if($full.Length -le 2){throw 'OBD_INSTALL_ROOT_INVALID'}
   return $full
 }
+function Get-OwnerProgramDataPath {
+  $path=[Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)
+  if([string]::IsNullOrWhiteSpace($path) -or $path -notmatch '\A[A-Za-z]:\\'){throw 'OBD_PROGRAMDATA_UNAVAILABLE'}
+  return [IO.Path]::GetFullPath($path).TrimEnd('\')
+}
+function Get-OwnerDataRoot { return Join-Path (Get-OwnerProgramDataPath) 'AgentoC' }
+function Get-OwnerInstanceRoot { return Join-Path (Get-OwnerDataRoot) 'instances\owner' }
 if(-not ('AgentoCOwnerFilePin' -as [type])){
 Add-Type -TypeDefinition @'
 using System;
@@ -117,14 +124,15 @@ function Assert-OwnerObjectAcl([string]$Path,[string[]]$Allowed,[switch]$Ancesto
         # Only the fixed OS ProgramData ancestor may have metadata writers.
         # DELETE/DELETE_CHILD/WRITE_DAC/WRITE_OWNER always refuse. Metadata
         # writers can set reparse points, so ACL ownership alone is insufficient.
-        if(-not $Ancestor -or [IO.Path]::GetFullPath($Path) -ine 'C:\ProgramData' -or ([int64]$qaAce.FileSystemRights -band 0x500d0040)){throw 'OBD_OBJECT_WRITABLE_BY_FOREIGN_IDENTITY'}
+        if(-not $Ancestor -or [IO.Path]::GetFullPath($Path).TrimEnd('\') -ine (Get-OwnerProgramDataPath) -or ([int64]$qaAce.FileSystemRights -band 0x500d0040)){throw 'OBD_OBJECT_WRITABLE_BY_FOREIGN_IDENTITY'}
         $qaNeedsWitness=$true
       }
     }
   }
   if($qaNeedsWitness){
     if($null -eq $Pins){throw 'OBD_ANCESTOR_WITNESS_REQUIRED'}
-    foreach($qaHandle in [AgentoCOwnerFilePin]::NonemptyDirectory('C:\ProgramData','C:\ProgramData\Microsoft')){$Pins.Add($qaHandle)}
+    $qaProgramData=Get-OwnerProgramDataPath
+    foreach($qaHandle in [AgentoCOwnerFilePin]::NonemptyDirectory($qaProgramData,(Join-Path $qaProgramData 'Microsoft'))){$Pins.Add($qaHandle)}
   }
 }
 function Read-OwnerPinnedFile([string]$Path,[string[]]$Allowed,[Collections.Generic.List[IDisposable]]$Pins,[int]$Maximum=8192,[string[]]$AncestorAllowed=$null){
@@ -144,12 +152,12 @@ function Read-OwnerPinnedFile([string]$Path,[string[]]$Allowed,[Collections.Gene
 }
 function Get-OwnerBootstrapLivePath([string]$RequestedPurpose){
   switch -CaseSensitive ($RequestedPurpose){
-    'cli' {return 'C:\ProgramData\AgentoC\instances\owner\runtime\owner-bootstrap-cli-live.json'}
-    'browser' {return 'C:\ProgramData\AgentoC\instances\owner\runtime\owner-bootstrap-browser-live.json'}
+    'cli' {return Join-Path (Get-OwnerInstanceRoot) 'runtime\owner-bootstrap-cli-live.json'}
+    'browser' {return Join-Path (Get-OwnerInstanceRoot) 'runtime\owner-bootstrap-browser-live.json'}
     default {throw 'OBD_PURPOSE_INVALID'}
   }
 }
-function Assert-OwnerPolicyInstallComplete([string]$InstanceRoot='C:\ProgramData\AgentoC\instances\owner'){
+function Assert-OwnerPolicyInstallComplete([string]$InstanceRoot=(Get-OwnerInstanceRoot)){
   foreach($marker in @('owner-services.prepare-lock','owner-data.prepare-lock','owner-msi.prepare-lock','owner-identity.initialize-lock','owner-msi.prepared.json','owner-activation.prepare-lock','owner-policy.prepare-lock','owner-msi.policy.json')){
     if(Test-Path -LiteralPath (Join-Path (Get-OwnerProductRoot) $marker)){throw 'OBD_INSTALL_INCOMPLETE'}
   }
@@ -163,8 +171,9 @@ function Read-InstalledOwnerBootstrap {
     $qaReleasePath=Join-Path (Get-OwnerProductRoot) 'payload\owner-bootstrap-release.json'
     if(-not(Test-Path -LiteralPath $qaReleasePath)){throw 'OBD_RELEASE_NOT_INSTALLED'}
     $qaRelease=Read-OwnerPinnedFile $qaReleasePath $qaAdmin $qaPins
-    if(-not(Test-Path -LiteralPath 'C:\ProgramData\AgentoC\instances\owner\security\owner-bootstrap-install.json')){throw 'OBD_INSTALL_POLICY_MISSING'}
-    $qaInstall=Read-OwnerPinnedFile 'C:\ProgramData\AgentoC\instances\owner\security\owner-bootstrap-install.json' $qaAdmin $qaPins
+    $qaInstallPath=Join-Path (Get-OwnerInstanceRoot) 'security\owner-bootstrap-install.json'
+    if(-not(Test-Path -LiteralPath $qaInstallPath)){throw 'OBD_INSTALL_POLICY_MISSING'}
+    $qaInstall=Read-OwnerPinnedFile $qaInstallPath $qaAdmin $qaPins
     $qaInstallObject=([Text.UTF8Encoding]::new($false,$true)).GetString($qaInstall)|ConvertFrom-Json
     if($qaInstallObject.controlSid -cnotmatch '^S-1-5-80-(\d+-){4}\d+$'){throw 'OBD_INSTALL_POLICY_INVALID'}
     if($Purpose -cne 'activation'){

@@ -7,7 +7,7 @@ $activationAction=$Action;$preserveExistingIdentity=$PreserveExistingIdentity.Is
 . (Join-Path $PSScriptRoot 'prepare-owner-service-data.ps1') -LibraryOnly
 . (Join-Path $PSScriptRoot 'prepare-owner-install-policy.ps1') -LibraryOnly
 $pins=[Collections.Generic.List[IDisposable]]::new();$handles=[Collections.Generic.List[IDisposable]]::new()
-$product=Get-OwnerProductRoot;$root='C:\ProgramData\AgentoC\instances\owner';$stage='administrator';$privateRead=$false
+$product=Get-OwnerProductRoot;$root=Get-OwnerInstanceRoot;$stage='administrator';$privateRead=$false
 $transaction=$null;$activationLeases=@();$quarantine='not-started'
 $healthDiagnostics=[ordered]@{attempts=0;httpStatus=$null;activationEndpointStatus=$null;healthCheckGatePassed=$false;ok=$null;cliTransport=$null;ownerActivationState=$null;ownerActivationReady=$null;ownerActivationCode=$null;pid=$null;pidIsInt32=$false;nodeProcessFound=$false;nodeProcessQuery='not-attempted';nodeParentMatchesControl=$false;nodeExecutableMatchesProductRoot=$false;listenerCount=-1;listenerOwnerMatches=$false;lastErrorType=$null;webExceptionStatus=$null;socketErrorCode=$null;serviceLogs=@()}
 $nextNodeProcessEnumerationAt=[DateTime]::MinValue
@@ -91,7 +91,7 @@ try {
  $actual=@(Get-OwnerDataServices);$control=($actual|Where-Object {$_.role -eq 'control'}).sid;$executor=($actual|Where-Object {$_.role -eq 'supervisor'}).sid
  $stage='layout'
  foreach($row in @(Get-OwnerDataLayout $control $executor $prepared.ownerSid)){
-  $path=if($row.relative){Join-Path 'C:\ProgramData\AgentoC' $row.relative}else{'C:\ProgramData\AgentoC'};$pins.Add([AgentoCOwnerFilePin]::Directory($path));$acl=[IO.Directory]::GetAccessControl($path)
+  $path=if($row.relative){Join-Path (Get-OwnerDataRoot) $row.relative}else{Get-OwnerDataRoot};$pins.Add([AgentoCOwnerFilePin]::Directory($path));$acl=[IO.Directory]::GetAccessControl($path)
   if(-not $acl.AreAccessRulesProtected -or $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -cne 'S-1-5-32-544' -or (Get-OwnerDataAclSddl $acl ([Security.AccessControl.AccessControlSections]::Access)) -cne (Get-OwnerDataAclSddl (New-OwnerDataAcl $row.grants $row.traverseOnly) ([Security.AccessControl.AccessControlSections]::Access))){throw 'OAC_LAYOUT_MISMATCH'}
  }
  $stage='policy';$policyInput=Read-ActivationJson (Join-Path $root 'security\owner-bootstrap-install.json') $admin;$policy=$policyInput.value

@@ -5,7 +5,8 @@ using System.Reflection;using System.Runtime.InteropServices;using System.Securi
 using System.Security.Principal;using System.Security.Cryptography;using System.Text.RegularExpressions;using System.Web.Script.Serialization;
 using Microsoft.Win32.SafeHandles;using AgentoC.ServiceHost;
 static class ManagedOwnerMsiBridge {
- static string Product=@"C:\Program Files\AgentoC";const string Data=@"C:\ProgramData\AgentoC";
+ static string Product=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"AgentoC");
+ static readonly string Data=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"AgentoC");
  const string BrokerServiceName="AgentoC-PrivilegedBroker";
  const uint ScManagerConnect=0x0001,ServiceQueryConfig=0x0001,ServiceChangeConfig=0x0002,ServiceReadControl=0x00020000;
  const uint ServiceConfigSidInfo=5,ServiceConfigRequiredPrivileges=6,ServiceSidUnrestricted=1;
@@ -138,15 +139,19 @@ static class ManagedOwnerMsiBridge {
    byte[] bytes=new byte[(int)needed];Marshal.Copy(buffer,bytes,0,bytes.Length);var descriptor=new RawSecurityDescriptor(bytes,0);
    Need(descriptor.Owner!=null&&Admins.Contains(descriptor.Owner.Value)&&descriptor.DiscretionaryAcl!=null,"OMI_BROKER_SERVICE_ACL_REFUSED");
    int dangerous=unchecked((int)(ServiceChangeConfigRight|ServiceDeleteRight|ServiceStartRight|ServiceStopRight|ServicePauseContinueRight|ServiceUserControlRight|WriteDacRight|WriteOwnerRight|GenericWriteRight|GenericAllRight));
+   string controlSid=new NTAccount("NT SERVICE","AgentoC-ControlPlane").Translate(typeof(SecurityIdentifier)).Value;bool controlQuery=false;
    foreach(GenericAce ace in descriptor.DiscretionaryAcl){
     if(ace.AceType==AceType.AccessDenied||ace.AceType==AceType.AccessDeniedObject)continue;
     var common=ace as CommonAce;Need(common!=null&&common.AceQualifier==AceQualifier.AccessAllowed,"OMI_BROKER_SERVICE_ACL_ACE_REFUSED");
     if(!Admins.Contains(common.SecurityIdentifier.Value))Need((common.AccessMask&dangerous)==0,"OMI_BROKER_SERVICE_ACL_MUTATION_REFUSED");
+    if(common.SecurityIdentifier.Value==controlSid){Need(common.AccessMask==4,"OMI_BROKER_CONTROL_QUERY_RIGHTS_REFUSED");controlQuery=true;}
    }
+   Need(controlQuery,"OMI_BROKER_CONTROL_QUERY_RIGHTS_REQUIRED");
   }finally{Marshal.FreeHGlobal(buffer);}
  }
  static void SetBrokerServiceDacl(IntPtr service){
-  var descriptor=new RawSecurityDescriptor("O:SYG:SYD:(A;;GA;;;SY)(A;;GA;;;BA)");byte[] bytes=new byte[descriptor.BinaryLength];descriptor.GetBinaryForm(bytes,0);IntPtr buffer=Marshal.AllocHGlobal(bytes.Length);
+  string controlSid=new NTAccount("NT SERVICE","AgentoC-ControlPlane").Translate(typeof(SecurityIdentifier)).Value;
+  var descriptor=new RawSecurityDescriptor("O:SYG:SYD:(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x00000004;;;"+controlSid+")");byte[] bytes=new byte[descriptor.BinaryLength];descriptor.GetBinaryForm(bytes,0);IntPtr buffer=Marshal.AllocHGlobal(bytes.Length);
   try{Marshal.Copy(bytes,0,buffer,bytes.Length);Need(SetServiceObjectSecurity(service,7,buffer),"OMI_BROKER_SERVICE_ACL_APPLY_FAILED");}finally{Marshal.FreeHGlobal(buffer);}
  }
  static void SetBrokerServiceConfiguration(IntPtr service,uint level,IntPtr info){Need(ChangeServiceConfig2(service,level,info),"OMI_BROKER_SERVICE_CONFIG_APPLY_FAILED");}
@@ -536,15 +541,16 @@ static class ManagedOwnerMsiBridge {
    if(owner!=null)scriptArguments+=" -OwnerSid "+owner;
    // The process-only bypass is scoped to this embedded script, extracted into
    // the protected temporary root above; machine execution policy stays intact.
-   var info=new ProcessStartInfo{FileName=@"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",Arguments="-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \""+Path.Combine(root,script)+"\""+scriptArguments,UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true};
-   info.EnvironmentVariables.Clear();foreach(string key in new[]{"SystemRoot","WINDIR"})info.EnvironmentVariables[key]=@"C:\Windows";info.EnvironmentVariables["AGENTOC_INSTALL_ROOT"]=Product;info.EnvironmentVariables["TEMP"]=info.EnvironmentVariables["TMP"]=root;
+   string windowsRoot=Environment.GetFolderPath(Environment.SpecialFolder.Windows);Need(!String.IsNullOrWhiteSpace(windowsRoot)&&Path.IsPathRooted(windowsRoot),"OMI_WINDOWS_DIRECTORY_UNAVAILABLE");
+   var info=new ProcessStartInfo{FileName=Path.Combine(Environment.SystemDirectory,@"WindowsPowerShell\v1.0\powershell.exe"),Arguments="-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \""+Path.Combine(root,script)+"\""+scriptArguments,UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true};
+   info.EnvironmentVariables.Clear();foreach(string key in new[]{"SystemRoot","WINDIR"})info.EnvironmentVariables[key]=windowsRoot;info.EnvironmentVariables["AGENTOC_INSTALL_ROOT"]=Product;info.EnvironmentVariables["TEMP"]=info.EnvironmentVariables["TMP"]=root;
    using(var child=new Process{StartInfo=info})using(var outputDone=new System.Threading.ManualResetEventSlim())using(var errorDone=new System.Threading.ManualResetEventSlim()){
     var output=new StringBuilder();int errorBytes=0,overflow=0;
     child.OutputDataReceived+=(s,e)=>{if(e.Data==null){outputDone.Set();return;}lock(output){if(output.Length+e.Data.Length>65536)System.Threading.Interlocked.Exchange(ref overflow,1);else output.AppendLine(e.Data);}};
     child.ErrorDataReceived+=(s,e)=>{if(e.Data==null){errorDone.Set();return;}if(System.Threading.Interlocked.Add(ref errorBytes,e.Data.Length)>65536)System.Threading.Interlocked.Exchange(ref overflow,1);};
     Need(child.Start(),"OMI_CHILD_START_FAILED");child.BeginOutputReadLine();child.BeginErrorReadLine();
     if(!child.WaitForExit(action=="Activate"||action=="UpgradeActivate"||action=="ActiveRemove"||action=="PrevalidateStop"||action=="RemoveRollback"?240000:120000)){
-     using(var killer=Process.Start(new ProcessStartInfo{FileName=@"C:\Windows\System32\taskkill.exe",Arguments="/PID "+child.Id+" /T /F",UseShellExecute=false,CreateNoWindow=true}))killer.WaitForExit(15000);
+     using(var killer=Process.Start(new ProcessStartInfo{FileName=Path.Combine(Environment.SystemDirectory,"taskkill.exe"),Arguments="/PID "+child.Id+" /T /F",UseShellExecute=false,CreateNoWindow=true}))killer.WaitForExit(15000);
      throw new InvalidOperationException("OMI_CHILD_TIMEOUT");
     }
     Need(outputDone.Wait(5000)&&errorDone.Wait(5000)&&overflow==0,"OMI_SCRIPT_OUTPUT_REFUSED");

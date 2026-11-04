@@ -42,6 +42,7 @@ namespace AgentoC.ServiceHost
                     PipeOptions.None, TokenImpersonationLevel.Impersonation))
                 {
                     pipe.Connect(5000);
+                    BrokerPipeServerIdentity.Verify(pipe.SafePipeHandle);
                     pipe.Write(request, 0, request.Length);
                     pipe.Flush();
                     byte[] header = ReadExactly(pipe, 4);
@@ -85,6 +86,48 @@ namespace AgentoC.ServiceHost
                 offset += count;
             }
             return result;
+        }
+    }
+
+    // A local process may create a same-named pipe before the service starts.
+    // Bind the connected pipe to the PID currently registered by SCM for the
+    // dedicated broker service before sending any request or trusting a reply.
+    internal static class BrokerPipeServerIdentity
+    {
+        const uint ScManagerConnect = 0x0001, ServiceQueryStatus = 0x0004;
+        const uint ServiceWin32OwnProcess = 0x0010, ServiceRunning = 0x0004;
+        [StructLayout(LayoutKind.Sequential)]
+        struct ServiceStatusProcess {
+            public uint serviceType, currentState, controlsAccepted, win32ExitCode, serviceSpecificExitCode;
+            public uint checkPoint, waitHint, processId, serviceFlags;
+        }
+        [DllImport("kernel32.dll", SetLastError=true)]
+        static extern bool GetNamedPipeServerProcessId(SafePipeHandle pipe, out uint serverProcessId);
+        [DllImport("advapi32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+        static extern IntPtr OpenSCManager(string machineName, string databaseName, uint desiredAccess);
+        [DllImport("advapi32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+        static extern IntPtr OpenService(IntPtr manager, string serviceName, uint desiredAccess);
+        [DllImport("advapi32.dll", SetLastError=true)]
+        static extern bool QueryServiceStatusEx(IntPtr service, int infoLevel, out ServiceStatusProcess status, uint bufferSize, out uint bytesNeeded);
+        [DllImport("advapi32.dll", SetLastError=true)]
+        static extern bool CloseServiceHandle(IntPtr handle);
+
+        internal static void Verify(SafePipeHandle pipe) {
+            uint serverPid;
+            if (pipe == null || pipe.IsInvalid || !GetNamedPipeServerProcessId(pipe, out serverPid) || serverPid == 0)
+                throw new InvalidOperationException("BROKER_PIPE_SERVER_IDENTITY_REFUSED");
+            IntPtr manager = OpenSCManager(null, null, ScManagerConnect);
+            if (manager == IntPtr.Zero) throw new InvalidOperationException("BROKER_PIPE_SERVER_IDENTITY_REFUSED");
+            try {
+                IntPtr service = OpenService(manager, "AgentoC-PrivilegedBroker", ServiceQueryStatus);
+                if (service == IntPtr.Zero) throw new InvalidOperationException("BROKER_PIPE_SERVER_IDENTITY_REFUSED");
+                try {
+                    ServiceStatusProcess status; uint needed;
+                    if (!QueryServiceStatusEx(service, 0, out status, (uint)Marshal.SizeOf(typeof(ServiceStatusProcess)), out needed)
+                        || status.serviceType != ServiceWin32OwnProcess || status.currentState != ServiceRunning || status.processId != serverPid)
+                        throw new InvalidOperationException("BROKER_PIPE_SERVER_IDENTITY_REFUSED");
+                } finally { CloseServiceHandle(service); }
+            } finally { CloseServiceHandle(manager); }
         }
     }
 
@@ -378,6 +421,12 @@ namespace AgentoC.ServiceHost
 
     public sealed class AgentoCService : ServiceBase
     {
+        private static string ProgramDataPath() {
+            var value=Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+            if(String.IsNullOrWhiteSpace(value)||!Path.IsPathRooted(value))throw new InvalidOperationException("SHT_PROGRAMDATA_UNAVAILABLE");
+            return Path.GetFullPath(value).TrimEnd('\\');
+        }
+        private static string OwnerInstancePath() { return Path.Combine(ProgramDataPath(),@"AgentoC\instances\owner"); }
         private readonly string role;
         private readonly string nodePath;
         private readonly string scriptPath;
@@ -414,7 +463,7 @@ namespace AgentoC.ServiceHost
             this.workingDirectory = workingDirectory;
             this.configDirectory = configDirectory;
             this.instanceRoot = instanceRoot ?? Path.GetDirectoryName(configDirectory);
-            this.productRoot = Path.GetFullPath(productRoot ?? @"C:\Program Files\AgentoC").TrimEnd('\\');
+            this.productRoot = Path.GetFullPath(productRoot ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "AgentoC")).TrimEnd('\\');
             revalidateForRecovery=ValidateInstalledLayout;
             authSessionSecretPath = Path.Combine(configDirectory, "auth-session-secret");
             stopFilePath = Path.GetFullPath(Path.Combine(configDirectory, "..", "runtime", "service-stop-" + role + ".request"));
@@ -512,12 +561,15 @@ namespace AgentoC.ServiceHost
                 info.EnvironmentVariables["AGENTOC_TEMPORARY_PAIRING_ENABLED"] = "1";
             info.EnvironmentVariables["AGENTOC_WINDOWS_SERVICE_ROLE"] = role;
             info.EnvironmentVariables["AGENTOC_WINDOWS_SERVICE_MODE"] = "1";
+            // Do not trust an inherited ProgramData override for the fixed
+            // owner layout; this value comes from the Windows known folder.
+            info.EnvironmentVariables["ProgramData"] = ProgramDataPath();
             info.EnvironmentVariables["AGENTOC_INSTALL_ROOT"] = productRoot;
             info.EnvironmentVariables["AGENTOC_CONFIG_DIR"] = configDirectory;
             info.EnvironmentVariables["AGENTOC_INSTANCE_ROOT"] = instanceRoot;
             // Managed supervisor config is private but spool/provider roots
             // remain on the same explicitly pinned instance as the controller.
-            if (String.Equals(instanceRoot,@"C:\ProgramData\AgentoC\instances\owner",StringComparison.OrdinalIgnoreCase))
+            if (String.Equals(instanceRoot,OwnerInstancePath(),StringComparison.OrdinalIgnoreCase))
             {
                 var home=role=="control"?Path.Combine(instanceRoot,"home"):Path.Combine(instanceRoot,"executor","home");
                 foreach(var key in new[] {"HOME","USERPROFILE"}) info.EnvironmentVariables[key]=home;
@@ -554,7 +606,7 @@ namespace AgentoC.ServiceHost
         private void ValidateLayout(bool initializing)
         {
             var product=Path.Combine(productRoot,"payload");
-            var root=@"C:\ProgramData\AgentoC\instances\owner";
+            var root=OwnerInstancePath();
             var expectedConfig=role=="control"?Path.Combine(root,"config"):Path.Combine(root,"executor","config");
             var expectedScript=Path.Combine(product,role=="control"?"chat-server.mjs":@"chat\runner-supervisor-daemon.mjs");
             foreach(var pair in new[] {new[]{instanceRoot,root},new[]{configDirectory,expectedConfig},new[]{workingDirectory,product},new[]{nodePath,Path.Combine(product,"node.exe")},new[]{scriptPath,expectedScript}})
@@ -588,7 +640,7 @@ namespace AgentoC.ServiceHost
             try {
                 ReadAdministrativeInput(Path.Combine(productRoot,"owner-msi.prepared.json"),pins,8192);
                 if(Encoding.UTF8.GetString(ReadAdministrativeInput(Path.Combine(productRoot,"owner-identity.initialize-lock"),pins,128))!="agentoc-owner-identity-initialization-v1\n")throw new InvalidOperationException("SHT_INITIALIZATION_LEASE_REQUIRED");
-                foreach(var relative in new[]{"node.exe",@"scripts\initialize-windows-owner-identity.mjs",@"lib\instance-identity.mjs",@"lib\instance-proof-protocol.mjs"}) {
+                foreach(var relative in new[]{"node.exe",@"scripts\initialize-windows-owner-identity.mjs",@"lib\instance-identity.mjs",@"lib\instance-proof-protocol.mjs",@"lib\windows-owner-identity-paths.mjs"}) {
                     string path=Path.Combine(workingDirectory,relative);
                     ReadAdministrativeInput(path,pins,157286400);
                 }
@@ -633,7 +685,7 @@ namespace AgentoC.ServiceHost
                     if(!AllowPinnedProgramDataAncestor(p,rights))throw new InvalidOperationException("SHT_INITIALIZATION_INPUT_WRITABLE "+AdministrativeInputStage(p,path,false));
                     needsWitness=true;
                 }
-                if(needsWitness)pins.AddRange(ServiceDirectoryPin.NonemptyDirectory(@"C:\ProgramData",@"C:\ProgramData\Microsoft"));
+                if(needsWitness)pins.AddRange(ServiceDirectoryPin.NonemptyDirectory(ProgramDataPath(),Path.Combine(ProgramDataPath(),"Microsoft")));
             }
             var file=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);pins.Add(file);
             ServiceDirectoryPin.VerifyFile(file.SafeFileHandle,path);
@@ -646,7 +698,7 @@ namespace AgentoC.ServiceHost
         }
 
         private static bool AllowPinnedProgramDataAncestor(string path,long rights) {
-            return String.Equals(Path.GetFullPath(path).TrimEnd('\\'),@"C:\ProgramData",StringComparison.OrdinalIgnoreCase)
+            return String.Equals(Path.GetFullPath(path).TrimEnd('\\'),ProgramDataPath(),StringComparison.OrdinalIgnoreCase)
                 && (rights&0x500d0040L)==0;
         }
 
@@ -657,8 +709,8 @@ namespace AgentoC.ServiceHost
             string full=Path.GetFullPath(ancestor).TrimEnd('\\');
             string root=Path.GetPathRoot(ancestor).TrimEnd('\\');
             if(String.Equals(full,root,StringComparison.OrdinalIgnoreCase))return "SHT_INPUT_DRIVE_ROOT";
-            if(String.Equals(full,@"C:\ProgramData",StringComparison.OrdinalIgnoreCase))return "SHT_INPUT_PROGRAMDATA";
-            if(String.Equals(full,@"C:\Program Files",StringComparison.OrdinalIgnoreCase))return "SHT_INPUT_PROGRAM_FILES";
+            if(String.Equals(full,ProgramDataPath(),StringComparison.OrdinalIgnoreCase))return "SHT_INPUT_PROGRAMDATA";
+            if(String.Equals(full,Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles).TrimEnd('\\'),StringComparison.OrdinalIgnoreCase))return "SHT_INPUT_PROGRAM_FILES";
             if(String.Equals(full,Path.GetDirectoryName(input).TrimEnd('\\'),StringComparison.OrdinalIgnoreCase))return "SHT_INPUT_PARENT";
             return "SHT_INPUT_OTHER_ANCESTOR";
         }
@@ -681,11 +733,11 @@ namespace AgentoC.ServiceHost
                     if(admins.Contains(identity) || (target&&identity==sid)) continue;
                     long mask=target?(privateReads?0xd00d015fL:0x500d0156L):0x500d0152L;
                     if(((long)ace.FileSystemRights&mask)!=0) {
-                        if(target||!String.Equals(cursor,@"C:\ProgramData",StringComparison.OrdinalIgnoreCase)||((long)ace.FileSystemRights&0x500d0040L)!=0)throw new InvalidOperationException("SHT_DATA_FOREIGN_ACCESS_REFUSED");
+                        if(target||!String.Equals(cursor,ProgramDataPath(),StringComparison.OrdinalIgnoreCase)||((long)ace.FileSystemRights&0x500d0040L)!=0)throw new InvalidOperationException("SHT_DATA_FOREIGN_ACCESS_REFUSED");
                         needsWitness=true;
                     }
                 }
-                if(needsWitness)ServiceDirectoryPin.Lifetime.AddRange(ServiceDirectoryPin.NonemptyDirectory(@"C:\ProgramData",@"C:\ProgramData\Microsoft"));
+                if(needsWitness)ServiceDirectoryPin.Lifetime.AddRange(ServiceDirectoryPin.NonemptyDirectory(ProgramDataPath(),Path.Combine(ProgramDataPath(),"Microsoft")));
             }
         }
 
@@ -792,7 +844,7 @@ namespace AgentoC.ServiceHost
             try {
                 if (!exited && !child.HasExited) {
                     using (var killer = Process.Start(new ProcessStartInfo {
-                        FileName = @"C:\Windows\System32\taskkill.exe",
+                        FileName = Path.Combine(Environment.SystemDirectory, "taskkill.exe"),
                         Arguments = "/PID " + child.Id + " /T /F",
                         UseShellExecute = false,
                         CreateNoWindow = true,

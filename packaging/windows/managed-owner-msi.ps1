@@ -45,11 +45,11 @@ try {
  if(-not [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){throw 'OMI_ADMIN_REQUIRED'}
  Open-OwnerServicePreparationInputs $pins
  foreach($marker in @('owner-services.prepare-lock','owner-data.prepare-lock','owner-msi.prepare-lock','owner-identity.initialize-lock','owner-activation.prepare-lock','owner-policy.prepare-lock','owner-msi.policy.json')){if(Test-OwnerServicePreparationPresence (Join-Path $product $marker)){throw 'OMI_PREPARATION_INCOMPLETE'}}
- foreach($path in @('C:\ProgramData\AgentoC\instances\owner\security','C:\ProgramData\AgentoC\instances\owner\owner-policy.install-lock')){if(Test-OwnerServicePreparationPresence $path){throw 'OMI_ACTIVE_INSTALLATION_REFUSED'}}
+ foreach($path in @((Join-Path (Get-OwnerInstanceRoot) 'security'),(Join-Path (Get-OwnerInstanceRoot) 'owner-policy.install-lock'))){if(Test-OwnerServicePreparationPresence $path){throw 'OMI_ACTIVE_INSTALLATION_REFUSED'}}
  Assert-OwnerPreparedRelease $pins
  if($Action -eq 'Prepare'){
   if($OwnerSid -cnotmatch '^S-1-5-21-(\d+-){3}\d+$'){throw 'OMI_OWNER_SID_REQUIRED'}
-  if(Test-OwnerServicePreparationPresence 'C:\ProgramData\AgentoC'){throw 'OMI_EXISTING_DATA_REFUSED'}
+  if(Test-OwnerServicePreparationPresence (Get-OwnerDataRoot)){throw 'OMI_EXISTING_DATA_REFUSED'}
   if(Test-OwnerServicePreparationPresence $receipt){throw 'OMI_RECEIPT_EXISTS'}
  }else{
   $bytes=Read-OwnerPinnedFile $receipt @(Get-OwnerAdministrativeSids) $pins

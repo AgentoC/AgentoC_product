@@ -7,7 +7,7 @@ $msiPolicyCommit=$Commit.IsPresent -or $PSBoundParameters.ContainsKey('Action')
 . (Join-Path $PSScriptRoot 'managed-owner-msi.ps1') -LibraryOnly
 . (Join-Path $PSScriptRoot 'prepare-owner-install-policy.ps1') -LibraryOnly
 $pins=[Collections.Generic.List[IDisposable]]::new();$handles=[Collections.Generic.List[ManagedPreparedService]]::new()
-$product=Get-OwnerProductRoot;$root='C:\ProgramData\AgentoC\instances\owner';$lockPath=Join-Path $product 'owner-policy.prepare-lock';$lease=$null;$complete=$false;$identityRead=$false;$stage='services'
+$product=Get-OwnerProductRoot;$root=Get-OwnerInstanceRoot;$lockPath=Join-Path $product 'owner-policy.prepare-lock';$lease=$null;$complete=$false;$identityRead=$false;$stage='services'
 try {
  $services=@(Get-OwnerDataServices)
  if(-not $msiPolicyCommit){@{ok=$true;readOnly=$true;policyPrepared=$false;servicesActivated=$false;identityRead=$false}|ConvertTo-Json -Compress;return}
@@ -18,10 +18,10 @@ try {
  $stage='receipt';$bytes=Read-OwnerPinnedFile (Join-Path $product 'owner-msi.prepared.json') @(Get-OwnerAdministrativeSids) $pins
  $receipt=[Text.UTF8Encoding]::new($false,$true).GetString($bytes)|ConvertFrom-Json
  if(@($receipt.PSObject.Properties).Count -ne 4 -or $receipt.version -isnot [int] -or $receipt.version -ne 1 -or $receipt.purpose -cne 'owner-msi-preparation' -or $receipt.phase -cne 'prepared' -or $receipt.ownerSid -cnotmatch '^S-1-5-21-(\d+-){3}\d+$'){throw 'OPP_PREPARED_RECEIPT_REQUIRED'}
- $stage='layout';for($parent='C:\ProgramData';$parent;$parent=[IO.Path]::GetDirectoryName($parent)){$pins.Add([AgentoCOwnerFilePin]::Directory($parent));Assert-OwnerObjectAcl $parent @(Get-OwnerAdministrativeSids) -Ancestor -Pins $pins}
+ $stage='layout';for($parent=(Get-OwnerProgramDataPath);$parent;$parent=[IO.Path]::GetDirectoryName($parent)){$pins.Add([AgentoCOwnerFilePin]::Directory($parent));Assert-OwnerObjectAcl $parent @(Get-OwnerAdministrativeSids) -Ancestor -Pins $pins}
  $controlSid=($services|Where-Object {$_.role -eq 'control'}).sid;$executorSid=($services|Where-Object {$_.role -eq 'supervisor'}).sid
  foreach($row in @(Get-OwnerDataLayout $controlSid $executorSid $receipt.ownerSid)){
-  $path=if($row.relative){Join-Path 'C:\ProgramData\AgentoC' $row.relative}else{'C:\ProgramData\AgentoC'}
+  $path=if($row.relative){Join-Path (Get-OwnerDataRoot) $row.relative}else{Get-OwnerDataRoot}
   $pins.Add([AgentoCOwnerFilePin]::Directory($path));$acl=[IO.Directory]::GetAccessControl($path)
   if(-not $acl.AreAccessRulesProtected -or $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -cne 'S-1-5-32-544' -or (Get-OwnerDataAclSddl $acl ([Security.AccessControl.AccessControlSections]::Access)) -cne (Get-OwnerDataAclSddl (New-OwnerDataAcl $row.grants $row.traverseOnly) ([Security.AccessControl.AccessControlSections]::Access))){throw 'OPP_LAYOUT_MISMATCH'}
  }

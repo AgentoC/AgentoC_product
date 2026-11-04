@@ -57,10 +57,10 @@
         <RegistryValue Name="EventMessageFile" Type="string" Value="[System64Folder]EventCreate.exe" />
         <RegistryValue Name="TypesSupported" Type="integer" Value="7" />
       </RegistryKey>
-      <ServiceInstall Id="ControlPlaneService" Name="AgentoC-ControlPlane" DisplayName="AgentoC Control Plane" Type="ownProcess" Start="auto" ErrorControl="normal" Arguments="--role control --config-dir &quot;C:\ProgramData\AgentoC\instances\owner\config&quot; --instance-root &quot;C:\ProgramData\AgentoC\instances\owner&quot;">
+      <ServiceInstall Id="ControlPlaneService" Name="AgentoC-ControlPlane" DisplayName="AgentoC Control Plane" Type="ownProcess" Start="auto" ErrorControl="normal" Arguments="--role control --config-dir &quot;[CommonAppDataFolder]AgentoC\instances\owner\config&quot; --instance-root &quot;[CommonAppDataFolder]AgentoC\instances\owner&quot;">
         <ServiceDependency Id="AgentoC-RunnerSupervisor" />
       </ServiceInstall>
-      <ServiceInstall Id="RunnerSupervisorService" Name="AgentoC-RunnerSupervisor" DisplayName="AgentoC Runner Supervisor" Type="ownProcess" Start="auto" ErrorControl="normal" Arguments="--role supervisor --config-dir &quot;C:\ProgramData\AgentoC\instances\owner\executor\config&quot; --instance-root &quot;C:\ProgramData\AgentoC\instances\owner&quot;" />
+      <ServiceInstall Id="RunnerSupervisorService" Name="AgentoC-RunnerSupervisor" DisplayName="AgentoC Runner Supervisor" Type="ownProcess" Start="auto" ErrorControl="normal" Arguments="--role supervisor --config-dir &quot;[CommonAppDataFolder]AgentoC\instances\owner\executor\config&quot; --instance-root &quot;[CommonAppDataFolder]AgentoC\instances\owner&quot;" />
       <ServiceControl Id="RunnerSupervisorServiceControl" Name="AgentoC-RunnerSupervisor" Start="install" Stop="both" Remove="uninstall" />
       <ServiceControl Id="ControlPlaneServiceControl" Name="AgentoC-ControlPlane" Start="install" Stop="both" Remove="uninstall" />
     </Component>

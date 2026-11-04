@@ -14,12 +14,15 @@ function Get-OwnerServicePreparationPlan {
   # must remain quoted.
   $executable=Join-Path $product 'AgentoC.ServiceHost.exe'
   $serviceBinary=if($executable -match '\s'){'"'+$executable+'"'}else{$executable}
+  $programData=[Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)
+  if(-not $programData -or -not [IO.Path]::IsPathRooted($programData)){throw 'OSP_PROGRAMDATA_UNAVAILABLE'}
+  $instanceRoot=Join-Path $programData 'AgentoC\instances\owner'
   foreach($role in @('supervisor','control')){
     $name=if($role -eq 'control'){'AgentoC-ControlPlane'}else{'AgentoC-RunnerSupervisor'}
-    $config=if($role -eq 'control'){'C:\ProgramData\AgentoC\instances\owner\config'}else{'C:\ProgramData\AgentoC\instances\owner\executor\config'}
+    $config=if($role -eq 'control'){Join-Path $instanceRoot 'config'}else{Join-Path $instanceRoot 'executor\config'}
     [pscustomobject]@{name=$name;account=('NT SERVICE\'+$name);startMode='Disabled';role=$role;
       dependencies=@($(if($role -eq 'control'){'AgentoC-RunnerSupervisor'}));
-      command=('{0} --role {1} --config-dir "{2}" --instance-root "C:\ProgramData\AgentoC\instances\owner"' -f $serviceBinary,$role,$config)}
+      command=('{0} --role {1} --config-dir "{2}" --instance-root "{3}"' -f $serviceBinary,$role,$config,$instanceRoot)}
   }
 }
 
@@ -41,7 +44,7 @@ function Assert-OwnerServicePreparationFresh([switch]$OwnLock) {
   foreach($row in @(Get-OwnerServicePreparationPlan)){
     if(Get-CimInstance Win32_Service -Filter ("Name='"+$row.name+"'")){throw 'OSP_EXISTING_SERVICE_REFUSED'}
   }
-  if(Test-OwnerServicePreparationPresence 'C:\ProgramData\AgentoC'){throw 'OSP_EXISTING_DATA_REFUSED'}
+  if(Test-OwnerServicePreparationPresence (Get-OwnerDataRoot)){throw 'OSP_EXISTING_DATA_REFUSED'}
   if(-not $OwnLock -and (Test-OwnerServicePreparationPresence (Join-Path $product 'owner-services.prepare-lock'))){throw 'OSP_PREPARATION_INCOMPLETE'}
   if(Test-OwnerServicePreparationPresence (Join-Path $product 'owner-data.prepare-lock')){throw 'OSP_PREPARATION_INCOMPLETE'}
 }

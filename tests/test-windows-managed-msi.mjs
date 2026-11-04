@@ -140,13 +140,15 @@ assert.match(bridge,/args\.Length==3&&args\[0\]=="configure-broker-service"/,'th
 assert.match(bridge,/Owner MSI Broker trust failed:/,'failed Broker trust actions must log only a typed code for local MSI diagnosis');
 assert.match(bridge,/Owner MSI prepare bridge failed:/,'Owner prepare bridge failures must log only a typed code for local MSI diagnosis');
 assert.match(bridge,/SetBrokerServiceDacl\(service\);VerifyBrokerServiceDacl\(service\)/,'the Broker MSI action must replace an untrusted legacy service DACL with a restrictive one before validating it');
-assert.match(bridge,/new RawSecurityDescriptor\("O:SYG:SYD:\(A;;GA;;;SY\)\(A;;GA;;;BA\)"\)/,'the Broker service ACL repair must grant control only to SYSTEM and built-in Administrators');
+assert.match(bridge,/new RawSecurityDescriptor\("O:SYG:SYD:\(A;;GA;;;SY\)\(A;;GA;;;BA\)\(A;;0x00000004;;;/,'the Broker service ACL must grant the control service only query-status access');
+assert.match(bridge,/common\.AccessMask==4.*OMI_BROKER_CONTROL_QUERY_RIGHTS_REFUSED/,'the control-service ACE must not grant service mutation rights');
 assert.match(bridge,/QueryServiceObjectSecurity\(service,5,/,'Broker service ACL verification must request both Owner and DACL fields');
 assert.match(activatedWix,/<Custom Action="ManagedConfigureBrokerServiceTrust" After="ManagedInstallRollback"/,'Broker service trust must be set after MSI creates the service');
 assert.match(activatedWix,/ServiceSid|configure-broker-service/,'the activated package must configure the Broker service SID');
 assert.match(activatedWix,/ManagedBrokerOwnerReset[^\r\n]+admin owner-reset/,'uninstall must revoke Broker approvals while the service pipe is still available');
 assert.match(activatedWix,/<Custom Action="ManagedBrokerOwnerReset" Before="StopServices"/,'Broker revocation must complete before MSI stops the service');
 assert.match(msiBuilder,/build-privileged-broker\.ps1/,'the activated MSI must build Broker from this source tree');
+assert.match(msiBuilder, /Join-Path \$installScriptRoot 'build-privileged-broker\.ps1'\) -SourceRoot \$payloadRoot/, 'Broker must compile from the frozen staged payload');
 assert.match(msiBuilder,/PrivilegedBroker=\$brokerBuildRoot/,'the activated MSI must bind the fresh Broker binary');
 assert.match(msiBuilder,/AgentoC\.PrivilegedBroker\.manifest\.json/,'the MSI must carry a product-versioned Broker hash manifest');
 assert.match(brokerBuilder,/Privileged Broker output is not a native Windows x64 PE32\+ executable/,'the Broker package helper must validate its Windows PE output');

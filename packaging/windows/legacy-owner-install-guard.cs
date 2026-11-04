@@ -6,8 +6,8 @@ using System.Management;
 using System.Collections.Generic;
 
 public static partial class AgentoCLegacyOwnerInstallGuard {
-    const string Product = @"C:\Program Files\AgentoC";
-    const string Instance = @"C:\ProgramData\AgentoC\instances\owner";
+    static readonly string Product = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "AgentoC");
+    static readonly string Instance = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), @"AgentoC\instances\owner");
     static readonly string[] Services = { "AgentoC-ControlPlane", "AgentoC-RunnerSupervisor" };
     static void Refuse(string code) { throw new InvalidOperationException(code); }
 

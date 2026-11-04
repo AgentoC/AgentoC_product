@@ -80,14 +80,15 @@ function Read-UpgradeReceipt([string]$Name,[int]$Maximum=8192){
 }
 function Invoke-OwnerUpgradeAdmission {
  if(-not [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){throw 'OUG_ADMIN_REQUIRED'}
- if(-not (Test-OwnerServicePreparationPresence $product) -or -not (Test-OwnerServicePreparationPresence 'C:\ProgramData\AgentoC')){throw 'OUG_EXISTING_INSTALL_REQUIRED'}
+ if(-not (Test-OwnerServicePreparationPresence $product) -or -not (Test-OwnerServicePreparationPresence (Get-OwnerDataRoot))){throw 'OUG_EXISTING_INSTALL_REQUIRED'}
  foreach($name in @('owner-services.prepare-lock','owner-data.prepare-lock','owner-msi.prepare-lock','owner-msi.upgrade-transaction.json','owner-identity.initialize-lock','owner-activation.prepare-lock','owner-policy.prepare-lock','owner-msi.policy.json','owner-msi.prepared.json')){if(Test-OwnerServicePreparationPresence (Join-Path $product $name)){throw 'OUG_INSTALL_TRANSACTION_PRESENT'}}
- foreach($name in @('owner-policy.install-lock','security\owner-policy.install-lock')){if(Test-OwnerServicePreparationPresence (Join-Path 'C:\ProgramData\AgentoC\instances\owner' $name)){throw 'OUG_OWNER_TRANSACTION_PRESENT'}}
+ foreach($name in @('owner-policy.install-lock','security\owner-policy.install-lock')){if(Test-OwnerServicePreparationPresence (Join-Path (Get-OwnerInstanceRoot) $name)){throw 'OUG_OWNER_TRANSACTION_PRESENT'}}
  $services=@();foreach($role in @('control','supervisor')){
   $name=if($role -ceq 'control'){'AgentoC-ControlPlane'}else{'AgentoC-RunnerSupervisor'};$service=Get-CimInstance Win32_Service -Filter ("Name='"+$name+"'")
   if(-not $service -or $service.StartName -ine ('NT SERVICE\'+$name) -or $service.State -cne 'Running' -or $service.StartMode -cne 'Auto' -or $service.ProcessId -le 0){throw 'OUG_SERVICE_STATE_REFUSED'}
-  $config=if($role -ceq 'control'){'C:\ProgramData\AgentoC\instances\owner\config'}else{'C:\ProgramData\AgentoC\instances\owner\executor\config'}
-  $command=' --role '+$role+' --config-dir "'+$config+'" --instance-root "C:\ProgramData\AgentoC\instances\owner"'
+  $instanceRoot=Get-OwnerInstanceRoot
+  $config=if($role -ceq 'control'){Join-Path $instanceRoot 'config'}else{Join-Path $instanceRoot 'executor\config'}
+  $command=' --role '+$role+' --config-dir "'+$config+'" --instance-root "'+$instanceRoot+'"'
   if($service.PathName -cnotmatch '^(?:"(?<exe>[A-Za-z]:\\[^\"]+\.exe)"|(?<exe>[A-Za-z]:\\\S+\.exe))(?<args>.*)$' -or $Matches.args -cne $command){throw 'OUG_SERVICE_COMMAND_REFUSED'}
   $exe=[IO.Path]::GetFullPath($Matches.exe);if($services.Count -and $services[0].exe -cne $exe){throw 'OUG_SERVICE_HOST_MISMATCH'}
   Assert-UpgradePath $exe $false
@@ -99,7 +100,7 @@ function Invoke-OwnerUpgradeAdmission {
   $services+=@{name=$name;role=$role;sid=$expectedSid;pid=[int]$service.ProcessId;exe=$exe}
  }
  $control=$services|Where-Object {$_.role -ceq 'control'};$executor=$services|Where-Object {$_.role -ceq 'supervisor'}
- $root='C:\ProgramData\AgentoC';$ownerRoot=Join-Path $root 'instances\owner';$policyPath=Join-Path $ownerRoot 'security\owner-bootstrap-install.json'
+ $root=Get-OwnerDataRoot;$ownerRoot=Get-OwnerInstanceRoot;$policyPath=Join-Path $ownerRoot 'security\owner-bootstrap-install.json'
  $policyBytes=Read-OwnerPinnedFile $policyPath @(Get-OwnerAdministrativeSids) $pins
  $policy=[Text.UTF8Encoding]::new($false,$true).GetString($policyBytes)|ConvertFrom-Json;Assert-OwnerInstallPolicy $policy
  if($policy.controlSid -cne $control.sid -or $policy.executorSid -cne $executor.sid){throw 'OUG_POLICY_SERVICE_MISMATCH'}
@@ -120,7 +121,7 @@ function Invoke-OwnerUpgradeAdmission {
  $healthObserved=[DateTime]::MinValue;if($health.observedAt -isnot [string] -or -not [DateTime]::TryParseExact($health.observedAt,'o',[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::RoundtripKind,[ref]$healthObserved)){throw 'OUG_ACTIVE_RECEIPT_INVALID'}
  if(@($marker.PSObject.Properties).Count -ne 5 -or $marker.version -isnot [int] -or $marker.version -ne 1 -or $marker.purpose -cne 'owner-service-activation' -or $marker.instanceId -cne $active.instanceId -or $marker.preparedSha256 -cne $active.preparedSha256 -or $marker.policyReceiptSha256 -cne $active.policyReceiptSha256){throw 'OUG_ACTIVE_RECEIPT_INVALID'}
  $layout=@(Get-OwnerDataLayout $control.sid $executor.sid $policy.ownerSid);$missing=0
- for($parent='C:\ProgramData';$parent;$parent=[IO.Path]::GetDirectoryName($parent)){$pins.Add([AgentoCOwnerFilePin]::Directory($parent));Assert-OwnerObjectAcl $parent @(Get-OwnerAdministrativeSids) -Ancestor -Pins $pins}
+ for($parent=(Get-OwnerProgramDataPath);$parent;$parent=[IO.Path]::GetDirectoryName($parent)){$pins.Add([AgentoCOwnerFilePin]::Directory($parent));Assert-OwnerObjectAcl $parent @(Get-OwnerAdministrativeSids) -Ancestor -Pins $pins}
  foreach($row in $layout){
   $path=if($row.relative){Join-Path $root $row.relative}else{$root}
   if(-not (Test-OwnerServicePreparationPresence $path)){$missing++;continue}

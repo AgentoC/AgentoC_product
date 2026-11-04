@@ -20,7 +20,9 @@ try{
     $qaSource=Join-Path $SourceRoot 'native\windows-owner-bootstrap.cs'
     if($qaTarget.IndexOfAny([char[]]@('"',"`r","`n")) -ge 0 -or $qaSource.IndexOfAny([char[]]@('"',"`r","`n")) -ge 0){throw 'Invalid compiler path'}
     $qaCompilerInfo=[Diagnostics.ProcessStartInfo]::new()
-    $qaCompilerInfo.FileName='C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+    $qaWindowsRoot=[Environment]::GetFolderPath([Environment+SpecialFolder]::Windows)
+    if(-not $qaWindowsRoot -or -not [IO.Path]::IsPathRooted($qaWindowsRoot)){throw 'Owner helper Windows directory unavailable'}
+    $qaCompilerInfo.FileName=Join-Path $qaWindowsRoot 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
     $qaCompilerInfo.Arguments='/nologo /utf8output /target:exe /platform:x64 /r:System.Web.Extensions.dll /out:"'+$qaTarget+'" "'+$qaSource+'"'
     $qaCompilerInfo.UseShellExecute=$false;$qaCompilerInfo.CreateNoWindow=$true
     $qaCompilerInfo.RedirectStandardOutput=$true;$qaCompilerInfo.RedirectStandardError=$true

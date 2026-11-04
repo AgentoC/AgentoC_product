@@ -10,8 +10,8 @@ param(
 $ErrorActionPreference = 'Stop'
 # No service stop/delete, ACL repair, backup or payload change before this gate.
 & (Join-Path $PSScriptRoot 'assert-legacy-owner-install.ps1') -PackageRoot $PackageRoot
-$ProductRoot = 'C:\Program Files\AgentoC'
-$DataRoot = 'C:\ProgramData\AgentoC'
+$ProductRoot = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles)) 'AgentoC'
+$DataRoot = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)) 'AgentoC'
 $InstanceRoot = Join-Path $DataRoot 'instances\owner'
 $ConfigRoot = Join-Path $InstanceRoot 'config'
 $RunSpoolRoot = Join-Path $InstanceRoot 'data\chat-runs'

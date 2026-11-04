@@ -151,7 +151,7 @@ assert.match(activatedOwnerMsi, /ManagedRemoveRollback" Before="ManagedBrokerOwn
 assert.match(activatedOwnerMsi, /ManagedRemove" Before="DeleteServices"/);
 assert.match(activatedOwnerMsi, /Account="NT SERVICE\\AgentoC-ControlPlane"/);
 assert.match(activatedOwnerMsi, /Account="NT SERVICE\\AgentoC-RunnerSupervisor"/);
-assert.match(activatedOwnerMsi, /--config-dir &quot;C:\\ProgramData\\AgentoC\\instances\\owner\\executor\\config&quot; --instance-root/);
+assert.match(activatedOwnerMsi, /--config-dir &quot;\[CommonAppDataFolder\]AgentoC\\instances\\owner\\executor\\config&quot; --instance-root/);
 assert.doesNotMatch(activatedOwnerMsi, /<ServiceControl[^>]*(?:AgentoC-ControlPlane|AgentoC-RunnerSupervisor)[^>]*Start=/);
 assert.match(activatedOwnerMsi, /<ServiceControl[^>]*Name="AgentoC-PrivilegedBroker"[^>]*Start="install"/);
 assert.match(build, /heat\.exe/);

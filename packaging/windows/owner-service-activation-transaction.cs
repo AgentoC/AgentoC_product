@@ -3,7 +3,7 @@
 // it cannot stand in for a genuine signed-helper/product activation positive.
 using System;using System.IO;using System.Text;using System.Collections.Generic;using System.Security.Cryptography;using System.Security.Principal;using System.Security.AccessControl;using System.Runtime.InteropServices;using System.Web.Script.Serialization;using AgentoC.ServiceHost;
 public sealed class OwnerServiceActivationTransaction:IDisposable {
- static readonly string Root=Path.GetFullPath(Environment.GetEnvironmentVariable("AGENTOC_INSTALL_ROOT")??@"C:\Program Files\AgentoC").TrimEnd('\\');
+ static readonly string Root=Path.GetFullPath(Environment.GetEnvironmentVariable("AGENTOC_INSTALL_ROOT")??Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"AgentoC")).TrimEnd('\\');
  static readonly string Marker=Path.Combine(Root,"owner-activation.prepare-lock");
  static readonly string CommittedMarker=Path.Combine(Root,"owner-activation.committed-lock");
  readonly OwnerServiceActivationTrial supervisor,control;readonly List<IDisposable> pins=new List<IDisposable>();

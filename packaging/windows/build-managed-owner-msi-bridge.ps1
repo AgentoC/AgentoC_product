@@ -6,5 +6,8 @@ $resources=@('read-owner-bootstrap-discovery.ps1','prepare-owner-services.ps1','
 # MSI launches this helper directly. A console-subsystem executable can flash
 # a terminal window during interactive installation or removal; a GUI
 # subsystem still supports explicitly redirected stdout/stderr for diagnostics.
-& 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe' /nologo /target:winexe /main:ManagedOwnerMsiBridge /r:System.Management.dll /r:System.ServiceProcess.dll /r:System.Security.dll /r:System.Web.Extensions.dll ('/out:'+$OutputPath) @resources (Join-Path $root 'managed-owner-msi-bridge.cs') (Join-Path $root 'owner-msi-relocation-journal.cs') (Join-Path $root 'AgentoC.ServiceHost.cs') (Join-Path $root 'owner-service-activation-trial.cs')
+$windowsRoot=[Environment]::GetFolderPath([Environment+SpecialFolder]::Windows)
+if(-not $windowsRoot -or -not [IO.Path]::IsPathRooted($windowsRoot)){throw 'OMI_WINDOWS_DIRECTORY_UNAVAILABLE'}
+$compiler=Join-Path $windowsRoot 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+& $compiler /nologo /target:winexe /main:ManagedOwnerMsiBridge /r:System.Management.dll /r:System.ServiceProcess.dll /r:System.Security.dll /r:System.Web.Extensions.dll ('/out:'+$OutputPath) @resources (Join-Path $root 'managed-owner-msi-bridge.cs') (Join-Path $root 'owner-msi-relocation-journal.cs') (Join-Path $root 'AgentoC.ServiceHost.cs') (Join-Path $root 'owner-service-activation-trial.cs')
 if($LASTEXITCODE -ne 0){throw 'OMI_BRIDGE_COMPILE_FAILED'}

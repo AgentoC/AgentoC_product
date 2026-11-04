@@ -1,10 +1,12 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)] [string]$SourceRoot,
-    [Parameter(Mandatory = $true)] [string]$OutputPath
+    [Parameter(Mandatory = $true)] [string]$OutputPath,
+    [string]$RuntimeManifestSha256 = ''
 )
 
 $ErrorActionPreference = 'Stop'
+if ($RuntimeManifestSha256 -and $RuntimeManifestSha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Broker runtime manifest hash is invalid.' }
 
 if ($env:OS -ne 'Windows_NT' -or [Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
     throw 'build-privileged-broker.ps1 requires native Windows.'
@@ -51,7 +53,9 @@ try {
     $env:GOFLAGS = ''
     Push-Location $brokerRoot
     try {
-        & $go.Source build -trimpath -buildvcs=false -o $OutputPath .
+        $goArguments = @('build', '-trimpath', '-buildvcs=false', '-o', $OutputPath)
+        if ($RuntimeManifestSha256) { $goArguments += @('-ldflags', ('-X=main.windowsRuntimeManifestSHA256=' + $RuntimeManifestSha256)) }
+        & $go.Source @goArguments .
         if ($LASTEXITCODE -ne 0) { throw "Windows Privileged Broker build failed (go exit $LASTEXITCODE)." }
     } finally {
         Pop-Location

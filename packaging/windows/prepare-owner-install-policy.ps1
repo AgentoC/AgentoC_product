@@ -140,10 +140,10 @@ if(-not $ownerPolicyLibraryOnly){
       try{Assert-OwnerPolicyRelease $metadata;$null=Get-OwnerReleaseTrust $metadata $helper $helperPath}catch{throw 'OIP_SIGNED_RELEASE_REQUIRED'}
       # Read privately solely to retain the actual durable ID, never output or
       # copy the identity/key container to policy, logs or the executor.
-      $identity=Read-OwnerPinnedFile 'C:\ProgramData\AgentoC\instances\owner\config\instance-identity.json' ($admin+@($policy.controlSid)) $pins 32768
+      $identity=Read-OwnerPinnedFile (Join-Path (Get-OwnerInstanceRoot) 'config\instance-identity.json') ($admin+@($policy.controlSid)) $pins 32768
       $record=[Text.UTF8Encoding]::new($false,$true).GetString($identity)|ConvertFrom-Json
       if($record.instanceId -cne $policy.instanceId){throw 'OIP_INSTANCE_MISMATCH'}
-      Publish-OwnerInstallPolicy 'C:\ProgramData\AgentoC\instances\owner' $policy | ConvertTo-Json -Compress
+      Publish-OwnerInstallPolicy (Get-OwnerInstanceRoot) $policy | ConvertTo-Json -Compress
     }finally{for($index=$pins.Count-1;$index -ge 0;$index--){$pins[$index].Dispose()}}
   }catch{
     $message=$_.Exception.GetBaseException().Message

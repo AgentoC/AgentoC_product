@@ -12,7 +12,7 @@ try{
     $releasePath=Join-Path (Get-OwnerProductRoot) 'payload\owner-bootstrap-release.json'
     if(-not(Test-Path -LiteralPath $releasePath)){throw 'OBD_RELEASE_NOT_INSTALLED'}
     $release=Read-OwnerPinnedFile $releasePath $admin $pins
-    $install=Read-OwnerPinnedFile 'C:\ProgramData\AgentoC\instances\owner\security\owner-bootstrap-install.json' $admin $pins
+    $install=Read-OwnerPinnedFile (Join-Path (Get-OwnerInstanceRoot) 'security\owner-bootstrap-install.json') $admin $pins
     $utf8=[Text.UTF8Encoding]::new($false,$true)
     $releaseObject=$utf8.GetString($release)|ConvertFrom-Json
     $installation=$utf8.GetString($install)|ConvertFrom-Json
@@ -20,7 +20,7 @@ try{
     if([Security.Principal.WindowsIdentity]::GetCurrent().User.Value -cne $installation.controlSid -or (Get-Process -Id $PID).SessionId -ne 0){throw 'OSV_SERVICE_IDENTITY_DENIED'}
     # Publication directory must already exist with protected control/admin-only
     # write rights. Pin it and each ancestor, never create or repair ACLs here.
-    $runtime='C:\ProgramData\AgentoC\instances\owner\runtime'
+    $runtime=Join-Path (Get-OwnerInstanceRoot) 'runtime'
     for($path=$runtime;$path;$path=[IO.Path]::GetDirectoryName($path)){
       $pins.Add([AgentoCOwnerFilePin]::Directory($path))
       Assert-OwnerObjectAcl $path ($admin+@($installation.controlSid)) -Ancestor:($path -ne $runtime) -Pins $pins
@@ -32,7 +32,9 @@ try{
     $info.FileName=$helperPath;$info.Arguments=if($ActivationListener){'facts'}else{'peer-facts'};$info.UseShellExecute=$false;$info.CreateNoWindow=$true
     $info.RedirectStandardInput=$true
     $info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true;$info.EnvironmentVariables.Clear()
-    $info.EnvironmentVariables['SystemRoot']='C:\Windows';$info.EnvironmentVariables['WINDIR']='C:\Windows'
+    $windowsRoot=[Environment]::GetFolderPath([Environment+SpecialFolder]::Windows)
+    if(-not $windowsRoot -or -not [IO.Path]::IsPathRooted($windowsRoot)){throw 'OSV_WINDOWS_DIRECTORY_UNAVAILABLE'}
+    $info.EnvironmentVariables['SystemRoot']=$windowsRoot;$info.EnvironmentVariables['WINDIR']=$windowsRoot
     $process=[Diagnostics.Process]::new();$process.StartInfo=$info
     try{
       [void]$process.Start()

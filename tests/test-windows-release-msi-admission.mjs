@@ -5,8 +5,10 @@ import {promisify} from 'node:util';
 import {mkdtemp,access,readFile,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
+import {resolveWindowsSystemPaths} from '../chat/windows-system-paths.mjs';
 assert.equal(process.platform,'win32');
-const exec=promisify(execFile),ps='C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe',root=await mkdtemp(join(tmpdir(),'agct-msi-admission-'));
+const exec=promisify(execFile),ps=resolveWindowsSystemPaths()?.powershell,root=await mkdtemp(join(tmpdir(),'agct-msi-admission-'));
+assert.ok(ps,'Windows system PowerShell must be discoverable');
 const source=resolve('scripts/qa-windows-release-msi.ps1'),evidence=join(root,'must-not-create'),args=['-NoProfile','-NonInteractive','-File',source,'-ArtifactDirectory',join(root,'missing-input'),'-EvidenceDirectory',evidence];
 const rows=[];
 for(const env of [{...process.env,GITHUB_ACTIONS:'false'},{...process.env,GITHUB_ACTIONS:'true',RUNNER_ENVIRONMENT:'self-hosted'},{...process.env,GITHUB_ACTIONS:'true',RUNNER_ENVIRONMENT:'github-hosted',GITHUB_REPOSITORY:'owner/private-qa-repository',RUNNER_OS:'Windows',GITHUB_REF:'refs/heads/main'}]){

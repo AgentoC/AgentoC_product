@@ -17,9 +17,9 @@
   <Package Name="AgentoC" Manufacturer="AgentoC" Version="$(var.MsiProductVersion)" ProductCode="$(var.ProductCode)" UpgradeCode="2D1D9C6B-5BA7-4C70-9A7A-7E7A55E3A001" UpgradeStrategy="$(var.MsiUpgradeStrategy)" Scope="perMachine">
     <?if $(var.MsiUpgradeLane) = "major" ?>
       <?if $(var.ExperimentalMajorUpgrade) = "1" ?>
-      <MajorUpgrade DowngradeErrorMessage="A newer AgentoC version is already installed." Schedule="afterInstallExecute" />
+      <MajorUpgrade DowngradeErrorMessage="A newer AgentoC version is already installed." AllowSameVersionUpgrades="yes" Schedule="afterInstallExecute" />
       <?else?>
-      <MajorUpgrade DowngradeErrorMessage="A newer AgentoC version is already installed." Schedule="afterInstallInitialize" />
+      <MajorUpgrade DowngradeErrorMessage="A newer AgentoC version is already installed." AllowSameVersionUpgrades="yes" Schedule="afterInstallInitialize" />
       <?endif?>
       <Property Id="AGENTOC_MAJOR_UPDATE_UI" Value="1" />
     <?endif?>
@@ -89,6 +89,7 @@
     <CustomAction Id="ManagedConfigureBrokerServiceTrust" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="configure-broker-service $(var.ProductVersion) $(var.BrokerSha256) &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedConfigureBrokerServiceTrustUpgrade" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="configure-broker-service $(var.ProductVersion) $(var.BrokerSha256) &quot;[INSTALLFOLDER].&quot;" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedBrokerOwnerReset" FileRef="PrivilegedBrokerBinary" ExeCommand="admin owner-reset" Execute="deferred" Impersonate="no" Return="check" />
+    <CustomAction Id="ManagedBrokerAutoSigner" FileRef="PrivilegedBrokerBinary" ExeCommand="admin auto-signer-from-instance" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="ManagedRemoveRollback" BinaryRef="ManagedOwnerMsiBridge" ExeCommand="remove-rollback $(var.ProductVersion) $(var.BrokerSha256) &quot;[INSTALLFOLDER].&quot;" Execute="rollback" Impersonate="no" Return="ignore" />
     <!-- Admission needs an administrator token to inspect the protected owner
          state. Run it in the elevated transaction before any mutation. -->
@@ -206,6 +207,9 @@
       <Custom Action="ManagedActivate" After="ManagedActivationCheck" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
       <Custom Action="ManagedInstallCommit" Before="InstallFinalize" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
       <Custom Action="ManagedRelocationCommit" After="ManagedInstallCommit" Condition="AGENTOC_RECOVERY_SOURCE AND NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT (REMOVE = &quot;ALL&quot;)" />
+      <!-- The service is running and the control-plane identity is initialized;
+           bind only its protected public key through the SYSTEM admin pipe. -->
+      <Custom Action="ManagedBrokerAutoSigner" After="StartServices" Condition="NOT (REMOVE = &quot;ALL&quot;) AND (NOT Installed OR REINSTALL)" />
 
       <?if $(var.MsiUpgradeLane) = "minor" ?>
         <Custom Action="ManagedConfigureBrokerServiceTrustUpgrade" After="InstallServices" Condition="Installed AND REINSTALL AND NOT (REMOVE = &quot;ALL&quot;)" />
@@ -279,12 +283,12 @@
 
     <Component Id="ManagedServiceHost" Directory="INSTALLFOLDER" Guid="*">
       <File Id="ManagedHost" Source="!(bindpath.ServiceHost)\AgentoC.ServiceHost.exe" KeyPath="yes" />
-      <ServiceInstall Id="ManagedControl" Name="AgentoC-ControlPlane" DisplayName="AgentoC Control Plane" Type="ownProcess" Start="disabled" Account="NT SERVICE\AgentoC-ControlPlane" ErrorControl="normal" Arguments="--role control --config-dir &quot;C:\ProgramData\AgentoC\instances\owner\config&quot; --instance-root &quot;C:\ProgramData\AgentoC\instances\owner&quot;">
+      <ServiceInstall Id="ManagedControl" Name="AgentoC-ControlPlane" DisplayName="AgentoC Control Plane" Type="ownProcess" Start="disabled" Account="NT SERVICE\AgentoC-ControlPlane" ErrorControl="normal" Arguments="--role control --config-dir &quot;[CommonAppDataFolder]AgentoC\instances\owner\config&quot; --instance-root &quot;[CommonAppDataFolder]AgentoC\instances\owner&quot;">
         <ServiceDependency Id="AgentoC-RunnerSupervisor" />
         <PermissionEx Sddl="O:SYG:SYD:(A;;GA;;;SY)(A;;GA;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)" />
       </ServiceInstall>
       <ServiceControl Id="ManagedControlControl" Name="AgentoC-ControlPlane" Stop="install" Remove="uninstall" />
-      <ServiceInstall Id="ManagedExecutor" Name="AgentoC-RunnerSupervisor" DisplayName="AgentoC Runner Supervisor" Type="ownProcess" Start="disabled" Account="NT SERVICE\AgentoC-RunnerSupervisor" ErrorControl="normal" Arguments="--role supervisor --config-dir &quot;C:\ProgramData\AgentoC\instances\owner\executor\config&quot; --instance-root &quot;C:\ProgramData\AgentoC\instances\owner&quot;">
+      <ServiceInstall Id="ManagedExecutor" Name="AgentoC-RunnerSupervisor" DisplayName="AgentoC Runner Supervisor" Type="ownProcess" Start="disabled" Account="NT SERVICE\AgentoC-RunnerSupervisor" ErrorControl="normal" Arguments="--role supervisor --config-dir &quot;[CommonAppDataFolder]AgentoC\instances\owner\executor\config&quot; --instance-root &quot;[CommonAppDataFolder]AgentoC\instances\owner&quot;">
         <PermissionEx Sddl="O:SYG:SYD:(A;;GA;;;SY)(A;;GA;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)" />
       </ServiceInstall>
       <ServiceControl Id="ManagedExecutorControl" Name="AgentoC-RunnerSupervisor" Stop="install" Remove="uninstall" />

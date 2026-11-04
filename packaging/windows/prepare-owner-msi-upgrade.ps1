@@ -7,7 +7,7 @@ $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue';$upgradeAct
 . (Join-Path $PSScriptRoot 'prepare-owner-service-data.ps1') -LibraryOnly
 . (Join-Path $PSScriptRoot 'prepare-owner-install-policy.ps1') -LibraryOnly
 $Action=$upgradeAction
-$product=Get-OwnerProductRoot;$dataRoot='C:\ProgramData\AgentoC';$ownerRoot=Join-Path $dataRoot 'instances\owner'
+$product=Get-OwnerProductRoot;$dataRoot=Get-OwnerDataRoot;$ownerRoot=Get-OwnerInstanceRoot
 $journalPath=Join-Path $product 'owner-msi.upgrade-transaction.json';$pins=[Collections.Generic.List[IDisposable]]::new()
 $services=[Collections.Generic.List[ManagedPreparedService]]::new();$lease=$null;$complete=$false;$stage='admission';$identityOpened=$false
 function Read-UpgradeJson([string]$Path,[int]$Maximum=8192){
@@ -58,7 +58,7 @@ function Assert-UpgradeFileMetadata([string]$Path,[string[]]$Allowed,[long]$Mini
 }
 function Assert-ExistingOwnerState([string]$ControlSid,[string]$ExecutorSid,$Policy){
  $layout=@(Get-OwnerDataLayout $ControlSid $ExecutorSid $Policy.ownerSid)
- for($parent='C:\ProgramData';$parent;$parent=[IO.Path]::GetDirectoryName($parent)){$pins.Add([AgentoCOwnerFilePin]::Directory($parent));Assert-OwnerObjectAcl $parent @(Get-OwnerAdministrativeSids) -Ancestor -Pins $pins}
+ for($parent=(Get-OwnerProgramDataPath);$parent;$parent=[IO.Path]::GetDirectoryName($parent)){$pins.Add([AgentoCOwnerFilePin]::Directory($parent));Assert-OwnerObjectAcl $parent @(Get-OwnerAdministrativeSids) -Ancestor -Pins $pins}
  foreach($row in $layout){
   $path=if($row.relative){Join-Path $dataRoot $row.relative}else{$dataRoot}
   if(-not(Test-OwnerServicePreparationPresence $path)){throw 'OMU_DATA_LAYOUT_INCOMPLETE'}

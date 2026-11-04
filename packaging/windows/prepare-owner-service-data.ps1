@@ -84,10 +84,10 @@ function Invoke-OwnerDataPreparation([switch]$Commit,[string]$OwnerSid=''){
   $pins=[Collections.Generic.List[IDisposable]]::new();$lock=$null;$complete=$false;$failed=$false;$result=$null
   try{
     $services=@(Get-OwnerDataServices)
-    if(Test-OwnerServicePreparationPresence 'C:\ProgramData\AgentoC'){throw 'ODP_EXISTING_DATA_REFUSED'}
+    if(Test-OwnerServicePreparationPresence (Get-OwnerDataRoot)){throw 'ODP_EXISTING_DATA_REFUSED'}
     foreach($marker in @('owner-services.prepare-lock','owner-data.prepare-lock')){if(Test-OwnerServicePreparationPresence (Join-Path $product $marker)){throw 'ODP_PREPARATION_INCOMPLETE'}}
     Open-OwnerServicePreparationInputs $pins
-    for($parent='C:\ProgramData';$parent;$parent=[IO.Path]::GetDirectoryName($parent)){
+    for($parent=(Get-OwnerProgramDataPath);$parent;$parent=[IO.Path]::GetDirectoryName($parent)){
       $pins.Add([AgentoCOwnerFilePin]::Directory($parent));Assert-OwnerObjectAcl $parent @(Get-OwnerAdministrativeSids) -Ancestor -Pins $pins
     }
     if(-not $Commit){return @{ok=$true;readOnly=$true;dataPrepared=$false;servicesActivated=$false;migrationReady=$false;ownerSidRequired=$true}}
@@ -99,7 +99,7 @@ function Invoke-OwnerDataPreparation([switch]$Commit,[string]$OwnerSid=''){
     $null=@(Get-OwnerDataServices)
     Initialize-OwnerDataDirectoryType
     foreach($row in $layout){
-      $path=if($row.relative){Join-Path 'C:\ProgramData\AgentoC' $row.relative}else{'C:\ProgramData\AgentoC'}
+      $path=if($row.relative){Join-Path (Get-OwnerDataRoot) $row.relative}else{Get-OwnerDataRoot}
       $acl=New-OwnerDataAcl $row.grants $row.traverseOnly
       [AgentoCOwnerDataDirectory]::Create($path,$acl.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]'Owner,Access'))
       $pins.Add([AgentoCOwnerFilePin]::Directory($path))

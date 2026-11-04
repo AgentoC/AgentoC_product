@@ -27,10 +27,10 @@
     <StandardDirectory Id="ProgramFiles64Folder"><Directory Id="INSTALLFOLDER" Name="AgentoC" /></StandardDirectory>
     <Component Id="ManagedServiceHost" Directory="INSTALLFOLDER" Guid="*">
       <File Id="ManagedHost" Source="!(bindpath.ServiceHost)\AgentoC.ServiceHost.exe" KeyPath="yes" />
-      <ServiceInstall Id="ManagedControl" Name="AgentoC-ControlPlane" DisplayName="AgentoC Control Plane" Type="ownProcess" Start="disabled" Account="NT SERVICE\AgentoC-ControlPlane" ErrorControl="normal" Arguments="--role control --config-dir &quot;C:\ProgramData\AgentoC\instances\owner\config&quot; --instance-root &quot;C:\ProgramData\AgentoC\instances\owner&quot;">
+      <ServiceInstall Id="ManagedControl" Name="AgentoC-ControlPlane" DisplayName="AgentoC Control Plane" Type="ownProcess" Start="disabled" Account="NT SERVICE\AgentoC-ControlPlane" ErrorControl="normal" Arguments="--role control --config-dir &quot;[CommonAppDataFolder]AgentoC\instances\owner\config&quot; --instance-root &quot;[CommonAppDataFolder]AgentoC\instances\owner&quot;">
         <ServiceDependency Id="AgentoC-RunnerSupervisor" />
       </ServiceInstall>
-      <ServiceInstall Id="ManagedExecutor" Name="AgentoC-RunnerSupervisor" DisplayName="AgentoC Runner Supervisor" Type="ownProcess" Start="disabled" Account="NT SERVICE\AgentoC-RunnerSupervisor" ErrorControl="normal" Arguments="--role supervisor --config-dir &quot;C:\ProgramData\AgentoC\instances\owner\executor\config&quot; --instance-root &quot;C:\ProgramData\AgentoC\instances\owner&quot;" />
+      <ServiceInstall Id="ManagedExecutor" Name="AgentoC-RunnerSupervisor" DisplayName="AgentoC Runner Supervisor" Type="ownProcess" Start="disabled" Account="NT SERVICE\AgentoC-RunnerSupervisor" ErrorControl="normal" Arguments="--role supervisor --config-dir &quot;[CommonAppDataFolder]AgentoC\instances\owner\executor\config&quot; --instance-root &quot;[CommonAppDataFolder]AgentoC\instances\owner&quot;" />
       <!-- No ServiceControl start/stop/remove: removal uses verified retained
            native handles and refuses active or changed registrations. -->
     </Component>

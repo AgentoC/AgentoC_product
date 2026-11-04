@@ -6,7 +6,7 @@ $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue';$policyRemo
 . (Join-Path $PSScriptRoot 'managed-owner-msi.ps1') -LibraryOnly
 . (Join-Path $PSScriptRoot 'prepare-owner-install-policy.ps1') -LibraryOnly
 $pins=[Collections.Generic.List[IDisposable]]::new();$services=[Collections.Generic.List[IDisposable]]::new();$lease=$null;$complete=$false;$activeRemoval=$policyRemoveAction.StartsWith('Active',[StringComparison]::Ordinal)
-$product=Get-OwnerProductRoot;$root='C:\ProgramData\AgentoC\instances\owner';$marker=Join-Path $product 'owner-msi.prepare-lock';$removedMarker=Join-Path $product 'owner-msi.removed.json'
+$product=Get-OwnerProductRoot;$root=Get-OwnerInstanceRoot;$marker=Join-Path $product 'owner-msi.prepare-lock';$removedMarker=Join-Path $product 'owner-msi.removed.json'
 function Read-PolicyRemovalJson([string]$Path,[int]$Limit=8192){
  $bytes=Read-OwnerPinnedFile $Path @(Get-OwnerAdministrativeSids) $pins $Limit
  try{$value=[Text.UTF8Encoding]::new($false,$true).GetString($bytes)|ConvertFrom-Json}catch{throw 'ORP_PUBLIC_METADATA_INVALID'}
@@ -46,7 +46,7 @@ try {
  }else{@(Get-OwnerDataServices)}
  $control=($actual|Where-Object {$_.role -eq 'control'}).sid;$executor=($actual|Where-Object {$_.role -eq 'supervisor'}).sid
  foreach($row in @(Get-OwnerDataLayout $control $executor $prepared.ownerSid)){
-  $path=if($row.relative){Join-Path 'C:\ProgramData\AgentoC' $row.relative}else{'C:\ProgramData\AgentoC'};$pins.Add([AgentoCOwnerFilePin]::Directory($path));$acl=[IO.Directory]::GetAccessControl($path)
+  $path=if($row.relative){Join-Path (Get-OwnerDataRoot) $row.relative}else{Get-OwnerDataRoot};$pins.Add([AgentoCOwnerFilePin]::Directory($path));$acl=[IO.Directory]::GetAccessControl($path)
   if(-not $acl.AreAccessRulesProtected -or $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -cne 'S-1-5-32-544' -or (Get-OwnerDataAclSddl $acl ([Security.AccessControl.AccessControlSections]::Access)) -cne (Get-OwnerDataAclSddl (New-OwnerDataAcl $row.grants $row.traverseOnly) ([Security.AccessControl.AccessControlSections]::Access))){throw 'ORP_LAYOUT_MISMATCH'}
  }
  $policyInput=Read-PolicyRemovalJson (Join-Path $root 'security\owner-bootstrap-install.json');$policy=$policyInput.value

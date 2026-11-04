@@ -36,27 +36,27 @@ public sealed class OwnerIdentityServiceLease:IDisposable {
 }
 '@
 $pins=[Collections.Generic.List[IDisposable]]::new();$supervisor=$null;$control=$null;$marker=$null;$complete=$false
-$product=Get-OwnerProductRoot;$config='C:\ProgramData\AgentoC\instances\owner\config';$lockPath=Join-Path $product 'owner-identity.initialize-lock';$stage='services'
+$product=Get-OwnerProductRoot;$config=Join-Path (Get-OwnerInstanceRoot) 'config';$lockPath=Join-Path $product 'owner-identity.initialize-lock';$stage='services'
 try {
  $services=@(Get-OwnerDataServices)
  if(-not $identityCommit){@{ok=$true;readOnly=$true;identityInitialized=$false;servicesActivated=$false}|ConvertTo-Json -Compress;return}
  if(-not [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){throw 'OII_ADMIN_REQUIRED'}
  $stage='inputs';Open-OwnerServicePreparationInputs $pins
  foreach($name in @('owner-services.prepare-lock','owner-data.prepare-lock','owner-msi.prepare-lock','owner-identity.initialize-lock','owner-activation.prepare-lock','owner-policy.prepare-lock','owner-msi.policy.json')){if(Test-OwnerServicePreparationPresence (Join-Path $product $name)){throw 'OII_TRANSACTION_INCOMPLETE'}}
- foreach($path in @('C:\ProgramData\AgentoC\instances\owner\security','C:\ProgramData\AgentoC\instances\owner\owner-policy.install-lock')){if(Test-OwnerServicePreparationPresence $path){throw 'OII_ACTIVE_STATE_REFUSED'}}
+ foreach($path in @((Join-Path (Get-OwnerInstanceRoot) 'security'),(Join-Path (Get-OwnerInstanceRoot) 'owner-policy.install-lock'))){if(Test-OwnerServicePreparationPresence $path){throw 'OII_ACTIVE_STATE_REFUSED'}}
  Assert-OwnerPreparedRelease $pins
  $stage='receipt';$receiptBytes=Read-OwnerPinnedFile (Join-Path $product 'owner-msi.prepared.json') @(Get-OwnerAdministrativeSids) $pins
  $receipt=[Text.UTF8Encoding]::new($false,$true).GetString($receiptBytes)|ConvertFrom-Json
  if(@($receipt.PSObject.Properties).Count -ne 4 -or $receipt.version -ne 1 -or $receipt.purpose -cne 'owner-msi-preparation' -or $receipt.phase -cne 'prepared' -or $receipt.ownerSid -cnotmatch '^S-1-5-21-(\d+-){3}\d+$'){throw 'OII_PREPARED_RECEIPT_REQUIRED'}
  # Verify the entire protected prepared directory layout without changing it.
- $stage='layout';for($parent='C:\ProgramData';$parent;$parent=[IO.Path]::GetDirectoryName($parent)){$pins.Add([AgentoCOwnerFilePin]::Directory($parent));Assert-OwnerObjectAcl $parent @(Get-OwnerAdministrativeSids) -Ancestor -Pins $pins}
+ $stage='layout';for($parent=(Get-OwnerProgramDataPath);$parent;$parent=[IO.Path]::GetDirectoryName($parent)){$pins.Add([AgentoCOwnerFilePin]::Directory($parent));Assert-OwnerObjectAcl $parent @(Get-OwnerAdministrativeSids) -Ancestor -Pins $pins}
  $controlSid=($services|Where-Object {$_.role -eq 'control'}).sid;$executorSid=($services|Where-Object {$_.role -eq 'supervisor'}).sid
  foreach($row in @(Get-OwnerDataLayout $controlSid $executorSid $receipt.ownerSid)){
-  $path=if($row.relative){Join-Path 'C:\ProgramData\AgentoC' $row.relative}else{'C:\ProgramData\AgentoC'}
+  $path=if($row.relative){Join-Path (Get-OwnerDataRoot) $row.relative}else{Get-OwnerDataRoot}
   $pins.Add([AgentoCOwnerFilePin]::Directory($path));$a=[IO.Directory]::GetAccessControl($path)
   if(-not $a.AreAccessRulesProtected -or $a.GetOwner([Security.Principal.SecurityIdentifier]).Value -cne 'S-1-5-32-544' -or (Get-OwnerDataAclSddl $a ([Security.AccessControl.AccessControlSections]::Access)) -cne (Get-OwnerDataAclSddl (New-OwnerDataAcl $row.grants $row.traverseOnly) ([Security.AccessControl.AccessControlSections]::Access))){throw 'OII_LAYOUT_MISMATCH'}
  }
- $stage='modules';foreach($relative in @('scripts\initialize-windows-owner-identity.mjs','lib\instance-identity.mjs','lib\instance-proof-protocol.mjs')){$null=Read-OwnerPinnedFile (Join-Path (Join-Path $product 'payload') $relative) @(Get-OwnerAdministrativeSids) $pins 131072}
+ $stage='modules';foreach($relative in @('scripts\initialize-windows-owner-identity.mjs','lib\instance-identity.mjs','lib\instance-proof-protocol.mjs','lib\windows-owner-identity-paths.mjs')){$null=Read-OwnerPinnedFile (Join-Path (Join-Path $product 'payload') $relative) @(Get-OwnerAdministrativeSids) $pins 131072}
  $stage='existing';foreach($name in @('instance-identity.json','instance-identity.json.initialize-lock','instance-identity.json.pending','auth-session-secret','auth-sessions.sqlite','owner-identity.result.json')){if(Test-OwnerServicePreparationPresence (Join-Path $config $name)){throw 'OII_EXISTING_STATE_REFUSED'}}
  $stage='lease';$plan=@(Get-OwnerServicePreparationPlan);$p=$plan|Where-Object {$_.role -eq 'supervisor'};$supervisor=[ManagedPreparedService]::new($p.name,$p.command,$p.account)
  $p=$plan|Where-Object {$_.role -eq 'control'};$control=[OwnerIdentityServiceLease]::new($p.command)

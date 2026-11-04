@@ -16,7 +16,9 @@ param(
     [string]$MsiProductVersion = '',
     [string]$PreviousMsiProductVersion = '',
     [string]$PreviousMsiPath = '',
-    [string]$PreviousMsiSha256 = ''
+    [string]$PreviousMsiSha256 = '',
+    [string]$WingetClientPackagePath = '',
+    [string]$PowerShellRuntimeArchivePath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -87,6 +89,10 @@ try {
     $runtimeStager = Join-Path $SourceRoot 'scripts\stage-runtime-payload.mjs'
     & $node.Source $runtimeStager --source $SourceRoot --destination $payloadRoot --profile desktop
     if ($LASTEXITCODE -ne 0) { throw 'Clean allowlisted Windows runtime staging failed.' }
+    & $node.Source (Join-Path $payloadRoot 'scripts\verify-windows-approval-payload.mjs') $payloadRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Windows approval payload inputs are incomplete.' }
+    & (Join-Path $payloadRoot 'packaging\windows\build-safe-delete.ps1') -SourceRoot $payloadRoot -OutputPath (Join-Path $payloadRoot 'bin\agentoc-safe-delete.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Windows safe deletion helper could not be built.' }
     # Keep the host's displayed build version aligned with the actual package.
     & (Join-Path $scriptRoot 'write-package-version.ps1') -PayloadRoot $payloadRoot -Version $Version
     # Build Electron in a temporary, locked install so npm never mutates the
@@ -184,6 +190,34 @@ try {
     # managed install must ship the explicit admin-installed v2 trust manifest.
     $developmentOnlyBootstrap = -not $fullOwnerActivation
     & (Join-Path $payloadRoot 'packaging\windows\stage-owner-bootstrap.ps1') -SourceRoot $payloadRoot -PayloadRoot $payloadRoot -SignedHelperPath $SignedOwnerBootstrapPath -PublisherSha256 $OwnerBootstrapPublisherSha256 -DevelopmentOnly:$developmentOnlyBootstrap
+    $runtimeManifestSha256 = ''
+    if ($fullOwnerActivation) {
+        # Package an exact, signed client for the future system-compatible
+        # installer backend. Never resolve a user-writable module at runtime.
+        $wingetPackage = $WingetClientPackagePath
+        if (-not $wingetPackage) {
+            $wingetPackage = Join-Path $qrcodeCacheRoot 'Microsoft.WinGet.Client-1.29.380.nupkg'
+            if (-not (Test-Path -LiteralPath $wingetPackage -PathType Leaf)) {
+                Invoke-WebRequest -UseBasicParsing -Uri 'https://www.powershellgallery.com/api/v2/package/Microsoft.WinGet.Client/1.29.380' -OutFile $wingetPackage
+            }
+        }
+        & (Join-Path $payloadRoot 'packaging\windows\stage-winget-client.ps1') -PackagePath $wingetPackage -PayloadRoot $payloadRoot
+        # The MSI currently targets x64. Its private PowerShell runtime keeps
+        # the service independent of the host's interactive user installation.
+        $runtimeArchive = $PowerShellRuntimeArchivePath
+        if (-not $runtimeArchive) {
+            $runtimeArchive = Join-Path $qrcodeCacheRoot 'PowerShell-7.6.6-win-x64.zip'
+            if (-not (Test-Path -LiteralPath $runtimeArchive -PathType Leaf)) {
+                Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/PowerShell/PowerShell/releases/download/v7.6.6/PowerShell-7.6.6-win-x64.zip' -OutFile $runtimeArchive
+            }
+        }
+        & (Join-Path $payloadRoot 'packaging\windows\stage-powershell-runtime.ps1') -ArchivePath $runtimeArchive -PayloadRoot $payloadRoot -Architecture x64
+        $runtimeManifestOutput = & $node.Source (Join-Path $payloadRoot 'scripts\create-windows-runtime-manifest.mjs') $payloadRoot
+        if ($LASTEXITCODE -ne 0) { throw 'Windows runtime integrity manifest generation failed.' }
+        $runtimeManifest = $runtimeManifestOutput | ConvertFrom-Json
+        $runtimeManifestSha256 = [string]$runtimeManifest.sha256
+        if ($runtimeManifestSha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Windows runtime integrity manifest hash is invalid.' }
+    }
     # Production npm packages ship TypeScript declaration bundles for editor
     # tooling. They are not executable runtime inputs and add nearly 200 MB to
     # this MSI; keep shipped JavaScript and run the bundled tools after pruning.
@@ -221,9 +255,10 @@ try {
         Measure-Object Length -Sum).Sum
     Write-Output ('Electron desktop payload: {0:N0} bytes' -f $desktopPayloadBytes)
     Write-Output ('Core Windows payload: {0:N0} bytes' -f ($payloadBytes - $desktopPayloadBytes))
-    Write-Output ('Complete MSI payload: {0:N0} bytes (600 MB maximum)' -f $payloadBytes)
-    if ($payloadBytes -gt 600MB) {
-        throw ('Staged MSI payload is {0:N0} MB, above the established 600 MB runtime budget.' -f ($payloadBytes / 1MB))
+    $maxPayloadBytes = if ($fullOwnerActivation) { 900MB } else { 600MB }
+    Write-Output ('Complete MSI payload: {0:N0} bytes ({1:N0} MiB maximum)' -f $payloadBytes, ($maxPayloadBytes / 1MB))
+    if ($payloadBytes -gt $maxPayloadBytes) {
+        throw ('Staged MSI payload is {0:N0} MiB, above the {1:N0} MiB runtime budget.' -f ($payloadBytes / 1MB), ($maxPayloadBytes / 1MB))
     }
     # Compile the service host from the same frozen staged source, never reuse
     # an untracked developer executable from SourceRoot.
@@ -234,7 +269,9 @@ try {
     $brokerBuildRoot = Join-Path $staging 'privileged-broker'
     $brokerSource = Join-Path $brokerBuildRoot 'AgentoC.PrivilegedBroker.exe'
     if ($fullOwnerActivation) {
-        & (Join-Path $scriptRoot 'build-privileged-broker.ps1') -SourceRoot $SourceRoot -OutputPath $brokerSource
+        # Compile the broker from the same verified, frozen payload as the
+        # service host; the live checkout can change after staging completes.
+        & (Join-Path $installScriptRoot 'build-privileged-broker.ps1') -SourceRoot $payloadRoot -OutputPath $brokerSource -RuntimeManifestSha256 $runtimeManifestSha256
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $brokerSource -PathType Leaf)) { throw 'Windows Privileged Broker build failed.' }
         $brokerSha256 = (Get-FileHash -LiteralPath $brokerSource -Algorithm SHA256).Hash.ToLowerInvariant()
         $brokerManifest = [ordered]@{ schemaVersion = 1; productVersion = $Version; sha256 = $brokerSha256 } | ConvertTo-Json -Compress
