@@ -3,9 +3,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
+	"io"
 	"path/filepath"
 	"regexp"
 	"time"
@@ -25,6 +28,9 @@ type ownerInstallRunner struct {
 	environment    func(windows.Token) ([]string, error)
 	paths          func() (root, systemDir string, err error)
 	run            func(context.Context, windows.Token, string, []string, []string, string) (int, error)
+	inspect        func(context.Context, windows.Token, string, []string, []string, string) ([]byte, error)
+	elevate        func(windows.Token, string, uint32) (windows.Token, error)
+	closeElevated  func(windows.Token) error
 }
 
 // install is private and does not authorize, claim, or persist a request. Its
@@ -61,6 +67,28 @@ func (runner ownerInstallRunner) install(parent context.Context, ownerSID, packa
 		return failed("OWNER_INSTALL_ENVIRONMENT_UNAVAILABLE")
 	}
 	env = append(env, "AGENTOC_INSTALL_PACKAGE_ID="+packageID, "AGENTOC_INSTALL_PACKAGE_VERSION="+version, "AGENTOC_INSTALL_SCOPE="+scope)
+	units := utf16.Encode([]rune(ownerInstallScript))
+	encoded := make([]byte, len(units)*2)
+	for i, unit := range units {
+		binary.LittleEndian.PutUint16(encoded[i*2:], unit)
+	}
+	args := []string{"-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", base64.StdEncoding.EncodeToString(encoded)}
+	executable := filepath.Join(vendor, "PowerShell", "pwsh.exe")
+	var selected *selectedInstallerFacts
+	if runner.inspect != nil && runner.elevate != nil && runner.closeElevated != nil {
+		inspectCtx, cancelInspect := context.WithTimeout(parent, 30*time.Second)
+		data, inspectErr := runner.inspect(inspectCtx, token, executable, args, append(append([]string{}, env...), "AGENTOC_INSTALL_INSPECT=1"), systemDir)
+		cancelInspect()
+		if inspectErr == nil && len(data) <= 64*1024 {
+			var facts selectedInstallerFacts
+			decoder := json.NewDecoder(bytes.NewReader(data))
+			decoder.DisallowUnknownFields()
+			var extra any
+			if decoder.Decode(&facts) == nil && decoder.Decode(&extra) == io.EOF && validInstallerFacts(&facts, packageID, version) && facts.Scope == "User" && (facts.Elevation == "ElevationRequired" || facts.Elevation == "ElevatesSelf") {
+				selected = &facts
+			}
+		}
+	}
 	// Check once more after environment construction, immediately before the
 	// child starts. A vanished or ambiguous session cannot be silently reused.
 	current, err := runner.tokens.discover(ownerSID)
@@ -79,15 +107,34 @@ func (runner ownerInstallRunner) install(parent context.Context, ownerSID, packa
 	if parent.Err() != nil {
 		return failed("OWNER_INSTALL_RUN_CANCELLED")
 	}
-	units := utf16.Encode([]rune(ownerInstallScript))
-	encoded := make([]byte, len(units)*2)
-	for i, unit := range units {
-		binary.LittleEndian.PutUint16(encoded[i*2:], unit)
+	executionToken := token
+	if selected != nil {
+		elevated, elevatedErr := runner.elevate(token, ownerSID, session)
+		if elevatedErr != nil && elevated != 0 {
+			_ = runner.closeElevated(elevated)
+		}
+		if elevatedErr == nil && elevated != 0 {
+			defer runner.closeElevated(elevated)
+			fresh, freshSession, freshErr := acquireOwnerSessionToken(ownerSID, runner.tokens)
+			if freshErr != nil {
+				return failed("OWNER_INSTALL_OWNER_UNAVAILABLE")
+			}
+			stillCurrent := freshSession == session && runner.tokens.sameLogon(token, fresh)
+			_ = runner.tokens.close(fresh)
+			if !stillCurrent || parent.Err() != nil {
+				return failed("OWNER_INSTALL_OWNER_UNAVAILABLE")
+			}
+			data, marshalErr := json.Marshal(selected)
+			if marshalErr != nil {
+				return failed("OWNER_INSTALL_INVALID")
+			}
+			env = append(env, "AGENTOC_INSTALL_SELECTED="+string(data))
+			executionToken = elevated
+		}
 	}
-	args := []string{"-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", base64.StdEncoding.EncodeToString(encoded)}
 	ctx, cancel := context.WithTimeout(parent, 10*time.Minute)
 	defer cancel()
-	exit, runErr := runner.run(ctx, token, filepath.Join(vendor, "PowerShell", "pwsh.exe"), args, env, systemDir)
+	exit, runErr := runner.run(ctx, executionToken, executable, args, env, systemDir)
 	if ctx.Err() != nil {
 		return ownerInstallResult{Status: "unknown", Code: "OWNER_INSTALL_OUTCOME_UNKNOWN"}
 	}
@@ -103,6 +150,8 @@ func (runner ownerInstallRunner) install(parent context.Context, ownerSID, packa
 		return failed("OWNER_INSTALL_PACKAGE_UNAVAILABLE")
 	case 24:
 		return ownerInstallResult{Status: "unknown", Code: "OWNER_INSTALL_REBOOT_REQUIRED"}
+	case 25:
+		return failed("OWNER_INSTALL_SELECTION_CHANGED")
 	default:
 		return failed("OWNER_INSTALL_FAILED")
 	}

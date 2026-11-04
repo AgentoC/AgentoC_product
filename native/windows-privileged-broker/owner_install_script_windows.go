@@ -24,6 +24,41 @@ try {
   $matches = @(Find-WinGetPackage -Id $id -Source 'winget' -MatchOption Equals -ErrorAction Stop)
   if ($matches.Count -ne 1 -or $matches[0].Id -cne $id -or $matches[0].Source -ine 'winget' -or
       @($matches[0].AvailableVersions) -cnotcontains $version) { exit 22 }
+  if ($env:AGENTOC_INSTALL_INSPECT -ceq '1' -or $env:AGENTOC_INSTALL_SELECTED) {
+    try {
+      $property = $matches[0].GetType().GetProperty('CatalogPackageCOM', [Reflection.BindingFlags]'Instance,NonPublic')
+      if (-not $property) { exit 25 }
+      $catalog = $property.GetValue($matches[0])
+      $versions = $catalog.AvailableVersions
+      if (-not $versions -or $versions.Count -gt 10000) { exit 25 }
+      $key = $null
+      for ($index = 0; $index -lt $versions.Count; $index++) {
+        $candidate = $versions[$index]
+        if ($candidate.Version -ceq $version) { if ($key) { exit 25 }; $key = $candidate }
+      }
+      if (-not $key) { exit 25 }
+      $packageVersion = $catalog.GetPackageVersionInfo($key)
+      if (-not $packageVersion -or $packageVersion.Id -cne $id -or $packageVersion.Version -cne $version) { exit 25 }
+      $optionsType = $property.PropertyType.Assembly.GetType('Microsoft.Management.Deployment.InstallOptions', $true)
+      $options = [Activator]::CreateInstance($optionsType)
+      $options.PackageInstallMode = 'Silent'
+      if ($env:AGENTOC_INSTALL_SCOPE -ceq 'user') { $options.PackageInstallScope = 'User' }
+      elseif ($env:AGENTOC_INSTALL_SCOPE -cne 'default') { exit 23 }
+      $installer = $packageVersion.GetApplicableInstaller($options)
+      if (-not $installer) { exit 25 }
+      if ($env:AGENTOC_INSTALL_INSPECT -ceq '1') {
+        @{ id = $id; version = $version; source = 'winget'; scope = [string]$installer.Scope;
+           elevation = [string]$installer.ElevationRequirement; type = [string]$installer.InstallerType; nestedType = [string]$installer.NestedInstallerType;
+           architecture = [string]$installer.Architecture; locale = [string]$installer.Locale } | ConvertTo-Json -Compress
+        exit 0
+      }
+      $expected = $env:AGENTOC_INSTALL_SELECTED | ConvertFrom-Json -ErrorAction Stop
+      if ($expected.id -cne $id -or $expected.version -cne $version -or $expected.source -cne 'winget' -or
+          [string]$installer.Scope -cne $expected.scope -or [string]$installer.ElevationRequirement -cne $expected.elevation -or
+          [string]$installer.InstallerType -cne $expected.type -or [string]$installer.NestedInstallerType -cne $expected.nestedType -or
+          [string]$installer.Architecture -cne $expected.architecture -or [string]$installer.Locale -cne $expected.locale) { exit 25 }
+    } catch { exit 25 }
+  }
   $arguments = @{ Id=$id; Version=$version; Source='winget'; MatchOption='Equals'; Mode='Silent'; Confirm=$false; ErrorAction='Stop' }
   if ($env:AGENTOC_INSTALL_SCOPE -ceq 'user') { $arguments.Scope = 'User' }
   elseif ($env:AGENTOC_INSTALL_SCOPE -cne 'default') { exit 23 }

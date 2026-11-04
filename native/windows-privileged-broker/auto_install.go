@@ -115,7 +115,16 @@ var (
 
 func validInspectedInstaller(grant autoInstallGrant) bool {
 	facts := grant.SelectedInstaller
-	if facts == nil || facts.ID != grant.PackageID || facts.Version != grant.VersionID || facts.Source != "winget" || facts.Scope != "System" || !installerLocalePattern.MatchString(facts.Locale) {
+	return validInstallerFacts(facts, grant.PackageID, grant.VersionID) && facts.Scope == "System"
+}
+
+func validInstallerFacts(facts *selectedInstallerFacts, packageID, versionID string) bool {
+	if facts == nil || facts.ID != packageID || facts.Version != versionID || facts.Source != "winget" || !installerLocalePattern.MatchString(facts.Locale) {
+		return false
+	}
+	switch facts.Scope {
+	case "Unknown", "User", "System":
+	default:
 		return false
 	}
 	switch facts.Elevation {

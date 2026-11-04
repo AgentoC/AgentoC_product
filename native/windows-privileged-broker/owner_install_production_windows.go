@@ -26,7 +26,9 @@ func runInstalledOwnerInstall(ctx context.Context, ownerSID, packageID, version,
 			systemDir, err := windows.GetSystemDirectory()
 			return root, systemDir, err
 		},
-		run: runOwnerProcess,
+		run: runOwnerProcess, inspect: runOwnerInspection,
+		elevate:       systemLinkedElevatedOwnerToken,
+		closeElevated: func(token windows.Token) error { return token.Close() },
 	}
 	return runner.install(ctx, ownerSID, packageID, version, scope)
 }
