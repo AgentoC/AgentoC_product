@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
@@ -15,6 +16,8 @@ import com.andysagent.agentoc.core.agentui.AgentRunStatus
 import com.andysagent.agentoc.core.designsystem.AgentocTheme
 import com.andysagent.agentoc.core.timeline.TimelineItem
 import com.andysagent.agentoc.core.timeline.TimelineRole
+import com.andysagent.agentoc.core.timeline.TimelineOperationKind
+import com.andysagent.agentoc.core.timeline.TimelineOperationStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -30,6 +33,22 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ExecutionTimelineUiTest {
     @get:Rule val rule = createComposeRule()
+
+    @Test fun completedRunKeepsFinalAnswerVisibleWhileProcessToggles() {
+        val entries = listOf(
+            TimelineItem.Message("progress", 1, TimelineRole.Agent, "Checking source", true, messagePhase = "commentary"),
+            TimelineItem.Operation("thought", 2, TimelineOperationKind.Tool, "Thinking", "Reasoning", TimelineOperationStatus.Completed, isReasoning = true),
+            TimelineItem.Message("answer", 3, TimelineRole.Agent, "Final result", true, messagePhase = "final_answer"),
+        )
+        val turn = TurnGroupProjector().project(entries).single()
+        rule.setContent { AgentocTheme { TurnTimelineView(turn, true, null, null, {}, { _, _ -> }, {}, {}) } }
+        rule.onNodeWithText("Final result").assertIsDisplayed()
+        rule.onNodeWithText("Checking source").assertDoesNotExist()
+        rule.onNodeWithTag("turn-process-toggle").performClick()
+        rule.onNodeWithText("Checking source").assertIsDisplayed()
+        rule.onNodeWithTag("thinking-row").assertIsDisplayed()
+        rule.onNodeWithText("Final result").assertIsDisplayed()
+    }
 
     @Test fun userMessageBranchCopiesThroughTheSelectedPrompt() {
         var branch: Pair<Long, String>? = null

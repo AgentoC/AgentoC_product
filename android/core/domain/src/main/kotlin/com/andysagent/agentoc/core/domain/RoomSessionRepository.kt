@@ -217,6 +217,13 @@ class RoomSessionRepository(
     private val runActivityState = MutableStateFlow<Map<String, JsonObject>>(emptyMap())
     override fun observeRunActivity(sessionId: String): Flow<JsonObject?> =
         runActivityState.map { it[sessionId] }.distinctUntilChanged()
+    override fun observeRunDurations(sessionId: String): Flow<Map<String, Long>> =
+        dao.observeRunDurations(sessionId).map { rows -> rows.associate { it.runId to it.durationMs } }
+    override suspend fun saveRunDuration(sessionId: String, runId: String, durationMs: Long) {
+        if (sessionId.isNotBlank() && runId.isNotBlank() && durationMs >= 0) {
+            dao.upsertRunDuration(com.andysagent.agentoc.core.database.RunDurationEntity(sessionId, runId, durationMs))
+        }
+    }
     private val durableArtifactState = MutableStateFlow<Map<String, List<SessionEventDto>>>(emptyMap())
     // Accessed while syncMutex is held. Retry a failed visible projection on
     // the next sync without rewinding the durable event cursor.
@@ -787,6 +794,7 @@ class RoomSessionRepository(
 
     override suspend fun deleteSession(sessionId: String) {
         execute(ApiRequest("DELETE", "/api/sessions/${encode(sessionId)}"))
+        dao.deleteRunDurations(sessionId)
         refreshSessions()
     }
 

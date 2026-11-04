@@ -79,6 +79,10 @@ data class TimelineMessageStagingEntity(
     val messagePhase: String? = null,
 )
 
+/** Completed duration is immutable and remains available while offline. */
+@Entity(tableName = "run_durations", primaryKeys = ["sessionId", "runId"])
+data class RunDurationEntity(val sessionId: String, val runId: String, val durationMs: Long)
+
 @Entity(tableName = "approvals", indices = [Index(value = ["sessionId", "status"])])
 data class ApprovalEntity(
     @androidx.room.PrimaryKey val id: String,

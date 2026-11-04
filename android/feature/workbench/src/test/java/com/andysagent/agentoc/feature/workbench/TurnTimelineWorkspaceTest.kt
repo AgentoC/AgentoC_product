@@ -34,6 +34,7 @@ class TurnTimelineWorkspaceTest {
         val replyB = TimelineItem.Message("reply-b", 4, TimelineRole.Agent, "Answer B", true, requestId = "b", runId = "run-b")
         val turns = projector.project(listOf(a, b, replyA, replyB))
         assertEquals(listOf("a", "b"), turns.map { it.requestId })
+        assertEquals(listOf("run-a", "run-b"), turns.map { it.runId })
         assertEquals(listOf(replyA), turns[0].agentMessages)
         assertEquals(listOf(replyB), turns[1].agentMessages)
         val finalA = replyA.copy(seq = 5, completed = true, text = "Final A")

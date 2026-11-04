@@ -142,8 +142,9 @@ fun TurnTimelineView(
             // While a reply is being generated, render the ordered stream in
             // the process area. Unknown legacy messages remain visible after
             // completion instead of guessing which one is the final answer.
-            val processEntries = if (runActive && beforeFinal.isEmpty()) turn.entries else beforeFinal
-            val outsideEntries = if (runActive && beforeFinal.isEmpty()) emptyList() else finalEntries
+            val hasFinal = turn.entries.any { it is TimelineItem.Message && it.messagePhase == "final_answer" }
+            val processEntries = if (runActive && !hasFinal) turn.entries else beforeFinal
+            val outsideEntries = if (runActive && !hasFinal) emptyList() else finalEntries
             var expanded by rememberSaveable(turn.requestId ?: turn.id) { mutableStateOf(runActive) }
             var userToggled by rememberSaveable(turn.requestId ?: turn.id) { mutableStateOf(false) }
             LaunchedEffect(runActive) { if (!runActive && !userToggled) expanded = false }
@@ -165,16 +166,17 @@ fun TurnTimelineView(
                     is TimelineItem.Notice -> if (item.text.isNotBlank()) Text(item.text)
                 }
             } }
-            if (processEntries.isNotEmpty() || runActive) {
+            if (processEntries.isNotEmpty() || runActive || runDuration != null) {
+                val canExpand = processEntries.isNotEmpty() || activeAction != null
                 Row(Modifier.fillMaxWidth().heightIn(min = 36.dp)
-                    .clickable { expanded = !expanded; userToggled = true }
+                    .clickable(enabled = canExpand) { expanded = !expanded; userToggled = true }
                     .testTag("turn-process-toggle")
                     .semantics { contentDescription = toggleDescription },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (runDuration != null) runDuration() else Text(stringResource(R.string.timeline_process),
                         style = MaterialTheme.typography.labelSmall, color = LocalAgentocColors.current.secondaryContent)
-                    AgentoWebIcon(if (expanded) AgentoWebGlyph.ChevronDown else AgentoWebGlyph.ChevronRight,
+                    if (canExpand) AgentoWebIcon(if (expanded) AgentoWebGlyph.ChevronDown else AgentoWebGlyph.ChevronRight,
                         null, Modifier.size(14.dp), tint = LocalAgentocColors.current.secondaryContent)
                 }
                 AnimatedVisibility(expanded) {

@@ -152,6 +152,7 @@ data class WorkbenchUiState(
     val selectedDiffFile: FileDiffDetail? = null,
     val planMode: Boolean = false,
     val runMetrics: RunMetricsUiState = RunMetricsUiState(),
+    val runDurations: Map<String, Long> = emptyMap(),
     val stepTraces: List<StepTraceItem> = emptyList(),
     val changedFiles: List<FileDiffDetail> = emptyList(),
     val remoteTargets: List<RemoteTarget> = emptyList(),
@@ -461,6 +462,7 @@ data class ChatUiState(
     val selectedDiffFile: FileDiffDetail? = null,
     val planMode: Boolean = false,
     val runMetrics: RunMetricsUiState = RunMetricsUiState(),
+    val runDurations: Map<String, Long> = emptyMap(),
     val stepTraces: List<StepTraceItem> = emptyList(),
     val changedFiles: List<FileDiffDetail> = emptyList(),
 )
@@ -650,6 +652,8 @@ class ChatViewModel(
     private var listedSessionActionTarget: Pair<SessionRepository, String>? = null
     private var listedProjectActionTarget: Pair<SessionRepository, String>? = null
     private var lastRunProjectionRequest: Pair<String, Long>? = null
+    private var durationFetchJob: Job? = null
+    private val durationAttempts = mutableMapOf<String, Long>()
     private var artifactProjectionSessionId: String? = null
     private var artifactProjectionRepository: SessionRepository? = null
     private val artifactProjectionLock = Any()
@@ -738,6 +742,7 @@ class ChatViewModel(
                     ?: sessions.firstOrNull().takeUnless { newSessionRequested && fixed === selectedRepository }
                 if (selected != null && (selected.id != currentId || fixed !== selectedRepository)) selectSession(selected.id)
                 if (selected != null) {
+                    val previousRunStatus = mutableState.value.runStatus
                     val queueIds = selected.queuedMessages.map { it.requestId }.toSet()
                     val key = requireNotNull(fixed) to selected.id
                     updateState {
@@ -749,6 +754,18 @@ class ChatViewModel(
                             queuedMessages = selected.queuedMessages.map(::toQueuedMessageUiState),
                             acceptedTurns = sessionAcceptedTurns[key].orEmpty().filterNot { it.requestId in queueIds },
                         )
+                    }
+                    if (previousRunStatus in setOf(AgentRunStatus.Working, AgentRunStatus.WaitingApproval) &&
+                        selected.status.toAgentStatus() in setOf(AgentRunStatus.Idle, AgentRunStatus.Completed, AgentRunStatus.Failed, AgentRunStatus.Cancelled)) {
+                        val items = mutableState.value.timelineItems
+                        val lastRunId = items.asReversed().firstNotNullOfOrNull { item -> when (item) {
+                            is TimelineItem.Message -> item.runId
+                            is TimelineItem.Operation -> item.runId
+                            is TimelineItem.Plan -> item.runId
+                            is TimelineItem.Notice -> null
+                        } }
+                        lastRunId?.let(durationAttempts::remove)
+                        fetchHistoricalDurations(requireNotNull(fixed), selected.id, sessionGeneration, items)
                     }
                 } else if (currentId != null || fixed !== selectedRepository) {
                     saveSelectedDraft()
@@ -1791,6 +1808,9 @@ class ChatViewModel(
         saveSelectedDraft()
         selectedSessionJob?.cancel()
         val generation = ++sessionGeneration
+        durationFetchJob?.cancel()
+        durationFetchJob = null
+        durationAttempts.clear()
         val editGeneration = ++runtimeEditGeneration
         lastRunProjectionRequest = null
         selectedRepository = fixed
@@ -1838,6 +1858,7 @@ class ChatViewModel(
                 stepTraces = emptyList(),
                 changedFiles = emptyList(),
                 runMetrics = RunMetricsUiState(status = selectedSession?.status?.toAgentStatus() ?: AgentRunStatus.Idle),
+                runDurations = emptyMap(),
                 serverRunActivity = null,
                 loadingOlder = false,
                 hasOlder = false,
@@ -1859,6 +1880,11 @@ class ChatViewModel(
             launch {
                 fixed.observeRunActivity(sessionId).collectLatest { activity ->
                     if (isCurrentSession(sessionId, generation)) updateState { copy(serverRunActivity = activity) }
+                }
+            }
+            launch {
+                fixed.observeRunDurations(sessionId).collectLatest { durations ->
+                    if (isCurrentSession(sessionId, generation)) updateState { copy(runDurations = durations) }
                 }
             }
             launch {
@@ -1911,6 +1937,7 @@ class ChatViewModel(
                             ),
                         )
                     }
+                    fetchHistoricalDurations(fixed, sessionId, generation, items)
                     items.asSequence().mapNotNull { (it as? TimelineItem.Operation)?.runId }
                         .lastOrNull()
                         ?.let { runId ->
@@ -2042,6 +2069,7 @@ class ChatViewModel(
                 val projection = fixed.loadRunProjection(runId)
                 if (isCurrentSession(sessionId, generation)) {
                     updateRunMetricsFromProjection(projection, runId)
+                    completedRunDuration(projection)?.let { fixed.saveRunDuration(sessionId, runId, it) }
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -2051,9 +2079,62 @@ class ChatViewModel(
         }
     }
 
+    private fun fetchHistoricalDurations(fixed: SessionRepository, sessionId: String, generation: Long, items: List<TimelineItem>) {
+        if (durationFetchJob?.isActive == true) return
+        val known = mutableState.value.runDurations
+        val runIds = items.mapNotNull { item -> when (item) {
+            is TimelineItem.Message -> item.runId
+            is TimelineItem.Operation -> item.runId
+            is TimelineItem.Plan -> item.runId
+            is TimelineItem.Notice -> null
+        } }.filter(String::isNotBlank).distinct().asReversed().filter { runId ->
+            val now = System.nanoTime() / 1_000_000L
+            runId !in known && durationAttempts[runId]?.let { now - it < 30_000L } != true
+        }
+        if (runIds.isEmpty()) return
+        val job = viewModelScope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
+            for (runId in runIds) {
+                if (!isCurrentSession(sessionId, generation)) return@launch
+                if (runId in known || runId in mutableState.value.runDurations) continue
+                val now = System.nanoTime() / 1_000_000L
+                if (durationAttempts[runId]?.let { now - it < 30_000L } == true) continue
+                durationAttempts[runId] = now
+                try {
+                    val projection = fixed.loadRunProjection(runId)
+                    val duration = completedRunDuration(projection)
+                    if (duration != null && isCurrentSession(sessionId, generation)) {
+                        fixed.saveRunDuration(sessionId, runId, duration)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Throwable) {
+                    // Offline or expired runs retain any previously saved duration.
+                }
+            }
+        }
+        durationFetchJob = job
+        job.invokeOnCompletion {
+            if (durationFetchJob === job) {
+                durationFetchJob = null
+                if (isCurrentSession(sessionId, generation)) {
+                    fetchHistoricalDurations(fixed, sessionId, generation, mutableState.value.timelineItems)
+                }
+            }
+        }
+        job.start()
+    }
+
+    private fun completedRunDuration(projection: JsonObject): Long? {
+        val state = projection.stringValue("state") ?: projection.stringValue("status")
+        if (state?.lowercase() !in setOf("completed", "finished", "succeeded", "success", "failed", "error", "interrupted", "cancelled", "canceled")) return null
+        val started = projection.timestampValue("startedAt") ?: projection.timestampValue("createdAt")
+        val ended = projection.timestampValue("finishedAt") ?: projection.timestampValue("completedAt") ?: projection.timestampValue("finalizedAt")
+        return (projection.longValue("durationMs") ?: if (started != null && ended != null) ended - started else null)?.takeIf { it >= 0 }
+    }
+
     private fun updateRunMetricsFromProjection(projection: JsonObject, runId: String) {
         val state = projection.stringValue("state") ?: projection.stringValue("status")
-        val started = projection.timestampValue("startedAt")
+        val started = projection.timestampValue("startedAt") ?: projection.timestampValue("createdAt")
         val finished = projection.timestampValue("finishedAt")
             ?: projection.timestampValue("completedAt")
             ?: projection.timestampValue("finalizedAt")
@@ -2062,7 +2143,6 @@ class ChatViewModel(
         updateState {
             copy(runMetrics = runMetrics.copy(
                 runId = runId,
-                startedAtMillis = started ?: runMetrics.startedAtMillis.takeIf { runMetrics.runId == runId },
                 phase = projection.stringValue("phase"),
                 provider = projection.stringValue("provider"),
                 model = projection.stringValue("model"),

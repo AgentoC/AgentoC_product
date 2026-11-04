@@ -44,6 +44,50 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatModernizationParityTest {
 
+    @Test fun `completed run duration is saved for later offline display`() = runTest {
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        try {
+            val reply = TimelineItem.Message("reply", 2, TimelineRole.Agent, "Done", true, runId = "run-a")
+            val projection = kotlinx.serialization.json.Json.parseToJsonElement(
+                """{"state":"completed","startedAt":1000,"completedAt":6500}"""
+            ) as kotlinx.serialization.json.JsonObject
+            val repository = TestSessionRepository(
+                sessions = listOf(Session("s1", "History", status = SessionStatus.Completed)),
+                timelines = mapOf("s1" to listOf(reply)), runProjections = mapOf("run-a" to projection),
+            )
+            val viewModel = ChatViewModel(repository)
+            advanceUntilIdle()
+            assertEquals(5_500L, viewModel.state.value.runDurations["run-a"])
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test fun `completion refreshes duration even when active run was just checked`() = runTest {
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        try {
+            val projections = mutableMapOf("run-a" to (kotlinx.serialization.json.Json.parseToJsonElement(
+                """{"state":"running","startedAt":1000}"""
+            ) as kotlinx.serialization.json.JsonObject))
+            val reply = TimelineItem.Message("reply", 2, TimelineRole.Agent, "Working", false, runId = "run-a")
+            val repository = TestSessionRepository(
+                sessions = listOf(Session("s1", "Live", status = SessionStatus.Working)),
+                timelines = mapOf("s1" to listOf(reply)), runProjections = projections,
+            )
+            val viewModel = ChatViewModel(repository)
+            advanceUntilIdle()
+            assertNull(viewModel.state.value.runDurations["run-a"])
+            projections["run-a"] = kotlinx.serialization.json.Json.parseToJsonElement(
+                """{"state":"completed","startedAt":1000,"completedAt":6500}"""
+            ) as kotlinx.serialization.json.JsonObject
+            repository.updateSessionStatus("s1", SessionStatus.Completed)
+            advanceUntilIdle()
+            assertEquals(5_500L, viewModel.state.value.runDurations["run-a"])
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
     @Test fun `same session ID on another computer keeps separate drafts and timeline`() = runTest {
         Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
         try {
@@ -870,12 +914,16 @@ private class TestSessionRepository(
     private val approvals: List<Approval> = emptyList(),
     connection: RuntimeConnectionState = RuntimeConnectionState.Connected,
     private val timelines: Map<String, List<TimelineItem>> = emptyMap(),
+    private val runProjections: Map<String, kotlinx.serialization.json.JsonObject> = emptyMap(),
     private val beforeGoalUpdate: suspend () -> Unit = {},
 ) : SessionRepository {
     private val connectionStateValue = MutableStateFlow(connection)
     override val connectionState: StateFlow<RuntimeConnectionState> = connectionStateValue.asStateFlow()
     override val invalidations: Flow<SessionInvalidation> = MutableSharedFlow()
     private val sessionState = MutableStateFlow(sessions)
+    fun updateSessionStatus(sessionId: String, status: SessionStatus) {
+        sessionState.value = sessionState.value.map { if (it.id == sessionId) it.copy(status = status) else it }
+    }
     private val computerState = MutableStateFlow<List<Computer>>(emptyList())
     private val projectState = MutableStateFlow<List<Project>>(emptyList())
     private val messageState = MutableStateFlow<List<Message>>(emptyList())
@@ -884,6 +932,13 @@ private class TestSessionRepository(
     val runtimeDecisionCalls = mutableListOf<RuntimeDecisionCall>()
 
     private val timelineState = MutableStateFlow(timelines)
+    private val durationsState = MutableStateFlow<Map<String, Long>>(emptyMap())
+    override fun observeRunDurations(sessionId: String): Flow<Map<String, Long>> = durationsState
+    override suspend fun saveRunDuration(sessionId: String, runId: String, durationMs: Long) {
+        durationsState.value = durationsState.value + (runId to durationMs)
+    }
+    override suspend fun loadRunProjection(runId: String): kotlinx.serialization.json.JsonObject =
+        runProjections[runId] ?: throw IllegalStateException("Run unavailable")
     override fun observeComputers(): Flow<List<Computer>> = computerState
     override fun observeProjects(): Flow<List<Project>> = projectState
     override fun observeSessions(): Flow<List<Session>> = sessionState

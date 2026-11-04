@@ -109,6 +109,8 @@ interface SessionRepository {
     fun observeTimeline(sessionId: String): Flow<List<TimelineItem>>
     /** Canonical action projection shared with the Web live activity strip. */
     fun observeRunActivity(sessionId: String): Flow<JsonObject?> = kotlinx.coroutines.flow.flowOf(null)
+    fun observeRunDurations(sessionId: String): Flow<Map<String, Long>> = kotlinx.coroutines.flow.flowOf(emptyMap())
+    suspend fun saveRunDuration(sessionId: String, runId: String, durationMs: Long) {}
     fun observeTimelinePaging(sessionId: String): Flow<TimelinePagingState> =
         kotlinx.coroutines.flow.flowOf(TimelinePagingState())
     fun observePendingApprovals(sessionId: String): Flow<List<Approval>>

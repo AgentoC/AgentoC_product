@@ -14,6 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SessionEntity::class,
         MessageEntity::class,
         TimelineMessageStagingEntity::class,
+        RunDurationEntity::class,
         ApprovalEntity::class,
         PendingOperationEntity::class,
         SyncCursorEntity::class,
@@ -22,13 +23,18 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TargetRuntimeSummaryEventEntity::class,
         TargetRuntimeSummaryCursorEntity::class,
     ],
-    version = 15,
+    version = 16,
     exportSchema = true,
 )
 abstract class AgentoCDatabase : RoomDatabase() {
     abstract fun dao(): AgentoCDao
 
     companion object {
+        val MIGRATION_15_16: Migration = object : Migration(15, 16) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("CREATE TABLE IF NOT EXISTS run_durations (sessionId TEXT NOT NULL, runId TEXT NOT NULL, durationMs INTEGER NOT NULL, PRIMARY KEY(sessionId, runId))")
+            }
+        }
         val MIGRATION_14_15: Migration = object : Migration(14, 15) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE messages ADD COLUMN messagePhase TEXT")
@@ -205,6 +211,7 @@ abstract class AgentoCDatabase : RoomDatabase() {
             MIGRATION_12_13,
             MIGRATION_13_14,
             MIGRATION_14_15,
+            MIGRATION_15_16,
         ).build()
     }
 }

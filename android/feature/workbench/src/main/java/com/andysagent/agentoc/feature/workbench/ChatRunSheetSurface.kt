@@ -114,7 +114,6 @@ data class FileDiffDetail(
 @Immutable
 data class RunMetricsUiState(
     val durationFormatted: String = "N/A",
-    val startedAtMillis: Long? = null,
     val status: AgentRunStatus = AgentRunStatus.Idle,
     val promptTokens: Int = 0,
     val completionTokens: Int = 0,

@@ -70,6 +70,9 @@ class SwitchingSessionRepository(scope: CoroutineScope) : SessionRepository {
     override fun observeProjects(): Flow<List<Project>> = delegateFlow { it.observeProjects() }
     override fun observeSession(sessionId: String): Flow<Session?> = delegateFlow { it.observeSession(sessionId) }
     override fun observeRunActivity(sessionId: String): Flow<JsonObject?> = delegateFlow { it.observeRunActivity(sessionId) }
+    override fun observeRunDurations(sessionId: String): Flow<Map<String, Long>> = delegateFlow { it.observeRunDurations(sessionId) }
+    override suspend fun saveRunDuration(sessionId: String, runId: String, durationMs: Long) =
+        current().saveRunDuration(sessionId, runId, durationMs)
     override fun observeMessages(sessionId: String): Flow<List<Message>> = delegateFlow { it.observeMessages(sessionId) }
     override fun observeTimeline(sessionId: String): Flow<List<TimelineItem>> = delegateFlow { it.observeTimeline(sessionId) }
     override fun observeTimelinePaging(sessionId: String): Flow<TimelinePagingState> = delegateFlow { it.observeTimelinePaging(sessionId) }

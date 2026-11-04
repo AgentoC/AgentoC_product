@@ -8,6 +8,15 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AgentoCDao {
+    @Query("SELECT * FROM run_durations WHERE sessionId = :sessionId")
+    fun observeRunDurations(sessionId: String): Flow<List<RunDurationEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertRunDuration(item: RunDurationEntity)
+
+    @Query("DELETE FROM run_durations WHERE sessionId = :sessionId")
+    suspend fun deleteRunDurations(sessionId: String)
+
     @Query("SELECT * FROM computers ORDER BY name")
     fun observeComputers(): Flow<List<ComputerEntity>>
 

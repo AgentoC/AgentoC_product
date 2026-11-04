@@ -11,6 +11,22 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class AgentoCDatabaseMigrationTest {
+    @Test fun migrates15To16WithoutDroppingMessages() {
+        val name = "migration-15-16-run-duration.db"
+        helper.createDatabase(name, 15).use { db ->
+            db.execSQL("INSERT INTO sessions (id,title,status,latestSeq,updatedAt) VALUES ('s','Offline','completed',1,10)")
+            db.execSQL("INSERT INTO messages (id,sessionId,role,content,seq,requestId,completed,updatedAt,messagePhase) VALUES ('m','s','assistant','Keep this',1,'r',1,10,'final_answer')")
+        }
+        helper.runMigrationsAndValidate(name, 16, true, AgentoCDatabase.MIGRATION_15_16).use { db ->
+            db.query("SELECT content,messagePhase FROM messages WHERE id='m'").use { row ->
+                assertEquals(true, row.moveToFirst()); assertEquals("Keep this", row.getString(0)); assertEquals("final_answer", row.getString(1))
+            }
+            db.execSQL("INSERT INTO run_durations (sessionId,runId,durationMs) VALUES ('s','r',12345)")
+            db.query("SELECT durationMs FROM run_durations WHERE sessionId='s' AND runId='r'").use { row ->
+                assertEquals(true, row.moveToFirst()); assertEquals(12345L, row.getLong(0))
+            }
+        }
+    }
     @Test fun migrates14To15PreservingExistingMessages() {
         val name = "migration-14-15-message-phase.db"
         helper.createDatabase(name, 14).use { db ->

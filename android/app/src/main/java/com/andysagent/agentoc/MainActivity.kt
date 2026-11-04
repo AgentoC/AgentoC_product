@@ -1098,6 +1098,7 @@ class MainActivity : ComponentActivity() {
                     goalText = chatState.goalText,
                     autoContinue = chatState.autoContinue,
                     runMetrics = chatState.runMetrics,
+                    runDurations = chatState.runDurations,
                     stepTraces = chatState.stepTraces,
                     changedFiles = chatState.changedFiles,
                     queuedMessages = chatState.queuedMessages,

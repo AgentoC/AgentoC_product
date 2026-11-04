@@ -51,6 +51,7 @@ data class TurnOperationSummary(
 data class TurnGroup(
     val id: String,
     val requestId: String? = null,
+    val runId: String? = null,
     val userPrompt: TurnUserPrompt? = null,
     val agentSummary: String? = null,
     val plans: List<TimelineItem.Plan> = emptyList(),
@@ -211,6 +212,7 @@ class TurnGroupProjector {
                 TurnGroup(
                     id = turnId,
                     requestId = currentRequestId,
+                    runId = currentRunId,
                     userPrompt = currentUserPrompt,
                     agentSummary = currentAgentSummary,
                     plans = currentPlans.toList(),
@@ -269,6 +271,7 @@ class TurnGroupProjector {
                             requestId = item.requestId,
                         )
                     } else if (item.role == TimelineRole.Agent) {
+                        if (currentRunId == null) currentRunId = item.runId
                         if (currentRequestId == null) {
                             currentRequestId = item.requestId ?: item.runId
                         }
@@ -279,10 +282,12 @@ class TurnGroupProjector {
                     }
                 }
                 is TimelineItem.Plan -> {
+                    if (currentRunId == null) currentRunId = item.runId
                     if (currentRequestId == null) currentRequestId = item.runId
                     currentPlans.add(item)
                 }
                 is TimelineItem.Operation -> {
+                    if (currentRunId == null) currentRunId = item.runId
                     if (currentRequestId == null) currentRequestId = item.runId
                     currentOperations.add(item)
                     if (item.fileChanges.isNotEmpty()) {

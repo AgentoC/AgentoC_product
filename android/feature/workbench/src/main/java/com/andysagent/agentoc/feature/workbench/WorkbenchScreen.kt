@@ -1560,9 +1560,14 @@ private fun ChatSurface(
         )
     }
     val latestTurnGroups = rememberUpdatedState(turnGroups)
-    val showActiveRunAction = state.pendingTurn?.state == PendingTurnState.Sending ||
-        state.runStatus == AgentRunStatus.Working || state.runStatus == AgentRunStatus.WaitingApproval
     val durationTurnKey = turnGroups.lastOrNull()?.requestId ?: turnGroups.lastOrNull()?.userPrompt?.id
+    val statusActive = state.pendingTurn?.state == PendingTurnState.Sending ||
+        state.runStatus == AgentRunStatus.Working || state.runStatus == AgentRunStatus.WaitingApproval
+    var observedActive by remember(state.sessionId, durationTurnKey) { mutableStateOf(false) }
+    LaunchedEffect(statusActive) { if (statusActive) observedActive = true }
+    val terminalStatus = state.runStatus in setOf(AgentRunStatus.Completed, AgentRunStatus.Failed, AgentRunStatus.Cancelled)
+    val showActiveRunAction = statusActive ||
+        (observedActive && state.connection != AgentConnectionStatus.Connected && !terminalStatus)
     var runStartedElapsed by remember(state.sessionId, durationTurnKey) { mutableLongStateOf(Long.MAX_VALUE) }
     var runElapsedSeconds by remember(state.sessionId, durationTurnKey) { mutableLongStateOf(-1L) }
     val lastUserIndex = state.timelineItems.indexOfLast { it is TimelineItem.Message && it.role == com.andysagent.agentoc.core.timeline.TimelineRole.User }
@@ -2720,12 +2725,16 @@ private fun ChatSurface(
                             onOpenFileDiff = { diff -> onSetSelectedDiffFile(diff) },
                             onReport = { text -> onEvent(WorkbenchEvent.ReportAgentContent(text)) },
                             showMessageActions = canMessageAction,
-                            runDuration = if (isLastTurn && (showActiveRunAction || runElapsedSeconds >= 0L ||
-                                (currentRunId != null && currentRunId == state.runMetrics.runId && state.runMetrics.durationFormatted != "N/A"))) {{
-                                val duration = if (!showActiveRunAction && currentRunId == state.runMetrics.runId && state.runMetrics.durationFormatted != "N/A") state.runMetrics.durationFormatted
-                                    else if (runElapsedSeconds < 0) "" else if (runElapsedSeconds < 60) "${runElapsedSeconds}s" else "${runElapsedSeconds / 60}m ${runElapsedSeconds % 60}s"
+                            runDuration = if (turn.runId?.let(state.runDurations::containsKey) == true || (isLastTurn && (showActiveRunAction || runElapsedSeconds >= 0L ||
+                                (currentRunId != null && currentRunId == state.runMetrics.runId && state.runMetrics.durationFormatted != "N/A")))) {{
+                                val seconds = if (isLastTurn && showActiveRunAction) runElapsedSeconds else
+                                    turn.runId?.let(state.runDurations::get)?.div(1_000) ?: if (isLastTurn) runElapsedSeconds else -1L
+                                val duration = if (seconds >= 0) {
+                                    if (seconds < 60) stringResource(R.string.workbench_duration_seconds, seconds)
+                                    else stringResource(R.string.workbench_duration_minutes_seconds, seconds / 60, seconds % 60)
+                                } else if (isLastTurn && currentRunId == state.runMetrics.runId && state.runMetrics.durationFormatted != "N/A") state.runMetrics.durationFormatted else ""
                                 val label = if (duration.isEmpty()) stringResource(R.string.workbench_status_processing) else
-                                    stringResource(if (showActiveRunAction) R.string.workbench_run_elapsed else R.string.workbench_run_finished, duration)
+                                    stringResource(if (isLastTurn && showActiveRunAction) R.string.workbench_run_elapsed else R.string.workbench_run_finished, duration)
                                 Text(label,
                                     style = MaterialTheme.typography.labelSmall, color = colors.secondaryContent,
                                     modifier = Modifier.testTag("run-elapsed"))
