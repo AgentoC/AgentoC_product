@@ -87,6 +87,20 @@ try {
     await assert.rejects(stageRuntimePayload({ ...f, profile: 'desktop' }), /clean checkout/);
     assert.equal(existsSync(f.destination), false);
   });
+  await check('explicit committed-object staging preserves dirty work and ignores changed manifest and inputs', async () => {
+    const committedManifest = readFileSync(new URL('../packaging/runtime-payload.json', import.meta.url));
+    const binary = Buffer.from([0, 1, 2, 13, 10, 255, 0, 42]);
+    const f = fixture({ 'packaging/runtime-payload.json': committedManifest, 'lib/raw.bin': binary });
+    writeFileSync(join(f.source, 'lib/runtime.mjs'), 'export const dirty = true;\n');
+    writeFileSync(join(f.source, 'packaging/runtime-payload.json'), '{"schemaVersion":0}');
+    writeFileSync(join(f.source, 'untracked.txt'), 'preserve');
+    const result = await stageRuntimePayload({ ...f, profile: 'desktop', sourceMode: 'git-objects' });
+    assert.equal(readFileSync(join(f.destination, 'lib/runtime.mjs'), 'utf8'), 'export const fixture = true;\n');
+    assert.deepEqual(readFileSync(join(f.destination, 'lib/raw.bin')), binary);
+    assert.equal(readFileSync(join(f.source, 'lib/runtime.mjs'), 'utf8'), 'export const dirty = true;\n');
+    assert.equal(readFileSync(join(f.source, 'untracked.txt'), 'utf8'), 'preserve');
+    assert.equal(result.sourceRevision, f.git('rev-parse', 'HEAD').toString().trim());
+  });
   await check('assume-unchanged cannot hide altered executable source from committed-blob verification', async () => {
     const f = fixture();
     f.git('update-index', '--assume-unchanged', 'lib/runtime.mjs');
