@@ -237,7 +237,7 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
       // Get-Command can import a module and run its initialization even with
       // -ListImported when a module-qualified command name is supplied. Only
       // the unfiltered inventory is bounded to already imported commands.
-      if (program === 'get-command' && (filterArgs.positional.length ||
+      if (program === 'get-command' && (entry.pipelineInput !== false || filterArgs.positional.length ||
           [...filterArgs.named.keys()].some(key => key !== 'listimported'))) {
         return { complete: false, actions, reason: 'command lookup may execute module initialization' };
       }
@@ -258,6 +258,11 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
       return { complete: false, actions, reason: 'content read limit is not a literal nonnegative integer' };
     }
     const namedPath = args.named.get('literalpath') || args.named.get('filepath') || args.named.get('path');
+    // With no explicit path, Get-ChildItem binds incoming pipeline values as
+    // paths rather than necessarily listing the current directory.
+    if (program === 'get-childitem' && !namedPath && !args.positional.length && entry.pipelineInput !== false) {
+      return { complete: false, actions, reason: 'listing path may come from pipeline input' };
+    }
     let source = namedPath || args.positional[0] || (program === 'get-childitem' ? '.' : '');
     const destinationKey = kind === 'rename' ? 'newname' : 'destination';
     const destination = args.named.get(destinationKey) || ((kind === 'copy' || kind === 'move' || kind === 'rename') ? args.positional[namedPath ? 0 : 1] : '');

@@ -59,7 +59,8 @@ $commands = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Lang
     }
   })
   $redirectFacts = @(Get-RedirectionFacts $command)
-  @{ name = $command.GetCommandName(); elements = $elements; invocation = [string]$command.InvocationOperator; redirections = @($command.Redirections).Count; redirectFacts = $redirectFacts }
+  $hasPipelineInput = $command.Parent -is [System.Management.Automation.Language.PipelineAst] -and $command.Parent.PipelineElements[0] -ne $command
+  @{ name = $command.GetCommandName(); elements = $elements; invocation = [string]$command.InvocationOperator; redirections = @($command.Redirections).Count; redirectFacts = $redirectFacts; pipelineInput = $hasPipelineInput }
 })
 $expressions = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandExpressionAst] }, $true) | ForEach-Object {
   @{ expressionType = $_.Expression.GetType().Name; staticFileCall = (Get-SafeStaticFileCall $_.Expression); redirections = @($_.Redirections).Count; redirectFacts = @(Get-RedirectionFacts $_) }

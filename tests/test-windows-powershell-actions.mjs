@@ -64,6 +64,9 @@ assert.equal(result.actions.length, 2);
 assert.equal((await inspect('Get-Process -Name explorer | Select-Object -First 1')).decision, 'allow');
 assert.equal((await inspect('Get-Command')).decision, 'allow');
 assert.equal((await inspect('Get-Command -ListImported')).decision, 'allow');
+assert.equal((await inspect('Get-Command -ListImported | Select-Object -First 1')).decision, 'allow');
+assert.equal((await inspect("'AgentoCFixture\\Invoke-AgentoCProbe' | Get-Command -ListImported")).decision, 'review');
+assert.equal((await inspect("Write-Output 'AgentoCFixture\\Invoke-AgentoCProbe' | Get-Command")).decision, 'review');
 assert.equal((await inspect('Get-Command -Name Get-Content -CommandType Cmdlet')).decision, 'review');
 assert.equal((await inspect('Get-Command -ListImported AgentoCFixture\\Invoke-AgentoCProbe')).decision, 'review');
 assert.equal((await inspect('Get-Process -Id $env:PID')).decision, 'review');
@@ -138,6 +141,8 @@ for (const riskMode of ['recommended', 'full-auto']) {
   const approval = (script) => ({ kind: 'command', params: { command: [resolveWindowsSystemPaths().powershell, '-NoProfile', '-Command', script] } });
   const state = { riskMode, cwd: workspace, riskContext: context };
   assert.equal((await decideWindowsApproval(approval('Get-Command -ListImported AgentoCFixture\\Invoke-AgentoCProbe'), state)).decision, 'prompt', `${riskMode}: module lookup`);
+  assert.equal((await decideWindowsApproval(approval("'AgentoCFixture\\Invoke-AgentoCProbe' | Get-Command -ListImported"), state)).decision, 'prompt', `${riskMode}: piped module lookup`);
+  assert.equal((await decideWindowsApproval(approval("'..\\protected' | Get-ChildItem"), state)).decision, 'prompt', `${riskMode}: piped listing target`);
   assert.equal((await decideWindowsApproval(approval('Get-Command -ListImported'), state)).decision, 'auto-allow', `${riskMode}: imported command inventory`);
   const outside = path.join(root, 'ordinary.txt').replace(/'/g, "''");
   assert.equal((await decideWindowsApproval(approval(`Get-Content -LiteralPath '${outside}' -Tail 1`), state)).decision, 'auto-allow');
@@ -176,8 +181,19 @@ for (const [index, shell] of [resolveWindowsSystemPaths().powershell, process.en
   assert.equal((await inspect(query, { executable: shell })).decision, 'review');
   execFileSync(shell, ['-NoProfile', '-NonInteractive', '-Command', `${query} | Out-Null`], { env, windowsHide: true });
   await access(marker);
+  const pipedName = `${name}Piped`;
+  const pipedDir = path.join(modules, pipedName);
+  const pipedMarker = path.join(root, `module-piped-${index}.txt`);
+  await mkdir(pipedDir);
+  await writeFile(path.join(pipedDir, `${pipedName}.psm1`), `Set-Content -LiteralPath '${pipedMarker.replaceAll("'", "''")}' -Value loaded\nfunction Invoke-AgentoCProbe { 'fixture' }\nExport-ModuleMember -Function Invoke-AgentoCProbe\n`);
+  const pipedQuery = `'${pipedName}\\Invoke-AgentoCProbe' | Get-Command -ListImported`;
+  assert.equal((await inspect(pipedQuery, { executable: shell })).decision, 'review');
+  execFileSync(shell, ['-NoProfile', '-NonInteractive', '-Command', `${pipedQuery} | Out-Null`], { env, windowsHide: true });
+  await access(pipedMarker);
 }
 assert.equal((await inspect('Get-ChildItem -Path folder -Recurse')).decision, 'allow');
+assert.equal((await inspect('Get-ChildItem | Select-Object -First 1')).decision, 'allow');
+assert.equal((await inspect("'..\\protected' | Get-ChildItem")).decision, 'review');
 assert.equal((await inspect("Get-ChildItem -Path folder -Filter '*.md'")).decision, 'allow');
 assert.equal((await inspect("Get-ChildItem -Path folder -Filter '*.md' -Recurse")).decision, 'allow');
 assert.equal((await inspect('Get-ChildItem -Path folder -File -Name')).decision, 'allow');

@@ -18,6 +18,11 @@ const unicode = await parseWindowsPowerShellAst('Get-Content "中文 文档.md"'
 assert.equal(unicode.commands[0].elements[1].value, '中文 文档.md');
 const pipeline = await parseWindowsPowerShellAst('Get-Content README.md | Select-Object -First 1');
 assert.deepEqual(pipeline.commands.map((x) => x.name), ['Get-Content', 'Select-Object']);
+assert.deepEqual(pipeline.commands.map((x) => x.pipelineInput), [false, true]);
+const pipedExpression = await parseWindowsPowerShellAst("'fixture' | Get-Command -ListImported");
+assert.equal(pipedExpression.commands[0].pipelineInput, true);
+const separateCommands = await parseWindowsPowerShellAst('Get-Date; Get-Command -ListImported');
+assert.deepEqual(separateCommands.commands.map((x) => x.pipelineInput), [false, false]);
 const redirect = await parseWindowsPowerShellAst('Write-Output hello >> "中文 文件.md"');
 assert.equal(redirect.commands[0].redirections, 1);
 assert.deepEqual(redirect.commands[0].redirectFacts[0], { type: 'FileRedirectionAst', location: '中文 文件.md', locationType: 'StringConstantExpressionAst' });
