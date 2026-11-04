@@ -49,6 +49,35 @@ function splitOptions(args, supported, longOptions = {}) {
   return { operands, flags };
 }
 
+// Read-only utilities still need the same path checks as `cat`. Keep the
+// grammar literal and reject options that run commands, follow files, or
+// select extra files through an option.
+function readUtilityOperands(program, args) {
+  const operands = []; let options = true; let explicitPattern = false;
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (options && arg === '--') { options = false; continue; }
+    if (options && arg.startsWith('-')) {
+      if (['head', 'tail'].includes(program)) {
+        if (/^-(?:n|c)$/.test(arg)) { if (!/^\d{1,9}$/.test(args[++i] || '')) return null; continue; }
+        if (/^-(?:n|c)\d{1,9}$/.test(arg) || /^--(?:lines|bytes)=\d{1,9}$/.test(arg)) continue;
+      } else if (program === 'wc' && /^-[clmwL]+$/.test(arg)) continue;
+      else if (program === 'grep' && /^-[iFEnwvcl]+$/.test(arg)) continue;
+      else if (program === 'grep' && arg === '-e') {
+        if (explicitPattern || ++i >= args.length) return null;
+        explicitPattern = true; continue;
+      }
+      return null;
+    }
+    operands.push(arg);
+  }
+  if (program === 'grep' && !explicitPattern) {
+    if (operands.length < 2) return null;
+    operands.shift(); // the first operand is the literal search pattern
+  }
+  return operands.length && operands.every(operand => operand !== '-') ? operands : null;
+}
+
 // Recognize only a single trailing stdout redirection to one literal path.
 // Leave descriptor manipulation, shell control syntax and expansion to review.
 function splitLiteralOutput(command) {
@@ -86,6 +115,13 @@ export async function analyzeWindowsBash(command, context = {}, { analyzeFiles =
   const program = words[0];
   if ((program === 'pwd' && words.length === 1) || program === 'echo') {
     return outputEntry.length ? analyzeFiles(outputEntry, context) : { complete: true, actions: [{ kind: 'read', program, target: null }] };
+  }
+  if (['head', 'tail', 'wc', 'grep'].includes(program)) {
+    const operands = readUtilityOperands(program, words.slice(1));
+    if (!operands) return { complete: false, actions: [], reason: 'read utility has unsupported or ambiguous arguments' };
+    const targets = operands.map(gitBashPath);
+    if (targets.some(target => !target)) return { complete: false, actions: [], reason: 'Bash path cannot be resolved' };
+    return analyzeFiles([...targets.map(target => ({ path: target, kind: 'read' })), ...outputEntry], context);
   }
   const spec = {
     cat: ['read', ''], ls: ['read', 'alR'], mkdir: ['write', 'p'], touch: ['write', ''],
