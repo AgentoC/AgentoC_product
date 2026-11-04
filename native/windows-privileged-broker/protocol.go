@@ -42,6 +42,15 @@ type brokerRequest struct {
 	AutoInstall      *autoInstallGrant          `json:"autoInstall,omitempty"`
 	OwnerInstall     *ownerInstallGrant         `json:"ownerInstall,omitempty"`
 	AutoInspect      *autoInstallInspectRequest `json:"autoInspect,omitempty"`
+	ServiceInspect   *serviceInspectRequest     `json:"serviceInspect,omitempty"`
+}
+
+type serviceInspectRequest struct {
+	ServiceName string `json:"serviceName"`
+}
+type serviceInspectFacts struct {
+	ServiceName    string `json:"serviceName"`
+	DefinitionHash string `json:"definitionHash"`
 }
 
 type autoInstallInspectRequest struct {
@@ -72,6 +81,7 @@ type brokerResponse struct {
 	OwnerInstall        *ownerInstallGrant         `json:"ownerInstall,omitempty"`
 	OwnerIdentity       *ownerInstallIdentity      `json:"ownerIdentity,omitempty"`
 	SelectedInstaller   *selectedInstallerFacts    `json:"selectedInstaller,omitempty"`
+	ServiceFacts        *serviceInspectFacts       `json:"serviceFacts,omitempty"`
 	Challenge           *brokerChallenge           `json:"challenge,omitempty"`
 	EnrollmentChallenge *brokerEnrollmentChallenge `json:"enrollmentChallenge,omitempty"`
 	Result              *brokerOperationResult     `json:"result,omitempty"`
@@ -155,6 +165,9 @@ func decodeBrokerRequest(payload []byte) (brokerRequest, error) {
 }
 
 func validateRequest(request brokerRequest) error {
+	if request.Type != "service.inspect" && request.ServiceInspect != nil {
+		return errInvalidRequest
+	}
 	if request.Type != "owner_install.execute" && request.OwnerInstall != nil {
 		return errInvalidRequest
 	}
@@ -252,6 +265,10 @@ func validateRequest(request brokerRequest) error {
 	case "auto_install.inspect":
 		if request.AutoInspect == nil || !autoInstallPackagePattern.MatchString(request.AutoInspect.PackageID) ||
 			!autoInstallVersionPattern.MatchString(request.AutoInspect.PackageVersion) || hasNonHealthFields(request) || request.AutoInstall != nil {
+			return errInvalidRequest
+		}
+	case "service.inspect":
+		if request.ServiceInspect == nil || !validServiceControlName(request.ServiceInspect.ServiceName) || hasNonHealthFields(request) {
 			return errInvalidRequest
 		}
 	default:

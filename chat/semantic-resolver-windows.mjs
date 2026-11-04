@@ -22,6 +22,7 @@ import {
 import { computeSelfProtectionFacts, deriveAgentoCSelfProtectionRoots } from './self-protection.mjs';
 import { systemPathRootsForPlatform } from './risk-policy.mjs';
 import { validateWindowsSelectedInstallerFacts } from './windows-winget-installer-facts.mjs';
+import { createWindowsPrivilegedBrokerClient } from './windows-privileged-broker.mjs';
 
 export const WINDOWS_RESOLVER_PLATFORM = 'win32';
 export const WINDOWS_RESOLVER_PROVIDER_VERSION = 'windows-resource-resolver/v1';
@@ -408,6 +409,7 @@ export function createDefaultWindowsFactsProvider() {
     // only through an explicit fixture/provider.
     platform: process.platform,
     timeoutMs: 5_000,
+    serviceInspector: createWindowsPrivilegedBrokerClient().inspectService,
   });
 }
 

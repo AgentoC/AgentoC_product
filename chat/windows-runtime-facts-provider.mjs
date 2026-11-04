@@ -458,7 +458,7 @@ export async function revalidateWindowsServiceFacts(snapshot = {}, { provider } 
   const definitionHash = trimString(snapshot.definitionHash).toLowerCase();
   if (!serviceName || !definitionHash) return revalidationFailure('service snapshot is incomplete');
   try {
-    const current = await provider.serviceFacts({ serviceName });
+    const current = await provider.serviceFacts({ serviceName, ...(snapshot.action ? { action: snapshot.action } : {}) });
     if (current?.platform !== 'win32' || current?.manager !== 'windows-service'
       || current?.exists !== true || !sameValue(current.serviceName, serviceName)
       || trimString(current.definitionHash).toLowerCase() !== definitionHash) {
@@ -516,6 +516,7 @@ export function createWindowsRuntimeFactsProvider({
   execFile = defaultExecFile,
   platform = process.platform,
   timeoutMs = WINDOWS_FACTS_TIMEOUT_MS,
+  serviceInspector = null,
 } = {}) {
   const run = async (script, envValues, { array = false } = {}) => {
     if (platform !== 'win32') throw fail('WINDOWS_FACTS_PLATFORM_REQUIRED', 'Windows facts provider requires win32');
@@ -587,8 +588,12 @@ export function createWindowsRuntimeFactsProvider({
       }
       return { exists: true, identity: stat.identity, digest: artifact.digest, size: stat.size };
     },
-    async serviceFacts({ serviceName } = {}) {
+    async serviceFacts({ serviceName, action } = {}) {
       const requested = assertServiceName(serviceName);
+      if (typeof serviceInspector === 'function' && ['start-service', 'stop-service', 'restart-service'].includes(action)) {
+        if (platform !== 'win32') throw fail('WINDOWS_FACTS_PLATFORM_REQUIRED', 'Windows facts provider requires win32');
+        return parseWindowsServiceFacts(JSON.stringify(await serviceInspector({ serviceName: requested })), requested);
+      }
       return parseWindowsServiceFacts(JSON.stringify(await run(SERVICE_SCRIPT, { AGENTOC_SERVICE_NAME: requested })), requested);
     },
     async aclFacts({ canonicalPath } = {}) {

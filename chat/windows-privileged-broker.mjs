@@ -119,6 +119,13 @@ function validateRequest(request) {
         typeof query.packageVersion !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._+:-]{0,127}$/.test(query.packageVersion)) throw brokerError('BROKER_REQUEST_INVALID');
     return;
   }
+  if (request.type === 'service.inspect') {
+    const query = request.serviceInspect;
+    if (!hasOnlyKeys(request, ['version', 'type', 'serviceInspect']) || !hasOnlyKeys(query, ['serviceName']) ||
+        typeof query.serviceName !== 'string' || !query.serviceName || query.serviceName !== query.serviceName.trim() ||
+        query.serviceName.length > 256 || /[\\/*?\x00-\x1f]/.test(query.serviceName)) throw brokerError('BROKER_REQUEST_INVALID');
+    return;
+  }
   if (request.type === 'owner_install.identity') {
     if (!hasOnlyKeys(request, ['version', 'type'])) throw brokerError('BROKER_REQUEST_INVALID');
     return;
@@ -382,6 +389,14 @@ export function createWindowsPrivilegedBrokerClient({
       const facts = validateWindowsSelectedInstallerFacts(response?.selectedInstaller, { packageId, packageVersion });
       if (response?.type !== 'auto_install_inspection' || !facts || facts.scope !== 'System') throw brokerError('BROKER_RESPONSE_INVALID');
       return facts;
+    },
+    inspectService: async ({ serviceName }) => {
+      const response = await rpc('request', { version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'service.inspect', serviceInspect: { serviceName } });
+      if (response?.type === 'error') throw brokerError(response.code || 'SERVICE_INSPECTION_FAILED');
+      const facts = response?.serviceFacts;
+      if (response?.type !== 'service_inspection' || !hasOnlyKeys(facts, ['serviceName', 'definitionHash']) ||
+          facts.serviceName !== serviceName || !/^[a-f0-9]{64}$/.test(facts.definitionHash || '')) throw brokerError('BROKER_RESPONSE_INVALID');
+      return { platform: 'win32', manager: 'windows-service', serviceName, exists: true, definitionHash: facts.definitionHash };
     },
   });
 }

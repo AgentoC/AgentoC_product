@@ -30,30 +30,31 @@ const (
 var impersonateNamedPipeClient = windows.NewLazySystemDLL("advapi32.dll").NewProc("ImpersonateNamedPipeClient")
 
 type brokerIPCServer struct {
-	store           *brokerStore
-	target          brokerTargetController
-	autoInstaller   autoInstaller
-	ownerInstaller  func(context.Context, string, string, string, string) ownerInstallResult
-	ownerPolicy     func() (ownerInstallPolicy, error)
-	ownerAvailable  func(string) bool
-	executionCtx    context.Context
-	controlPlaneSID *windows.SID
-	testPipeOwner   *windows.SID
-	healthPipeName  string
-	requestPipeName string
-	adminPipeName   string
-	stopEvent       windows.Handle
-	healthPipe      windows.Handle
-	requestPipe     windows.Handle
-	adminPipe       windows.Handle
-	stopOnce        sync.Once
-	stopCh          chan struct{}
-	workers         sync.WaitGroup
-	autoMu          sync.Mutex
-	autoCancel      map[string]context.CancelFunc
-	rateMu          sync.Mutex
-	rateWindowStart time.Time
-	rateCount       int
+	store            *brokerStore
+	target           brokerTargetController
+	autoInstaller    autoInstaller
+	ownerInstaller   func(context.Context, string, string, string, string) ownerInstallResult
+	ownerPolicy      func() (ownerInstallPolicy, error)
+	ownerAvailable   func(string) bool
+	serviceInspector func(string) (string, error)
+	executionCtx     context.Context
+	controlPlaneSID  *windows.SID
+	testPipeOwner    *windows.SID
+	healthPipeName   string
+	requestPipeName  string
+	adminPipeName    string
+	stopEvent        windows.Handle
+	healthPipe       windows.Handle
+	requestPipe      windows.Handle
+	adminPipe        windows.Handle
+	stopOnce         sync.Once
+	stopCh           chan struct{}
+	workers          sync.WaitGroup
+	autoMu           sync.Mutex
+	autoCancel       map[string]context.CancelFunc
+	rateMu           sync.Mutex
+	rateWindowStart  time.Time
+	rateCount        int
 }
 
 type pipeClientFacts struct {
@@ -85,18 +86,19 @@ func newBrokerIPCServerForPipeNamesAndAdmin(store *brokerStore, controlPlaneSID 
 		return nil, fmt.Errorf("create Broker stop event: %w", err)
 	}
 	server := &brokerIPCServer{
-		store:           store,
-		target:          windowsBrokerTargetController{},
-		autoInstaller:   windowsAutoInstaller{},
-		ownerInstaller:  runInstalledOwnerInstall,
-		ownerPolicy:     readInstalledOwnerPolicy,
-		ownerAvailable:  func(sid string) bool { _, err := discoverOwnerSession(sid); return err == nil },
-		controlPlaneSID: controlPlaneSID,
-		healthPipeName:  healthName,
-		requestPipeName: requestName,
-		adminPipeName:   adminName,
-		stopEvent:       stop,
-		stopCh:          make(chan struct{}),
+		store:            store,
+		target:           windowsBrokerTargetController{},
+		serviceInspector: inspectWindowsServiceControl,
+		autoInstaller:    windowsAutoInstaller{},
+		ownerInstaller:   runInstalledOwnerInstall,
+		ownerPolicy:      readInstalledOwnerPolicy,
+		ownerAvailable:   func(sid string) bool { _, err := discoverOwnerSession(sid); return err == nil },
+		controlPlaneSID:  controlPlaneSID,
+		healthPipeName:   healthName,
+		requestPipeName:  requestName,
+		adminPipeName:    adminName,
+		stopEvent:        stop,
+		stopCh:           make(chan struct{}),
 	}
 	if localTest {
 		validTestName := func(name string) bool {
@@ -713,6 +715,19 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 		} else {
 			response.Code = "REQUEST_NOT_FOUND"
 		}
+		return response
+	}
+	if request.Type == "service.inspect" {
+		if s.serviceInspector == nil {
+			return newErrorResponse("SERVICE_INSPECTION_UNAVAILABLE")
+		}
+		name := request.ServiceInspect.ServiceName
+		digest, err := s.serviceInspector(name)
+		if err != nil || !serviceDefinitionHash.MatchString(digest) {
+			return newErrorResponse("SERVICE_INSPECTION_FAILED")
+		}
+		response := newResponse("service_inspection")
+		response.ServiceFacts = &serviceInspectFacts{ServiceName: name, DefinitionHash: digest}
 		return response
 	}
 	if request.Type == "auto_install.inspect" {

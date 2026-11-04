@@ -10,7 +10,7 @@ export async function revalidateWindowsServiceControl(capability, { provider, no
     return { ok: false, code: checked.code || 'WINDOWS_SERVICE_CAPABILITY_INVALID', error: checked.error || 'Windows service capability is invalid' };
   }
   const input = capability.operations[0].adapterInput;
-  const result = await revalidateWindowsServiceFacts({ serviceName: input.serviceName, definitionHash: input.definitionHash }, { provider });
+  const result = await revalidateWindowsServiceFacts({ serviceName: input.serviceName, definitionHash: input.definitionHash, action: input.serviceAction }, { provider });
   if (!result.ok) return result;
   return { ok: true, invocation: { kind: 'windows-service-control', serviceName: input.serviceName,
     action: input.serviceAction, definitionHash: input.definitionHash } };

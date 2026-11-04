@@ -19,6 +19,8 @@ import { promisify } from 'node:util';
 import { SEMANTIC_ADAPTER_MSI_INSTALL_V1, SEMANTIC_ADAPTER_WINGET_INSTALL_V1, revalidateWindowsMsiInstall, revalidateWindowsWingetInstall } from './semantic-windows-adapter.mjs';
 import { SEMANTIC_ADAPTER_WINDOWS_SERVICE_CONTROL_V1, SEMANTIC_CAPABILITY_AUTH_MODE_POLICY_AUTO, revalidateSemanticCapability, verifySemanticCapability } from './semantic-capability.mjs';
 import { revalidateWindowsServiceControl } from './windows-service-control.mjs';
+import { createWindowsRuntimeFactsProvider } from './windows-runtime-facts-provider.mjs';
+import { createWindowsPrivilegedBrokerClient } from './windows-privileged-broker.mjs';
 import {
   PERMISSION_MODES,
   CAPABILITY_AUTHORIZATION_CLASSES,
@@ -56,7 +58,8 @@ async function defaultRevalidate(capability, { execFile, artifactFacts, serviceF
     return revalidateWindowsMsiInstall(capability, { artifactFacts });
   }
   if (adapter === SEMANTIC_ADAPTER_WINDOWS_SERVICE_CONTROL_V1) {
-    return revalidateWindowsServiceControl(capability, { provider: serviceFactsProvider, now });
+    const provider = serviceFactsProvider || createWindowsRuntimeFactsProvider({ serviceInspector: createWindowsPrivilegedBrokerClient().inspectService });
+    return revalidateWindowsServiceControl(capability, { provider, now });
   }
   return fail('SEMANTIC_CAPABILITY_ADAPTER_DENIED', `unsupported Windows adapter: ${adapter}`);
 }
