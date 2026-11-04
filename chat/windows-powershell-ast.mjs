@@ -23,6 +23,28 @@ function Get-RedirectionFacts($node) {
     @{ type = $_.GetType().Name; location = $location; locationType = $locationType }
   })
 }
+function Get-SafeStaticFileCall($node) {
+  if ($node -isnot [System.Management.Automation.Language.InvokeMemberExpressionAst] -or
+      -not $node.Static -or
+      $node.Parent -isnot [System.Management.Automation.Language.CommandExpressionAst] -or
+      $node.Expression -isnot [System.Management.Automation.Language.TypeExpressionAst] -or
+      $node.Expression.TypeName.FullName -ine 'System.IO.File' -or
+      $node.Member -isnot [System.Management.Automation.Language.StringConstantExpressionAst]) { return $null }
+  $method = [string]$node.Member.Value
+  $kind = switch ($method.ToLowerInvariant()) {
+    'readalltext' { 'read' }
+    'writealltext' { 'write' }
+    'appendalltext' { 'write' }
+    'delete' { 'delete' }
+    default { return $null }
+  }
+  $count = if ($kind -eq 'write') { 2 } else { 1 }
+  if (@($node.Arguments).Count -ne $count) { return $null }
+  foreach ($argument in $node.Arguments) {
+    if ($argument -isnot [System.Management.Automation.Language.StringConstantExpressionAst]) { return $null }
+  }
+  return @{ kind = $kind; path = [string]$node.Arguments[0].Value; method = $method }
+}
 $commands = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object {
   $command = $_
   $elements = @($command.CommandElements | ForEach-Object {
@@ -40,15 +62,17 @@ $commands = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Lang
   @{ name = $command.GetCommandName(); elements = $elements; invocation = [string]$command.InvocationOperator; redirections = @($command.Redirections).Count; redirectFacts = $redirectFacts }
 })
 $expressions = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandExpressionAst] }, $true) | ForEach-Object {
-  @{ expressionType = $_.Expression.GetType().Name; redirections = @($_.Redirections).Count; redirectFacts = @(Get-RedirectionFacts $_) }
+  @{ expressionType = $_.Expression.GetType().Name; staticFileCall = (Get-SafeStaticFileCall $_.Expression); redirections = @($_.Redirections).Count; redirectFacts = @(Get-RedirectionFacts $_) }
 })
 $dynamicNodes = @($ast.FindAll({ param($n)
   ($n -is [System.Management.Automation.Language.VariableExpressionAst]) -or
   ($n -is [System.Management.Automation.Language.SubExpressionAst]) -or
   ($n -is [System.Management.Automation.Language.ScriptBlockExpressionAst]) -or
   ($n -is [System.Management.Automation.Language.AssignmentStatementAst]) -or
-  ($n -is [System.Management.Automation.Language.InvokeMemberExpressionAst]) -or
-  ($n.GetType().Name -in @('TypeExpressionAst','MemberExpressionAst','FunctionDefinitionAst','TypeDefinitionAst','IfStatementAst','ForStatementAst','ForEachStatementAst','WhileStatementAst','DoWhileStatementAst','DoUntilStatementAst','TryStatementAst','TrapStatementAst','UsingStatementAst','ExitStatementAst','ThrowStatementAst','DataStatementAst')) -or
+  (($n -is [System.Management.Automation.Language.InvokeMemberExpressionAst]) -and $null -eq (Get-SafeStaticFileCall $n)) -or
+  (($n -is [System.Management.Automation.Language.TypeExpressionAst]) -and $null -eq (Get-SafeStaticFileCall $n.Parent)) -or
+  (($n.GetType().Name -eq 'MemberExpressionAst') -and $null -eq (Get-SafeStaticFileCall $n)) -or
+  ($n.GetType().Name -in @('FunctionDefinitionAst','TypeDefinitionAst','IfStatementAst','ForStatementAst','ForEachStatementAst','WhileStatementAst','DoWhileStatementAst','DoUntilStatementAst','TryStatementAst','TrapStatementAst','UsingStatementAst','ExitStatementAst','ThrowStatementAst','DataStatementAst')) -or
   ($n -is [System.Management.Automation.Language.ExpandableStringExpressionAst] -and @($n.NestedExpressions).Count -gt 0)
 }, $true) | ForEach-Object { $_.GetType().Name })
 $errorMessages = @($errors | ForEach-Object { $_.Message })

@@ -201,6 +201,23 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
     return '';
   };
   for (const expression of expressions) {
+    if (expression.expressionType === 'InvokeMemberExpressionAst' && expression.staticFileCall) {
+      const call = expression.staticFileCall;
+      if (!['read', 'write', 'delete'].includes(call.kind) || typeof call.path !== 'string' || !call.path) {
+        return { complete: false, actions, reason: 'static file call is invalid' };
+      }
+      // .NET resolves relative paths against the process directory, which can
+      // differ from PowerShell's current location. Do not guess that binding.
+      if (!/^[a-z]:[\\/]/i.test(call.path)) {
+        return { complete: false, actions, reason: 'static file call requires an absolute path' };
+      }
+      const analyzed = await analyzeWindowsFileChanges([{ path: call.path, kind: call.kind }], context, { fsApi });
+      if (!analyzed.complete) return { ...analyzed, actions: [...actions, ...analyzed.actions] };
+      actions.push(...analyzed.actions);
+      const reason = await appendRedirects(expression, 'static-file');
+      if (reason) return { complete: false, actions, reason };
+      continue;
+    }
     if (!['StringConstantExpressionAst', 'ConstantExpressionAst'].includes(expression.expressionType)) return { complete: false, actions, reason: 'dynamic or unsupported expression' };
     const reason = await appendRedirects(expression, 'literal');
     if (reason) return { complete: false, actions, reason };

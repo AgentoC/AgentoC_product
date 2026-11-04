@@ -24,6 +24,13 @@ const literalRedirect = await parseWindowsPowerShellAst("'hello' > output.md");
 assert.equal(literalRedirect.expressions[0].expressionType, 'StringConstantExpressionAst');
 assert.equal(literalRedirect.expressions[0].redirectFacts[0].location, 'output.md');
 const dynamic = await parseWindowsPowerShellAst('Get-Content $env:TEMP');
+const staticWrite = await parseWindowsPowerShellAst("[System.IO.File]::WriteAllText('文档.txt', 'hello')");
+assert.deepEqual(staticWrite.dynamicNodes, []);
+assert.deepEqual(staticWrite.expressions[0].staticFileCall, { kind: 'write', path: '文档.txt', method: 'WriteAllText' });
+for (const source of ["[System.IO.File]::Move('a', 'b')", "[System.IO.File]::WriteAllText('a', $env:TEMP)",
+  "[System.IO.Directory]::Delete('a', $true)", "[System.IO.File]::WriteAllText('a', (Get-Date).ToString())"]) {
+  assert.ok((await parseWindowsPowerShellAst(source)).dynamicNodes.length, source);
+}
 assert.ok(dynamic.dynamicNodes.includes('VariableExpressionAst'));
 const syntax = await parseWindowsPowerShellAst('Get-Content "unterminated');
 assert.ok(syntax.errors.length);

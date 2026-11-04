@@ -223,4 +223,35 @@ const sensitiveDirectoryRead = await analyzeWindowsFileChanges([{ path: path.joi
 assert.equal(decideWindowsPowerShellActions(sensitiveDirectoryRead).decision, 'review');
 const unknownChange = await analyzeWindowsFileChanges([{ path: path.join(workspace, 'readme.txt'), kind: 'unknown' }], context);
 assert.equal(decideWindowsPowerShellActions(unknownChange).decision, 'review');
+
+// Literal .NET file operations use the same path and link checks as cmdlets.
+const psLiteral = value => `'${value.replaceAll("'", "''")}'`;
+const ordinaryFile = psLiteral(path.join(workspace, 'readme.txt'));
+const outsideFile = psLiteral(path.join(root, 'ordinary.txt'));
+const protectedFile = psLiteral(path.join(root, 'protected', 'important.txt'));
+for (const command of [
+  `[System.IO.File]::ReadAllText(${ordinaryFile})`,
+  `[System.IO.File]::WriteAllText(${ordinaryFile}, 'hello')`,
+  `[System.IO.File]::AppendAllText(${outsideFile}, 'hello')`,
+  `[System.IO.File]::Delete(${ordinaryFile})`,
+]) assert.equal((await inspect(command)).decision, 'allow', command);
+assert.equal((await inspect(`[System.IO.File]::WriteAllText(${protectedFile}, 'x')`)).decision, 'review');
+assert.equal((await inspect(`[System.IO.File]::WriteAllText(${psLiteral(path.join(workspace, 'ordinary-link'))}, 'x')`)).decision, 'review');
+assert.equal((await inspect(`[System.IO.File]::ReadAllText(${psLiteral(path.join(workspace, 'sensitive-folder', '.ssh', 'fixture-key'))})`)).decision, 'review');
+assert.equal(decideWindowsPowerShellActions(await analyzeWindowsPowerShell(`[System.IO.File]::WriteAllText(${outsideFile}, 'x')`, context), { conservative: true }).decision, 'review');
+for (const command of [
+  `[System.IO.File]::WriteAllText('readme.txt', 'x')`,
+  `[System.IO.File]::ReadAllText('C:relative.txt')`,
+  `[System.IO.File]::WriteAllText($env:TEMP, 'x')`,
+  `[System.IO.File]::WriteAllText(${ordinaryFile}, (Get-Date).ToString())`,
+  `[System.IO.File]::WriteAllText(${ordinaryFile}, 'x', [System.Text.Encoding]::UTF8)`,
+  `[System.IO.Directory]::Delete(${psLiteral(workspace)}, $true)`,
+  `[System.IO.File]::WriteAllText(${ordinaryFile}, 'x'); Remove-Item -LiteralPath ${protectedFile}`,
+]) assert.equal((await inspect(command)).decision, 'review', command);
+for (const riskMode of ['recommended', 'full-auto']) {
+  const state = { cwd: workspace, riskContext: context, riskContextValid: true, riskMode };
+  const request = command => ({ kind: 'command', providerMethod: 'can_use_tool', params: { tool_name: 'PowerShell', input: { command } } });
+  assert.equal((await decideWindowsApproval(request(`[System.IO.File]::WriteAllText(${outsideFile}, 'x')`), state)).decision, 'auto-allow');
+  assert.equal((await decideWindowsApproval(request(`[System.IO.File]::WriteAllText(${protectedFile}, 'x')`), state)).decision, 'prompt');
+}
 console.log('windows-powershell-actions: native AST and file policy checks passed');
