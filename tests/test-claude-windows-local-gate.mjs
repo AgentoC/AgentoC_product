@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { mkdtemp, mkdir, readFile, writeFile, access, rm } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
@@ -36,7 +36,7 @@ const outsideCase = deleteCase && process.env.AGENTOC_QA_CLAUDE_DELETE_OUTSIDE =
 const reviewCase = protectedCase || outsideCase;
 const relativeDelete = deleteCase && process.env.AGENTOC_QA_CLAUDE_DELETE_RELATIVE === '1';
 if ((installCase && (protectedCase || deleteCase)) || (reviewCase && relativeDelete) || (outsideCase && protectedCase) || (outsideFileCase && (installCase || deleteCase || protectedCase)) || (dotnetCase && (installCase || deleteCase)) || (guidanceCase && (installCase || deleteCase || dotnetCase || protectedCase || outsideFileCase))) throw new Error('fixture modes are mutually exclusive');
-if (readCase && (!['numbered', 'list'].includes(readCase) || installCase || deleteCase || dotnetCase || guidanceCase || protectedCase || outsideFileCase)) throw new Error('invalid read fixture mode');
+if (readCase && (!['numbered', 'list', 'git-status'].includes(readCase) || installCase || deleteCase || dotnetCase || guidanceCase || protectedCase || outsideFileCase)) throw new Error('invalid read fixture mode');
 if ((installCase || deleteCase || dotnetCase || guidanceCase || readCase) && !path.isAbsolute(process.env.AGENTOC_TEST_BASH_BINARY || '')) throw new Error('absolute Git Bash executable required');
 const safeDeleteHelper = process.env.AGENTOC_TEST_SAFE_DELETE_BINARY;
 if (deleteCase && !path.isAbsolute(safeDeleteHelper || '')) throw new Error('absolute safe deletion helper required');
@@ -57,9 +57,10 @@ const deleteCommand = `rm -rf '${bashTarget.replace(/'/g, "'\\''")}'`;
 const artifact = path.join(outsideFileCase ? outsideFileRoot : protectedCase ? protectedRoot : root, 'fixture.md');
 const bashQuote = value => `'${value.replaceAll("'", `'"'"'`)}'`;
 if (readCase) await writeFile(artifact, 'local read fixture\n');
+if (readCase === 'git-status') execFileSync('git', ['init', '-q'], { cwd: root, windowsHide: true });
 const bashArtifact = artifact.replace(/^([A-Za-z]):\\/, (_, drive) => `/${drive.toLowerCase()}/`).replaceAll('\\', '/');
 const bashRoot = root.replace(/^([A-Za-z]):\\/, (_, drive) => `/${drive.toLowerCase()}/`).replaceAll('\\', '/');
-const readCommand = readCase === 'numbered' ? `cat -n ${bashQuote(bashArtifact)}` : `ls -lah ${bashQuote(bashRoot)}`;
+const readCommand = readCase === 'numbered' ? `cat -n ${bashQuote(bashArtifact)}` : readCase === 'git-status' ? 'git status --short' : `ls -lah ${bashQuote(bashRoot)}`;
 const powershell = path.join(process.env.SystemRoot || process.env.WINDIR, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 const dotnetScript = `[System.IO.File]::WriteAllText('${artifact.replaceAll("'", "''")}', 'dotnet fixture')`;
 const dotnetCommand = `${bashQuote(powershell)} -NoProfile -NonInteractive -Command ${bashQuote(dotnetScript)}`;
@@ -135,7 +136,7 @@ if (installCase) {
 }
 const child = spawn(binary, buildClaudeBidiArgs({ permissionMode: 'default', model: 'claude-sonnet-4-5', maxTurns: relativeDelete ? 3 : 2 }), { cwd: root, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
 let errors = ''; child.stderr.on('data', (chunk) => { errors = (errors + String(chunk)).slice(-6000); });
-let approvals = 0; let terminal = null; let handlerFailure = null;
+let approvals = 0; let terminal = null; let handlerFailure = null; let gitOwnerReviewObserved = false;
 const output = createInterface({ input: child.stdout });
 const completed = new Promise((resolve, reject) => {
   const timer = setTimeout(() => { child.kill(); reject(new Error(`Claude fixture timed out: ${errors}`)); }, 45000);
@@ -149,6 +150,13 @@ output.on('line', (line) => {
     if (approval) {
       approvals++;
       await trackClaudeBidiApprovalRequest(run.id, gateState, event, child, deleteCase ? { safeDeleteHelperPath: safeDeleteHelper } : {});
+      if (readCase === 'git-status' && mode === 'recommended') {
+        const current = await getRun(run.id);
+        if (current.appServerPendingApprovals?.some((item) => item.approvalId === approval.approvalId)) {
+          gitOwnerReviewObserved = true;
+          child.stdin.write(serializeClaudeBidiMessage(buildClaudeBidiApprovalResponseMessage(approval, 'deny')));
+        }
+      }
       if (reviewCase && mode === 'recommended') {
         const current = await getRun(run.id);
         assert.ok(current.appServerPendingApprovals?.some((item) => item.approvalId === approval.approvalId), 'protected operation must wait for the owner');
@@ -182,17 +190,19 @@ try {
     assert.ok(guidanceObserved, 'real Claude must receive managed executor guidance');
   } else if (readCase) {
     assert.equal(await readFile(artifact, 'utf8'), 'local read fixture\n');
-    assert.ok(toolResultObserved, 'actual Claude must receive the read result');
+    if (readCase !== 'git-status' || approvals === 0) assert.ok(toolResultObserved, 'actual Claude must receive the read result');
+    if (readCase === 'git-status' && approvals && mode === 'recommended') assert.ok(gitOwnerReviewObserved, 'Git must wait for owner when not auto-approved');
   } else if (protectedCase) await assert.rejects(access(artifact), { code: 'ENOENT' });
   else assert.equal(await readFile(artifact, 'utf8'), dotnetCase ? 'dotnet fixture' : 'local fixture\n');
   assert.ok(requests >= 2, 'local model must receive the tool result');
   const spool = await readRunSpoolRecords(run.id);
   if (deleteCase && !reviewCase) assert.ok(spool.some((record) => record.json?.reason === 'handle-bound workspace deletion'), 'actual sidecar must use the handle-bound deletion helper');
   else if (guidanceCase) assert.ok(spool.some((record) => record.json?.type === 'agentoc.approval_response' && record.json?.autoDenied === true && record.json?.reason?.includes('agentoc_request_actions')), 'actual sidecar must persist managed executor guidance');
-  else if (!reviewCase && (!readCase || approvals)) assert.ok(spool.some((record) => record.json?.type === 'agentoc.approval_response' && record.json?.autoApproved === true), 'actual sidecar must persist the automatic decision');
+  else if (readCase === 'git-status' && approvals && mode === 'full-auto') assert.ok(spool.some((record) => record.json?.type === 'agentoc.approval_response' && record.json?.autoDenied === true), 'unattended Git request must be denied when not auto-approved');
+  else if (!reviewCase && (!readCase || approvals) && readCase !== 'git-status') assert.ok(spool.some((record) => record.json?.type === 'agentoc.approval_response' && record.json?.autoApproved === true), 'actual sidecar must persist the automatic decision');
   else if (reviewCase && mode === 'full-auto') assert.ok(spool.some((record) => record.json?.type === 'agentoc.approval_response' && record.json?.autoDenied === true), 'unattended protected write must be denied');
   if (relativeDelete) assert.ok(spool.some((record) => record.json?.autoDenied === true && record.json?.reason?.includes('resolve each target against the command working directory')), 'relative target must be denied with an actionable retry');
-  console.log(`claude-windows-local-gate: ${mode} real CLI ${installCase ? 'controlled install reached mock service' : reviewCase ? 'dangerous operation denied' : deleteCase ? 'handle-bound fixture deletion completed' : guidanceCase ? 'managed executor guidance received' : readCase ? `${readCase} read completed (${approvals} approval requests)` : dotnetCase ? 'trusted PowerShell wrapped file write completed' : outsideFileCase ? 'outside-workspace file write completed' : 'file approval completed'}`);
+  console.log(`claude-windows-local-gate: ${mode} real CLI ${installCase ? 'controlled install reached mock service' : reviewCase ? 'dangerous operation denied' : deleteCase ? 'handle-bound fixture deletion completed' : guidanceCase ? 'managed executor guidance received' : readCase ? `${readCase} ${approvals ? 'approval observed' : 'read completed without approval request'}` : dotnetCase ? 'trusted PowerShell wrapped file write completed' : outsideFileCase ? 'outside-workspace file write completed' : 'file approval completed'}`);
 } finally {
   child.kill(); output.close(); await new Promise((resolve) => server.close(resolve));
   const parent = path.resolve(os.tmpdir()).toLowerCase();
