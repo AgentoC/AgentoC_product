@@ -127,7 +127,7 @@ function validateRequest(request) {
         query.serviceName.length > 256 || /[\\/*?\x00-\x1f]/.test(query.serviceName)) throw brokerError('BROKER_REQUEST_INVALID');
     return;
   }
-  if (request.type === 'service.deny') {
+  if (request.type === 'service.deny' || request.type === 'service.approve') {
     if (!hasOnlyKeys(request, ['version', 'type', 'requestId', 'deviceId', 'deviceSignature']) || !validId(request.requestId) ||
         typeof request.deviceId !== 'string' || !DEVICE_ID_PATTERN.test(request.deviceId) ||
         typeof request.deviceSignature !== 'string' || request.deviceSignature.length === 0 || request.deviceSignature.length > 1024 ||
@@ -432,6 +432,13 @@ export function createWindowsPrivilegedBrokerClient({
       if (response?.type !== 'service_inspection' || !hasOnlyKeys(facts, ['serviceName', 'definitionHash']) ||
           facts.serviceName !== serviceName || !/^[a-f0-9]{64}$/.test(facts.definitionHash || '')) throw brokerError('BROKER_RESPONSE_INVALID');
       return { platform: 'win32', manager: 'windows-service', serviceName, exists: true, definitionHash: facts.definitionHash };
+    },
+    approveServiceControl: async ({ requestId, deviceId, deviceSignature }) => {
+      const response = await rpc('request', { version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'service.approve', requestId, deviceId, deviceSignature });
+      if (response?.type === 'error') throw brokerError(response.code || 'SERVICE_CONTROL_REJECTED');
+      if (response?.type !== 'result' || response.requestId !== requestId ||
+          !['executing', 'succeeded', 'failed', 'unknown', 'denied', 'expired'].includes(response.status)) throw brokerError('BROKER_RESPONSE_INVALID');
+      return response;
     },
     denyServiceControl: async ({ requestId, deviceId, deviceSignature }) => {
       const response = await rpc('request', { version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'service.deny', requestId, deviceId, deviceSignature });

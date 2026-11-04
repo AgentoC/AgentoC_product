@@ -123,6 +123,12 @@ func TestServiceControlPipeRequiresSignatureAndRunsOnce(t *testing.T) {
 			t.Fatalf("denial: %+v", got)
 		}
 	}
+	deniedApproval := denial
+	deniedApproval.Type = "service.approve"
+	deniedApproval.DeviceSignature = signApprovalMessage(t, deviceKey, serviceControlOwnerSigningBytes(deniedGrant))
+	if got := exchangeTestPipeRequest(t, base+".Request", deniedApproval); got.Status != statusDenied {
+		t.Fatalf("denied request executed: %+v", got)
+	}
 	if calls.Load() != 0 {
 		t.Fatal("denial ran service controller")
 	}
@@ -154,8 +160,9 @@ func TestServiceControlPipeRequiresSignatureAndRunsOnce(t *testing.T) {
 	if got := exchangeTestPipeRequest(t, base+".Request", badOwner); got.Code != "SERVICE_CONTROL_AUTHORIZATION_DENIED" {
 		t.Fatalf("bad owner proof: %+v", got)
 	}
+	deviceApproval := brokerRequest{Version: protocolVersion, Type: "service.approve", RequestID: grant.RequestID, DeviceID: deviceID, DeviceSignature: request.DeviceSignature}
 	for i := 0; i < 2; i++ {
-		if got := exchangeTestPipeRequest(t, base+".Request", request); got.Status != statusExecuting {
+		if got := exchangeTestPipeRequest(t, base+".Request", deviceApproval); got.Status != statusExecuting {
 			t.Fatalf("claim %d: %+v", i, got)
 		}
 	}

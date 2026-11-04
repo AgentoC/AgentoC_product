@@ -809,6 +809,14 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 		response.RequestID, response.Status, response.Code = record.Grant.RequestID, record.Status, record.Code
 		return response
 	}
+	if request.Type == "service.approve" {
+		// Resolve the server-signed grant inside the broker, never from the device.
+		record, found := s.store.GetServiceControl(request.RequestID)
+		if !found {
+			return newErrorResponse("SERVICE_CONTROL_AUTHORIZATION_DENIED")
+		}
+		request.Type, request.ServiceControl, request.Signature = "service.execute", &record.Grant, record.Signature
+	}
 	if request.Type == "service.execute" {
 		s.autoMu.Lock()
 		defer s.autoMu.Unlock()

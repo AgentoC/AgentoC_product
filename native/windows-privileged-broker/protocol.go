@@ -175,7 +175,7 @@ func decodeBrokerRequest(payload []byte) (brokerRequest, error) {
 }
 
 func validateRequest(request brokerRequest) error {
-	if request.Type != "service.execute" && request.Type != "service.deny" && request.DeviceSignature != "" {
+	if request.Type != "service.execute" && request.Type != "service.deny" && request.Type != "service.approve" && request.DeviceSignature != "" {
 		return errInvalidRequest
 	}
 	if request.Type != "service.execute" && request.Type != "service.review" && request.Type != "service.propose" && request.ServiceControl != nil {
@@ -287,7 +287,7 @@ func validateRequest(request brokerRequest) error {
 		if request.ServiceInspect == nil || !validServiceControlName(request.ServiceInspect.ServiceName) || hasNonHealthFields(request) {
 			return errInvalidRequest
 		}
-	case "service.deny":
+	case "service.deny", "service.approve":
 		if !validRequestID(request.RequestID) || len(request.DeviceID) != 64 || !isLowerHex(request.DeviceID) || request.DeviceSignature == "" || len(request.DeviceSignature) > 1024 {
 			return errInvalidRequest
 		}

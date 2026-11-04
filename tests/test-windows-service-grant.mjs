@@ -28,6 +28,7 @@ const client = createWindowsPrivilegedBrokerClient({ platform: 'win32', pipeExch
   calls++; assert.equal(pipe, 'request');
   if (request.type === 'service.pending') return { version: 2, type: 'service_pending', servicePending: [{ grant, brokerPublicKey: 'fixture', brokerSignature: 'eA==' }], hasMore: false };
   if (request.type === 'service.deny') return { version: 2, type: 'result', requestId: request.requestId, status: 'denied', code: 'DEVICE_DENIED' };
+  if (request.type === 'service.approve') return { version: 2, type: 'result', requestId: request.requestId, status: 'executing', code: 'EXECUTION_STARTED' };
   assert.deepEqual(request.serviceControl, grant);
   if (request.type === 'service.propose') return { version: 2, type: 'result', requestId: grant.requestId, status: 'awaiting_device' };
   if (request.type === 'service.review') return { version: 2, type: 'service_review', serviceControl: grant, brokerPublicKey: 'fixture', brokerSignature: 'eA==' };
@@ -38,10 +39,11 @@ assert.equal((await client.proposeServiceControl({ grant, signature: signature.t
 assert.equal((await client.pendingServiceControls({ deviceId })).items[0].grant.serviceName, grant.serviceName);
 assert.equal((await client.reviewServiceControl({ grant, signature: signature.toString('base64url'), deviceId })).type, 'service_review');
 assert.equal((await client.executeServiceControl({ grant, signature: signature.toString('base64url'), deviceId, deviceSignature })).status, 'executing');
+assert.equal((await client.approveServiceControl({ requestId: grant.requestId, deviceId, deviceSignature })).status, 'executing');
 const denialSignature = sign('sha256', windowsServiceOwnerDenialSigningBytes(grant), ownerKeys.privateKey).toString('base64');
 assert.equal((await client.denyServiceControl({ requestId: grant.requestId, deviceId, deviceSignature: denialSignature })).status, 'denied');
 assert.equal(verify('sha256', windowsServiceOwnerSigningBytes(grant), ownerKeys.publicKey, Buffer.from(denialSignature, 'base64')), false);
 await assert.rejects(client.executeServiceControl({ grant: { ...grant, action: 'delete' }, signature: signature.toString('base64url'), deviceId, deviceSignature }), { code: 'BROKER_REQUEST_INVALID' });
 await assert.rejects(client.executeServiceControl({ grant, signature: signature.toString('base64url') }), { code: 'BROKER_REQUEST_INVALID' });
-assert.equal(calls, 5);
+assert.equal(calls, 6);
 console.log('windows-service-grant: cross-language signing vector passed');
