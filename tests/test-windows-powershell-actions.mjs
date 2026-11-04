@@ -64,6 +64,12 @@ assert.equal(result.actions.length, 2);
 assert.equal((await inspect('Get-Process -Name explorer | Select-Object -First 1')).decision, 'allow');
 assert.equal((await inspect('Get-Command')).decision, 'allow');
 assert.equal((await inspect('Get-Command -ListImported')).decision, 'allow');
+for (const type of ['Alias', 'Function', 'Filter', 'Cmdlet', 'ExternalScript', 'Application', 'Script', 'Configuration', 'All']) {
+  assert.equal((await inspect(`Get-Command -ListImported -CommandType ${type}`)).decision, 'allow', type);
+}
+assert.equal((await inspect('Get-Command -ListImported -CommandType Unknown')).decision, 'review');
+assert.equal((await inspect('Get-Command -CommandType Cmdlet')).decision, 'allow');
+assert.equal((await inspect('Get-Command -ListImported -CommandType Cmdlet -Name Get-Content')).decision, 'review');
 assert.equal((await inspect('Get-Command -ListImported | Select-Object -First 1')).decision, 'allow');
 assert.equal((await inspect("'AgentoCFixture\\Invoke-AgentoCProbe' | Get-Command -ListImported")).decision, 'review');
 assert.equal((await inspect("Write-Output 'AgentoCFixture\\Invoke-AgentoCProbe' | Get-Command")).decision, 'review');
@@ -146,6 +152,7 @@ for (const riskMode of ['recommended', 'full-auto']) {
   assert.equal((await decideWindowsApproval(approval("'AgentoCFixture\\Invoke-AgentoCProbe' | Get-Command -ListImported"), state)).decision, 'prompt', `${riskMode}: piped module lookup`);
   assert.equal((await decideWindowsApproval(approval("'..\\protected' | Get-ChildItem"), state)).decision, 'prompt', `${riskMode}: piped listing target`);
   assert.equal((await decideWindowsApproval(approval('Get-Command -ListImported'), state)).decision, 'auto-allow', `${riskMode}: imported command inventory`);
+  assert.equal((await decideWindowsApproval(approval('Get-Command -ListImported -CommandType Cmdlet'), state)).decision, 'auto-allow', `${riskMode}: imported command type inventory`);
   const outside = path.join(root, 'ordinary.txt').replace(/'/g, "''");
   assert.equal((await decideWindowsApproval(approval(`Get-Content -LiteralPath '${outside}' -Tail 1`), state)).decision, 'auto-allow');
   assert.equal((await decideWindowsApproval(approval(`Set-Content -LiteralPath '${outside}' -Value hello -Encoding utf8 -NoNewline`), state)).decision, 'auto-allow');
@@ -178,6 +185,10 @@ for (const [index, shell] of [resolveWindowsSystemPaths().powershell, process.en
   await writeFile(path.join(moduleDir, `${name}.psm1`), `Set-Content -LiteralPath '${marker.replaceAll("'", "''")}' -Value loaded\nfunction Invoke-AgentoCProbe { 'fixture' }\nExport-ModuleMember -Function Invoke-AgentoCProbe\n`);
   const env = { ...process.env, PSModulePath: `${modules};${process.env.PSModulePath || ''}` };
   execFileSync(shell, ['-NoProfile', '-NonInteractive', '-Command', 'Get-Command -ListImported | Out-Null'], { env, windowsHide: true });
+  await assert.rejects(access(marker), { code: 'ENOENT' });
+  execFileSync(shell, ['-NoProfile', '-NonInteractive', '-Command', 'Get-Command -ListImported -CommandType Cmdlet | Out-Null'], { env, windowsHide: true });
+  await assert.rejects(access(marker), { code: 'ENOENT' });
+  execFileSync(shell, ['-NoProfile', '-NonInteractive', '-Command', 'Get-Command -CommandType Cmdlet | Out-Null'], { env, windowsHide: true });
   await assert.rejects(access(marker), { code: 'ENOENT' });
   const query = `Get-Command -ListImported ${name}\\Invoke-AgentoCProbe`;
   assert.equal((await inspect(query, { executable: shell })).decision, 'review');

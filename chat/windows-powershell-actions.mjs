@@ -23,6 +23,7 @@ const BUILTIN_ALIASES = new Map([
 const FILTERS = new Set(['select-object', 'sort-object', 'measure-object', 'out-string', 'write-output', 'get-date', 'get-location', 'get-service', 'get-process', 'get-command']);
 const SAFE_FILTER_PARAMS = new Set(['first', 'last', 'skip', 'unique', 'property', 'descending', 'width', 'line', 'name', 'displayname', 'noenumerate', 'id', 'module', 'commandtype', 'all', 'listimported', 'includeusername']);
 const SAFE_FILTER_SWITCHES = new Set(['unique', 'descending', 'noenumerate', 'all', 'listimported', 'includeusername']);
+const GET_COMMAND_TYPES = new Set(['alias', 'function', 'filter', 'cmdlet', 'externalscript', 'application', 'script', 'configuration', 'all']);
 const FILE_PARAMS = new Set(['path', 'literalpath', 'destination', 'value', 'itemtype', 'name', 'recurse', 'force', 'raw', 'encoding', 'filter', 'include', 'exclude']);
 const SWITCHES = new Set(['recurse', 'force', 'raw']);
 const CONTENT_READ_PARAMS = new Set([...FILE_PARAMS, 'totalcount', 'tail', 'readcount', 'delimiter', 'asbytestream']);
@@ -235,10 +236,12 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
       const filterArgs = parseArguments(entry.elements, SAFE_FILTER_PARAMS, SAFE_FILTER_SWITCHES);
       if (!filterArgs) return { complete: false, actions, reason: 'unsupported filter arguments' };
       // Get-Command can import a module and run its initialization even with
-      // -ListImported when a module-qualified command name is supplied. Only
-      // the unfiltered inventory is bounded to already imported commands.
+      // -ListImported when a name is supplied. An unnamed, non-pipeline
+      // inventory may safely filter already imported commands by literal type.
       if (program === 'get-command' && (entry.pipelineInput !== false || filterArgs.positional.length ||
-          [...filterArgs.named.keys()].some(key => key !== 'listimported'))) {
+          [...filterArgs.named.keys()].some(key => !['listimported', 'commandtype'].includes(key)) ||
+          (filterArgs.named.has('commandtype') &&
+            !GET_COMMAND_TYPES.has(String(filterArgs.named.get('commandtype')).toLowerCase())))) {
         return { complete: false, actions, reason: 'command lookup may execute module initialization' };
       }
       actions.push({ kind: 'read', program, target: null }); continue;
