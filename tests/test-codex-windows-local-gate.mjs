@@ -158,7 +158,7 @@ const env = { ...process.env, CODEX_HOME: home, XDG_CACHE_HOME: home, XDG_CONFIG
 delete env.OPENAI_API_KEY;
 if (pinnedIdentity) env.AGENTOC_WINDOWS_USER_INSTALL_IDENTITY = JSON.stringify(pinnedIdentity);
 if (managedDelete) env.AGENTOC_WINDOWS_SAFE_DELETE_CONTEXT = JSON.stringify({ runId: run.id, helperPath: safeDeleteBinary,
-  state: { riskMode, riskContextValid: true, riskContext: { trustedWorkspaceRoot: home, protectedRoots: [] } } });
+  state: { riskMode, riskContextValid: boundContext?.valid ?? true, riskContext: boundContext?.riskContext ?? { trustedWorkspaceRoot: home, protectedRoots: [] } } });
 let productionOverlay = null;
 if (productionStartup) {
   if (!exactTrust) throw new Error('production fixture requires exact trust');
@@ -231,7 +231,7 @@ createInterface({ input: child.stdout }).on('line', async line => {
   } else if (stage === 2 && msg.method === 'item/commandExecution/requestApproval') {
     if (managedElevation) { fixtureError('direct elevation unexpectedly reached command approval'); return; }
     if (dangerousRetry) {
-      const state = { riskMode, cwd: home, riskContextValid: true, riskContext: { trustedWorkspaceRoot: home }, startedTurn: true,
+      const state = { riskMode, cwd: home, riskContextValid: boundContext?.valid ?? true, riskContext: boundContext?.riskContext ?? { trustedWorkspaceRoot: home }, startedTurn: true,
         threadId: msg.params.threadId, turnId: msg.params.turnId, pendingApprovals: new Map(), activeItems: new Map(), autoApprovedMcpRequestIds: new Set() };
       const sent = [];
       await trackCodexAppServerApprovalRequest(run.id, state, msg, { stdin: { writable: true, write(value) { sent.push(JSON.parse(value)); return true; } } }, { safeDeleteHelperPath: safeDeleteBinary });
@@ -256,7 +256,7 @@ createInterface({ input: child.stdout }).on('line', async line => {
         child.stdin.write(JSON.stringify({ id: msg.id, result: { decision: 'decline' } }) + '\n'); child.kill(); server.close(); return;
       }
       if (managedInstall || managedDelete) {
-        const state = { riskMode, cwd: home, riskContextValid: true, riskContext: { trustedWorkspaceRoot: home }, startedTurn: true,
+        const state = { riskMode, cwd: home, riskContextValid: boundContext?.valid ?? true, riskContext: boundContext?.riskContext ?? { trustedWorkspaceRoot: home }, startedTurn: true,
           windowsManagedActionChannel: true, windowsManagedActionBinding: { endpoint: env.AGENTOC_APPROVED_ACTIONS_ENDPOINT, token: 'fixture-token', sessionId: 'fixture-session', runId: run.id, turnId: 'fixture-turn', windowsUserInstallIdentity: pinnedIdentity },
           threadId: msg.params.threadId, turnId: msg.params.turnId, pendingApprovals: new Map(), activeItems: new Map(), autoApprovedMcpRequestIds: new Set() };
         const sent = [];
