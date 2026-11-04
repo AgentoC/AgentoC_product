@@ -10,7 +10,7 @@ export function windowsServiceControlSigningBytes(grant) {
       fields.some(field => !Object.hasOwn(grant, field)) || grant.version !== 1 ||
       !['keyId', 'brokerInstallationId', 'requestId', 'sessionId', 'runId', 'turnId', 'actionId'].every(field => typeof grant[field] === 'string' && id.test(grant[field])) ||
       !Number.isSafeInteger(grant.policyGeneration) || grant.policyGeneration < 1 || typeof grant.nonce !== 'string' || !nonce.test(grant.nonce) ||
-      typeof grant.serviceName !== 'string' || !grant.serviceName || grant.serviceName !== grant.serviceName.trim() ||
+      typeof grant.serviceName !== 'string' || !grant.serviceName || !grant.serviceName.isWellFormed() || grant.serviceName !== grant.serviceName.trim() ||
       [...grant.serviceName].length > 256 || /[\\/*?\p{Cc}]/u.test(grant.serviceName) ||
       !['start-service', 'stop-service', 'restart-service'].includes(grant.action) || typeof grant.definitionHash !== 'string' || !/^[a-f0-9]{64}$/.test(grant.definitionHash) ||
       grant.authorization !== 'owner' || !Number.isSafeInteger(grant.issuedMs) || !Number.isSafeInteger(grant.expiresMs) ||

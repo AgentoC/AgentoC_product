@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // The native backend must open the exact service once, verify its identity and
@@ -33,7 +34,7 @@ type serviceControlOutcome struct {
 var serviceDefinitionHash = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 func validServiceControlName(name string) bool {
-	if name == "" || strings.TrimSpace(name) != name || len([]rune(name)) > 256 || strings.ContainsAny(name, `\/*?`) {
+	if name == "" || !utf8.ValidString(name) || strings.TrimSpace(name) != name || len([]rune(name)) > 256 || strings.ContainsAny(name, `\/*?`) {
 		return false
 	}
 	for _, r := range name {

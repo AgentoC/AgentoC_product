@@ -18,7 +18,7 @@ const deviceSignature = sign('sha256', windowsServiceOwnerSigningBytes(grant), o
 assert.equal(verify('sha256', windowsServiceOwnerSigningBytes(grant), ownerKeys.publicKey, Buffer.from(deviceSignature, 'base64')), true);
 assert.equal(verify(null, bytes, keys.publicKey, signature), true);
 assert.equal(verify(null, windowsServiceControlSigningBytes({ ...grant, serviceName: '其他' }), keys.publicKey, signature), false);
-for (const mutation of [{ serviceName: 'bad*' }, { action: 'delete' }, { authorization: 'policy-auto' }, { expiresMs: grant.issuedMs + 60001 }, { extra: true }]) {
+for (const mutation of [{ serviceName: 'bad*' }, { serviceName: 'bad\ud800' }, { action: 'delete' }, { authorization: 'policy-auto' }, { expiresMs: grant.issuedMs + 60001 }, { extra: true }]) {
   assert.throws(() => windowsServiceControlSigningBytes({ ...grant, ...mutation }), { code: 'SERVICE_CONTROL_GRANT_INVALID' });
 }
 let calls = 0;
