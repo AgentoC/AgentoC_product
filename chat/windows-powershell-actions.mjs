@@ -232,7 +232,15 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
     const redirectionReason = await appendRedirects(entry, program);
     if (redirectionReason) return { complete: false, actions, reason: redirectionReason };
     if (FILTERS.has(program)) {
-      if (!parseArguments(entry.elements, SAFE_FILTER_PARAMS, SAFE_FILTER_SWITCHES)) return { complete: false, actions, reason: 'unsupported filter arguments' };
+      const filterArgs = parseArguments(entry.elements, SAFE_FILTER_PARAMS, SAFE_FILTER_SWITCHES);
+      if (!filterArgs) return { complete: false, actions, reason: 'unsupported filter arguments' };
+      // Get-Command can import a module and run its initialization even with
+      // -ListImported when a module-qualified command name is supplied. Only
+      // the unfiltered inventory is bounded to already imported commands.
+      if (program === 'get-command' && (filterArgs.positional.length ||
+          [...filterArgs.named.keys()].some(key => key !== 'listimported'))) {
+        return { complete: false, actions, reason: 'command lookup may execute module initialization' };
+      }
       actions.push({ kind: 'read', program, target: null }); continue;
     }
     const kind = FILE_COMMANDS.get(program);

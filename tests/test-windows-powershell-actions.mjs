@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { link, mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { access, link, mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 import { analyzeWindowsFileChanges, analyzeWindowsPowerShell, decideWindowsPowerShellActions } from '../chat/windows-powershell-actions.mjs';
@@ -61,7 +62,10 @@ let result = await inspect('Get-Content readme.txt | Select-Object -First 1');
 assert.equal(result.decision, 'allow');
 assert.equal(result.actions.length, 2);
 assert.equal((await inspect('Get-Process -Name explorer | Select-Object -First 1')).decision, 'allow');
-assert.equal((await inspect('Get-Command -Name Get-Content -CommandType Cmdlet')).decision, 'allow');
+assert.equal((await inspect('Get-Command')).decision, 'allow');
+assert.equal((await inspect('Get-Command -ListImported')).decision, 'allow');
+assert.equal((await inspect('Get-Command -Name Get-Content -CommandType Cmdlet')).decision, 'review');
+assert.equal((await inspect('Get-Command -ListImported AgentoCFixture\\Invoke-AgentoCProbe')).decision, 'review');
 assert.equal((await inspect('Get-Process -Id $env:PID')).decision, 'review');
 assert.equal((await inspect('Get-Command -Name Get-Content; Remove-Item . -Recurse')).decision, 'review');
 result = await inspect('Set-Content -Path result.txt -Value hello');
@@ -133,6 +137,8 @@ assert.equal((await inspect('Rename-Item -Path readme.txt -NewName ordinary-link
 for (const riskMode of ['recommended', 'full-auto']) {
   const approval = (script) => ({ kind: 'command', params: { command: [resolveWindowsSystemPaths().powershell, '-NoProfile', '-Command', script] } });
   const state = { riskMode, cwd: workspace, riskContext: context };
+  assert.equal((await decideWindowsApproval(approval('Get-Command -ListImported AgentoCFixture\\Invoke-AgentoCProbe'), state)).decision, 'prompt', `${riskMode}: module lookup`);
+  assert.equal((await decideWindowsApproval(approval('Get-Command -ListImported'), state)).decision, 'auto-allow', `${riskMode}: imported command inventory`);
   const outside = path.join(root, 'ordinary.txt').replace(/'/g, "''");
   assert.equal((await decideWindowsApproval(approval(`Get-Content -LiteralPath '${outside}' -Tail 1`), state)).decision, 'auto-allow');
   assert.equal((await decideWindowsApproval(approval(`Set-Content -LiteralPath '${outside}' -Value hello -Encoding utf8 -NoNewline`), state)).decision, 'auto-allow');
@@ -152,6 +158,24 @@ for (const riskMode of ['recommended', 'full-auto']) {
   }
   assert.equal((await decideWindowsApproval(approval('Set-Content -LiteralPath ..\\protected\\result.txt -Value hello'), state)).decision, 'prompt');
   assert.equal((await decideWindowsApproval(approval('Remove-Item -LiteralPath ..\\outside-folder -Recurse'), state)).decision, 'prompt');
+}
+// A module-qualified lookup executes the module body even with ListImported.
+// Verify the behavior against both Windows PowerShell and packaged PowerShell
+// when provided; the fixture writes only an isolated marker under TEMP.
+for (const [index, shell] of [resolveWindowsSystemPaths().powershell, process.env.AGENTOC_TEST_PWSH].filter(Boolean).entries()) {
+  const name = `AgentoCQueryFixture${index}`;
+  const modules = path.join(root, `modules-${index}`);
+  const moduleDir = path.join(modules, name);
+  const marker = path.join(root, `module-loaded-${index}.txt`);
+  await mkdir(moduleDir, { recursive: true });
+  await writeFile(path.join(moduleDir, `${name}.psm1`), `Set-Content -LiteralPath '${marker.replaceAll("'", "''")}' -Value loaded\nfunction Invoke-AgentoCProbe { 'fixture' }\nExport-ModuleMember -Function Invoke-AgentoCProbe\n`);
+  const env = { ...process.env, PSModulePath: `${modules};${process.env.PSModulePath || ''}` };
+  execFileSync(shell, ['-NoProfile', '-NonInteractive', '-Command', 'Get-Command -ListImported | Out-Null'], { env, windowsHide: true });
+  await assert.rejects(access(marker), { code: 'ENOENT' });
+  const query = `Get-Command -ListImported ${name}\\Invoke-AgentoCProbe`;
+  assert.equal((await inspect(query, { executable: shell })).decision, 'review');
+  execFileSync(shell, ['-NoProfile', '-NonInteractive', '-Command', `${query} | Out-Null`], { env, windowsHide: true });
+  await access(marker);
 }
 assert.equal((await inspect('Get-ChildItem -Path folder -Recurse')).decision, 'allow');
 assert.equal((await inspect("Get-ChildItem -Path folder -Filter '*.md'")).decision, 'allow');
