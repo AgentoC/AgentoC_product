@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { compileWindowsGitStatus } from '../chat/windows-git-status.mjs';
@@ -67,5 +67,22 @@ try {
   unlinkSync(marker);
   run(parent, ['-c', 'core.fsmonitor=false', '--no-optional-locks', 'status', '--short']);
   assert.equal(existsSync(marker), false, 'safe status must suppress submodule fsmonitor');
+  // Disabling fsmonitor is not enough to make arbitrary repositories safe:
+  // a configured clean filter can run while Git checks a modified file.
+  const filterRepo = path.join(root, 'filter-repo');
+  mkdirSync(filterRepo); init(filterRepo);
+  const filterMarker = path.join(filterRepo, 'filter-ran');
+  writeFileSync(path.join(filterRepo, 'filter.sh'), '#!/bin/sh\nprintf invoked > filter-ran\ncat\n');
+  writeFileSync(path.join(filterRepo, '.gitattributes'), 'tracked.txt filter=fixture\n');
+  writeFileSync(path.join(filterRepo, 'tracked.txt'), 'before\n');
+  run(filterRepo, ['config', 'filter.fixture.clean', 'sh ./filter.sh']);
+  run(filterRepo, ['add', '.gitattributes', 'tracked.txt']);
+  run(filterRepo, ['commit', '-q', '-m', 'filter fixture']);
+  assert.ok(existsSync(filterMarker), 'fixture clean filter must execute during add');
+  unlinkSync(filterMarker);
+  writeFileSync(path.join(filterRepo, 'tracked.txt'), 'after!\n');
+  utimesSync(path.join(filterRepo, 'tracked.txt'), new Date(946684800000), new Date(946684800000));
+  run(filterRepo, ['-c', 'core.fsmonitor=false', '--no-optional-locks', 'status', '--short']);
+  assert.ok(existsSync(filterMarker), 'status may execute a configured clean filter even with fsmonitor disabled');
   console.log('windows-git-status: native AST and real Git output checks passed');
 } finally { rmSync(root, { recursive: true, force: true }); }

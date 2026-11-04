@@ -3,6 +3,9 @@ import { parseWindowsPowerShellAst } from './windows-powershell-ast.mjs';
 // This compiles command syntax only. It does not establish the identity of
 // Git, bind cwd or authorize execution. Callers must establish those facts and
 // execute with fsmonitor disabled before an automatic decision is possible.
+// That is still insufficient on its own: status can run repository-configured
+// clean filters while checking tracked files. Their execution must be excluded
+// or independently authorized, including races in repository configuration.
 const statusOptions = new Set([
   '--short', '--branch', '--long', '--porcelain', '--porcelain=v1', '--porcelain=v2',
   '--show-stash', '--no-renames', '--renames', '--ahead-behind', '--no-ahead-behind',

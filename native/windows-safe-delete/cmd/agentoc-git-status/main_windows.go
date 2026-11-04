@@ -2,6 +2,9 @@
 
 // This non-elevated executor is not an approval authority. The caller must
 // independently authorize the Git image, its dependencies and the workspace.
+// Disabling fsmonitor does not disable repository-configured clean filters;
+// those can execute while status checks modified files. This executor alone
+// must not be used as evidence that a status request is safe to auto-allow.
 package main
 
 import (
