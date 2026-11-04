@@ -17,7 +17,7 @@ if (process.platform === 'win32') {
     'Start-Process notepad.exe -Verb RunAs', 'Start-Process -Verb:RunAs notepad.exe',
     "Write-Output hello; Start-Process notepad.exe -Verb RunAs", 'New-LocalUser -Name fixture -WhatIf',
     'Remove-LocalGroupMember -Group Administrators -Member fixture -WhatIf', 'New-Service -Name fixture -WhatIf',
-    'sc.exe config fixture start= demand', 'net.exe user fixture /add']) {
+    'sc.exe config fixture start= demand', 'net.exe user fixture /add', 'Restart-Service -Name fixture']) {
     assert.equal(await needsWindowsElevationGuidance(command), true, command);
   }
   for (const command of ["Write-Output 'sudo whoami'", 'winget install Git.Git', 'Start-Process notepad.exe',

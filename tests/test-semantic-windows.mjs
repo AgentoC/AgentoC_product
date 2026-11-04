@@ -254,6 +254,19 @@ const serviceResolution = await resolveSemanticContext({
 });
 eq('Windows service facts compute', serviceResolution.scope.computed, true);
 eq('service snapshot participates in policy', evaluateSemanticOperation(serviceOperation, serviceResolution).decision, 'ASK');
+const proposedService = buildApprovedAction({ command: 'Restart-Service FixtureService' }, {
+  ...binding, platform: 'win32', cwd: process.cwd(), projectRoot: process.cwd(), home: process.cwd(),
+});
+eq('Windows service control is a host action', proposedService.executionClass, 'host');
+const proposedServiceProjection = await prepareApprovedActionSemanticProjection({
+  action: proposedService,
+  trustedContext,
+  resolverOptions: { windowsFactsProvider: { name: 'windows-service-fixture', async serviceFacts(query) {
+    return { platform: 'win32', manager: 'windows-service', serviceName: query.serviceName, exists: true, definitionHash: 'definition-1' };
+  } } },
+});
+eq('service action reaches owner review with an exact server snapshot', proposedServiceProjection.decision, 'ASK');
+eq('review binds the selected service name', proposedServiceProjection.decisions[0].operation.target.serviceName, 'FixtureService');
 
 const packageOperation = compile('winget install --id Git.Git --exact --source winget --scope machine').operations[0];
 const packageResolution = await resolveSemanticContext({

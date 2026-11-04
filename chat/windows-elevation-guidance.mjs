@@ -7,7 +7,7 @@ const elevationPrograms = new Set(['runas', 'runas.exe', 'gsudo', 'gsudo.exe', '
 // ordinary file or package commands. Read-only counterparts remain untouched.
 const adminCmdlets = new Set(['new-localuser', 'set-localuser', 'remove-localuser', 'enable-localuser', 'disable-localuser',
   'new-localgroup', 'set-localgroup', 'remove-localgroup', 'add-localgroupmember', 'remove-localgroupmember',
-  'new-service', 'remove-service']);
+  'new-service', 'remove-service', 'set-service', 'start-service', 'stop-service', 'restart-service']);
 const nameOf = value => path.win32.basename(String(value || '').replaceAll('/', '\\')).toLowerCase();
 
 function directAdminProgram(name, args) {
@@ -32,7 +32,7 @@ export function isWindowsAdministrativeArgv(argv) {
 // This is guidance for explicit elevation, not a privilege or risk classifier.
 // Unrecognized and dynamic commands remain with the existing approval policy.
 export async function needsWindowsElevationGuidance(command, shell = 'PowerShell', parse = parseWindowsPowerShellAst) {
-  if (typeof command !== 'string' || !/runas|gsudo|sudo|localuser|localgroup|(?:^|[\\/\s])(?:sc|net)(?:\.exe)?(?:\s|$)|(?:new|remove)-service/i.test(command)) return false;
+  if (typeof command !== 'string' || !/runas|gsudo|sudo|localuser|localgroup|(?:^|[\\/\s])(?:sc|net)(?:\.exe)?(?:\s|$)|(?:new|remove|set|start|stop|restart)-service/i.test(command)) return false;
   if (shell === 'Bash') {
     const words = parseLiteralBashWords(command);
     if (!words || words.length < 2) return false;
