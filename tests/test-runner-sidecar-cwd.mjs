@@ -102,7 +102,7 @@ try {
     },
   };
   const riskDigest = computeExecutionScopeDigest(riskScope);
-  const boundRisk = resolveRunRiskContext({ executionScope: riskScope, executionScopeDigest: riskDigest });
+  const boundRisk = resolveRunRiskContext({ executionScope: riskScope, executionScopeDigest: riskDigest }, { platform: 'linux' });
   assert.equal(boundRisk.valid, true, 'matching risk context digest should be accepted');
   assert.equal(boundRisk.riskContext.trustedWorkspaceRoot, root, 'accepted context should preserve the bound workspace');
   assert.equal(resolveRunRiskContext({ executionScope: riskScope }).reason, 'execution-scope-digest-missing',

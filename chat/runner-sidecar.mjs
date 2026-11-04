@@ -4,7 +4,8 @@ import { createHash } from 'node:crypto';
 import { spawn } from 'child_process';
 import { accessSync, constants, rmSync, statSync } from 'fs';
 import { createInterface } from 'readline';
-import { dirname, isAbsolute, join, relative, resolve } from 'path';
+import { dirname, isAbsolute, join, relative, resolve, win32 } from 'path';
+import { ownerWindowsOsPaths } from '../lib/windows-owner-os-paths.mjs';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { createToolInvocation, prependAttachmentPaths, resolveCommandSpawnSpec } from './process-runner.mjs';
 import { readPiTerminalOutcome } from './adapters/pi.mjs';
@@ -352,7 +353,7 @@ export function resolveRunCwd(manifest, deps = {}) {
 // whose digest the sidecar received. A malformed or stale context deliberately
 // falls back to the conservative classifier path instead of trusting cwd or
 // projectRoot supplied by a caller.
-export function resolveRunRiskContext(manifest) {
+export function resolveRunRiskContext(manifest, { platform = process.platform, windowsOsPaths = platform === 'win32' ? ownerWindowsOsPaths() : null } = {}) {
   const scope = manifest?.executionScope;
   if (!scope || typeof scope !== 'object') {
     return { riskContext: null, valid: false, reason: 'legacy-execution-scope' };
@@ -381,6 +382,17 @@ export function resolveRunRiskContext(manifest) {
     || !context.trustedWorkspaceRoot.trim()
     || !Array.isArray(context.protectedRoots)) {
     return { riskContext: null, valid: false, reason: 'risk-context-shape-invalid' };
+  }
+  if (platform === 'win32') {
+    if (context.platform !== 'win32' || !windowsOsPaths || !Array.isArray(context.systemPathRoots)) {
+      return { riskContext: null, valid: false, reason: 'windows-system-paths-unavailable' };
+    }
+    const roots = new Set(context.systemPathRoots.filter((value) => typeof value === 'string')
+      .map((value) => win32.normalize(value).toLowerCase()));
+    if (![windowsOsPaths.windows, windowsOsPaths.programData, windowsOsPaths.programFiles]
+      .every((value) => typeof value === 'string' && value && roots.has(win32.normalize(value).toLowerCase()))) {
+      return { riskContext: null, valid: false, reason: 'windows-system-paths-unavailable' };
+    }
   }
   return { riskContext: context, valid: true, reason: '' };
 }

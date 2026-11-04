@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { buildRunRiskContext } from '../chat/run-admission.mjs';
 import { classifyRiskTargetScope, RISK_TARGET_SCOPE } from '../chat/risk-policy.mjs';
 import { analyzeWindowsFileChanges, decideWindowsPowerShellActions } from '../chat/windows-powershell-actions.mjs';
+import { computeExecutionScopeDigest } from '../chat/execution-scope.mjs';
+import { resolveRunRiskContext } from '../chat/runner-sidecar.mjs';
+import { decideWindowsApproval } from '../chat/windows-approval-gate.mjs';
 
 test('run admission protects OS-derived roots across drives for every file operation', async () => {
   const windowsOsPaths = { windows: 'D:\\Windows', programData: 'E:\\Shared Data', programFiles: 'F:\\Applications' };
@@ -29,4 +32,44 @@ test('run admission protects OS-derived roots across drives for every file opera
   const ordinary = await analyzeWindowsFileChanges([{ kind: 'write', path: 'E:\\Documents\\note.txt' }], context, { fsApi });
   assert.equal(ordinary.actions[0].protected, false);
   assert.equal(decideWindowsPowerShellActions(ordinary).decision, 'allow');
+});
+
+test('Windows sidecar refuses automatic approval when OS roots cannot be verified', () => {
+  const windowsOsPaths = { windows: 'D:\\Windows', programData: 'E:\\Shared Data', programFiles: 'F:\\Applications' };
+  const scope = {
+    platform: 'win32',
+    workspaceRoot: { realPath: 'G:\\work' },
+    scopeRoot: { realPath: 'G:\\work' },
+    cwd: { realPath: 'G:\\work' },
+  };
+  scope.riskContext = buildRunRiskContext(scope, { windowsOsPaths });
+  const manifest = { executionScope: scope, executionScopeDigest: computeExecutionScopeDigest(scope) };
+  const options = { platform: 'win32', windowsOsPaths };
+  assert.equal(resolveRunRiskContext(manifest, options).valid, true);
+  assert.equal(resolveRunRiskContext(manifest, { ...options, windowsOsPaths: null }).reason, 'windows-system-paths-unavailable');
+  const omittedRootScope = { ...scope, riskContext: { ...scope.riskContext,
+    systemPathRoots: scope.riskContext.systemPathRoots.filter(root => root.toLowerCase() !== windowsOsPaths.programData.toLowerCase()) } };
+  assert.equal(resolveRunRiskContext({ executionScope: omittedRootScope,
+    executionScopeDigest: computeExecutionScopeDigest(omittedRootScope) }, options).reason, 'windows-system-paths-unavailable');
+  const otherPlatformScope = { ...scope, riskContext: { ...scope.riskContext, platform: 'linux' } };
+  assert.equal(resolveRunRiskContext({ executionScope: otherPlatformScope,
+    executionScopeDigest: computeExecutionScopeDigest(otherPlatformScope) }, options).reason, 'windows-system-paths-unavailable');
+});
+
+test('real Windows admission and sidecar agree on the OS roots', { skip: process.platform !== 'win32' }, () => {
+  const work = process.cwd();
+  const scope = { workspaceRoot: { realPath: work }, scopeRoot: { realPath: work }, cwd: { realPath: work } };
+  scope.riskContext = buildRunRiskContext(scope);
+  const binding = resolveRunRiskContext({ executionScope: scope, executionScopeDigest: computeExecutionScopeDigest(scope) });
+  assert.equal(binding.valid, true, binding.reason);
+});
+
+test('an unverified context cannot auto-approve file operations in either main mode', async () => {
+  for (const riskMode of ['recommended', 'full-auto']) {
+    const decision = await decideWindowsApproval({ providerMethod: 'can_use_tool',
+      params: { tool_name: 'Write', input: { file_path: 'G:\\work\\report.md' } } },
+    { riskMode, cwd: 'G:\\work', riskContextValid: false });
+    assert.equal(decision.decision, 'prompt');
+    assert.equal(decision.reason, 'run path context is unavailable');
+  }
 });
