@@ -3,7 +3,7 @@ import { generateKeyPairSync, verify } from 'node:crypto';
 import { buildApprovedAction } from '../chat/approved-actions.mjs';
 import { prepareApprovedActionSemanticProjection } from '../chat/approved-action-semantic.mjs';
 import { windowsServiceControlSigningBytes } from '../chat/windows-service-grant.mjs';
-import { submitOrResumeWindowsServiceProposal, queryWindowsServiceProposal, windowsServiceRequestIds } from '../chat/windows-service-proposal.mjs';
+import { submitOrResumeWindowsServiceProposal, queryWindowsServiceProposal, waitWindowsServiceProposal, windowsServiceRequestIds } from '../chat/windows-service-proposal.mjs';
 
 const context = { sessionId: 'session', runId: 'run', turnId: 'turn', requestKey: 'request', platform: 'win32',
   cwd: 'D:\\work', projectRoot: 'D:\\work', home: 'D:\\home' };
@@ -59,4 +59,16 @@ const racingClient = { ...client, status: async id => ++lookups === 1
   : { type: 'result', requestId: id, status: 'awaiting_device', serviceControl: submitted.grant },
   proposeServiceControl: async () => { throw Object.assign(new Error('race'), { code: 'REQUEST_ID_CONFLICT' }); } };
 assert.equal((await submitOrResumeWindowsServiceProposal({ ...options, client: racingClient })).duplicate, true);
+let clock = 0, polls = 0;
+const pollingClient = { ...client, status: async id => ({ type: 'result', requestId: id,
+  status: ++polls < 3 ? 'awaiting_device' : 'denied', code: polls < 3 ? 'DEVICE_APPROVAL_REQUIRED' : 'DEVICE_DENIED', serviceControl: submitted.grant }) };
+assert.deepEqual(await waitWindowsServiceProposal({ ...options, client: pollingClient, timeoutMs: 5000, intervalMs: 1000,
+  monotonicNow: () => clock, delay: async ms => { clock += ms; } }), { requestId, status: 'denied', code: 'DEVICE_DENIED' });
+assert.equal(count, 1);
+clock = 0;
+const stalledClient = { ...client, status: async id => ({ type: 'result', requestId: id, status: 'executing', serviceControl: submitted.grant }) };
+assert.equal((await waitWindowsServiceProposal({ ...options, client: stalledClient, timeoutMs: 2000, intervalMs: 1000,
+  monotonicNow: () => clock, delay: async ms => { clock += ms; } })).status, 'unknown');
+const aborted = new AbortController(); aborted.abort();
+assert.equal((await waitWindowsServiceProposal({ ...options, signal: aborted.signal })).status, 'unknown');
 console.log('windows-service-proposal: ok');

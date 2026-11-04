@@ -59,6 +59,34 @@ export async function queryWindowsServiceProposal({ action, projection, authenti
   return { requestId, status: result.status, code: result.code || '' };
 }
 
+// Observe only the original broker record. A cancelled wait or broken
+// transport cannot establish whether an operation has executed.
+export async function waitWindowsServiceProposal({ action, projection, authenticatedPrincipalKind, client, signal,
+  timeoutMs = 10 * 60_000, intervalMs = 1_000, monotonicNow = () => performance.now(),
+  delay = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || !Number.isFinite(intervalMs) || intervalMs <= 0 ||
+      typeof monotonicNow !== 'function' || typeof delay !== 'function') {
+    fail('SERVICE_STATUS_INVALID', 'Invalid service status wait');
+  }
+  const { requestId } = windowsServiceRequestIds(action);
+  const deadline = monotonicNow() + timeoutMs;
+  const unknown = () => ({ requestId, status: 'unknown', code: 'SERVICE_OUTCOME_UNKNOWN' });
+  while (!signal?.aborted && monotonicNow() < deadline) {
+    let result;
+    try { result = await queryWindowsServiceProposal({ action, projection, authenticatedPrincipalKind, client }); }
+    catch (error) {
+      if (['SERVICE_BINDING_CONFLICT', 'SERVICE_PROJECTION_INVALID', 'SERVICE_PROFILE_DENIED'].includes(error?.code)) throw error;
+      return unknown();
+    }
+    if (['succeeded', 'failed', 'denied', 'expired', 'unknown'].includes(result.status)) return result;
+    if (!['awaiting_device', 'executing'].includes(result.status)) return unknown();
+    const remaining = deadline - monotonicNow();
+    if (remaining <= 0 || signal?.aborted) break;
+    await delay(Math.min(intervalMs, remaining));
+  }
+  return unknown();
+}
+
 // A failed or timed-out proposal is ambiguous. A retry reads the original
 // durable request ID before creating any new nonce, and matches every target.
 export async function submitOrResumeWindowsServiceProposal({ action, projection, riskMode, authenticatedPrincipalKind, client,
