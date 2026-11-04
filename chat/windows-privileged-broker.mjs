@@ -1,6 +1,7 @@
 import { createConnection } from 'node:net';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { validateWindowsSelectedInstallerFacts } from './windows-winget-installer-facts.mjs';
 
 import { readBody } from '../lib/utils.mjs';
 import {
@@ -107,6 +108,55 @@ function validateRequest(request) {
         !validId(request.requestId) || typeof request.deviceId !== 'string' || !DEVICE_ID_PATTERN.test(request.deviceId) ||
         !['approve', 'deny'].includes(request.choice) || typeof request.signature !== 'string' ||
         request.signature.length === 0 || request.signature.length > 1024 || !SIGNATURE_PATTERN.test(request.signature)) {
+      throw brokerError('BROKER_REQUEST_INVALID');
+    }
+    return;
+  }
+  if (request.type === 'auto_install.inspect') {
+    const query = request.autoInspect;
+    if (!hasOnlyKeys(request, ['version', 'type', 'autoInspect']) || !hasOnlyKeys(query, ['packageId', 'packageVersion']) ||
+        typeof query.packageId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(query.packageId) ||
+        typeof query.packageVersion !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._+:-]{0,127}$/.test(query.packageVersion)) throw brokerError('BROKER_REQUEST_INVALID');
+    return;
+  }
+  if (request.type === 'owner_install.identity') {
+    if (!hasOnlyKeys(request, ['version', 'type'])) throw brokerError('BROKER_REQUEST_INVALID');
+    return;
+  }
+  if (request.type === 'owner_install.execute') {
+    const grant = request.ownerInstall;
+    const keys = ['version', 'keyId', 'brokerInstallationId', 'policyGeneration', 'instanceId', 'ownerSid', 'requestId', 'sessionId',
+      'runId', 'turnId', 'actionId', 'nonce', 'packageId', 'packageVersion', 'source', 'installScope', 'issuedMs', 'expiresMs'];
+    if (!hasOnlyKeys(request, ['version', 'type', 'ownerInstall', 'signature']) || !hasOnlyKeys(grant, keys) ||
+        keys.some((key) => !Object.hasOwn(grant, key)) || grant.version !== 1 ||
+        !['keyId', 'brokerInstallationId', 'requestId', 'sessionId', 'runId', 'turnId', 'actionId'].every((key) => validId(grant[key])) ||
+        !/^inst_[a-f0-9]{32}$/.test(grant.instanceId || '') || grant.keyId !== grant.instanceId || !/^S-1-5-21-(?:\d+-){3}\d+$/.test(grant.ownerSid || '') ||
+        !Number.isSafeInteger(grant.policyGeneration) || grant.policyGeneration < 1 || !/^[A-Za-z0-9_-]{24,128}$/.test(grant.nonce || '') ||
+        !/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(grant.packageId || '') || !/^[A-Za-z0-9][A-Za-z0-9._+:-]{0,127}$/.test(grant.packageVersion || '') ||
+        grant.source !== 'winget' || grant.installScope !== 'user' || !Number.isSafeInteger(grant.issuedMs) || !Number.isSafeInteger(grant.expiresMs) ||
+        grant.issuedMs <= 0 || grant.expiresMs <= grant.issuedMs || grant.expiresMs - grant.issuedMs > 60000 ||
+        typeof request.signature !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(request.signature)) throw brokerError('BROKER_REQUEST_INVALID');
+    return;
+  }
+  if (request.type === 'auto_install.execute') {
+    const grant = request.autoInstall;
+    const keys = ['version', 'keyId', 'brokerInstallationId', 'policyGeneration', 'requestId', 'sessionId',
+      'runId', 'turnId', 'actionId', 'nonce', 'packageId', 'packageVersion', 'source', 'installScope', 'issuedMs', 'expiresMs'];
+    const selectedKeys = ['id', 'version', 'source', 'scope', 'elevation', 'type', 'nestedType', 'architecture', 'locale'];
+    const selected = grant?.selectedInstaller;
+    const validSelection = selected === undefined || (hasOnlyKeys(selected, selectedKeys) && selectedKeys.every((key) => Object.hasOwn(selected, key)) &&
+      Boolean(validateWindowsSelectedInstallerFacts(selected, { packageId: grant?.packageId, packageVersion: grant?.packageVersion })) &&
+      selected.scope === 'System' && selected.elevation !== 'ElevationProhibited');
+    if (!hasOnlyKeys(request, ['version', 'type', 'autoInstall', 'signature']) ||
+        !hasOnlyKeys(grant, [...keys, 'selectedInstaller']) || !validSelection || keys.some((key) => !Object.hasOwn(grant, key)) || grant.version !== 1 ||
+        !['keyId', 'brokerInstallationId', 'requestId', 'sessionId', 'runId', 'turnId', 'actionId'].every((key) => validId(grant[key])) ||
+        !Number.isSafeInteger(grant.policyGeneration) || grant.policyGeneration < 1 ||
+        typeof grant.nonce !== 'string' || !/^[A-Za-z0-9_-]{24,128}$/.test(grant.nonce) ||
+        typeof grant.packageId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(grant.packageId) ||
+        typeof grant.packageVersion !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._+:-]{0,127}$/.test(grant.packageVersion) || grant.source !== 'winget' || grant.installScope !== 'machine' ||
+        !Number.isSafeInteger(grant.issuedMs) || !Number.isSafeInteger(grant.expiresMs) || grant.issuedMs <= 0 ||
+        grant.expiresMs <= grant.issuedMs || grant.expiresMs - grant.issuedMs > 60000 ||
+        typeof request.signature !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(request.signature)) {
       throw brokerError('BROKER_REQUEST_INVALID');
     }
     return;
@@ -272,18 +322,18 @@ export function createWindowsPrivilegedBrokerClient({
   serviceHostPath,
 } = {}) {
   const useServiceHostBridge = platform === 'win32' && connect === createConnection;
-  const rpc = (pipe, request) => {
+  const rpc = (pipe, request, requestTimeoutMs = timeoutMs) => {
     if (platform !== 'win32') return Promise.reject(brokerError('BROKER_PLATFORM_UNSUPPORTED'));
-    if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 30000) {
+    if (!Number.isInteger(requestTimeoutMs) || requestTimeoutMs < 100 || requestTimeoutMs > 30000) {
       return Promise.reject(brokerError('BROKER_CLIENT_CONFIGURATION_INVALID'));
     }
     try {
       if (pipeExchange) {
         encodeFrame(request);
-        return pipeExchange({ pipe, request, timeoutMs });
+        return pipeExchange({ pipe, request, timeoutMs: requestTimeoutMs });
       }
-      if (useServiceHostBridge) return exchangeViaServiceHost({ request, pipe, timeoutMs, serviceHostPath });
-      return exchangePipeFrame({ connect, pipePath: PIPE_PATHS[pipe], request, timeoutMs });
+      if (useServiceHostBridge) return exchangeViaServiceHost({ request, pipe, timeoutMs: requestTimeoutMs, serviceHostPath });
+      return exchangePipeFrame({ connect, pipePath: PIPE_PATHS[pipe], request, timeoutMs: requestTimeoutMs });
     } catch (error) {
       return Promise.reject(error?.code ? error : brokerError('BROKER_REQUEST_INVALID'));
     }
@@ -312,6 +362,27 @@ export function createWindowsPrivilegedBrokerClient({
       version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'decision',
       requestId, deviceId, choice, signature,
     }),
+    executeAutoInstall: ({ grant, signature }) => rpc('request', {
+      version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'auto_install.execute', autoInstall: grant, signature,
+    }),
+    executeOwnerInstall: ({ grant, signature }) => rpc('request', {
+      version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'owner_install.execute', ownerInstall: grant, signature,
+    }),
+    ownerInstallIdentity: async () => {
+      const response = await rpc('request', { version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'owner_install.identity' });
+      if (response?.type === 'error') throw brokerError(response.code || 'OWNER_INSTALL_POLICY_UNAVAILABLE');
+      const identity = response?.ownerIdentity;
+      if (response?.type !== 'owner_install_identity' || !hasOnlyKeys(identity, ['instanceId', 'ownerSid']) ||
+          !/^inst_[a-f0-9]{32}$/.test(identity.instanceId || '') || !/^S-1-5-21-(?:\d+-){3}\d+$/.test(identity.ownerSid || '')) throw brokerError('BROKER_RESPONSE_INVALID');
+      return identity;
+    },
+    inspectAutoInstall: async ({ packageId, packageVersion }) => {
+      const response = await rpc('request', { version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'auto_install.inspect', autoInspect: { packageId, packageVersion } }, 30000);
+      if (response?.type === 'error') throw brokerError(response.code || 'AUTO_INSTALL_INSPECTION_FAILED');
+      const facts = validateWindowsSelectedInstallerFacts(response?.selectedInstaller, { packageId, packageVersion });
+      if (response?.type !== 'auto_install_inspection' || !facts || facts.scope !== 'System') throw brokerError('BROKER_RESPONSE_INVALID');
+      return facts;
+    },
   });
 }
 

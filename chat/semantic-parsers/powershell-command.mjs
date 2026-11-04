@@ -33,8 +33,9 @@ const KNOWN_PARAMS = new Set([
   '-path', '-literalpath', '-destination', '-name', '-id', '-recurse', '-force',
   '-itemtype', '-filter', '-include', '-exclude', '-raw', '-encoding', '-value',
   '-aclobject', '-displayname', '-startup_type', '-startupType', '-startup-type',
-  '--id', '--exact', '--source', '--version', '--scope', '--accept-source-agreements',
-  '--accept-package-agreements', '--silent', '/i', '/qn', '/quiet', '/norestart',
+  '--id', '--query', '-q', '--exact', '--source', '--version', '--scope', '--accept-source-agreements',
+  '--accept-package-agreements', '--silent', '--disable-interactivity', '/i', '/qn', '/quiet', '/norestart',
+  '-e', '-s', '-v', '-h',
 ]);
 
 function trimString(value) {
@@ -105,7 +106,7 @@ function isStaticLiteral(value) {
   return typeof value === 'string' && value !== '' && !/[*$?\[\]`$(){}|;&<>]/.test(value);
 }
 
-function parameterMap(tokens) {
+function parameterMap(tokens, { winget = false } = {}) {
   const values = new Map();
   const unknownParams = [];
   const duplicateParams = [];
@@ -117,7 +118,15 @@ function parameterMap(tokens) {
       positionals.push(token);
       continue;
     }
-    const normalized = token.toLowerCase();
+    // WinGet accepts long value options in both --name value and
+    // --name=value forms. Restrict the latter to the four fields whose
+    // semantics are explicitly validated by wingetCandidate below.
+    const inline = winget && token.match(/^(--(?:id|query|source|version|scope))=(.+)$/i);
+    const normalized = (inline ? inline[1] : token).toLowerCase();
+    if (!winget && ['-e', '-s', '-v', '-h', '-q', '--query', '--disable-interactivity'].includes(normalized)) {
+      unknownParams.push(token);
+      continue;
+    }
     if (!KNOWN_PARAMS.has(normalized) && !KNOWN_PARAMS.has(token)) {
       unknownParams.push(token);
       continue;
@@ -125,9 +134,13 @@ function parameterMap(tokens) {
     if (values.has(normalized) || switches.has(normalized)) {
       duplicateParams.push(token);
     }
+    if (inline) {
+      values.set(normalized, inline[2]);
+      continue;
+    }
     const next = tokens[index + 1];
-    const isSwitch = ['-recurse', '-force', '-raw', '--exact', '--accept-source-agreements',
-      '--accept-package-agreements', '--silent', '/qn', '/quiet', '/norestart'].includes(normalized);
+    const isSwitch = ['-recurse', '-force', '-raw', '--exact', '-e', '--accept-source-agreements',
+      '--accept-package-agreements', '--silent', '-h', '--disable-interactivity', '/qn', '/quiet', '/norestart'].includes(normalized);
     if (isSwitch) {
       switches.add(normalized);
       continue;
@@ -155,7 +168,8 @@ function resolvePathLiteral(value, base) {
   if (!isStaticLiteral(raw)) return '';
   const paths = path.win32;
   if (raw === '~' || raw.startsWith('~\\') || raw.startsWith('~/')) return '';
-  return paths.normalize(paths.isAbsolute(raw) ? raw : paths.resolve(base.cwd || 'C:\\', raw));
+  if (!paths.isAbsolute(raw) && !paths.isAbsolute(base.cwd || '')) return '';
+  return paths.normalize(paths.isAbsolute(raw) ? raw : paths.resolve(base.cwd, raw));
 }
 
 function unknownCandidate(evidence = [], unknowns = ['parser:powershell-unverified'], effects = ['process.execute']) {
@@ -171,6 +185,11 @@ function unknownCandidate(evidence = [], unknowns = ['parser:powershell-unverifi
 }
 
 function pathCandidate(program, params, base) {
+  if (params.values.has('-filter') || params.values.has('-include') || params.values.has('-exclude') ||
+      (program === 'new-item' && (params.values.has('-name') ||
+        (params.values.has('-itemtype') && !['file', 'directory'].includes(params.values.get('-itemtype').toLowerCase()))))) {
+    return unknownCandidate([program, 'unresolved-target-selection'], ['target:dynamic-argv']);
+  }
   const namedPath = getParam(params, '-literalpath', '-path');
   if (namedPath && params.positionals?.length > 0) {
     return unknownCandidate([program, 'mixed-target-arguments'], ['target:ambiguous-argv']);
@@ -199,6 +218,31 @@ function pathCandidate(program, params, base) {
     reasons: [reason(RC.ORDINARY_OPERATION)],
     unknowns: [],
   };
+}
+
+function copyMoveCandidates(program, params, base) {
+  if (params.values.has('-filter') || params.values.has('-include') || params.values.has('-exclude')) {
+    return [unknownCandidate([program, 'unresolved-target-selection'], ['target:dynamic-argv'])];
+  }
+  const namedSource = getParam(params, '-literalpath', '-path');
+  const namedDestination = getParam(params, '-destination');
+  const positional = [...params.positionals];
+  const source = namedSource || positional.shift();
+  const destination = namedDestination || positional.shift();
+  if (positional.length || (params.values.has('-path') && params.values.has('-literalpath'))) {
+    return [unknownCandidate([program, 'ambiguous-target-arguments'], ['target:ambiguous-argv'])];
+  }
+  const sourcePath = resolvePathLiteral(source, base);
+  const destinationPath = resolvePathLiteral(destination, base);
+  if (!sourcePath || !destinationPath) return [unknownCandidate([program, 'dynamic-path'], ['target:dynamic-argv'])];
+  const recursive = params.switches.has('-recurse');
+  const candidate = (root, primaryAction) => ({
+    primaryAction, effects: [], confidence: 'high',
+    target: { kind: recursive ? 'filesystem_tree' : 'filesystem_file', platform: 'win32', root, recursive },
+    evidence: [program, `path:${root}`, ...(recursive ? ['recurse'] : [])],
+    reasons: [reason(RC.ORDINARY_OPERATION)], unknowns: [],
+  });
+  return [candidate(sourcePath, program === 'move-item' ? 'fs.delete' : 'fs.read'), candidate(destinationPath, 'fs.write')];
 }
 
 function aclCandidate(program, params, base) {
@@ -241,11 +285,23 @@ function serviceCandidate(program, params) {
 
 function wingetCandidate(program, params) {
   const verb = params.values.get('__verb') || '';
-  const id = getParam(params, '--id');
-  const source = getParam(params, '--source');
-  const version = getParam(params, '--version');
-  if (!id || !isStaticLiteral(id) || verb !== 'install' || params.positionals?.length !== 1
-    || source.toLowerCase() !== 'winget' || !params.switches.has('--exact')) {
+  const namedId = getParam(params, '--id');
+  const query = getParam(params, '--query', '-q');
+  const positionalId = params.positionals?.[1] || '';
+  const id = namedId || query || positionalId;
+  const source = getParam(params, '--source', '-s') || 'winget';
+  const version = getParam(params, '--version', '-v');
+  const allowedValues = new Set(['__verb', '--id', '--query', '-q', '--source', '-s', '--version', '-v', '--scope']);
+  const allowedSwitches = new Set(['--exact', '-e', '--silent', '-h', '--disable-interactivity', '--accept-source-agreements', '--accept-package-agreements']);
+  if (!id || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id) || !['install', 'add'].includes(verb)
+    || [...params.values.keys()].some((key) => !allowedValues.has(key))
+    || [...params.switches].some((key) => !allowedSwitches.has(key))
+    || [namedId, query, positionalId].filter(Boolean).length !== 1 || params.positionals?.length !== (namedId || query ? 1 : 2)
+    || (params.values.has('--query') && params.values.has('-q'))
+    || (params.values.has('--source') && params.values.has('-s'))
+    || (params.values.has('--version') && params.values.has('-v'))
+    || source.toLowerCase() !== 'winget'
+    || (params.values.has('--scope') && !['machine', 'user'].includes(params.values.get('--scope').toLowerCase()))) {
     return unknownCandidate(['winget', verb || 'unknown-verb'], ['package:source-unverified'], ['process.execute']);
   }
   return {
@@ -255,6 +311,7 @@ function wingetCandidate(program, params) {
     target: {
       kind: 'package', platform: 'win32', manager: 'winget', packages: [id], source: 'winget',
       exact: true, requestedVersion: version,
+      requestedInstallScope: (params.values.get('--scope') || '').toLowerCase(),
     },
     evidence: ['winget', 'install', `id:${id}`, 'source:winget', ...(version ? [`version:${version}`] : [])],
     reasons: [reason(RC.ORDINARY_OPERATION)],
@@ -287,8 +344,9 @@ export function parsePowerShellCommandFacts(command) {
   if (tokenized.dynamic) {
     return { platform: 'win32', command: text, program: '', tokens: [], dynamic: true, unknown: tokenized.reason };
   }
-  const program = (tokenized.tokens[0] || '').toLowerCase();
-  const params = parameterMap(tokenized.tokens);
+  const rawProgram = (tokenized.tokens[0] || '').toLowerCase();
+  const program = rawProgram === 'winget.exe' ? 'winget' : rawProgram;
+  const params = parameterMap(tokenized.tokens, { winget: program === 'winget' });
   const verb = tokenized.tokens[1]?.toLowerCase() || '';
   if (program === 'winget') {
     params.values.set('__verb', verb);
@@ -322,6 +380,13 @@ export function mapPowerShellFactsToCandidates(facts, context = {}) {
     return { candidates: [unknownCandidate([program, facts.unknown], ['parser:powershell-unknown-parameter'])], unknowns: ['parser:powershell-unknown-parameter'], confidence: 'unknown' };
   }
   const params = facts.params;
+  if (program === 'copy-item' || program === 'move-item') {
+    const candidates = copyMoveCandidates(program, params, base).map((candidate) => ({
+      ...candidate, effectsComplete: Array.isArray(candidate.unknowns) && candidate.unknowns.length === 0,
+    }));
+    return { candidates, unknowns: dedupe(candidates.flatMap((candidate) => candidate.unknowns || [])),
+      confidence: candidates.every((candidate) => candidate.confidence === 'high') ? 'high' : 'unknown' };
+  }
   let candidate;
   if (DYNAMIC_CMDS.has(program)) candidate = unknownCandidate([program, 'dynamic-evaluation'], ['interpreter:powershell-dynamic']);
   else if (program === 'winget') candidate = wingetCandidate(program, params);

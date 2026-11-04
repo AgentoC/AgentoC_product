@@ -1,0 +1,99 @@
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
+import { resolveWindowsSystemPaths } from './windows-system-paths.mjs';
+
+// Fixed parser program: the provider's command travels only on stdin as JSON.
+// ParseInput builds an AST; it does not execute or evaluate that command.
+const PARSER_SCRIPT = String.raw`
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+[Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false
+$raw = [Console]::In.ReadToEnd()
+$request = ConvertFrom-Json -InputObject $raw
+$tokens = $null; $errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseInput([string]$request.command, [ref]$tokens, [ref]$errors)
+function Get-RedirectionFacts($node) {
+  @($node.Redirections | ForEach-Object {
+    $location = $null; $locationType = $null
+    if ($_ -is [System.Management.Automation.Language.FileRedirectionAst] -and $null -ne $_.Location) {
+      $locationType = $_.Location.GetType().Name
+      if ($_.Location -is [System.Management.Automation.Language.StringConstantExpressionAst] -or $_.Location -is [System.Management.Automation.Language.ConstantExpressionAst]) { $location = [string]$_.Location.Value }
+    }
+    @{ type = $_.GetType().Name; location = $location; locationType = $locationType }
+  })
+}
+$commands = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object {
+  $command = $_
+  $elements = @($command.CommandElements | ForEach-Object {
+    if ($_ -is [System.Management.Automation.Language.CommandParameterAst]) {
+      $value = $null; $argumentType = $null
+      if ($null -ne $_.Argument) { $value = $_.Argument.Value; $argumentType = $_.Argument.GetType().Name }
+      @{ kind = 'parameter'; name = $_.ParameterName; value = $value; argumentType = $argumentType }
+    } elseif ($_ -is [System.Management.Automation.Language.StringConstantExpressionAst] -or $_ -is [System.Management.Automation.Language.ConstantExpressionAst]) {
+      @{ kind = 'literal'; value = [string]$_.Value }
+    } else {
+      @{ kind = 'dynamic'; node = $_.GetType().Name }
+    }
+  })
+  $redirectFacts = @(Get-RedirectionFacts $command)
+  @{ name = $command.GetCommandName(); elements = $elements; invocation = [string]$command.InvocationOperator; redirections = @($command.Redirections).Count; redirectFacts = $redirectFacts }
+})
+$expressions = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandExpressionAst] }, $true) | ForEach-Object {
+  @{ expressionType = $_.Expression.GetType().Name; redirections = @($_.Redirections).Count; redirectFacts = @(Get-RedirectionFacts $_) }
+})
+$dynamicNodes = @($ast.FindAll({ param($n)
+  ($n -is [System.Management.Automation.Language.VariableExpressionAst]) -or
+  ($n -is [System.Management.Automation.Language.SubExpressionAst]) -or
+  ($n -is [System.Management.Automation.Language.ScriptBlockExpressionAst]) -or
+  ($n -is [System.Management.Automation.Language.AssignmentStatementAst]) -or
+  ($n -is [System.Management.Automation.Language.InvokeMemberExpressionAst]) -or
+  ($n.GetType().Name -in @('TypeExpressionAst','MemberExpressionAst','FunctionDefinitionAst','TypeDefinitionAst','IfStatementAst','ForStatementAst','ForEachStatementAst','WhileStatementAst','DoWhileStatementAst','DoUntilStatementAst','TryStatementAst','TrapStatementAst','UsingStatementAst','ExitStatementAst','ThrowStatementAst','DataStatementAst')) -or
+  ($n -is [System.Management.Automation.Language.ExpandableStringExpressionAst] -and @($n.NestedExpressions).Count -gt 0)
+}, $true) | ForEach-Object { $_.GetType().Name })
+$errorMessages = @($errors | ForEach-Object { $_.Message })
+@{ commands = $commands; expressions = $expressions; dynamicNodes = $dynamicNodes; errors = $errorMessages; psVersion = $PSVersionTable.PSVersion.ToString() } | ConvertTo-Json -Depth 12 -Compress
+`;
+
+export const WINDOWS_POWERSHELL_AST_VERSION = 'powershell-native-ast/v1';
+
+export function parseWindowsPowerShellAst(command, { executable, timeoutMs = 5000, spawnProcess = spawn } = {}) {
+  if (typeof command !== 'string' || !command.trim() || Buffer.byteLength(command, 'utf8') > 128 * 1024) {
+    return Promise.reject(new Error('PowerShell command is empty or exceeds the parser limit'));
+  }
+  const shell = executable || resolveWindowsSystemPaths()?.powershell;
+  if (!shell || !path.win32.isAbsolute(shell)) return Promise.reject(new Error('Windows system PowerShell is unavailable'));
+  const encoded = Buffer.from(PARSER_SCRIPT, 'utf16le').toString('base64');
+  return new Promise((resolve, reject) => {
+    let finished = false; let stdout = ''; let stderr = '';
+    const stdoutDecoder = new StringDecoder('utf8');
+    const stderrDecoder = new StringDecoder('utf8');
+    const child = spawnProcess(shell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
+      shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const finish = (error, result) => {
+      if (finished) return;
+      finished = true; clearTimeout(timer);
+      if (error) reject(error); else resolve(result);
+    };
+    const timer = setTimeout(() => { child.kill(); finish(new Error('PowerShell parser timed out')); }, timeoutMs);
+    child.on('error', (error) => finish(error));
+    child.stdout.on('data', (chunk) => {
+      stdout += stdoutDecoder.write(chunk);
+      if (stdout.length > 1024 * 1024) { child.kill(); finish(new Error('PowerShell parser output exceeded limit')); }
+    });
+    child.stderr.on('data', (chunk) => { stderr = (stderr + stderrDecoder.write(chunk)).slice(-4096); });
+    child.on('close', (code) => {
+      stdout += stdoutDecoder.end();
+      stderr = (stderr + stderrDecoder.end()).slice(-4096);
+      if (code !== 0) return finish(new Error(`PowerShell parser failed (${code}): ${stderr}`));
+      try {
+        const result = JSON.parse(stdout.replace(/^\uFEFF/, ''));
+        if (!Array.isArray(result.commands) || !Array.isArray(result.errors) || !Array.isArray(result.dynamicNodes)) throw new Error('Invalid PowerShell parser response');
+        finish(null, { ...result, parserVersion: WINDOWS_POWERSHELL_AST_VERSION });
+      } catch (error) { finish(error); }
+    });
+    child.stdin.on('error', (error) => finish(error));
+    child.stdin.end(JSON.stringify({ command }));
+  });
+}

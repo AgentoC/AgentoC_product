@@ -7,7 +7,7 @@ import {
 import { spawnSupervisedRunner } from '../chat/runner-supervisor-daemon.mjs';
 
 const ordinary = { version: 1, sid: 'S-1-5-21-100-200-300-1001',
-  isSystem: false, isAdministrator: false, integrityRid: 8192 };
+  isSystem: false, isService: false, isAdministrator: false, integrityRid: 8192 };
 
 test('non-Windows paths do not use the Windows token probe', async () => {
   await admit({ platform: 'linux', readIdentityImpl() { throw new Error('unexpected probe'); } });
@@ -38,23 +38,31 @@ for (const [name, patch] of [
 
 test('missing, malformed and localized/unsupported probe output fails closed', async () => {
   for (const stdout of ['', '{}', 'not JSON', JSON.stringify({ ...ordinary, integrityRid: '8192' })]) {
-    await assert.rejects(readWindowsExecutionIdentity({ execFileImpl: async () => ({ stdout }) }),
+    await assert.rejects(readWindowsExecutionIdentity({ env: { SystemRoot: 'D:\\WinNT' }, execFileImpl: async () => ({ stdout }) }),
       { code: 'WINDOWS_EXECUTION_IDENTITY_UNAVAILABLE' });
   }
-  await assert.rejects(readWindowsExecutionIdentity({ execFileImpl: async () => { throw new Error('PRIVATE probe stderr'); } }),
+  await assert.rejects(readWindowsExecutionIdentity({ env: { SystemRoot: 'D:\\WinNT' }, execFileImpl: async () => { throw new Error('PRIVATE probe stderr'); } }),
     error => error.code === 'WINDOWS_EXECUTION_IDENTITY_UNAVAILABLE' && !error.message.includes('PRIVATE'));
 });
 
 test('a fixed absolute Windows probe is bounded and accepts UTF-8 BOM output', async () => {
   let call;
-  assert.deepEqual(await readWindowsExecutionIdentity({ execFileImpl: async (...args) => {
+  assert.deepEqual(await readWindowsExecutionIdentity({ env: { WINDIR: 'D:\\WinNT' }, execFileImpl: async (...args) => {
     call = args;
     return { stdout: '\uFEFF' + JSON.stringify(ordinary) };
   } }), ordinary);
   assert.match(call[0], /^[A-Za-z]:\\.*\\System32\\WindowsPowerShell\\v1\.0\\powershell\.exe$/i);
+  assert.match(call[0], /^D:\\WinNT\\/i);
   assert.ok(call[1].includes('-NonInteractive'));
   assert.equal(call[2].timeout, 10000);
   assert.equal(call[2].env.PATHEXT, '.COM;.EXE;.BAT;.CMD');
+});
+
+test('missing Windows installation root never falls back to a hard-coded drive', async () => {
+  let called = false;
+  await assert.rejects(readWindowsExecutionIdentity({ env: {}, execFileImpl: async () => { called = true; } }),
+    { code: 'WINDOWS_EXECUTION_IDENTITY_UNAVAILABLE' });
+  assert.equal(called, false);
 });
 
 test('real current Windows token is accepted only when ordinary', { skip: process.platform !== 'win32' }, async () => {

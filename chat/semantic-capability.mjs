@@ -8,6 +8,7 @@
  */
 
 import { randomBytes, sign as edSign, verify as edVerify } from 'node:crypto';
+import { validateWindowsSelectedInstallerFacts } from './windows-winget-installer-facts.mjs';
 
 import {
   SEMANTIC_CAPABILITY_VERSION,
@@ -37,6 +38,10 @@ export const SEMANTIC_CAPABILITY_AUTH_MODE_OWNER = 'owner-selection';
 // the credentialId to be EMPTY in this mode so a capability never claims a
 // passkey proof that does not exist.
 export const SEMANTIC_CAPABILITY_AUTH_MODE_OWNER_CLICK = 'owner-click';
+// Server policy can authorize a narrowly classified Windows package install
+// without claiming that a human selected it. The signed adapter and exact
+// operation bindings remain mandatory and are revalidated by the executor.
+export const SEMANTIC_CAPABILITY_AUTH_MODE_POLICY_AUTO = 'policy-auto';
 export const SEMANTIC_ADAPTER_APT_INSTALL_V1 = 'linux-apt-install/v1';
 
 export const SEMANTIC_CAPABILITY_ERROR = Object.freeze({
@@ -57,7 +62,7 @@ const SIGNABLE_FIELDS = Object.freeze([
   'v', 'kid', 'capabilityId', 'nonce', 'adapter', 'operations',
   'operationSetHash', 'selectionManifestHash', 'sessionId', 'runId', 'turnId',
   'policyVersion', 'compilerVersion', 'resolverVersion', 'issuedAt', 'expiresAt',
-  'authMode', 'credentialId',
+  'authMode', 'credentialId', 'windowsExecutionSid',
 ]);
 
 function trimString(value) {
@@ -139,6 +144,10 @@ function canonicalBoundOperation(policyDecision) {
       || JSON.stringify(targetPackages) !== JSON.stringify(resolvedPackages)) {
       fail(SEMANTIC_CAPABILITY_ERROR.REVALIDATION_FAILED, 'package resolver snapshot does not match the requested target');
     }
+    if (snapshot.selectedInstaller != null && (targetManager !== 'winget' || snapshotPackages.length !== 1 ||
+        !validateWindowsSelectedInstallerFacts(snapshot.selectedInstaller, { packageId: snapshotPackages[0]?.name, packageVersion: snapshotPackages[0]?.availableVersion }))) {
+      fail(SEMANTIC_CAPABILITY_ERROR.REVALIDATION_FAILED, 'selected installer does not match the resolved package');
+    }
   }
   if (operation.target?.kind === 'package_artifact') {
     const snapshot = operation.target.resourceSnapshot;
@@ -179,6 +188,8 @@ function canonicalBoundOperation(policyDecision) {
       manager: trimString(operation.target?.manager),
       packages: [...(operation.target?.packages || [])].map(trimString).sort(),
       source: trimString(operation.target?.source),
+      ...(operation.target?.platform === 'win32' && operation.target?.manager === 'winget'
+        ? { requestedInstallScope: trimString(operation.target?.requestedInstallScope) } : {}),
       requestedVersions: [...(operation.target?.packages || [])]
         .map(trimString)
         .sort()
@@ -206,6 +217,7 @@ function canonicalBoundOperation(policyDecision) {
         .sort((left, right) => left.id.localeCompare(right.id)),
       exact: operation.target?.exact === true,
       sourceTrust: trimString(operation.target?.resourceSnapshot?.sourceTrust),
+      ...(operation.target?.resourceSnapshot?.selectedInstaller ? { selectedInstaller: clone(operation.target.resourceSnapshot.selectedInstaller) } : {}),
       ...(operation.target?.kind === 'package_artifact' ? {
         artifactPath: trimString(operation.target?.root),
         artifactIdentity: trimString(operation.target?.resourceSnapshot?.artifactIdentity),
@@ -253,10 +265,14 @@ function adapterAllows(adapter, operations) {
         && input.sourceTrust === 'configured'
         && Array.isArray(input.packages) && input.packages.length === 1
         && input.packages.every((name) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(trimString(name)))
+        && ['', 'machine', 'user'].includes(input.requestedInstallScope)
         && Array.isArray(input.requestedVersions) && input.requestedVersions.length === 1
         && input.requestedVersions.every((version) => typeof version === 'string')
         && Array.isArray(input.resolvedVersions) && input.resolvedVersions.length === 1
-        && input.resolvedVersions.every((version) => isNonEmptyString(version));
+        && input.resolvedVersions.every((version) => isNonEmptyString(version))
+        && (input.selectedInstaller == null || Boolean(validateWindowsSelectedInstallerFacts(input.selectedInstaller, {
+          packageId: input.packages[0], packageVersion: input.resolvedVersions[0],
+        })));
     });
   }
   if (adapter === SEMANTIC_ADAPTER_MSI_INSTALL_V1) {
@@ -357,6 +373,9 @@ function isValidSemanticCapabilityAuthMode(capability) {
   const credentialId = trimString(capability?.credentialId);
   if (authMode === SEMANTIC_CAPABILITY_AUTH_MODE_OWNER) return Boolean(credentialId);
   if (authMode === SEMANTIC_CAPABILITY_AUTH_MODE_OWNER_CLICK) return !credentialId;
+  if (authMode === SEMANTIC_CAPABILITY_AUTH_MODE_POLICY_AUTO) {
+    return !credentialId && capability?.adapter === SEMANTIC_ADAPTER_WINGET_INSTALL_V1;
+  }
   return false;
 }
 
@@ -392,6 +411,12 @@ export function validateSemanticCapability(capability, { now = Date.now() } = {}
   const operations = Array.isArray(capability.operations) ? capability.operations : [];
   if (operations.length === 0 || !adapterAllows(trimString(capability.adapter), operations)) {
     return { ok: false, code: SEMANTIC_CAPABILITY_ERROR.ADAPTER_DENIED, error: 'capability adapter or operation set is unsupported' };
+  }
+  if (capability.authMode === SEMANTIC_CAPABILITY_AUTH_MODE_POLICY_AUTO
+      && capability.adapter === SEMANTIC_ADAPTER_WINGET_INSTALL_V1
+      && ['', 'user'].includes(operations[0]?.adapterInput?.requestedInstallScope)
+      && !/^S-1-\d+(?:-\d+)+$/i.test(capability.windowsExecutionSid || '')) {
+    return { ok: false, code: SEMANTIC_CAPABILITY_ERROR.BINDING_REQUIRED, error: 'Windows execution SID is required' };
   }
   if (!operationBindingsMatch(operations, capability)) {
     return { ok: false, code: SEMANTIC_CAPABILITY_ERROR.BINDING_REQUIRED, error: 'operation bindings do not match capability binding' };
@@ -450,7 +475,7 @@ export function createSemanticCapability({
     issuedAt,
     expiresAt: new Date(Number(now) + boundedTtl).toISOString(),
     authMode,
-    credentialId: authMode === SEMANTIC_CAPABILITY_AUTH_MODE_OWNER_CLICK
+    credentialId: [SEMANTIC_CAPABILITY_AUTH_MODE_OWNER_CLICK, SEMANTIC_CAPABILITY_AUTH_MODE_POLICY_AUTO].includes(authMode)
       ? ''
       : nonEmpty(credentialId, 'credentialId'),
   };

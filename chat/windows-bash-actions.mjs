@@ -1,0 +1,110 @@
+import path from 'node:path';
+import { analyzeWindowsFileChanges } from './windows-powershell-actions.mjs';
+
+// Parse a literal simple command only. Anything requiring shell expansion,
+// substitutions, redirection, operators, or comments is left for review.
+export function parseLiteralBashWords(command) {
+  if (typeof command !== 'string' || !command.trim() || command.length > 128 * 1024 || /[\r\n\0]/.test(command)) return null;
+  const words = []; let word = ''; let active = false; let quote = '';
+  for (let i = 0; i < command.length; i += 1) {
+    const c = command[i];
+    if (quote === "'") { if (c === "'") quote = ''; else word += c; continue; }
+    if (quote === '"') {
+      if (c === '"') { quote = ''; continue; }
+      if (c === '$' || c === '`') return null;
+      if (c === '\\' && i + 1 < command.length && /[\\"$`]/.test(command[i + 1])) { word += command[++i]; continue; }
+      word += c; continue;
+    }
+    if (/\s/.test(c)) { if (active) { words.push(word); word = ''; active = false; } continue; }
+    if (c === "'" || c === '"') { quote = c; active = true; continue; }
+    if (c === '\\') { if (++i >= command.length) return null; word += command[i]; active = true; continue; }
+    if (/[;&|<>`$(){}#*?\[\]!]/.test(c)) return null;
+    word += c; active = true;
+  }
+  if (quote) return null;
+  if (active) words.push(word);
+  return words.length ? words : null;
+}
+
+export function gitBashPath(value) {
+  if (!value || value.startsWith('~')) return '';
+  const drive = value.match(/^\/([a-zA-Z])(?:\/(.*))?$/);
+  if (drive) return `${drive[1]}:\\${(drive[2] || '').replaceAll('/', '\\')}`;
+  // /tmp and other MSYS roots depend on the installation and environment.
+  if (value.startsWith('/')) return '';
+  if (/^[a-zA-Z]:[^/\\]/.test(value)) return '';
+  return path.win32.normalize(value);
+}
+
+function splitOptions(args, supported, longOptions = {}) {
+  const operands = []; const flags = new Set(); let options = true;
+  for (const arg of args) {
+    if (options && arg === '--') { options = false; continue; }
+    if (options && arg.startsWith('-') && arg !== '-') {
+      if (Object.hasOwn(longOptions, arg)) { flags.add(longOptions[arg]); continue; }
+      if (!/^-[A-Za-z]+$/.test(arg) || [...arg.slice(1)].some((flag) => !supported.includes(flag))) return null;
+      for (const flag of arg.slice(1)) flags.add(flag.toLowerCase());
+    } else operands.push(arg);
+  }
+  return { operands, flags };
+}
+
+// Recognize only a single trailing stdout redirection to one literal path.
+// Leave descriptor manipulation, shell control syntax and expansion to review.
+function splitLiteralOutput(command) {
+  if (typeof command !== 'string' || !command.trim() || command.length > 128 * 1024 || /[\r\n\0]/.test(command)) return null;
+  let quote = ''; let offset = -1; let width = 0;
+  for (let i = 0; i < command.length; i += 1) {
+    const c = command[i];
+    if (quote === "'") { if (c === "'") quote = ''; continue; }
+    if (quote === '"') {
+      if (c === '"') quote = '';
+      else if (c === '\\' && i + 1 < command.length && /[\\"$`]/.test(command[i + 1])) i += 1;
+      continue;
+    }
+    if (c === "'" || c === '"') { quote = c; continue; }
+    if (c === '\\') { i += 1; continue; }
+    if (c !== '>') continue;
+    if (offset >= 0 || /[0-9]/.test(command[i - 1] || '')) return null;
+    offset = i; width = command[i + 1] === '>' ? 2 : 1;
+    if (width === 2) i += 1;
+  }
+  if (quote) return null;
+  if (offset < 0) return { words: parseLiteralBashWords(command), output: '' };
+  const words = parseLiteralBashWords(command.slice(0, offset));
+  const output = parseLiteralBashWords(command.slice(offset + width));
+  return words && output?.length === 1 && output[0] ? { words, output: output[0] } : null;
+}
+
+export async function analyzeWindowsBash(command, context = {}, { analyzeFiles = analyzeWindowsFileChanges } = {}) {
+  const split = splitLiteralOutput(command);
+  const words = split?.words;
+  if (!words) return { complete: false, actions: [], reason: 'Bash command requires expansion or parsing' };
+  const output = split.output ? gitBashPath(split.output) : '';
+  if (split.output && !output) return { complete: false, actions: [], reason: 'Bash redirection path cannot be resolved' };
+  const outputEntry = output ? [{ path: output, kind: 'write' }] : [];
+  const program = words[0];
+  if ((program === 'pwd' && words.length === 1) || program === 'echo') {
+    return outputEntry.length ? analyzeFiles(outputEntry, context) : { complete: true, actions: [{ kind: 'read', program, target: null }] };
+  }
+  const spec = {
+    cat: ['read', ''], ls: ['read', 'alR'], mkdir: ['write', 'p'], touch: ['write', ''],
+    rm: ['delete', 'rRf'], rmdir: ['delete', ''], cp: ['copy', 'rR'], mv: ['move', ''],
+  }[program];
+  if (!spec) return { complete: false, actions: [], reason: 'Bash command is not yet supported' };
+  const longOptions = program === 'rm' ? { '--recursive': 'r', '--force': 'f' }
+    : program === 'cp' || program === 'ls' ? { '--recursive': 'r' } : program === 'mkdir' ? { '--parents': 'p' } : {};
+  const parsed = splitOptions(words.slice(1), spec[1], longOptions);
+  if (!parsed) return { complete: false, actions: [], reason: 'Bash command has unsupported options' };
+  const { operands, flags } = parsed;
+  if (program === 'ls' && !operands.length) operands.push('.');
+  if ((spec[0] === 'copy' || spec[0] === 'move') ? operands.length !== 2 : operands.length === 0) {
+    return { complete: false, actions: [], reason: 'Bash operands are incomplete or ambiguous' };
+  }
+  const targets = operands.map(gitBashPath);
+  if (targets.some((item) => !item)) return { complete: false, actions: [], reason: 'Bash path cannot be resolved' };
+  const entries = spec[0] === 'copy' || spec[0] === 'move'
+    ? [{ path: targets[0], kind: spec[0] === 'move' ? 'delete' : 'read', recursive: flags.has('r') }, { path: targets[1], kind: 'write', recursive: flags.has('r'), copySource: targets[0] }]
+    : targets.map((target) => ({ path: target, kind: spec[0], recursive: flags.has('r') }));
+  return analyzeFiles([...entries, ...outputEntry], context);
+}

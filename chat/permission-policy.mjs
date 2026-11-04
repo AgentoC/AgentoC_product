@@ -50,6 +50,7 @@ export const CAPABILITY_TURN_BINDINGS = Object.freeze({
 export const CAPABILITY_AUTHORIZATION_CLASSES = Object.freeze({
   OWNER: 'owner',
   STRONG_OWNER: 'strong-owner',
+  POLICY_AUTO: 'policy-auto',
 });
 
 export const PERMISSION_REASON_CODES = Object.freeze({
@@ -728,6 +729,12 @@ export function validateCapabilityGrant(grant, { now = Date.now() } = {}) {
   if (!Object.values(CAPABILITY_AUTHORIZATION_CLASSES).includes(authClass)) {
     return errorResult(C.CAPABILITY_INVALID, 'authorizationClass is invalid');
   }
+  if (authClass === CAPABILITY_AUTHORIZATION_CLASSES.POLICY_AUTO
+      && (grant.workload.scope !== CAPABILITY_WORKLOAD_SCOPES.ONE_OPERATION
+        || !nonEmpty(grant.workload.runId) || !nonEmpty(grant.workload.turnId)
+        || max !== 1 || expiresAt - issuedAt > 60_000)) {
+    return errorResult(C.CAPABILITY_INVALID, 'policy-auto grants must bind one run operation and expire within one minute');
+  }
   const constraintErrors = validateCapabilityConstraints(grant.constraints);
   if (constraintErrors.length > 0) return errorResult(C.CAPABILITY_INVALID, constraintErrors.join('; '), { errors: constraintErrors });
   if (grant.constraintManifestHash !== computeCapabilityConstraintHash(grant)) {
@@ -863,6 +870,17 @@ export function capabilityMatchesOperation(grant, operation, facts, {
   }
   if (!capabilityWorkloadMatches(grant, operation)) {
     return errorResult(C.CAPABILITY_WORKLOAD_MISMATCH, PERMISSION_REASON_MESSAGES[C.CAPABILITY_WORKLOAD_MISMATCH]);
+  }
+  if (grant.authorizationClass === CAPABILITY_AUTHORIZATION_CLASSES.POLICY_AUTO) {
+    const target = operation.target || {};
+    const packages = Array.isArray(target.packages) ? target.packages : [];
+    if (operation.primaryAction !== 'package.install' || operation.executionClass !== 'host'
+        || target.platform !== 'win32' || target.kind !== 'package' || target.manager !== 'winget'
+        || target.source !== 'winget' || target.exact !== true || target.resourceSnapshot?.sourceTrust !== 'configured'
+        || packages.length !== 1 || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(packages[0])
+        || JSON.stringify(uniqueStrings(operation.effects).sort()) !== JSON.stringify(['process.execute'])) {
+      return errorResult(C.CAPABILITY_CONSTRAINT_MISMATCH, 'policy-auto is limited to one verified Windows package installation');
+    }
   }
   if (grant.constraints.action !== operation.primaryAction
     || grant.constraints.executionClass !== facts.executionClass

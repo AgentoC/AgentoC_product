@@ -22,15 +22,12 @@ import net from 'net';
 import { WINDOWS_PIPE_PEER_NATIVE_HELPER } from './windows-named-pipe-peer-facts.mjs';
 import { validateWindowsExecutorPeerConnect } from './semantic-windows-executor-peer.mjs';
 import { spawnManagedProcess } from '../lib/windows-managed-spawn.mjs';
+import { resolveWindowsSystemPaths } from './windows-system-paths.mjs';
 
 export const WINDOWS_EXECUTOR_SERVER_VERSION = 'windows-executor-server/v1';
-export const WINDOWS_EXECUTOR_POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
-export const WINDOWS_EXECUTOR_ENV = Object.freeze({
-  SystemRoot: 'C:\\Windows',
-  WINDIR: 'C:\\Windows',
-  PATH: 'C:\\Windows\\System32;C:\\Windows',
-  LANG: 'C',
-});
+const systemPaths = resolveWindowsSystemPaths();
+export const WINDOWS_EXECUTOR_POWERSHELL = systemPaths?.powershell || '';
+export const WINDOWS_EXECUTOR_ENV = Object.freeze(systemPaths?.env || { LANG: 'C' });
 export const WINDOWS_EXECUTOR_CONNECT_TIMEOUT_MS = 20_000;
 const MAX_EXECUTOR_SERVER_LINE_BYTES = 1 * 1024 * 1024;
 
@@ -80,12 +77,13 @@ export function buildWindowsExecutorServerInvocation({
   pipeName,
   powershellExecutable = WINDOWS_EXECUTOR_POWERSHELL,
   env = WINDOWS_EXECUTOR_ENV,
+  cwd = systemPaths?.system32 || '',
   script = WINDOWS_EXECUTOR_SERVER_SCRIPT,
 } = {}) {
   return {
     file: powershellExecutable,
     args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', encodeWindowsCommand(script)],
-    cwd: 'C:\\Windows\\System32',
+    cwd,
     env: { ...env, AGENTOC_EXECUTOR_PIPE: pipeName },
   };
 }

@@ -13,6 +13,8 @@ import { projectSemanticPolicy } from './semantic-policy.mjs';
 import {
   buildSemanticCapabilitySelection,
   createSemanticCapability,
+  SEMANTIC_CAPABILITY_AUTH_MODE_POLICY_AUTO,
+  SEMANTIC_ADAPTER_WINGET_INSTALL_V1,
 } from './semantic-capability.mjs';
 
 export const SEMANTIC_APPROVAL_PROOF_PURPOSE = 'semantic-capability-approval';
@@ -131,4 +133,45 @@ export async function authorizeSemanticApproval({
     kid: trimString(kid),
     now,
   });
+}
+
+/** Issue a narrowly scoped policy-auto capability using only server projection.
+ * The caller must obtain riskMode from the admitted run, never from a tool
+ * request. The executor still verifies the signature, binding and current
+ * package facts, and consumes the capability only once.
+ */
+function authorizeWindowsInstallForScopes({ prepared, riskMode = '', kid = '', now }, allowedScopes) {
+  if (!['recommended', 'full-auto'].includes(trimString(riskMode))) {
+    fail('SEMANTIC_AUTO_PROFILE_DENIED', 'this profile does not permit automatic Windows installation');
+  }
+  const binding = assertBinding(prepared?.binding || {});
+  const decisions = Array.isArray(prepared?.projection?.decisions) ? prepared.projection.decisions : [];
+  if (decisions.length !== 1) fail('SEMANTIC_AUTO_SELECTION_DENIED', 'automatic installation requires exactly one operation');
+  const entry = decisions[0];
+  const op = entry?.operation;
+  if (entry?.decision !== 'ASK' || entry?.unknowns?.length || op?.primaryAction !== 'package.install'
+      || op?.target?.platform !== 'win32' || op?.executionClass !== 'host'
+      || op?.target?.kind !== 'package' || op?.target?.manager !== 'winget'
+      || op?.target?.source !== 'winget' || op?.target?.exact !== true
+      || !allowedScopes.includes(op?.target?.requestedInstallScope)
+      || op?.target?.resourceSnapshot?.sourceTrust !== 'configured') {
+    fail('SEMANTIC_AUTO_SELECTION_DENIED', 'operation is not an eligible verified Windows package installation');
+  }
+  return createSemanticCapability({
+    selectedDecisions: decisions,
+    adapter: SEMANTIC_ADAPTER_WINGET_INSTALL_V1,
+    sessionId: binding.sessionId, runId: binding.runId, turnId: binding.turnId,
+    authMode: SEMANTIC_CAPABILITY_AUTH_MODE_POLICY_AUTO, kid: trimString(kid), now,
+  });
+}
+
+// The system broker has a machine-wide token and must never receive an
+// unspecified/user-scoped operation. User/default execution must use an
+// ordinary-user transport and retains the original scope in the signed input.
+export function authorizeWindowsAutomaticInstall(options = {}) {
+  return authorizeWindowsInstallForScopes(options, ['machine']);
+}
+
+export function authorizeWindowsUserInstall(options = {}) {
+  return authorizeWindowsInstallForScopes(options, ['', 'user']);
 }

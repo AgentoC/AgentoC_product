@@ -17,9 +17,10 @@ import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import { SEMANTIC_ADAPTER_MSI_INSTALL_V1, SEMANTIC_ADAPTER_WINGET_INSTALL_V1, revalidateWindowsMsiInstall, revalidateWindowsWingetInstall } from './semantic-windows-adapter.mjs';
-import { revalidateSemanticCapability, verifySemanticCapability } from './semantic-capability.mjs';
+import { SEMANTIC_CAPABILITY_AUTH_MODE_POLICY_AUTO, revalidateSemanticCapability, verifySemanticCapability } from './semantic-capability.mjs';
 import {
   PERMISSION_MODES,
+  CAPABILITY_AUTHORIZATION_CLASSES,
   PERMISSION_REASON_CODES,
   PERMISSION_REASON_MESSAGES,
   buildPermissionFacts,
@@ -27,6 +28,7 @@ import {
   evaluatePermissionSet,
 } from './permission-policy.mjs';
 import { computeSemanticManifestHash } from './semantic-operation.mjs';
+import { resolveWindowsSystemPaths } from './windows-system-paths.mjs';
 
 const defaultExecFile = promisify(execFileCallback);
 
@@ -59,9 +61,11 @@ async function defaultExecInvocation(invocation, { execFile, timeoutMs = 120_000
   if (typeof execFile !== 'function' || !invocation || !trimString(invocation.executable)) {
     return fail('WINDOWS_EXECUTOR_DISPATCH_FAILED', 'fixed-argv execution is unavailable');
   }
+  const cwd = invocation.cwd || resolveWindowsSystemPaths()?.system32;
+  if (!cwd) return fail('WINDOWS_EXECUTOR_DISPATCH_FAILED', 'Windows system working directory is unavailable');
   try {
     const result = await execFile(invocation.executable, Array.isArray(invocation.argv) ? invocation.argv : [], {
-      cwd: invocation.cwd || 'C:\\',
+      cwd,
       windowsHide: true,
       timeout: timeoutMs,
       maxBuffer: 2 * 1024 * 1024,
@@ -434,6 +438,13 @@ export async function dispatchWindowsSemanticExec({
       PERMISSION_REASON_CODES.POLICY_GATE_REQUIRED,
       'Windows dispatch requires a Phase 2A permission policy gate for host-capable operations',
     );
+  }
+  const automaticCapability = capability.authMode === SEMANTIC_CAPABILITY_AUTH_MODE_POLICY_AUTO;
+  const automaticGrant = policyContext?.capability?.authorizationClass === CAPABILITY_AUTHORIZATION_CLASSES.POLICY_AUTO;
+  const automaticEntry = Array.isArray(policyContext?.entries)
+    && policyContext.entries.some((entry) => entry?.capability?.authorizationClass === CAPABILITY_AUTHORIZATION_CLASSES.POLICY_AUTO);
+  if (automaticCapability !== automaticGrant || automaticEntry || (automaticCapability && Array.isArray(policyContext?.entries))) {
+    return fail('SEMANTIC_AUTHORIZATION_MISMATCH', 'semantic capability and policy grant authorization modes do not match');
   }
   const capabilityBinding = buildCapabilityRevalidationDecisions(capability, policyContext);
   if (!capabilityBinding.ok) {

@@ -10,20 +10,18 @@
 import path from 'node:path';
 import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
+import { getWindowsWingetPackageFacts } from './semantic-windows-adapter.mjs';
+import { resolveWindowsSystemPaths } from './windows-system-paths.mjs';
 
 const defaultExecFile = promisify(execFileCallback);
 
 export const WINDOWS_RUNTIME_FACTS_PROVIDER_VERSION = 'windows-runtime-facts/v1';
-export const WINDOWS_POWERSHELL_EXECUTABLE = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
-export const WINDOWS_POWERSHELL_CWD = 'C:\\Windows\\System32';
+const systemPaths = resolveWindowsSystemPaths();
+export const WINDOWS_POWERSHELL_CWD = systemPaths?.system32 || '';
+export const WINDOWS_POWERSHELL_EXECUTABLE = systemPaths?.powershell || '';
 export const WINDOWS_FACTS_TIMEOUT_MS = 5_000;
 
-const WINDOWS_FACTS_ENV = Object.freeze({
-  SystemRoot: 'C:\\Windows',
-  WINDIR: 'C:\\Windows',
-  PATH: 'C:\\Windows\\System32;C:\\Windows',
-  LANG: 'C',
-});
+const WINDOWS_FACTS_ENV = Object.freeze(systemPaths?.env || { LANG: 'C' });
 
 const POWERSHELL_PREFIX = Object.freeze([
   '-NoLogo',
@@ -135,6 +133,8 @@ function Normalize-FinalPath([string]$Value) {
 
 const PATH_REALPATH_SCRIPT = String.raw`${WINDOWS_NATIVE_HELPER}
 $path = $env:AGENTOC_FACTS_PATH
+try { $null = Get-Item -LiteralPath $path -Force -ErrorAction Stop }
+catch [System.Management.Automation.ItemNotFoundException] { @{ platform = 'win32'; notFound = $true } | ConvertTo-Json -Compress; return }
 $final = [AgentocWindowsFacts]::FinalPath($path)
 if ([string]::IsNullOrWhiteSpace($final)) { throw 'Windows final path unavailable' }
 [ordered]@{ platform = 'win32'; canonicalPath = (Normalize-FinalPath $final) } | ConvertTo-Json -Compress
@@ -142,7 +142,8 @@ if ([string]::IsNullOrWhiteSpace($final)) { throw 'Windows final path unavailabl
 
 const PATH_STAT_SCRIPT = String.raw`${WINDOWS_NATIVE_HELPER}
 $path = $env:AGENTOC_FACTS_PATH
-$item = Get-Item -LiteralPath $path -Force -ErrorAction Stop
+try { $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop }
+catch [System.Management.Automation.ItemNotFoundException] { @{ platform = 'win32'; notFound = $true } | ConvertTo-Json -Compress; return }
 $identity = [AgentocWindowsFacts]::Identity($item.FullName)
 if ($null -eq $identity) { throw 'Windows file identity unavailable' }
 $final = [AgentocWindowsFacts]::FinalPath($item.FullName)
@@ -407,6 +408,29 @@ export async function revalidateWindowsPathFacts(snapshot = {}, { provider } = {
   const expectedPath = trimString(snapshot.canonical);
   if (!expectedPath || !trimString(snapshot.identity)) return revalidationFailure('path snapshot is incomplete');
   try {
+    if (snapshot.noFollow === true) {
+      const segments = snapshot.missingPathSegments;
+      if (!path.win32.isAbsolute(expectedPath) || snapshot.reparsePoint === true || snapshot.parentIsDirectory !== true
+          || !Array.isArray(segments) || !segments.length || segments.some((part) => typeof part !== 'string' || !part || part === '.' || part === '..' || /[\\/\0:]/.test(part))) {
+        return revalidationFailure('missing path snapshot is invalid');
+      }
+      let parentPath = expectedPath;
+      for (const _segment of segments) parentPath = path.win32.dirname(parentPath);
+      if (!samePath(path.win32.join(parentPath, ...segments), expectedPath)) return revalidationFailure('missing path components changed');
+      const canonicalParent = await provider.realpath(parentPath);
+      if (!samePath(canonicalParent, parentPath)) return revalidationFailure('parent path changed');
+      const parent = await provider.stat(canonicalParent);
+      if ((parent?.canonicalPath && !samePath(parent.canonicalPath, parentPath)) || parent?.type !== 'dir' || parent?.reparsePoint === true || !sameValue(parent?.identity, snapshot.expectedParentIdentity)
+          || !sameValue(parent?.mountId || parent?.volumeSerial, snapshot.mountId)
+          || snapshot.identity !== `no-follow:${parent.identity}:${segments.join('\\')}`) return revalidationFailure('parent identity changed');
+      try {
+        await provider.stat(path.win32.join(parentPath, segments[0]));
+        return revalidationFailure('missing path now exists');
+      } catch (error) {
+        if (error?.code !== 'ENOENT') return revalidationFailure('missing path cannot be verified');
+      }
+      return { ok: true, code: '', facts: parent };
+    }
     const currentCanonical = await provider.realpath(expectedPath);
     if (!samePath(currentCanonical, expectedPath)) return revalidationFailure('canonical path changed');
     const current = await provider.stat(currentCanonical);
@@ -495,6 +519,7 @@ export function createWindowsRuntimeFactsProvider({
 } = {}) {
   const run = async (script, envValues, { array = false } = {}) => {
     if (platform !== 'win32') throw fail('WINDOWS_FACTS_PLATFORM_REQUIRED', 'Windows facts provider requires win32');
+    if (!WINDOWS_POWERSHELL_EXECUTABLE || !WINDOWS_POWERSHELL_CWD) throw fail('WINDOWS_FACTS_SYSTEM_UNAVAILABLE', 'Windows system path is unavailable');
     const env = { ...WINDOWS_FACTS_ENV, ...envValues };
     try {
       // PowerShell 5.1 encodes redirected stdout with [Console]::OutputEncoding,
@@ -527,11 +552,15 @@ export function createWindowsRuntimeFactsProvider({
     name: WINDOWS_RUNTIME_FACTS_PROVIDER_VERSION,
     async realpath(input) {
       const requested = assertWindowsPath(input);
-      return parseWindowsRealpathFacts(JSON.stringify(await run(PATH_REALPATH_SCRIPT, { AGENTOC_FACTS_PATH: requested })));
+      const facts = await run(PATH_REALPATH_SCRIPT, { AGENTOC_FACTS_PATH: requested });
+      if (facts?.platform === 'win32' && facts?.notFound === true && Object.keys(facts).length === 2) throw Object.assign(new Error('Windows path not found'), { code: 'ENOENT' });
+      return parseWindowsRealpathFacts(JSON.stringify(facts));
     },
     async stat(input) {
       const requested = assertWindowsPath(input);
-      return parseWindowsPathFacts(JSON.stringify(await run(PATH_STAT_SCRIPT, { AGENTOC_FACTS_PATH: requested })));
+      const facts = await run(PATH_STAT_SCRIPT, { AGENTOC_FACTS_PATH: requested });
+      if (facts?.platform === 'win32' && facts?.notFound === true && Object.keys(facts).length === 2) throw Object.assign(new Error('Windows path not found'), { code: 'ENOENT' });
+      return parseWindowsPathFacts(JSON.stringify(facts));
     },
     async lstat(input) {
       return this.stat(input);
@@ -540,14 +569,23 @@ export function createWindowsRuntimeFactsProvider({
       const requested = assertWindowsPath(input);
       return parseWindowsDirectoryFacts(JSON.stringify(await run(DIRECTORY_SCRIPT, { AGENTOC_FACTS_PATH: requested }, { array: true })));
     },
-    async packageFacts() { return null; },
+    async packageFacts(input) {
+      if (platform !== 'win32') return null;
+      return getWindowsWingetPackageFacts(input, { execFile });
+    },
     async artifactFacts(input) {
       // MSI artifact revalidation: identity (volume:fileId) from stat plus a
       // SHA-256 digest. Any failure to resolve either is an unresolved artifact.
       const requested = assertWindowsPath(typeof input === 'string' ? input : input?.canonicalPath);
       const stat = parseWindowsPathFacts(JSON.stringify(await run(PATH_STAT_SCRIPT, { AGENTOC_FACTS_PATH: requested })));
+      if (stat.type !== 'file' || stat.reparsePoint) throw fail('WINDOWS_FACTS_UNAVAILABLE', 'Windows artifact must be a regular file');
       const artifact = parseWindowsArtifactFacts(JSON.stringify(await run(ARTIFACT_DIGEST_SCRIPT, { AGENTOC_FACTS_PATH: requested })));
-      return { identity: stat.identity, digest: artifact.digest };
+      const after = parseWindowsPathFacts(JSON.stringify(await run(PATH_STAT_SCRIPT, { AGENTOC_FACTS_PATH: requested })));
+      if (after.type !== 'file' || after.reparsePoint || after.identity !== stat.identity
+          || after.size !== stat.size || !samePath(after.canonicalPath, stat.canonicalPath)) {
+        throw fail('WINDOWS_FACTS_UNAVAILABLE', 'Windows artifact changed during inspection');
+      }
+      return { exists: true, identity: stat.identity, digest: artifact.digest, size: stat.size };
     },
     async serviceFacts({ serviceName } = {}) {
       const requested = assertServiceName(serviceName);

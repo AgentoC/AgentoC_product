@@ -20,22 +20,19 @@ import {
   createWindowsRuntimeFactsProvider,
 } from './windows-runtime-facts-provider.mjs';
 import { computeSelfProtectionFacts, deriveAgentoCSelfProtectionRoots } from './self-protection.mjs';
+import { systemPathRootsForPlatform } from './risk-policy.mjs';
+import { validateWindowsSelectedInstallerFacts } from './windows-winget-installer-facts.mjs';
 
 export const WINDOWS_RESOLVER_PLATFORM = 'win32';
 export const WINDOWS_RESOLVER_PROVIDER_VERSION = 'windows-resource-resolver/v1';
 
-const WINDOWS_SENSITIVE_ROOTS = Object.freeze([
-  'C:\\Windows',
-  'C:\\Program Files',
-  'C:\\Program Files (x86)',
-  'C:\\ProgramData',
-]);
 const WINDOWS_CREDENTIAL_SUFFIXES = Object.freeze([
   '\\AppData\\Roaming\\Microsoft\\Credentials',
   '\\AppData\\Local\\Microsoft\\Credentials',
   '\\AppData\\Roaming\\Microsoft\\Protect',
   '\\NTUSER.DAT',
 ]);
+const WINDOWS_PROFILE_SENSITIVE = /(?:^|\\)(?:ntuser\.dat(?:\.log\d*)?|appdata\\(?:local|roaming)\\microsoft\\(?:credentials|protect))(?:\\|$)/i;
 
 function trimString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -84,12 +81,15 @@ function samePath(left, right) {
 function contained(root, candidate) {
   if (!root || !candidate) return false;
   const relative = path.win32.relative(normalize(root), normalize(candidate));
-  return relative === '' || (!relative.startsWith('..') && !path.win32.isAbsolute(relative));
+  return relative === '' || (relative !== '..' && !relative.startsWith('..\\') && !path.win32.isAbsolute(relative));
 }
 
-function isSensitivePath(candidate, home) {
+function isSensitivePath(candidate, home, additionalRoots = []) {
   const value = normalize(candidate).toLowerCase();
-  if (WINDOWS_SENSITIVE_ROOTS.some((root) => value === root.toLowerCase() || value.startsWith(`${root.toLowerCase()}\\`))) return true;
+  const roots = [...systemPathRootsForPlatform('win32'), ...additionalRoots].filter((root) => typeof root === 'string');
+  if (roots.some((root) => contained(root, candidate))) return true;
+  if (/^[a-z]:\\(?:system volume information|\$recycle\.bin)(?:\\|$)/i.test(value)) return true;
+  if (WINDOWS_PROFILE_SENSITIVE.test(value)) return true;
   if (home && WINDOWS_CREDENTIAL_SUFFIXES.some((suffix) => value === `${normalize(home)}${suffix}`.toLowerCase() || value.startsWith(`${normalize(home)}${suffix}\\`.toLowerCase()))) return true;
   return false;
 }
@@ -108,7 +108,10 @@ async function statFacts(provider, canonicalPath) {
 async function canonicalize(rawPath, provider, baseDir) {
   const value = trimString(rawPath);
   if (!value || value.includes('\0')) throw Object.assign(new Error('Windows path is invalid'), { code: 'EINVAL' });
-  const absolute = path.win32.normalize(path.win32.isAbsolute(value) ? value : path.win32.resolve(baseDir || 'C:\\', value));
+  if (!path.win32.isAbsolute(value) && (!baseDir || !path.win32.isAbsolute(baseDir))) {
+    throw Object.assign(new Error('Windows relative path has no trusted absolute base'), { code: 'EINVAL' });
+  }
+  const absolute = path.win32.normalize(path.win32.isAbsolute(value) ? value : path.win32.resolve(baseDir, value));
   let linkFacts = null;
   if (typeof provider.lstat === 'function') {
     try { linkFacts = await statFacts(provider, absolute); } catch {}
@@ -139,20 +142,26 @@ async function canonicalize(rawPath, provider, baseDir) {
     const missing = [];
     while (probe && probe !== path.win32.dirname(probe)) {
       try {
-        const parentFacts = await statFacts(provider, probe);
+        await statFacts(provider, probe);
+        // The target does not exist, so resolve the closest existing ancestor
+        // before appending the missing components. Otherwise a junction in the
+        // ancestor can make a protected destination appear to be in the project.
+        const realParent = normalize(await provider.realpath(probe));
+        const parentFacts = await statFacts(provider, realParent);
+        const resolvedPath = path.win32.join(realParent, ...missing);
         return {
           requested: value,
-          canonical: absolute,
-          identity: `no-follow:${parentFacts.identity}:${missing.reverse().join('\\')}`,
+          canonical: resolvedPath,
+          identity: `no-follow:${parentFacts.identity}:${missing.join('\\')}`,
           mountId: parentFacts.mountId,
           type: 'file',
           size: null,
           expectedParentIdentity: parentFacts.identity,
           noFollow: true,
           symlinkChain: [],
-          missingPathSegments: missing.reverse(),
+          missingPathSegments: [...missing],
           parentIsDirectory: parentFacts.type === 'dir',
-          reparsePoint: false,
+          reparsePoint: !samePath(probe, realParent) || parentFacts.reparsePoint,
         };
       } catch (parentError) {
         if (!isMissing(parentError)) throw parentError;
@@ -220,18 +229,20 @@ function unresolved(unknowns, provider, options, caller) {
 
 async function resolveFilesystem(target, caller, options, provider) {
   const trusted = trustedContext(options);
+  const systemRoots = Array.isArray(options.trustedContext?.systemPathRoots) ? options.trustedContext.systemPathRoots : [];
   let projectRoot = '';
   try {
-    projectRoot = trusted.projectRoot ? (await canonicalize(trusted.projectRoot, provider, 'C:\\')).canonical : '';
+    projectRoot = trusted.projectRoot ? (await canonicalize(trusted.projectRoot, provider, trusted.cwd)).canonical : '';
   } catch {}
-  const resolved = await canonicalize(target.root, provider, trusted.cwd || projectRoot || 'C:\\');
+  const resolved = await canonicalize(target.root, provider, trusted.cwd || projectRoot);
   const unknowns = [];
   const outside = projectRoot ? !contained(projectRoot, resolved.canonical) : true;
   if (!projectRoot) unknowns.push('scope:trusted-project-root-unavailable');
-  if (outside) unknowns.push('scope:outside-project');
+  // A resolved outside path is a location fact, not an unknown. The policy
+  // separately checks the operation and its outside_project classification.
   if (resolved.noFollow && resolved.parentIsDirectory === false) unknowns.push('target:non-directory-parent');
   if (resolved.reparsePoint) unknowns.push('target:reparse-point');
-  if (isSensitivePath(resolved.canonical, trusted.home)) unknowns.push('scope:windows-sensitive-path');
+  if (isSensitivePath(resolved.canonical, trusted.home, systemRoots)) unknowns.push('scope:windows-sensitive-path');
   let tree = { count: 1, size: resolved.size || 0, unreadable: false, exceeded: false, depthExceeded: false };
   if (target.recursive && resolved.type === 'dir') tree = await walkTree(provider, resolved.canonical, options);
   if (tree.unreadable) unknowns.push('scope:tree-unreadable');
@@ -249,7 +260,7 @@ async function resolveFilesystem(target, caller, options, provider) {
     parentIsDirectory: resolved.parentIsDirectory,
     reparsePoint: resolved.reparsePoint,
   };
-  const kind = isSensitivePath(resolved.canonical, trusted.home) ? 'sensitive'
+  const kind = isSensitivePath(resolved.canonical, trusted.home, systemRoots) ? 'sensitive'
     : outside ? 'outside_project' : (target.recursive ? 'project' : 'project');
   const selfProtection = computeSelfProtectionFacts({
     canonicalPaths: [resolved.canonical],
@@ -273,7 +284,7 @@ async function resolveFilesystem(target, caller, options, provider) {
       totalSize: tree.size,
       containsTrackedFiles: false,
       containsModifiedFiles: false,
-      containsSensitiveMaterial: isSensitivePath(resolved.canonical, trusted.home),
+      containsSensitiveMaterial: isSensitivePath(resolved.canonical, trusted.home, systemRoots),
       containsGitMetadata: false,
       generated: false,
       treeUnreadable: tree.unreadable,
@@ -293,7 +304,7 @@ async function resolveFilesystem(target, caller, options, provider) {
 }
 
 async function resolvePackage(target, caller, options, provider) {
-  const facts = await provider.packageFacts({ manager: target.manager, packages: target.packages, operation: target.operation || 'install' }).catch(() => null);
+  const facts = await provider.packageFacts({ manager: target.manager, packages: target.packages, requestedVersion: target.requestedVersion || '', operation: target.operation || 'install' }).catch(() => null);
   if (!facts) return unresolved(['package:metadata-unavailable'], provider, options, caller);
   const packages = Array.isArray(facts.packages) ? facts.packages : [];
   const names = (target.packages || []).map(trimString).sort();
@@ -302,6 +313,14 @@ async function resolvePackage(target, caller, options, provider) {
   if (facts.manager !== target.manager || JSON.stringify(names) !== JSON.stringify(factNames)) unknowns.push('package:target-mismatch');
   if (facts.source !== target.source || facts.sourceTrust !== 'configured') unknowns.push('package:source-unverified');
   if (target.exact !== true) unknowns.push('package:exact-match-required');
+  let selectedInstaller = null;
+  if (facts.selectedInstaller != null) {
+    const resolvedPackage = packages.length === 1 ? packages[0] : null;
+    selectedInstaller = validateWindowsSelectedInstallerFacts(facts.selectedInstaller, {
+      packageId: resolvedPackage?.name, packageVersion: resolvedPackage?.availableVersion,
+    });
+    if (!selectedInstaller) unknowns.push('package:selected-installer-unverified');
+  }
   const snapshot = {
     resolverVersion: SEMANTIC_RESOLVER_VERSION,
     observedAt: options.now || new Date().toISOString(),
@@ -310,7 +329,8 @@ async function resolvePackage(target, caller, options, provider) {
     sourceTrust: facts.sourceTrust,
     packages: packages.map((entry) => ({ name: entry.name, requestedVersion: entry.requestedVersion || '', availableVersion: entry.availableVersion || '' })),
     repositories: facts.repositories || [],
-    identity: stableIdentity([{ manager: facts.manager, source: facts.source, packages, repositories: facts.repositories || [] }]),
+    ...(selectedInstaller ? { selectedInstaller } : {}),
+    identity: stableIdentity([{ manager: facts.manager, source: facts.source, packages, repositories: facts.repositories || [], ...(selectedInstaller ? { selectedInstaller } : {}) }]),
     provider: provider.name || WINDOWS_RESOLVER_PROVIDER_VERSION,
   };
   return {
@@ -324,7 +344,7 @@ async function resolvePackage(target, caller, options, provider) {
 
 async function resolvePackageArtifact(target, caller, options, provider) {
   const trusted = trustedContext(options);
-  const resolved = await canonicalize(target.root, provider, trusted.cwd || 'C:\\');
+  const resolved = await canonicalize(target.root, provider, trusted.cwd);
   const facts = await provider.artifactFacts({ canonicalPath: resolved.canonical }).catch(() => null);
   const digest = trimString(facts?.digest).toLowerCase();
   const identity = trimString(facts?.identity);
@@ -367,7 +387,7 @@ async function resolveService(target, caller, options, provider) {
 }
 
 async function resolveAcl(target, caller, options, provider) {
-  const resolved = await canonicalize(target.root, provider, trustedContext(options).cwd || 'C:\\');
+  const resolved = await canonicalize(target.root, provider, trustedContext(options).cwd);
   const facts = await provider.aclFacts({ canonicalPath: resolved.canonical }).catch(() => null);
   const checked = validateWindowsAclFacts(facts || {}, { canonicalPath: resolved.canonical });
   if (!checked.ok) return unresolved([`acl:${checked.code.toLowerCase()}`], provider, options, caller);

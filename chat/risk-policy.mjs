@@ -400,6 +400,9 @@ export function systemPathRootsForPlatform(platform = process.platform, env = pr
   return Object.freeze([...new Set([
     env?.SystemRoot,
     env?.WINDIR,
+    // In a 32-bit process ProgramFiles may point at the x86 directory while
+    // ProgramW6432 names the native installation directory (on any drive).
+    env?.ProgramW6432,
     env?.ProgramFiles,
     env?.['ProgramFiles(x86)'],
     env?.ProgramData,

@@ -21,20 +21,17 @@
 
 import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
+import { resolveWindowsSystemPaths } from './windows-system-paths.mjs';
 
 const defaultExecFile = promisify(execFileCallback);
 
 export const WINDOWS_NAMED_PIPE_PEER_FACTS_VERSION = 'windows-named-pipe-peer-facts/v1';
-export const WINDOWS_POWERSHELL_EXECUTABLE = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
-export const WINDOWS_POWERSHELL_CWD = 'C:\\Windows\\System32';
+const systemPaths = resolveWindowsSystemPaths();
+export const WINDOWS_POWERSHELL_EXECUTABLE = systemPaths?.powershell || '';
+export const WINDOWS_POWERSHELL_CWD = systemPaths?.system32 || '';
 export const WINDOWS_PIPE_PEER_TIMEOUT_MS = 15_000;
 
-const WINDOWS_PIPE_PEER_ENV = Object.freeze({
-  SystemRoot: 'C:\\Windows',
-  WINDIR: 'C:\\Windows',
-  PATH: 'C:\\Windows\\System32;C:\\Windows',
-  LANG: 'C',
-});
+const WINDOWS_PIPE_PEER_ENV = Object.freeze(systemPaths?.env || { LANG: 'C' });
 
 const POWERSHELL_PREFIX = Object.freeze([
   '-NoLogo',

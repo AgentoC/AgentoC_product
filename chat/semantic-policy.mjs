@@ -227,10 +227,11 @@ export function evaluateSemanticOperation(operation, resolution) {
     policyReasons.push(reason(RC.SELF_PROTECTION_UNAVAILABLE));
   }
   // The workspace is a recommendation, not a hard sandbox. Ordinary concrete
-  // writes may work outside it; reads, sensitive/system/self-protected targets
-  // remain subject to their own ceilings below.
+  // reads and writes may work outside it on Windows; sensitive/system and
+  // self-protected targets remain subject to their own ceilings below.
   if (DENY_SCOPE_KINDS.has(trimString(scope.kind))
-    && !(ordinaryFilesystemWrite && trimString(scope.kind) === 'outside_project')) {
+    && !(trimString(scope.kind) === 'outside_project' && (ordinaryFilesystemWrite
+      || (bound.target?.platform === 'win32' && ordinaryFilesystem)))) {
     policyReasons.push(reason(RC.SENSITIVE_TARGET));
   }
   // `system` is a resource-domain label, not necessarily an unsafe filesystem
