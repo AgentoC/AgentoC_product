@@ -53,6 +53,14 @@ func openPinnedImageFile(name string, expected [sha256.Size]byte, allowHardLinks
 		strings.Contains(clean[2:], ":") {
 		return nil, ErrExecutableIdentity
 	}
+	return openPinnedRegularFile(clean, expected, allowHardLinks)
+}
+
+func openPinnedRegularFile(name string, expected [sha256.Size]byte, allowHardLinks bool) (*PinnedExecutable, error) {
+	clean := filepath.Clean(name)
+	if !filepath.IsAbs(clean) || len(filepath.VolumeName(clean)) != 2 || strings.Contains(clean[2:], ":") {
+		return nil, ErrExecutableIdentity
+	}
 	ptr, err := windows.UTF16PtrFromString(clean)
 	if err != nil {
 		return nil, ErrExecutableIdentity
