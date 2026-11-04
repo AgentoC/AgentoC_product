@@ -12,7 +12,7 @@ process.env.AGENTOC_WORK_ROOT_DIR = join(home, 'workspace');
 process.env.AGENTOC_INSTANCE_ROOT = home;
 
 const { CHAT_HISTORY_DIR } = await import('../lib/config.mjs');
-const { appendEvent, loadMeta, readEventsPage } = await import('../chat/history.mjs');
+const { appendEvent, loadMeta, readEventBody, readEventsPage } = await import('../chat/history.mjs');
 
 try {
   const emptySessionId = `strict-empty-${process.pid}-${Date.now()}`;
@@ -50,7 +50,12 @@ try {
   // Restore metadata, then verify a missing event is reported as a gap rather
   // than silently filtered out of a successful page.
   writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf8');
+  assert.equal(await readEventBody(sessionId, first.seq + 1, { strict: true }), null, 'future sequence is absent, not a gap');
   rmSync(eventPath);
+  await assert.rejects(
+    () => readEventBody(sessionId, first.seq, { strict: true }),
+    (error) => error.code === 'SESSION_HISTORY_GAP' && error.seq === first.seq,
+  );
   await assert.rejects(
     () => readEventsPage(sessionId, { limit: 10, direction: 'latest', strict: true }),
     (error) => error.code === 'SESSION_HISTORY_GAP' && error.seq === first.seq,

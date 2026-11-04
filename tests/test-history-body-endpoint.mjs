@@ -20,7 +20,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, '..');
 
 function randomPort() {
-  return 33000 + Math.floor(Math.random() * 10000);
+  return 52000 + Math.floor(Math.random() * 1000);
 }
 
 function sleep(ms) {
@@ -73,7 +73,7 @@ process.env.HOME = home;
 process.env.AGENTOC_CONFIG_DIR = configDir;
 process.env.AGENTOC_MEMORY_DIR = join(home, 'memory');
 process.env.AGENTOC_WORK_ROOT_DIR = join(home, 'workspace');
-delete process.env.AGENTOC_INSTANCE_ROOT;
+process.env.AGENTOC_INSTANCE_ROOT = home;
 
 const history = await import('../chat/history.mjs');
 const { createSession } = await import('../chat/session-manager.mjs');
@@ -125,7 +125,7 @@ try {
       HOME: home,
       CHAT_PORT: String(port),
       AGENTOC_CHAT_BASE_URL: `http://127.0.0.1:${port}`,
-      AGENTOC_INSTANCE_ROOT: '',
+      AGENTOC_INSTANCE_ROOT: home,
       AGENTOC_CONFIG_DIR: configDir,
       AGENTOC_AUTH_SESSION_SECRET: 'test-secret-0123456789abcdef0123456789abcdef',
       SECURE_COOKIES: '0',

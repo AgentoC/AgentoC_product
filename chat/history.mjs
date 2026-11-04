@@ -2988,6 +2988,9 @@ export async function readEventBody(sessionId, seq, options = {}) {
   const readContext = await createHistoryReadContext(sessionId, options.metaOverride || null, {
     strict: options.strict === true,
   });
+  // A sequence beyond the recorded history is absent, not a corrupt gap.
+  // Missing events inside the committed range remain strict-read errors.
+  if (!Number.isInteger(seq) || seq < 1 || seq > readContext.meta.latestSeq) return null;
   const logical = await loadLogicalStoredEvent(sessionId, seq, logicalEventOptions(readContext));
   const stored = logical?.event;
   const bodyField = stored?.bodyField || eventBodyField(stored);
