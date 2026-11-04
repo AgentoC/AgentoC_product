@@ -415,6 +415,10 @@ export function buildSessionDisplayEvents(history = [], { projectRoot = '', home
   const timeline = [];
   let reasoning = [];
 
+  const reasoningIdentity = (event) => JSON.stringify([
+    text(event?.runId), text(event?.providerMessageId), text(event?.providerBlockId),
+  ]);
+
   const flushReasoning = () => {
     if (reasoning.length === 0) return;
     const first = reasoning[0];
@@ -426,8 +430,18 @@ export function buildSessionDisplayEvents(history = [], { projectRoot = '', home
       seq: startSeq,
       blockStartSeq: startSeq,
       blockEndSeq: seqOf(last) || startSeq,
-      state: 'completed',
-      content: reasoning.map((event) => String(event.content || '')).join(''),
+      state: last.state === 'running' ? 'running' : 'completed',
+      ...(first.runId ? { runId: first.runId } : {}),
+      ...(first.requestId ? { requestId: first.requestId } : {}),
+      ...(first.providerMessageId ? { providerMessageId: first.providerMessageId } : {}),
+      ...(first.providerBlockId ? { providerBlockId: first.providerBlockId } : {}),
+      content: reasoning.reduce((body, event) => {
+        const part = String(event.content || '');
+        // Providers may send incremental deltas followed by a complete
+        // snapshot for the same block; the snapshot replaces those deltas.
+        if ((event.reasoningLifecycle === 'completed' || event.state === 'completed') && part) return part;
+        return body + part;
+      }, ''),
     });
     reasoning = [];
   };
@@ -443,6 +457,7 @@ export function buildSessionDisplayEvents(history = [], { projectRoot = '', home
     if (isSuppressed(event) || isTransportStatus(event) || INTERNAL_TYPES.has(event.type)) continue;
     if (event.type === 'message' && replacedMessageSeqs.has(seq)) continue;
     if (event.type === 'reasoning') {
+      if (reasoning.length > 0 && reasoningIdentity(reasoning[0]) !== reasoningIdentity(event)) flushReasoning();
       reasoning.push(event);
       continue;
     }
