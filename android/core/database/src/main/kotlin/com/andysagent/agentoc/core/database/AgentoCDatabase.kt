@@ -22,13 +22,19 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TargetRuntimeSummaryEventEntity::class,
         TargetRuntimeSummaryCursorEntity::class,
     ],
-    version = 14,
+    version = 15,
     exportSchema = true,
 )
 abstract class AgentoCDatabase : RoomDatabase() {
     abstract fun dao(): AgentoCDao
 
     companion object {
+        val MIGRATION_14_15: Migration = object : Migration(14, 15) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE messages ADD COLUMN messagePhase TEXT")
+                database.execSQL("ALTER TABLE timeline_message_staging ADD COLUMN messagePhase TEXT")
+            }
+        }
         val MIGRATION_13_14: Migration = object : Migration(13, 14) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
@@ -198,6 +204,7 @@ abstract class AgentoCDatabase : RoomDatabase() {
             MIGRATION_11_12,
             MIGRATION_12_13,
             MIGRATION_13_14,
+            MIGRATION_14_15,
         ).build()
     }
 }

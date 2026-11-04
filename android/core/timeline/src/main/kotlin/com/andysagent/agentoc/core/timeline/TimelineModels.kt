@@ -52,6 +52,7 @@ sealed interface TimelineItem {
         val revision: Long = 0,
         val lastEventSeq: Long = seq,
         val messageState: String = if (completed) "completed" else "streaming",
+        val messagePhase: String? = null,
     ) : TimelineItem
 
     data class Operation(
@@ -153,6 +154,7 @@ data class TimelineEvent(
     val providerToolUseId: String? = null,
     val responseId: String? = null,
     val messageState: String? = null,
+    val messagePhase: String? = null,
     val lastEventSeq: Long? = null,
     val beforeAssistantAtSameSeq: Boolean = false,
     )
@@ -214,7 +216,14 @@ class IncrementalTimelineProjector {
         val livePositions = liveEvents.mapNotNull { event -> event.entityId?.let { it to event.seq } }.toMap()
         val orderedLive = liveEvents.map { event ->
             val target = event.entityId?.let(reasoningAnchors::get)
-            val position = target?.let { durablePositions[it] ?: livePositions[it] }
+            val position = target?.let { id ->
+                durablePositions[id] ?: livePositions[id] ?: event.runId?.let { run ->
+                    // The completed snapshot may replace the provider's live
+                    // message identity. Reconcile only an unambiguous reply.
+                    messages.filter { it.role.equals("assistant", true) && it.runId == run }
+                        .singleOrNull()?.seq
+                }
+            }
             if (position != null && position > 0) event.copy(seq = position, beforeAssistantAtSameSeq = true) else event
         }
         val liveIds = orderedLive.asSequence().map { it.id }.toSet()
@@ -389,6 +398,7 @@ class TimelineEngine {
                 revision = event.revision ?: 0,
                 lastEventSeq = event.lastEventSeq ?: event.seq,
                 messageState = event.messageState ?: if (type.contains("delta")) "streaming" else "completed",
+                messagePhase = event.messagePhase,
             )
     }
 
@@ -455,6 +465,7 @@ object TimelineProjector {
                 requestId = message.requestId?.takeIf { it.isNotBlank() },
                 runId = message.runId?.takeIf { it.isNotBlank() },
                 messageState = message.messageState,
+                messagePhase = message.messagePhase,
                 lastEventSeq = message.lastEventSeq,
                 attachments = message.attachments.map { attachment ->
                     AttachmentItem(
@@ -527,6 +538,7 @@ private fun preferTimelineItem(current: TimelineItem, incoming: TimelineItem): T
         attachments = newer.attachments.ifEmpty { current.attachments.ifEmpty { incoming.attachments } },
         requestId = newer.requestId ?: current.requestId ?: incoming.requestId,
         runId = newer.runId ?: current.runId ?: incoming.runId,
+        messagePhase = newer.messagePhase ?: current.messagePhase ?: incoming.messagePhase,
     )
 }
 

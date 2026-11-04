@@ -687,6 +687,7 @@ function parseThreadItem(item, lifecycle = 'completed', params = {}, state = {})
           // its stable item id so provider-event dedup can enforce exactly
           // once history publication across a control-plane restart.
           ...(providerItemId ? { providerMessageId: providerItemId } : {}),
+          ...(['commentary', 'final_answer'].includes(item.phase) ? { messagePhase: item.phase } : {}),
           }));
         }
         if (lifecycle === 'completed') state.agentMessageTextByItemId?.delete(streamId);

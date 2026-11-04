@@ -83,7 +83,7 @@ interface AgentoCDao {
     @Query("DELETE FROM session_events WHERE sessionId = :sessionId")
     suspend fun deleteSessionEventProjection(sessionId: String)
 
-    @Query("INSERT INTO messages (id, sessionId, role, content, seq, requestId, runId, completed, updatedAt, lastEventSeq, revision, messageState) SELECT id, sessionId, role, content, seq, requestId, runId, messageState != 'streaming', :now, lastEventSeq, revision, messageState FROM timeline_message_staging WHERE sessionId = :sessionId")
+    @Query("INSERT INTO messages (id, sessionId, role, content, seq, requestId, runId, completed, updatedAt, lastEventSeq, revision, messageState, messagePhase) SELECT id, sessionId, role, content, seq, requestId, runId, messageState != 'streaming', :now, lastEventSeq, revision, messageState, messagePhase FROM timeline_message_staging WHERE sessionId = :sessionId")
     suspend fun publishStagedMessages(sessionId: String, now: Long)
 
     @Query("UPDATE sessions SET timelineProjectionVersion = 2 WHERE id = :sessionId")

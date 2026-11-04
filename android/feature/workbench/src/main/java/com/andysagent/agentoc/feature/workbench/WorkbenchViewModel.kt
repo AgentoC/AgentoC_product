@@ -2061,6 +2061,7 @@ class ChatViewModel(
         updateState {
             copy(runMetrics = runMetrics.copy(
                 runId = runId,
+                startedAtMillis = started ?: runMetrics.startedAtMillis.takeIf { runMetrics.runId == runId },
                 phase = projection.stringValue("phase"),
                 provider = projection.stringValue("provider"),
                 model = projection.stringValue("model"),

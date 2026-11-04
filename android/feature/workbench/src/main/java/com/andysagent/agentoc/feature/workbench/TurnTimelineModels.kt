@@ -66,6 +66,15 @@ data class TurnGroup(
     val entries: List<TimelineItem> = emptyList(),
 )
 
+/** Split only when the provider explicitly identifies the final response. */
+internal fun splitTurnEntries(entries: List<TimelineItem>): Pair<List<TimelineItem>, List<TimelineItem>> {
+    val finalIndex = entries.indexOfFirst {
+        it is TimelineItem.Message && it.role == TimelineRole.Agent && it.messagePhase == "final_answer"
+    }
+    if (finalIndex < 0) return emptyList<TimelineItem>() to entries
+    return entries.take(finalIndex) to entries.drop(finalIndex)
+}
+
 /**
  * Projector that groups sequential timeline items and pending turns into
  * cohesive, well-ordered TurnGroups by requestId/runId.

@@ -1562,10 +1562,29 @@ private fun ChatSurface(
     val latestTurnGroups = rememberUpdatedState(turnGroups)
     val showActiveRunAction = state.pendingTurn?.state == PendingTurnState.Sending ||
         state.runStatus == AgentRunStatus.Working || state.runStatus == AgentRunStatus.WaitingApproval
+    val durationTurnKey = turnGroups.lastOrNull()?.requestId ?: turnGroups.lastOrNull()?.userPrompt?.id
+    var runStartedElapsed by remember(state.sessionId, durationTurnKey) { mutableLongStateOf(0L) }
+    var runElapsedSeconds by remember(state.sessionId, durationTurnKey) { mutableLongStateOf(0L) }
+    val lastUserIndex = state.timelineItems.indexOfLast { it is TimelineItem.Message && it.role == com.andysagent.agentoc.core.timeline.TimelineRole.User }
+    val currentRunId = state.timelineItems.drop(lastUserIndex.coerceAtLeast(0))
+        .filterIsInstance<TimelineItem.Operation>().lastOrNull { !it.runId.isNullOrBlank() }?.runId
+    val authoritativeStart = state.runMetrics.startedAtMillis.takeIf { currentRunId != null && currentRunId == state.runMetrics.runId }
+    LaunchedEffect(state.sessionId, durationTurnKey, showActiveRunAction, authoritativeStart) {
+        if (!showActiveRunAction) return@LaunchedEffect
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (runStartedElapsed == 0L) runStartedElapsed = now
+        if (authoritativeStart != null) {
+            val age = (System.currentTimeMillis() - authoritativeStart).coerceAtLeast(0L)
+            runStartedElapsed = minOf(runStartedElapsed, now - age)
+        }
+        while (true) {
+            runElapsedSeconds = maxOf(runElapsedSeconds, (android.os.SystemClock.elapsedRealtime() - runStartedElapsed) / 1000)
+            kotlinx.coroutines.delay(1_000)
+        }
+    }
     // Match the actual LazyColumn content, including a pending question but
     // excluding the artificial runway used to dock a newly submitted turn.
     val timelineContentItemCount = turnGroups.size + (if (activeDecision != null) 1 else 0) +
-        (if (showActiveRunAction) 1 else 0) +
         (if (turnGroups.isEmpty() && state.timelineItems.isEmpty() && state.error == null) 1 else 0)
     val latestContentItemCount = rememberUpdatedState(timelineContentItemCount)
     val latestSessionId = rememberUpdatedState(state.sessionId)
@@ -2698,6 +2717,18 @@ private fun ChatSurface(
                             onOpenFileDiff = { diff -> onSetSelectedDiffFile(diff) },
                             onReport = { text -> onEvent(WorkbenchEvent.ReportAgentContent(text)) },
                             showMessageActions = canMessageAction,
+                            runDuration = if (isLastTurn && (showActiveRunAction || runElapsedSeconds > 0L)) {{
+                                val duration = if (runElapsedSeconds < 60) "${runElapsedSeconds}s" else "${runElapsedSeconds / 60}m ${runElapsedSeconds % 60}s"
+                                Text(stringResource(if (showActiveRunAction) R.string.workbench_run_elapsed else R.string.workbench_run_finished, duration),
+                                    style = MaterialTheme.typography.labelSmall, color = colors.secondaryContent,
+                                    modifier = Modifier.testTag("run-elapsed"))
+                            }} else null,
+                            runActive = isLastTurn && showActiveRunAction,
+                            activeAction = if (isLastTurn && showActiveRunAction) {{
+                                ActiveRunActionBar(status = state.runStatus,
+                                    actionSummary = state.currentAction?.sentence,
+                                    sending = state.pendingTurn?.state == PendingTurnState.Sending)
+                            }} else null,
                         )
                     }
 
@@ -2744,17 +2775,6 @@ private fun ChatSurface(
                             onWriteInChanged = { onEvent(WorkbenchEvent.DecisionWriteInChanged(decision.id, it)) },
                             onSubmit = { onEvent(WorkbenchEvent.SubmitDecision(decision.id)) },
                             modifier = Modifier.padding(vertical = 4.dp).testTag("active-decision-card"),
-                        )
-                    }
-                }
-
-                if (showActiveRunAction) {
-                    item(key = "active-run-action") {
-                        ActiveRunActionBar(
-                            status = state.runStatus,
-                            actionSummary = state.currentAction?.sentence,
-                            sinceMillis = state.currentAction?.sinceMillis,
-                            sending = state.pendingTurn?.state == PendingTurnState.Sending,
                         )
                     }
                 }
@@ -3395,19 +3415,10 @@ private fun DeviceConnectionPrompt(
 internal fun ActiveRunActionBar(
     status: AgentRunStatus,
     actionSummary: String? = null,
-    sinceMillis: Long? = null,
     sending: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalAgentocColors.current
-    var elapsedSeconds by remember(sinceMillis) { mutableLongStateOf(0L) }
-    LaunchedEffect(sinceMillis) {
-        if (sinceMillis == null) return@LaunchedEffect
-        while (true) {
-            elapsedSeconds = ((System.currentTimeMillis() - sinceMillis) / 1000).coerceAtLeast(0)
-            kotlinx.coroutines.delay(1_000)
-        }
-    }
     val sentence = when {
         sending -> stringResource(R.string.workbench_status_sending)
         !actionSummary.isNullOrBlank() -> actionSummary
@@ -3453,14 +3464,6 @@ internal fun ActiveRunActionBar(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-        }
-        if (sinceMillis != null) {
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = if (elapsedSeconds < 60) "${elapsedSeconds}s" else "${elapsedSeconds / 60}m ${elapsedSeconds % 60}s",
-                style = MaterialTheme.typography.labelSmall,
-                color = colors.secondaryContent,
-            )
         }
     }
 }

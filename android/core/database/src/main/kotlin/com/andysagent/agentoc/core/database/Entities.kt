@@ -60,6 +60,7 @@ data class MessageEntity(
     @androidx.room.ColumnInfo(defaultValue = "0") val lastEventSeq: Long = seq ?: 0,
     @androidx.room.ColumnInfo(defaultValue = "0") val revision: Long = 0,
     @androidx.room.ColumnInfo(defaultValue = "'completed'") val messageState: String = if (completed) "completed" else "streaming",
+    val messagePhase: String? = null,
 )
 
 /** Rebuilds remain invisible until the complete authoritative prefix is verified. */
@@ -75,6 +76,7 @@ data class TimelineMessageStagingEntity(
     val messageState: String,
     val requestId: String?,
     val runId: String?,
+    val messagePhase: String? = null,
 )
 
 @Entity(tableName = "approvals", indices = [Index(value = ["sessionId", "status"])])

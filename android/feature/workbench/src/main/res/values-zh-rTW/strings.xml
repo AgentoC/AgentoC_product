@@ -167,6 +167,9 @@
     <string name="workbench_suggestion_explain_file">解釋一個檔案</string>
     <string name="workbench_suggestion_create_plan">建立任務計畫</string>
     <string name="workbench_status_processing">處理中…</string>
+    <string name="workbench_run_elapsed">已處理 %1$s</string>
+    <string name="workbench_run_finished">用時 %1$s</string>
+    <string name="timeline_process">處理過程</string>
     <string name="workbench_status_awaiting_approval">等待核准</string>
     <string name="workbench_status_sending">傳送中…</string>
     <string name="projects_title">專案</string>

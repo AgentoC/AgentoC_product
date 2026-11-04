@@ -285,6 +285,7 @@ data class Message(
     val lastEventSeq: Long = seq ?: 0,
     val revision: Long = 0,
     val messageState: String = if (completed) "completed" else "streaming",
+    val messagePhase: String? = null,
 )
 
 data class Approval(

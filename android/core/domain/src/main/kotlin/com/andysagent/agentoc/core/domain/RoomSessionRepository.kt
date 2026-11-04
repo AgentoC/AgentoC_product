@@ -446,6 +446,7 @@ class RoomSessionRepository(
                 seq = it.seq,
                 completed = it.completed,
                 lastEventSeq = it.lastEventSeq, revision = it.revision, messageState = it.messageState,
+                messagePhase = it.messagePhase,
                 requestId = it.requestId,
                 runId = it.runId,
             )
@@ -1269,11 +1270,11 @@ class RoomSessionRepository(
                 if (event.isTimelineMessage()) {
                     val old = dao.getStagedMessage(sessionId, event.messageProjectionId())
                     val previous = old?.let { ProjectedMessage(it.id, it.role, it.content,
-                        it.seq, it.lastEventSeq, it.revision, it.messageState, it.requestId, it.runId) }
+                        it.seq, it.lastEventSeq, it.revision, it.messageState, it.requestId, it.runId, it.messagePhase) }
                     val next = reduceMessage(previous, event, event.boundarySeq())
                     dao.upsertStagedMessage(TimelineMessageStagingEntity(sessionId, next.id,
                         next.role, next.text, next.firstSeq, next.lastEventSeq, next.revision,
-                        next.state, next.requestId, next.runId))
+                        next.state, next.requestId, next.runId, next.messagePhase))
                 }
                 event.terminalRunState()?.let { terminal ->
                     dao.settleStagedMessages(sessionId, event.runId, event.requestId, terminal)
@@ -2664,7 +2665,7 @@ private class RoomEventSink(
             val existing = dao.getMessage(id)?.takeIf { it.sessionId == scope }
             val previous = existing?.let {
                 ProjectedMessage(it.id, it.role, it.content, it.seq ?: event.boundarySeq(),
-                    it.lastEventSeq, it.revision, it.messageState, it.requestId, it.runId)
+                    it.lastEventSeq, it.revision, it.messageState, it.requestId, it.runId, it.messagePhase)
             }
             val next = reduceMessage(previous, event, event.boundarySeq())
             dao.upsertMessages(listOf(MessageEntity(
@@ -2672,6 +2673,7 @@ private class RoomEventSink(
                 seq = next.firstSeq, requestId = next.requestId, runId = next.runId,
                 completed = next.completed, updatedAt = System.currentTimeMillis(),
                 lastEventSeq = next.lastEventSeq, revision = next.revision, messageState = next.state,
+                messagePhase = next.messagePhase,
             )))
         }
         event.terminalRunState()?.let { terminal ->

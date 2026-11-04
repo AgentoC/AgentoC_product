@@ -16,6 +16,15 @@ import org.junit.Test
 
 class TurnTimelineWorkspaceTest {
 
+    @Test fun `only explicitly marked final content is separated from ordered process`() {
+        val progress = TimelineItem.Message("progress", 1, TimelineRole.Agent, "Checking", true, messagePhase = "commentary")
+        val thought = TimelineItem.Operation("thought", 2, TimelineOperationKind.Tool, "Thinking", "Detail", TimelineOperationStatus.Completed, isReasoning = true)
+        val final = TimelineItem.Message("answer", 3, TimelineRole.Agent, "Done", true, messagePhase = "final_answer")
+        assertEquals(listOf(progress, thought) to listOf(final), splitTurnEntries(listOf(progress, thought, final)))
+        val legacy = final.copy(messagePhase = null)
+        assertEquals(emptyList<TimelineItem>() to listOf(progress, thought, legacy), splitTurnEntries(listOf(progress, thought, legacy)))
+    }
+
     private val projector = TurnGroupProjector()
 
     @Test fun `late reply is paired by request identity rather than the newest user prompt`() {

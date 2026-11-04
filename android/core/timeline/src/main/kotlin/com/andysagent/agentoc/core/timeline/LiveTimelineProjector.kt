@@ -209,6 +209,7 @@ class LiveTimelineProjector {
                 requestId = next.requestId, runId = next.runId,
                 role = when (next.role) { "user" -> TimelineRole.User; "system" -> TimelineRole.System; else -> TimelineRole.Agent },
                 messageState = next.state, lastEventSeq = if (event.boundarySeq() == 0L) 0L else next.lastEventSeq,
+                messagePhase = next.messagePhase,
                 operationStatus = if (next.completed) TimelineOperationStatus.Completed else TimelineOperationStatus.InProgress,
                 attachments = event.allAttachments().map { AttachmentItem(
                     assetId = it.assetId, filename = it.filename, originalName = it.originalName,

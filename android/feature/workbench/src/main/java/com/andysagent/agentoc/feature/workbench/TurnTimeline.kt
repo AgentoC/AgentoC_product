@@ -116,6 +116,9 @@ fun TurnTimelineView(
     modifier: Modifier = Modifier,
     onReport: ((String) -> Unit)? = null,
     showMessageActions: Boolean = true,
+    runDuration: (@Composable () -> Unit)? = null,
+    runActive: Boolean = false,
+    activeAction: (@Composable () -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
@@ -134,8 +137,18 @@ fun TurnTimelineView(
             )
         }
 
-        if (turn.entries.isNotEmpty()) {
-            turn.entries.forEach { item -> key(item.id) {
+        if (turn.entries.isNotEmpty() || runActive) {
+            val (beforeFinal, finalEntries) = splitTurnEntries(turn.entries)
+            // While a reply is being generated, render the ordered stream in
+            // the process area. Unknown legacy messages remain visible after
+            // completion instead of guessing which one is the final answer.
+            val processEntries = if (runActive && beforeFinal.isEmpty()) turn.entries else beforeFinal
+            val outsideEntries = if (runActive && beforeFinal.isEmpty()) emptyList() else finalEntries
+            var expanded by rememberSaveable(turn.requestId ?: turn.id) { mutableStateOf(runActive) }
+            var userToggled by rememberSaveable(turn.requestId ?: turn.id) { mutableStateOf(false) }
+            LaunchedEffect(runActive) { if (!runActive && !userToggled) expanded = false }
+            val toggleDescription = stringResource(if (expanded) R.string.timeline_details_hide else R.string.timeline_details_show)
+            val renderEntry: @Composable (TimelineItem) -> Unit = { item -> key(item.id) {
                 when (item) {
                     is TimelineItem.Message -> {
                         ResultBlock(item,
@@ -147,11 +160,32 @@ fun TurnTimelineView(
                     }
                     is TimelineItem.Plan -> PlanBlock(item, onPlanAction)
                     is TimelineItem.Operation -> {
-                        if (item.isReasoning) ThinkingRow(item)
+                        if (item.isReasoning) ThinkingRow(item) else ProcessOperationRow(item)
                     }
                     is TimelineItem.Notice -> if (item.text.isNotBlank()) Text(item.text)
                 }
             } }
+            if (processEntries.isNotEmpty() || runActive) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 36.dp)
+                    .clickable { expanded = !expanded; userToggled = true }
+                    .testTag("turn-process-toggle")
+                    .semantics { contentDescription = toggleDescription },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (runDuration != null) runDuration() else Text(stringResource(R.string.timeline_process),
+                        style = MaterialTheme.typography.labelSmall, color = LocalAgentocColors.current.secondaryContent)
+                    AgentoWebIcon(if (expanded) AgentoWebGlyph.ChevronDown else AgentoWebGlyph.ChevronRight,
+                        null, Modifier.size(14.dp), tint = LocalAgentocColors.current.secondaryContent)
+                }
+                AnimatedVisibility(expanded) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        processEntries.filterNot { it is TimelineItem.Notice }.forEach { renderEntry(it) }
+                        activeAction?.invoke()
+                    }
+                }
+                processEntries.filterIsInstance<TimelineItem.Notice>().forEach { renderEntry(it) }
+            }
+            outsideEntries.forEach { renderEntry(it) }
             return@Column
         }
 
@@ -191,6 +225,15 @@ fun TurnTimelineView(
             }
         }
     }
+}
+
+@Composable
+private fun ProcessOperationRow(operation: TimelineItem.Operation) {
+    val state = com.andysagent.agentoc.core.timeline.RunActionFormatter.forRun(
+        com.andysagent.agentoc.core.timeline.RunActionFormatter.RunActionStatus.Working, null, listOf(operation))
+    val text = state?.sentence ?: return
+    Text(text, style = MaterialTheme.typography.bodySmall,
+        color = LocalAgentocColors.current.secondaryContent, modifier = Modifier.testTag("process-operation"))
 }
 
 /**
@@ -415,8 +458,8 @@ internal fun ThinkingRow(operation: TimelineItem.Operation) {
         ) {
             Text(stringResource(R.string.timeline_thinking), style = MaterialTheme.typography.bodySmall,
                 color = colors.secondaryContent, maxLines = 1)
-            if (hasDetail) AgentoWebIcon(AgentoWebGlyph.ChevronDown, null,
-                modifier = Modifier.size(14.dp).rotate(if (expanded) 180f else 0f), tint = colors.secondaryContent)
+            if (hasDetail) AgentoWebIcon(if (expanded) AgentoWebGlyph.ChevronDown else AgentoWebGlyph.ChevronRight, null,
+                modifier = Modifier.size(14.dp), tint = colors.secondaryContent)
         }
         AnimatedVisibility(expanded && hasDetail) {
             SelectionContainer(Modifier.heightIn(max = 220.dp).verticalScroll(scrollState).testTag("thinking-content")) {

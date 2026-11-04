@@ -52,6 +52,19 @@ class LiveTokenRebaseTest {
         assertEquals(listOf("reply", "thinking:run-a"), projector.project(emptyList(), listOf(text, later)).map { it.id })
     }
 
+    @Test fun completedReplyWithNewIdentityKeepsObservedThinkingOrder() {
+        val projector = IncrementalTimelineProjector()
+        val thinking = TimelineEvent("thinking", 4, "reasoning", entityId = "thought", revision = 2,
+            text = "Thinking", operationKind = TimelineOperationKind.Tool, runId = "run-a")
+        val text = TimelineEvent("text", 3, "text_delta", entityId = "live-reply", revision = 3,
+            text = "Hello", role = TimelineRole.Agent, runId = "run-a", messageState = "streaming")
+        projector.project(emptyList(), listOf(thinking, text))
+        val answer = com.andysagent.agentoc.core.model.Message("durable-reply", "session", "assistant", "Hello",
+            seq = 3, completed = true, runId = "run-a")
+        assertEquals(listOf("thought", "durable-reply"),
+            projector.project(listOf(answer), listOf(thinking.copy(seq = 6))).map { it.id })
+    }
+
     @Test fun interveningToolAndOtherRunDoNotCreateAFalseAnchor() {
         val projector = IncrementalTimelineProjector()
         val thinking = TimelineEvent("thinking", 2, "reasoning", entityId = "thinking:run-a", revision = 1,

@@ -32,7 +32,10 @@ object RunActionFormatter {
         }
         val sourceSeq = (activity?.get("sourceSeq") as? JsonPrimitive)?.contentOrNull?.toLongOrNull() ?: 0L
         val liveToolIsNewer = active != null && (sourceSeq == 0L || active.seq == 0L || active.seq > sourceSeq)
-        if (liveToolIsNewer && (canonical == null || canonical.kind in setOf("working", "thinking", "think", "responding", "other", "tool"))) {
+        val genericTool = canonical?.kind in setOf("tool", "mcp", "other") &&
+            canonical?.sentence?.trim()?.lowercase() in setOf("using execute", "using exec", "using tool")
+        if ((liveToolIsNewer || genericTool) && active != null &&
+            (canonical == null || genericTool || canonical.kind in setOf("working", "thinking", "think", "responding", "other", "tool"))) {
             return fromOperation(active!!)
         }
         return fromProgressPlan(items, runId) ?: canonical ?: forRun(status, phase, items)
@@ -142,7 +145,7 @@ object RunActionFormatter {
         if (operation.isReasoning) return RunActionUiState("thinking", "Thinking through the task", operationId = operation.id)
         val command = operation.commandText()
         val semantic = command?.let(::parseCommand)
-        val tool = operation.toolName.orEmpty().trim().lowercase()
+        val tool = operation.toolName.orEmpty().trim().lowercase().substringAfterLast("__")
         val kind = semantic?.first ?: when (operation.kind) {
             TimelineOperationKind.FileEdit -> "edit"
             TimelineOperationKind.Diff -> "inspect"
@@ -192,7 +195,7 @@ object RunActionFormatter {
         toolName.orEmpty().lowercase() in setOf("read", "write", "edit", "multiedit", "notebookedit") || kind == TimelineOperationKind.FileEdit ->
             basename(inputField("file_path", "path", "notebook_path") ?: title.takeUnless { it.equals("edit", true) || it.equals("write", true) }.orEmpty().ifBlank { "file" })
         toolName.orEmpty().lowercase() in setOf("grep", "glob", "search") -> inputField("pattern", "query", "glob")?.let { clipSubject(it, 48) } ?: "workspace"
-        toolName.orEmpty().lowercase() in setOf("bash", "shell", "execute", "exec") -> "command"
+        toolName.orEmpty().lowercase().substringAfterLast("__") in setOf("bash", "shell", "execute", "exec") -> "command"
         kind == TimelineOperationKind.Diff -> "workspace changes"
         kind == TimelineOperationKind.SubAgent -> title.ifBlank { "sub-agent" }.compact()
         else -> (toolName ?: title).ifBlank { "next step" }.compact()

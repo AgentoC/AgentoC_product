@@ -42,20 +42,23 @@ class TimelineChronologyUiTest {
         rule.onNodeWithTag("thinking-content").assertExists()
     }
 
-    @Test fun thinkingExpandsAndToolRecordsStayHidden() {
+    @Test fun completedTurnCollapsesProcessAndKeepsFinalAnswerVisible() {
         val items = listOf(
             TimelineItem.Message("u", 1, TimelineRole.User, "Inspect the file", true),
-            TimelineItem.Message("a", 2, TimelineRole.Agent, "First explanation", true),
+            TimelineItem.Message("a", 2, TimelineRole.Agent, "First explanation", true, messagePhase = "commentary"),
             TimelineItem.Operation("op", 3, TimelineOperationKind.Command, "Check source", "done", TimelineOperationStatus.Completed),
             TimelineItem.Operation("thought", 3, TimelineOperationKind.Tool, "Thinking", "Private reasoning detail", TimelineOperationStatus.Completed, isReasoning = true),
-            TimelineItem.Message("b", 4, TimelineRole.Agent, "Final conclusion", true),
+            TimelineItem.Message("b", 4, TimelineRole.Agent, "Final conclusion", true, messagePhase = "final_answer"),
         )
         val turn = TurnGroupProjector().project(items).single()
         rule.setContent { AgentocTheme { Column {
             TurnTimelineView(turn, true, null, null, {}, { _, _ -> }, {}, {})
         } } }
+        rule.onNodeWithText("First explanation").assertDoesNotExist()
+        rule.onNodeWithText("Final conclusion").assertIsDisplayed()
+        rule.onNodeWithTag("turn-process-toggle").performClick()
         val first = rule.onNodeWithText("First explanation").getUnclippedBoundsInRoot().top
-        rule.onNodeWithText("Check source", substring = true).assertDoesNotExist()
+        rule.onNodeWithTag("process-operation").assertExists()
         rule.onNodeWithText("Private reasoning detail").assertDoesNotExist()
         val thinking = rule.onNodeWithTag("thinking-row").getUnclippedBoundsInRoot().top
         val last = rule.onNodeWithText("Final conclusion").getUnclippedBoundsInRoot().top

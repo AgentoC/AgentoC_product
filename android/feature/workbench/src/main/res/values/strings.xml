@@ -187,6 +187,9 @@
     <string name="workbench_suggestion_explain_file">Explain a file</string>
     <string name="workbench_suggestion_create_plan">Create a plan</string>
     <string name="workbench_status_processing">Processing…</string>
+    <string name="workbench_run_elapsed">Processed for %1$s</string>
+    <string name="workbench_run_finished">Took %1$s</string>
+    <string name="timeline_process">Activity</string>
     <string name="workbench_status_awaiting_approval">Waiting for approval</string>
     <string name="workbench_status_sending">Sending…</string>
     <string name="workbench_session_run_details">Run details</string>

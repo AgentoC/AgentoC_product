@@ -5,6 +5,16 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class RunActionFormatterTest {
+    @Test fun genericExecuteSnapshotUsesStructuredLiveCommand() {
+        val activity = kotlinx.serialization.json.Json.parseToJsonElement(
+            """{"state":"working","kind":"mcp","subject":"execute","sourceSeq":20,"runId":"run-a"}"""
+        ) as kotlinx.serialization.json.JsonObject
+        val tool = TimelineItem.Operation("tool", 20, TimelineOperationKind.Tool, "execute", "",
+            TimelineOperationStatus.InProgress, toolName = "mcp__shell__execute",
+            inputJson = """{"command":"cat README.md"}""", runId = "run-a")
+        assertEquals("Reading README.md", RunActionFormatter.project(
+            RunActionFormatter.RunActionStatus.Working, null, listOf(tool), activity, "run-a")?.sentence)
+    }
     @Test fun claudeToolsUseTheirStructuredInputsInsteadOfRawToolNames() {
         fun action(name: String, input: String, reasoning: Boolean = false): String? {
             val op = TimelineItem.Operation("op", 1, TimelineOperationKind.Tool, name, "", TimelineOperationStatus.InProgress,

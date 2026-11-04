@@ -11,6 +11,20 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class AgentoCDatabaseMigrationTest {
+    @Test fun migrates14To15PreservingExistingMessages() {
+        val name = "migration-14-15-message-phase.db"
+        helper.createDatabase(name, 14).use { db ->
+            db.execSQL("INSERT INTO sessions (id,title,status,latestSeq,updatedAt) VALUES ('s','Offline','completed',1,10)")
+            db.execSQL("INSERT INTO messages (id,sessionId,role,content,seq,requestId,completed,updatedAt) VALUES ('m','s','assistant','Keep this',1,'r',1,10)")
+        }
+        helper.runMigrationsAndValidate(name, 15, true, AgentoCDatabase.MIGRATION_14_15).use { db ->
+            db.query("SELECT content,messagePhase FROM messages WHERE id='m'").use { row ->
+                assertEquals(true, row.moveToFirst())
+                assertEquals("Keep this", row.getString(0))
+                assertEquals(true, row.isNull(1))
+            }
+        }
+    }
     @Test fun migrates13To14PreservingProjectsSessionsAndPendingOperations() {
         val name = "migration-13-14-pins.db"
         helper.createDatabase(name, 13).use { db ->

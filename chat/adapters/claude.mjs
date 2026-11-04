@@ -196,6 +196,7 @@ export function createClaudeAdapter() {
   let streamingDeltaOrdinal = 0;
   let streamingTextBlockIndexes = [];
   let streamingThinkingBlocks = new Map();
+  let streamingStopReason = '';
   // Upstream-reported model for the current turn (assistant/message_start
   // frames carry it).  Gateways remap tier aliases — the requested model and
   // the served model can differ (observed: glm-5.2 requested, glm-4.7
@@ -288,6 +289,7 @@ export function createClaudeAdapter() {
             upstreamModel = msg.model.trim();
           }
           const content = msg?.content;
+          const stopReason = msg?.stop_reason || (providerMessageId && providerMessageId === streamingMessageId ? streamingStopReason : '');
           if (Array.isArray(content)) {
             // A subsequent assistant payload belongs to a new provider turn;
             // an error after it must never inherit the prior terminal guard.
@@ -313,6 +315,8 @@ export function createClaudeAdapter() {
               textBlockOrdinal += 1;
               events.push(messageEvent('assistant', text, undefined, frameProviderFields({
                 ...(providerMessageId ? { providerMessageId } : {}),
+                ...(stopReason === 'end_turn' ? { messagePhase: 'final_answer' }
+                  : stopReason === 'tool_use' ? { messagePhase: 'commentary' } : {}),
                 providerSnapshotKind: 'finalized-assistant',
                 // Explicit snapshot semantics for downstream layers: the body
                 // is an accumulating revision of one provider message, and a
@@ -518,9 +522,13 @@ export function createClaudeAdapter() {
             streamingDeltaOrdinal = 0;
             streamingTextBlockIndexes = [];
             streamingThinkingBlocks = new Map();
+            streamingStopReason = '';
           }
           if (evt.type === 'message_start' && typeof evt.message?.model === 'string' && evt.message.model.trim()) {
             upstreamModel = evt.message.model.trim();
+          }
+          if (evt.type === 'message_delta' && typeof evt.delta?.stop_reason === 'string') {
+            streamingStopReason = evt.delta.stop_reason;
           }
           if (evt.type === 'content_block_delta') {
             if (evt.delta?.type === 'text_delta') {

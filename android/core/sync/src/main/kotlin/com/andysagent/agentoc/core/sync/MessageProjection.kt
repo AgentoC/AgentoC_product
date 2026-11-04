@@ -16,6 +16,7 @@ data class ProjectedMessage(
     val state: String,
     val requestId: String? = null,
     val runId: String? = null,
+    val messagePhase: String? = null,
 ) {
     val completed: Boolean get() = state != "streaming"
 }
@@ -76,5 +77,6 @@ fun reduceMessage(previous: ProjectedMessage?, event: SessionEventDto, provision
         state = if (previous?.completed == true && nextState == "streaming") previous.state else nextState,
         requestId = event.requestId ?: previous?.requestId,
         runId = event.runId ?: previous?.runId,
+        messagePhase = event.messagePhase ?: previous?.messagePhase,
     )
 }
