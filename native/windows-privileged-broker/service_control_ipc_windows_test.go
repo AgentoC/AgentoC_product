@@ -63,6 +63,13 @@ func TestServiceControlPipeRequiresSignatureAndRunsOnce(t *testing.T) {
 	if response := server.handleRequest(raw, false); response.Code != "SERVICE_CONTROL_UNAVAILABLE" {
 		t.Fatalf("production controller was enabled: %+v", response)
 	}
+	healthRequest, err := json.Marshal(brokerRequest{Version: protocolVersion, Type: "health"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if health := server.handleRequest(healthRequest, true); health.ServiceControlReady {
+		t.Fatal("disabled service controller advertised as ready")
+	}
 	release := make(chan struct{})
 	var calls atomic.Int32
 	server.serviceController = func(ctx context.Context, action serviceControlRequest) serviceControlOutcome {
@@ -82,6 +89,9 @@ func TestServiceControlPipeRequiresSignatureAndRunsOnce(t *testing.T) {
 			t.Error("wrong inspection target")
 		}
 		return grant.DefinitionHash, nil
+	}
+	if health := server.handleRequest(healthRequest, true); !health.ServiceControlReady || health.AutoInstallKeyID != "key" {
+		t.Fatalf("service readiness or signer missing: %+v", health)
 	}
 	done := make(chan error, 1)
 	go func() { done <- server.Run(context.Background()) }()

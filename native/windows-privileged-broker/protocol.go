@@ -78,6 +78,7 @@ type brokerResponse struct {
 	PolicyGeneration    uint64                     `json:"policyGeneration,omitempty"`
 	ExecutionEnabled    bool                       `json:"executionEnabled"`
 	AutoInstallReady    bool                       `json:"autoInstallReady"`
+	ServiceControlReady bool                       `json:"serviceControlReady"`
 	AutoInstallKeyID    string                     `json:"autoInstallKeyId,omitempty"`
 	AutoInstall         *autoInstallGrant          `json:"autoInstall,omitempty"`
 	OwnerInstall        *ownerInstallGrant         `json:"ownerInstall,omitempty"`

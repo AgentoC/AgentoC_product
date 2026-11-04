@@ -627,12 +627,16 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 		}
 		response.InstallationID = state.InstallationID
 		response.PolicyGeneration = state.PolicyGeneration
+		response.ServiceControlReady = state.AutoInstallSigner != nil && state.OwnerID != "" && len(state.Devices) > 0 && s.serviceController != nil && s.serviceInspector != nil
 		backendReady := state.AutoInstallSigner != nil && s.autoInstaller != nil
 		if availability, ok := s.autoInstaller.(interface{ Available() bool }); backendReady && ok {
 			backendReady = availability.Available()
 		}
 		if backendReady {
 			response.AutoInstallReady = true
+			response.AutoInstallKeyID = state.AutoInstallSigner.KeyID
+		}
+		if response.ServiceControlReady {
 			response.AutoInstallKeyID = state.AutoInstallSigner.KeyID
 		}
 		return response
