@@ -55,6 +55,11 @@ func (s *brokerStore) ClaimOwnerInstall(grant ownerInstallGrant, signature strin
 				return errRequestConflict
 			}
 		}
+		for _, old := range state.ServiceControls {
+			if old.Grant.RequestID == grant.RequestID {
+				return errRequestConflict
+			}
+		}
 		if _, ok := state.Requests[grant.RequestID]; ok {
 			return errRequestConflict
 		}

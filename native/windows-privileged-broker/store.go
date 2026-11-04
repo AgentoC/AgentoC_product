@@ -62,6 +62,7 @@ type persistedBrokerState struct {
 	Requests          map[string]requestRecord           `json:"requests"`
 	AutoInstalls      map[string]autoInstallRecord       `json:"autoInstalls,omitempty"`
 	OwnerInstalls     map[string]ownerInstallRecord      `json:"ownerInstalls,omitempty"`
+	ServiceControls   map[string]serviceControlRecord    `json:"serviceControls,omitempty"`
 	AutoInstallSigner *autoInstallSigner                 `json:"autoInstallSigner,omitempty"`
 	Audit             []auditEntry                       `json:"audit"`
 }
@@ -200,6 +201,17 @@ func recoverInterruptedExecutions(state *persistedBrokerState, now time.Time) (b
 		}
 		recovered = true
 	}
+	for nonce, record := range state.ServiceControls {
+		if record.Status != statusExecuting {
+			continue
+		}
+		record.Status, record.Code, record.UpdatedAt = statusUnknown, "EXECUTION_OUTCOME_UNKNOWN", now.UTC()
+		state.ServiceControls[nonce] = record
+		if err := appendAuditState(state, "service_control.unknown", record.Grant.RequestID, record.Code, record.Digest); err != nil {
+			return false, err
+		}
+		recovered = true
+	}
 	return recovered, nil
 }
 
@@ -259,6 +271,11 @@ func (s *brokerStore) RecordProposal(request brokerRequest, now time.Time) (requ
 		}
 		for _, automatic := range next.OwnerInstalls {
 			if automatic.Grant.RequestID == request.RequestID {
+				return errRequestConflict
+			}
+		}
+		for _, control := range next.ServiceControls {
+			if control.Grant.RequestID == request.RequestID {
 				return errRequestConflict
 			}
 		}
@@ -663,6 +680,16 @@ func expireOutstandingApprovals(state *persistedBrokerState, code string, now ti
 			return err
 		}
 	}
+	for nonce, record := range state.ServiceControls {
+		if record.Status != statusExecuting {
+			continue
+		}
+		record.Status, record.Code, record.UpdatedAt = statusUnknown, code, now.UTC()
+		state.ServiceControls[nonce] = record
+		if err := appendAuditState(state, "service_control.unknown", record.Grant.RequestID, code, record.Digest); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -963,6 +990,20 @@ func validateState(state persistedBrokerState) error {
 	for nonce, record := range state.OwnerInstalls {
 		message, err := ownerInstallGrantBytes(record.Grant)
 		if err != nil || nonce != record.Grant.Nonce || !ownerGrantNonce.MatchString(nonce) || !validRequestID(record.Grant.RequestID) ||
+			autoRequests[record.Grant.RequestID] || state.Requests[record.Grant.RequestID].Request.RequestID != "" ||
+			!isSHA256Hex(record.Digest) || record.Digest != fmt.Sprintf("%x", sha256.Sum256(message)) ||
+			!(record.Status == statusExecuting || record.Status == statusSucceeded || record.Status == statusFailed || record.Status == statusUnknown) ||
+			!validAuditCode(record.Code) || !record.CreatedAt.Equal(record.CreatedAt.UTC()) || !record.UpdatedAt.Equal(record.UpdatedAt.UTC()) {
+			return errStateInvalid
+		}
+		autoRequests[record.Grant.RequestID] = true
+	}
+	if len(state.ServiceControls) > maxStoredRequests {
+		return errStateInvalid
+	}
+	for nonce, record := range state.ServiceControls {
+		message := serviceControlSigningBytes(record.Grant)
+		if nonce != record.Grant.Nonce || !ownerGrantNonce.MatchString(nonce) || !validRequestID(record.Grant.RequestID) ||
 			autoRequests[record.Grant.RequestID] || state.Requests[record.Grant.RequestID].Request.RequestID != "" ||
 			!isSHA256Hex(record.Digest) || record.Digest != fmt.Sprintf("%x", sha256.Sum256(message)) ||
 			!(record.Status == statusExecuting || record.Status == statusSucceeded || record.Status == statusFailed || record.Status == statusUnknown) ||

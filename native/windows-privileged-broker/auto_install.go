@@ -220,6 +220,11 @@ func (s *brokerStore) ClaimAutoInstall(grant autoInstallGrant, signature string,
 				return errRequestConflict
 			}
 		}
+		for _, existing := range state.ServiceControls {
+			if existing.Grant.RequestID == grant.RequestID {
+				return errRequestConflict
+			}
+		}
 		if _, exists := state.Requests[grant.RequestID]; exists {
 			return errRequestConflict
 		}
