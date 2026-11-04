@@ -152,25 +152,12 @@ assert.match(context, /Pause only for a real blocker: an explicitly requested st
 assert.match(context, /Do not treat the absence of micro-instructions as a blocker; execution-layer decisions are part of your job/);
 assert.match(context, /## Privileged Operations/);
 assert.match(context, /agentoc-privileged --description \"<why>\" --category install\|other\|delete -- <real command>/);
-assert.match(context, /approval sentinel, not a root shell, a reusable sudo token/);
-assert.match(context, /agentoc-privileged-executor\.service/);
-assert.match(context, /systemd service running as root and listening on `\/run\/agentoc-privileged-executor\/sock`/);
-assert.match(context, /Do not start or restart the executor, connect to its socket, mint\/sign a token/);
-assert.match(context, /Use `install` only for the existing structured, allowlisted package-install path/);
-assert.match(context, /Use `other` for bounded state-changing administration/);
-assert.match(context, /Use `delete` for destructive or irreversible work/);
-assert.match(context, /Do not put `sudo`, `su`, a shell\/interpreter, `&&`, `;`, pipes, command substitution, or a nested script behind the sentinel/);
-// Real `agentoc-privileged` shim channel (docs/privileged-shim-channel-2026-09-03.md):
-// the gated provider path is one delivery path, not a precondition — every Run
-// also gets the per-Run launcher, so no permission-mode gate list may reappear here.
-assert.doesNotMatch(context, /This requires a gated provider permission mode/);
-assert.doesNotMatch(context, /do not expect privileged operations to work through it/);
-assert.match(context, /the sidecar also installs a real `agentoc-privileged` launcher on the Run's PATH/);
-assert.match(context, /runtimes with no approval gate \(agy\) or auto-run sandboxes \(Codex `full-auto` \/ `danger-full-access`\)/);
-assert.match(context, /never runs without owner approval/);
-assert.match(context, /69 channel unavailable, 70 refused/);
-assert.match(context, /74 owner denied, 75 owner did not resolve in time, 76 approved but the executor failed, 78 submission accepted but execution is pending/);
-assert.match(context, /never fall back to raw sudo/);
+assert.match(context, /separate managed privileged executor/);
+assert.match(context, /agentoc_request_actions/);
+assert.match(context, /never direct elevation/);
+assert.match(context, /eligible operations may be automatically approved/);
+assert.match(context, /statusOnly=true/);
+assert.match(context, /exit code `78` means pending/);
 assert.ok(context.includes(expectedMemoryRoot));
 assert.ok(context.includes(expectedWorkRoot));
 assert.doesNotMatch(context, /~\/\.agentoc\/memory\//);

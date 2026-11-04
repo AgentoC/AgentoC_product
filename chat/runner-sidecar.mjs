@@ -105,6 +105,7 @@ import {
 } from './privileged-gate.mjs';
 import { decideWindowsApproval } from './windows-approval-gate.mjs';
 import { buildClaudeWindowsInstallBridge, checkWindowsInstallBridgeReadiness } from './windows-auto-install-bridge.mjs';
+import { needsWindowsElevationGuidance, windowsElevationGuidance } from './windows-elevation-guidance.mjs';
 import { verifyCodexWindowsInstallBridgeApproval } from './codex-windows-install-hook.mjs';
 import { createCodexManagedHookSetup } from './codex-managed-hook-setup.mjs';
 import { buildWindowsSafeDeleteBridge, needsClaudeAbsoluteDeleteRetry } from './windows-safe-delete-bridge.mjs';
@@ -2778,6 +2779,19 @@ export async function trackClaudeBidiApprovalRequest(runId, state, parsed, proc,
 
   if (process.platform !== 'win32' && isUnattendedPermissionMode(state, approval)) {
     return denyUnattendedPermissionRequest(runId, state, approval, proc, 'claude');
+  }
+
+  if (process.platform === 'win32' && !isMcpTool && state.turnActive === true && approval.kind === 'command' &&
+      ['PowerShell', 'Bash'].includes(approval.params?.tool_name) &&
+      await needsWindowsElevationGuidance(approval.params?.input?.command, approval.params.tool_name)) {
+    const binding = state.windowsManagedActionBinding;
+    const reason = windowsElevationGuidance(state.windowsManagedActionChannel === true && binding?.runId === runId);
+    const message = buildClaudeBidiApprovalResponseMessage(approval, 'deny', null, { message: reason });
+    if (!message || !writeClaudeBidiMessage(proc, message)) throw new Error('Unable to provide managed elevation guidance');
+    await appendRunSpoolRecord(runId, { ts: nowIso(), stream: 'stdout', json: { type: 'agentoc.approval_response',
+      approvalId: approval.approvalId, provider: 'claude', decision: 'denied', status: 'denied', autoDenied: true,
+      providerRequestId: approval.providerRequestIdString || String(approval.providerRequestId ?? ''), providerMethod: approval.providerMethod || '', reason } });
+    return null;
   }
 
   // Privileged-approval gate (P1c-3): in privileged mode, intercept the gate

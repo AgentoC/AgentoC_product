@@ -2,6 +2,7 @@
 import { fileURLToPath } from 'node:url';
 import { buildCodexWindowsInstallHookDecision } from '../chat/codex-windows-install-hook.mjs';
 import { buildCodexWindowsSafeDeleteHookDecision } from '../chat/codex-windows-safe-delete-hook.mjs';
+import { buildCodexWindowsElevationGuidance } from '../chat/windows-elevation-guidance.mjs';
 
 // A malformed event or unavailable control plane leaves the original command
 // to the normal approval path. Never print credentials or diagnostics to stdout.
@@ -25,7 +26,9 @@ async function main() {
     sessionId: process.env.AGENTOC_APPROVED_ACTIONS_SESSION_ID, runId: process.env.AGENTOC_APPROVED_ACTIONS_RUN_ID,
     turnId: process.env.AGENTOC_APPROVED_ACTIONS_TURN_ID };
   try { channel.windowsUserInstallIdentity = JSON.parse(process.env.AGENTOC_WINDOWS_USER_INSTALL_IDENTITY || 'null'); } catch {}
-  return buildCodexWindowsInstallHookDecision({ event, channel, nodePath: process.execPath,
+  const install = await buildCodexWindowsInstallHookDecision({ event, channel, nodePath: process.execPath,
     scriptPath: fileURLToPath(new URL('./agentoc-windows-install-bridge.mjs', import.meta.url)) });
+  if (install.hookSpecificOutput) return install;
+  return buildCodexWindowsElevationGuidance({ event, channel });
 }
 main().then(result => process.stdout.write(JSON.stringify(result)), () => process.stdout.write('{}'));
