@@ -9,6 +9,7 @@ import { loadUiRuntimeSelection, saveUiRuntimeSelection } from '../lib/runtime-s
 import { getPublicAvailableToolsAsync, saveSimpleToolAsync } from '../lib/tools.mjs';
 import { readBody } from '../lib/utils.mjs';
 import { handleWindowsPrivilegedBrokerRoutes } from './windows-privileged-broker.mjs';
+import { getRun, getRunManifest, isTerminalRunState } from './runs.mjs';
 import {
   createOwnerWebAuthnAssertionOptions,
   createOwnerWebAuthnRegistrationOptions,
@@ -522,6 +523,15 @@ export async function handleControlRoutes({
     requireSessionAccess,
     getSession,
     resolveSessionRiskMode: resolveSessionRiskModeForRun,
+    authorizeServiceApproval: async (grant) => {
+      const run = await getRun(grant.runId);
+      if (!run || run.sessionId !== grant.sessionId || isTerminalRunState(run.state) ||
+          run.cancelRequested === true || run.stalledAt) return false;
+      const manifest = await getRunManifest(grant.runId);
+      return manifest?.sessionId === grant.sessionId &&
+        manifest?.options?.approvedActionChannel?.turnId === grant.turnId &&
+        Boolean(manifest?.options?.approvedActionChannel?.tokenHash);
+    },
     writeJson,
   })) return true;
 

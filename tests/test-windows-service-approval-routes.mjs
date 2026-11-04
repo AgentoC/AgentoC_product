@@ -4,7 +4,7 @@ import { PassThrough } from 'node:stream';
 import { handleWindowsPrivilegedBrokerRoutes, WINDOWS_BROKER_SERVICE_REQUESTS_PATH as base } from '../chat/windows-privileged-broker.mjs';
 
 const deviceId = 'a'.repeat(64);
-const grant = { requestId: 'request', sessionId: 'session' };
+const grant = { requestId: 'request', sessionId: 'session', runId: 'run', turnId: 'turn' };
 let calls = [];
 const brokerClient = {
   pendingServiceControls: async input => { calls.push(['pending', input]); return { items: [], hasMore: false, nextCursor: '' }; },
@@ -12,7 +12,7 @@ const brokerClient = {
   approveServiceControl: async input => { calls.push(['approve', input]); return { type: 'result', requestId: input.requestId, status: 'executing' }; },
   denyServiceControl: async input => { calls.push(['deny', input]); return { type: 'result', requestId: input.requestId, status: 'denied' }; },
 };
-async function call(method, pathname, { query = '', body, role = 'owner', riskMode = 'recommended', sessionAccess = true } = {}) {
+async function call(method, pathname, { query = '', body, role = 'owner', riskMode = 'recommended', sessionAccess = true, runActive = true } = {}) {
   const req = new PassThrough();
   req.method = method; req.url = pathname + query; req.headers = {};
   queueMicrotask(() => req.end(body === undefined ? undefined : JSON.stringify(body)));
@@ -22,6 +22,7 @@ async function call(method, pathname, { query = '', body, role = 'owner', riskMo
     req, res, pathname, authSession: { role }, brokerClient,
     requireSessionAccess: async () => { if (!sessionAccess) result = { status: 403 }; return sessionAccess; },
     getSession: async () => ({ riskMode }), resolveSessionRiskMode: s => s.riskMode,
+    authorizeServiceApproval: async actual => runActive && actual === grant,
     writeJson: (_res, status, payload) => { result = { status, payload }; },
   });
   assert.equal(handled, true);
@@ -35,6 +36,9 @@ calls = [];
 assert.equal((await call('POST', decisionPath, { body, role: 'viewer' })).status, 403);
 assert.equal(calls.length, 0);
 assert.equal((await call('POST', decisionPath, { body, sessionAccess: false })).status, 403);
+assert.equal(calls.some(([name]) => name === 'approve'), false);
+calls = [];
+assert.equal((await call('POST', decisionPath, { body, runActive: false })).status, 409);
 assert.equal(calls.some(([name]) => name === 'approve'), false);
 for (const riskMode of ['full-auto', 'conservative-auto']) {
   calls = [];

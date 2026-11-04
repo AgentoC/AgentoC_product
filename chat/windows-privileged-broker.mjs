@@ -551,6 +551,7 @@ export async function handleWindowsPrivilegedBrokerRoutes({
   requireSessionAccess,
   getSession,
   resolveSessionRiskMode,
+  authorizeServiceApproval,
   writeJson,
   reauthorizePending,
   brokerClient = defaultWindowsBrokerClient,
@@ -596,7 +597,8 @@ export async function handleWindowsPrivilegedBrokerRoutes({
       }
       const current = await brokerClient.status(requestId);
       const grant = current?.serviceControl;
-      if (current?.type !== 'result' || !grant || grant.requestId !== requestId || !validId(grant.sessionId)) {
+      if (current?.type !== 'result' || !grant || grant.requestId !== requestId || !validId(grant.sessionId) ||
+          !validId(grant.runId) || !validId(grant.turnId)) {
         writeJson(res, 409, { code: 'BROKER_CHALLENGE_UNAVAILABLE', error: 'No Windows service request is available' });
         return true;
       }
@@ -611,6 +613,10 @@ export async function handleWindowsPrivilegedBrokerRoutes({
         // Autonomous modes reject operations that require a human decision.
         if (!['safe', 'recommended'].includes(riskMode)) {
           writeJson(res, 403, { code: 'BROKER_PERMISSION_PROFILE_DENIED', error: 'Broker policy denied this operation' });
+          return true;
+        }
+        if (typeof authorizeServiceApproval !== 'function' || !await authorizeServiceApproval(grant)) {
+          writeJson(res, 409, { code: 'BROKER_RUN_NOT_ACTIVE', error: 'The original run or approval channel is no longer active' });
           return true;
         }
       }
