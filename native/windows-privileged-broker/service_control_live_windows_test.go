@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -231,4 +232,131 @@ func TestWindowsServiceControlIsolatedLiveSCM(t *testing.T) {
 	if result := server.handleRequest(mustJSON(t, approval), false); result.Status != statusSucceeded {
 		t.Fatalf("approval replay changed outcome: %+v", result)
 	}
+	if crossDir := os.Getenv("AGENTOC_BROKER_LIVE_CLIENT_DIR"); crossDir != "" {
+		requireLivePipeTestDir(t, crossDir)
+		run("stop-service", svc.Stopped)
+		crossGrant := grant
+		crossGrant.RequestID, crossGrant.Nonce = "cross-process-request", "zyxwvutsrqponmlkjihgfedc123456"
+		crossSignature := base64.RawURLEncoding.EncodeToString(ed25519.Sign(private, serviceControlSigningBytes(crossGrant)))
+		payload := liveServicePipeCase{Pipe: base + ".Request",
+			Proposal: brokerRequest{Version: protocolVersion, Type: "service.propose", ServiceControl: &crossGrant, Signature: crossSignature},
+			Approval: brokerRequest{Version: protocolVersion, Type: "service.approve", RequestID: crossGrant.RequestID, DeviceID: deviceID,
+				DeviceSignature: signApprovalMessage(t, deviceKey, serviceControlOwnerSigningBytes(crossGrant))}}
+		writeLivePipeJSON(t, filepath.Join(crossDir, "ready.json"), payload)
+		var result liveServicePipeResult
+		readLivePipeJSON(t, filepath.Join(crossDir, "result.json"), &result)
+		if !result.Success {
+			t.Fatalf("ordinary-user pipe client failed: %s", result.Error)
+		}
+		if status, err := service.Query(); err != nil || status.State != svc.Running {
+			t.Fatalf("ordinary-user pipe approval did not start service: %+v %v", status, err)
+		} else {
+			lastPID = status.ProcessId
+		}
+	}
+}
+
+type liveServicePipeCase struct {
+	Pipe     string        `json:"pipe"`
+	Proposal brokerRequest `json:"proposal"`
+	Approval brokerRequest `json:"approval"`
+}
+type liveServicePipeResult struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
+func requireLivePipeTestDir(t *testing.T, dir string) {
+	t.Helper()
+	absolute, err := filepath.Abs(dir)
+	root := strings.ToLower(filepath.Clean(os.TempDir())) + `\`
+	if err != nil || !strings.HasPrefix(strings.ToLower(absolute), root) || !strings.HasPrefix(filepath.Base(absolute), "service-qa-") {
+		t.Fatal("cross-process fixture directory is outside the task temporary root")
+	}
+}
+
+func writeLivePipeJSON(t *testing.T, path string, value any) {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(path); err == nil || !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("fixture response already exists")
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func readLivePipeJSON(t *testing.T, path string, output any) {
+	t.Helper()
+	deadline := time.Now().Add(45 * time.Second)
+	for {
+		data, err := os.ReadFile(path)
+		if err == nil {
+			if len(data) > 64*1024 || json.Unmarshal(data, output) != nil {
+				t.Fatal("cross-process fixture response is invalid")
+			}
+			return
+		}
+		if !errors.Is(err, os.ErrNotExist) || time.Now().After(deadline) {
+			t.Fatalf("cross-process fixture response unavailable: %v", err)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func TestWindowsServiceControlOrdinaryUserPipe(t *testing.T) {
+	dir := os.Getenv("AGENTOC_BROKER_LIVE_CLIENT_DIR")
+	if dir == "" {
+		t.Skip("cross-process live pipe test is opt-in")
+	}
+	requireLivePipeTestDir(t, dir)
+	admins, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if elevated, err := windows.GetCurrentProcessToken().IsMember(admins); err != nil || elevated {
+		t.Fatal("pipe client must use an ordinary non-elevated token")
+	}
+	success := false
+	defer func() {
+		result := liveServicePipeResult{Success: success}
+		if !success {
+			result.Error = "client test failed"
+		}
+		writeLivePipeJSON(t, filepath.Join(dir, "result.json"), result)
+	}()
+	var fixture liveServicePipeCase
+	readLivePipeJSON(t, filepath.Join(dir, "ready.json"), &fixture)
+	if !strings.HasPrefix(fixture.Pipe, `\\.\pipe\AgentoC.PrivilegedBroker.LocalTest.`) ||
+		fixture.Proposal.ServiceControl == nil || fixture.Approval.RequestID != fixture.Proposal.ServiceControl.RequestID {
+		t.Fatal("invalid cross-process service fixture")
+	}
+	if result := exchangeTestPipeRequest(t, fixture.Pipe, fixture.Proposal); result.Status != statusAwaitingDevice {
+		t.Fatalf("ordinary-user proposal failed: %+v", result)
+	}
+	if result := exchangeTestPipeRequest(t, fixture.Pipe, fixture.Approval); result.Status != statusExecuting && result.Status != statusSucceeded {
+		t.Fatalf("ordinary-user approval failed: %+v", result)
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		result := exchangeTestPipeRequest(t, fixture.Pipe, brokerRequest{Version: protocolVersion, Type: "status", RequestID: fixture.Approval.RequestID})
+		if result.Status == statusSucceeded {
+			break
+		}
+		if result.Status != statusExecuting || time.Now().After(deadline) {
+			t.Fatalf("ordinary-user result: %+v", result)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if result := exchangeTestPipeRequest(t, fixture.Pipe, fixture.Approval); result.Status != statusSucceeded {
+		t.Fatalf("ordinary-user replay changed outcome: %+v", result)
+	}
+	success = true
 }
