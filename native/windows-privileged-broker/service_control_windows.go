@@ -244,8 +244,9 @@ type serviceImageSnapshot struct {
 	FileIndex uint64 `json:"fileIndex"`
 }
 
-// Read through a single file handle; reject reparse points and aliases. The
-// image is observed here, not authorized or pinned for later execution.
+// Read through a single file handle and reject reparse points. Hard links are
+// normal for Windows system files; execution pins the underlying file without
+// write or delete sharing, so another link cannot modify the pinned image.
 func snapshotWindowsServiceImage(raw string) (serviceImageSnapshot, error) {
 	var result serviceImageSnapshot
 	expanded, err := registry.ExpandString(raw)
@@ -271,7 +272,7 @@ func snapshotWindowsServiceImage(raw string) (serviceImageSnapshot, error) {
 	}
 	defer file.Close()
 	var info windows.ByHandleFileInformation
-	if windows.GetFileInformationByHandle(handle, &info) != nil || info.FileAttributes&(windows.FILE_ATTRIBUTE_DIRECTORY|windows.FILE_ATTRIBUTE_REPARSE_POINT) != 0 || info.NumberOfLinks != 1 {
+	if windows.GetFileInformationByHandle(handle, &info) != nil || info.FileAttributes&(windows.FILE_ATTRIBUTE_DIRECTORY|windows.FILE_ATTRIBUTE_REPARSE_POINT) != 0 {
 		return result, errors.New("service image identity is unsafe")
 	}
 	buffer := make([]uint16, 32768)

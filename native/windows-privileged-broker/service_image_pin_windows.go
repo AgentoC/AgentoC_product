@@ -51,7 +51,7 @@ func (p *serviceImagePins) add(path string, directory bool) error {
 	}()
 	var info windows.ByHandleFileInformation
 	if windows.GetFileInformationByHandle(handle, &info) != nil || info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 ||
-		(info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0) != directory || (!directory && info.NumberOfLinks != 1) {
+		(info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0) != directory {
 		return errors.New("service image pin identity invalid")
 	}
 	buffer := make([]uint16, 32768)

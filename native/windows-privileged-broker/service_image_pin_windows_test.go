@@ -21,6 +21,8 @@ func TestServiceImagePinsPreventReplacementAndWrites(t *testing.T) {
 	if err := os.WriteFile(image, []byte("fixture"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	alias := filepath.Join(dir, "alias.exe")
+	linked := os.Link(image, alias) == nil
 	pins, snapshot, err := pinWindowsServiceImage(image)
 	if err != nil {
 		t.Fatal(err)
@@ -31,6 +33,17 @@ func TestServiceImagePinsPreventReplacementAndWrites(t *testing.T) {
 	}
 	if err := os.WriteFile(image, []byte("changed"), 0600); err == nil {
 		t.Fatal("write succeeded while image was pinned")
+	}
+	if linked {
+		if err := os.WriteFile(alias, []byte("changed through hard link"), 0600); err == nil {
+			t.Fatal("hard link bypassed image write pin")
+		}
+		// Removing a different hard-link name may succeed, but must not
+		// remove or make the pinned service path writable.
+		_ = os.Remove(alias)
+		if err := os.WriteFile(image, []byte("changed after unlink"), 0600); err == nil {
+			t.Fatal("unlinking a hard link bypassed image write pin")
+		}
 	}
 	if err := os.Rename(image, filepath.Join(dir, "renamed.exe")); err == nil {
 		t.Fatal("image replacement succeeded while pinned")

@@ -45,8 +45,9 @@ func TestWindowsServiceImageSnapshotDetectsContentAndIdentityChanges(t *testing.
 		t.Fatal("image content change was not detected")
 	}
 	if err := os.Link(first, filepath.Join(dir, "alias.exe")); err == nil {
-		if _, err := snapshotWindowsServiceImage(first); err == nil {
-			t.Fatal("hard-linked image accepted")
+		linked, err := snapshotWindowsServiceImage(first)
+		if err != nil || linked.FileIndex != c.FileIndex || linked.Volume != c.Volume || linked.Digest != c.Digest {
+			t.Fatal("hard-linked image identity changed", err)
 		}
 	}
 	if _, err := snapshotWindowsServiceImage("relative.exe"); err == nil {
