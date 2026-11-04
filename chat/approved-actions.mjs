@@ -10,6 +10,7 @@ import {
   tokenizeCommand,
 } from './privileged-classifier.mjs';
 import { classifyRisk } from './risk-classifier.mjs';
+import { isWindowsAdministrativeArgv } from './windows-elevation-guidance.mjs';
 import { APPROVED_ACTION_EXECUTION_CLASS, isOwnerHostPasskeyRequired } from './approved-action-policy.mjs';
 import { isApprovedActionSemanticProjectionIntact } from './approved-action-semantic.mjs';
 import {
@@ -254,7 +255,8 @@ export function classifyApprovedAction(action, context = {}) {
   });
   const hostRequested = action?.sawLeadingSudo === true
     || privileged.sawSudo === true
-    || risk.signals?.needsPrivilegedExecution === true;
+    || risk.signals?.needsPrivilegedExecution === true
+    || ((context.platform || process.platform) === 'win32' && isWindowsAdministrativeArgv(action?.argv));
   const executionClass = hostRequested
     ? APPROVED_ACTION_EXECUTION_CLASS.HOST
     : APPROVED_ACTION_EXECUTION_CLASS.SESSION;

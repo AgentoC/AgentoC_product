@@ -118,6 +118,11 @@ const ambiguous = buildApprovedAction({ command: 'sudo systemctl restart "a b"' 
 check('canonical command preserves argument boundaries', ambiguous.canonicalCommand === 'systemctl restart "a b"');
 check('argument boundaries are bound', !isApprovedActionManifestIntact({ ...ambiguous, argv: ['systemctl', 'restart', 'a', 'b'] }));
 check('review shows argument boundaries', createApprovedActionClientProjection(ambiguous).command === 'systemctl restart "a b"');
+for (const command of ['New-LocalUser -Name fixture', 'New-Service -Name fixture', 'sc.exe config fixture start= demand', 'net.exe user fixture /add']) {
+  const action = buildApprovedAction({ command }, { ...context, platform: 'win32' });
+  check(`${command} is a host action on Windows`, action.executionClass === APPROVED_ACTION_EXECUTION_CLASS.HOST && isApprovedActionManifestIntact(action));
+}
+throwsCode('Windows read-only account query does not become a host action', () => buildApprovedAction({ command: 'Get-LocalUser' }, { ...context, platform: 'win32' }), 'APPROVED_ACTION_NOT_REQUIRED');
 
 const sessionAction = buildApprovedAction({ command: 'rm -f /tmp/project/cache.db', description: 'Remove a generated cache' }, context);
 check('dangerous non-root action stays in session class', sessionAction.executionClass === APPROVED_ACTION_EXECUTION_CLASS.SESSION);

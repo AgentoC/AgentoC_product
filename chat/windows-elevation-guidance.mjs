@@ -22,6 +22,13 @@ function directAdminProgram(name, args) {
   return false;
 }
 
+// The server calls this with the already parsed, run-bound argv. A provider's
+// declared category is never sufficient to establish a host operation.
+export function isWindowsAdministrativeArgv(argv) {
+  return Array.isArray(argv) && argv.length > 0 && argv.every(arg => typeof arg === 'string') &&
+    directAdminProgram(nameOf(argv[0]), argv.slice(1));
+}
+
 // This is guidance for explicit elevation, not a privilege or risk classifier.
 // Unrecognized and dynamic commands remain with the existing approval policy.
 export async function needsWindowsElevationGuidance(command, shell = 'PowerShell', parse = parseWindowsPowerShellAst) {
