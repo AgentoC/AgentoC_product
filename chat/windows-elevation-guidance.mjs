@@ -42,6 +42,17 @@ export async function needsWindowsElevationGuidance(command, shell = 'PowerShell
     const words = parseLiteralBashWords(command);
     if (!words || words.length < 2) return false;
     const name = nameOf(words[0]);
+    // Claude on Windows commonly invokes PowerShell through its Bash tool.
+    // This path only provides a denial and guidance; it does not attest or
+    // authorize the outer executable. Inspect the fixed literal script so a
+    // direct administrative command receives the same guidance as a native
+    // PowerShell request.
+    if (['powershell', 'powershell.exe', 'pwsh', 'pwsh.exe'].includes(name)) {
+      const flag = words.findIndex((word, index) => index > 0 && /^-(?:command|c)$/i.test(word));
+      if (flag > 0 && flag === words.length - 2 && words.slice(1, flag).every(word => /^-(?:noprofile|nologo|noninteractive)$/i.test(word))) {
+        return needsWindowsElevationGuidance(words[flag + 1], 'PowerShell', parse);
+      }
+    }
     return (elevationPrograms.has(name) && !/^--?(help|version)$/i.test(words[1])) || directAdminProgram(name, words.slice(1));
   }
   let ast;

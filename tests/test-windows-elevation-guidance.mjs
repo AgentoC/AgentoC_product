@@ -34,6 +34,17 @@ if (process.platform === 'win32') {
   assert.equal(isWindowsAdministrativeArgv(['net.exe', 'start']), false);
   assert.equal(isWindowsAdministrativeArgv(['sc.exe', 'query', 'fixture']), false);
   assert.equal(await needsWindowsElevationGuidance("echo 'sudo whoami'", 'Bash'), false);
+  const bashQuote = value => `'${value.replaceAll("'", `'"'"'`)}'`;
+  const systemPowerShell = path.join(process.env.SystemRoot || process.env.WINDIR, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const wrapper = script => `${bashQuote(systemPowerShell)} -NoProfile -NonInteractive -Command ${bashQuote(script)}`;
+  for (const script of ['Start-Service -Name fixture', 'Stop-Service -Name fixture', 'New-LocalUser -Name fixture', 'sc.exe start fixture', 'net.exe stop fixture']) {
+    assert.equal(await needsWindowsElevationGuidance(wrapper(script), 'Bash'), true, script);
+  }
+  assert.equal(await needsWindowsElevationGuidance(`powershell.exe -NoProfile -Command ${bashQuote('Start-Service -Name fixture')}`, 'Bash'), true);
+  for (const script of ['Get-Service -Name fixture', 'sc.exe query fixture', "Write-Output 'Start-Service'"]) {
+    assert.equal(await needsWindowsElevationGuidance(wrapper(script), 'Bash'), false, script);
+  }
+  assert.equal(await needsWindowsElevationGuidance(`${wrapper('Start-Service -Name fixture')}; echo extra`, 'Bash'), false);
   const event = { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'test', tool_input: { command: 'runas /user:admin cmd.exe' } };
   const channel = { endpoint: 'endpoint', token: 'token', sessionId: 'session', runId: 'run', turnId: 'turn' };
   const managed = await buildCodexWindowsElevationGuidance({ event, channel });
