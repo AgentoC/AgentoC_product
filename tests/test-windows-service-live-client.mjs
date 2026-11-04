@@ -39,9 +39,15 @@ try {
   if (phonePort) {
     assert.ok(Number.isInteger(phonePort) && phonePort > 1024 && phonePort < 65536);
     phoneServer = createServer((req, res) => {
-      if (req.url?.startsWith('/api/windows-privileged-broker/service-requests/')) {
-        if (!phoneReview || !phoneClient) {
+      const serviceRoute = req.url?.startsWith('/api/windows-privileged-broker/service-requests/');
+      const enrollmentRoute = req.url?.startsWith('/api/windows-privileged-broker/enrollments/');
+      if (serviceRoute || enrollmentRoute) {
+        if (serviceRoute && (!phoneReview || !phoneClient)) {
           res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ type: 'service_pending', items: [], hasMore: false }));
+          return;
+        }
+        if (!phoneClient) {
+          res.writeHead(503, { 'content-type': 'application/json' }).end(JSON.stringify({ code: 'BROKER_UNAVAILABLE' }));
           return;
         }
         const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
@@ -55,7 +61,7 @@ try {
           authorizeServiceApproval: async grant => grant.requestId === phoneReview.grant.requestId,
           writeJson: (response, status, payload) => {
             response.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(payload));
-            if (req.method === 'POST' && status === 200 && ['executing', 'succeeded'].includes(payload.status)) {
+            if (serviceRoute && req.method === 'POST' && status === 200 && ['executing', 'succeeded'].includes(payload.status)) {
               phoneDecision = payload; resolvePhoneDecision(payload);
             }
           },
@@ -112,6 +118,14 @@ try {
       env: { ...process.env, AGENTOC_QA_PIPE: pipe === 'health' ? healthPipeName : pipeName, AGENTOC_QA_REQUEST: Buffer.from(JSON.stringify(request)).toString('base64') },
     })) });
   phoneClient = client;
+  if (phonePort) {
+    const deadline = Date.now() + 40_000;
+    for (;;) {
+      try { assert.equal(JSON.parse(await readFile(path.join(dir, 'phone-enrolled.json'), 'utf8')).enrolled, true); break; }
+      catch (error) { if (error.code !== 'ENOENT' || Date.now() >= deadline) throw error; }
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  }
   let grant = fixtureGrant;
   let decisionSignature = fixture.approval.deviceSignature;
   let controlPlaneOptions;

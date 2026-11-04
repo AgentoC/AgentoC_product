@@ -291,16 +291,9 @@ func TestWindowsServiceControlIsolatedLiveSCM(t *testing.T) {
 			if err := validateDeviceIDAndKey(phone.DeviceID, phone.PublicKey); err != nil {
 				t.Fatal("invalid isolated Android device identity")
 			}
-			// This is a disposable test store. Enrollment is seeded only for
-			// this fixture; the real enrollment protocol is tested separately.
-			if err := store.transact(func(next *persistedBrokerState) error {
-				if next.OwnerID != "owner" {
-					return errStateInvalid
-				}
-				next.Devices[phone.DeviceID] = brokerDevice{DeviceID: phone.DeviceID, OwnerID: "owner", PublicKey: phone.PublicKey, AddedAt: time.Now().UTC()}
-				next.PolicyGeneration++
-				return nil
-			}); err != nil {
+			// Start the normal enrollment protocol against a disposable store.
+			// The Android test must complete it with its non-exportable key.
+			if _, err := store.BeginEnrollment("owner", phone.DeviceID, phone.PublicKey, time.Now().UTC()); err != nil {
 				t.Fatal(err)
 			}
 			phoneID = phone.DeviceID
@@ -344,6 +337,19 @@ func TestWindowsServiceControlIsolatedLiveSCM(t *testing.T) {
 					t.Errorf("redact disposable fixture keys: %v", err)
 				}
 			})
+		}
+		if phoneID != "" {
+			deadline := time.Now().Add(45 * time.Second)
+			for {
+				if _, enrolled := store.Snapshot().Devices[phoneID]; enrolled {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("Android fixture did not complete enrollment")
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+			writeLivePipeJSON(t, filepath.Join(crossDir, "phone-enrolled.json"), map[string]bool{"enrolled": true})
 		}
 		var result liveServicePipeResult
 		readLivePipeJSON(t, filepath.Join(crossDir, "result.json"), &result)

@@ -2,6 +2,7 @@ package com.andysagent.agentoc.core.auth
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.andysagent.agentoc.core.network.ApiException
 import com.andysagent.agentoc.core.network.ApiResponse
 import java.net.HttpURLConnection
 import java.net.URL
@@ -35,7 +36,8 @@ class WindowsServiceControlLiveBrokerInstrumentedTest {
                     connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
                 }
                 val status = connection.responseCode
-                return status to connection.inputStream.bufferedReader().use { it.readText() }
+                val stream = if (status >= 400) connection.errorStream else connection.inputStream
+                return status to stream.bufferedReader().use { it.readText() }
             } finally { connection.disconnect() }
         }
         val registration = JSONObject().put("deviceId", deviceId).put("publicKey", publicKey)
@@ -45,6 +47,21 @@ class WindowsServiceControlLiveBrokerInstrumentedTest {
             ApiResponse(result.first, result.second)
         }
         val deadline = System.nanoTime() + 80_000_000_000L
+        var enrollment: BrokerPendingEnrollment? = null
+        while (System.nanoTime() < deadline && enrollment == null) {
+            try { enrollment = remote.pendingEnrollment(deviceId) }
+            catch (error: ApiException) { if (error.statusCode != 503) throw error; Thread.sleep(100) }
+        }
+        val pendingEnrollment = requireNotNull(enrollment) { "Timed out waiting for isolated device enrollment" }
+        val enrollmentChallenge = pendingEnrollment.challenge
+        assertEquals(deviceId, enrollmentChallenge.deviceId)
+        assertEquals(BrokerApprovalProtocol.expectedEnrollmentCode(enrollmentChallenge), enrollmentChallenge.verificationCode)
+        assertTrue(BrokerApprovalProtocol.verifyBrokerSignature(
+            pendingEnrollment.brokerPublicKey, pendingEnrollment.brokerSignature,
+            BrokerApprovalProtocol.brokerEnrollmentSignatureBytes(enrollmentChallenge),
+        ))
+        val enrollmentSignature = identity.signBrokerBytes(BrokerApprovalProtocol.deviceEnrollmentSignatureBytes(enrollmentChallenge))
+        assertEquals(deviceId, remote.completeEnrollment(enrollmentChallenge.enrollmentId, enrollmentChallenge.verificationCode, enrollmentSignature).deviceId)
         var review: WindowsServicePendingApproval? = null
         while (System.nanoTime() < deadline && review == null) {
             review = remote.pendingServiceControls(deviceId).requests.singleOrNull()
