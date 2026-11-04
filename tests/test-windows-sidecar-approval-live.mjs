@@ -44,6 +44,20 @@ async function fixture(mode) {
     pendingApprovals: new Map(), autoApprovedMcpRequestIds: new Set(), activeItems: new Map(), threadId: 'thread', turnId: 'turn', startedTurn: true };
   return { run, state, sent, proc };
 }
+for (const mode of ['recommended', 'full-auto']) {
+  const { run, state, sent, proc } = await fixture(mode);
+  state.riskContextValid = false;
+  const request = { type: 'control_request', request_id: 'unverified-system-roots', request: {
+    subtype: 'can_use_tool', tool_name: 'Write', input: { file_path: path.join(workspace, 'unverified.md') },
+  } };
+  await trackClaudeBidiApprovalRequest(run.id, state, request, proc);
+  if (mode === 'recommended') {
+    assert.equal(sent.length, 0, 'unverified system roots must wait for owner review');
+    assert.ok((await getRun(run.id)).appServerPendingApprovals.some(entry => entry.approvalId === 'claude:unverified-system-roots'));
+  } else {
+    assert.equal(sent[0]?.response?.response?.behavior, 'deny', 'unverified system roots must be denied unattended');
+  }
+}
 for (const mode of ['full-auto', 'recommended', 'conservative-auto']) {
   const { run, state, sent, proc } = await fixture(mode);
   const write = { type: 'control_request', request_id: 'write', request: { subtype: 'can_use_tool', tool_name: 'Write', input: { file_path: path.join(workspace, 'output.md') } } };
