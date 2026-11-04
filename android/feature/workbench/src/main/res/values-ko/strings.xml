@@ -82,7 +82,7 @@
     <string name="settings_version">버전</string>
     <string name="settings_computer_label">컴퓨터: %1$s</string>
     <string name="settings_model_providers">모델 제공업체</string>
-    <string name="settings_connectors_mcp">커넥터 및 MCP</string>
+    <string name="settings_connectors_mcp">앱 및 도구 연결</string>
     <string name="settings_workspace_files">작업 공간 파일</string>
     <string name="settings_scheduled_work">예약된 작업</string>
     <string name="settings_usage">사용량</string>
@@ -156,7 +156,7 @@
     <string name="language_label_korean">한국어</string>
     <string name="language_label_french">Français</string>
     <string name="language_label_spanish">Español</string>
-    <string name="settings_harnesses">Harnesses</string>
+    <string name="settings_harnesses">AI 실행 도구</string>
     <string name="workbench_connection_unavailable_title">연결할 수 없음</string>
     <string name="workbench_connection_unavailable_detail">선택한 컴퓨터에 다시 연결할 수 없습니다.</string>
     <string name="workbench_reconnect">다시 연결</string>

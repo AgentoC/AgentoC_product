@@ -82,7 +82,7 @@
     <string name="settings_version">バージョン</string>
     <string name="settings_computer_label">コンピューター: %1$s</string>
     <string name="settings_model_providers">モデルプロバイダー</string>
-    <string name="settings_connectors_mcp">コネクターと MCP</string>
+    <string name="settings_connectors_mcp">アプリとツールの接続</string>
     <string name="settings_workspace_files">ワークスペースのファイル</string>
     <string name="settings_scheduled_work">スケジュール済みの作業</string>
     <string name="settings_usage">使用量</string>
@@ -156,7 +156,7 @@
     <string name="language_label_korean">한국어</string>
     <string name="language_label_french">Français</string>
     <string name="language_label_spanish">Español</string>
-    <string name="settings_harnesses">Harnesses</string>
+    <string name="settings_harnesses">AI 実行ツール</string>
     <string name="workbench_connection_unavailable_title">接続できません</string>
     <string name="workbench_connection_unavailable_detail">選択したコンピュータへの接続を復旧できませんでした。</string>
     <string name="workbench_reconnect">再接続</string>

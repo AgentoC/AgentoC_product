@@ -1,0 +1,34 @@
+<resources>
+    <string name="journey_setup_computer">Configurar mi equipo</string>
+    <string name="journey_install_step">Instala en tu ordenador</string>
+    <string name="journey_code_step">Muestra el código del ordenador</string>
+    <string name="journey_scan_step">Escanea con este teléfono</string>
+    <string name="journey_installed">Ya instalado</string>
+    <string name="journey_code_ready">Ya veo el código</string>
+    <string name="journey_previous">Anterior</string>
+    <string name="journey_step_count">Paso %1$d de %2$d</string>
+    <string name="journey_handoff_hint">Envía el enlace a tu ordenador e instala AgentoC para Windows.</string>
+    <string name="journey_share_link">Compartir enlace de descarga</string>
+    <string name="journey_link_copied">Enlace copiado</string>
+    <string name="journey_link_failed">No se pudo abrir otra aplicación. Copia la dirección y ábrela en tu equipo.</string>
+    <string name="journey_long_term">Conexión permanente</string>
+    <string name="journey_temporary">Acceso temporal</string>
+    <string name="journey_account_instructions">En el ordenador: Phone pairing → Start phone pairing.\nElige Trusted. Inicia sesión con Google en uno de los dispositivos.</string>
+    <string name="journey_temporary_instructions">En el ordenador: Phone pairing → Start phone pairing.\nSin sesión iniciada, elige Temporary. Confirma en el ordenador para acceder durante 10 minutos.</string>
+    <string name="journey_have_code">Ya tengo un código</string>
+    <string name="journey_home_quiet">No hay nada que requiera tu atención.</string>
+    <string name="journey_continue_work">Continuar trabajando</string>
+    <string name="journey_connection_uncertain">La conexión no está disponible. El equipo podría seguir trabajando. Vuelve a conectarte para comprobar su estado.</string>
+    <string name="journey_show_less">Mostrar menos</string>
+    <string name="journey_show_all_actions">Ver todas las tareas pendientes</string>
+    <string name="journey_task_failed">Requiere recuperación · abrir para revisar</string>
+    <string name="journey_reply_needed">Esperando tu respuesta</string>
+    <string name="journey_approval_needed">Esperando tu autorización</string>
+    <string name="journey_settings_scope">Se aplica a: %1$s</string>
+    <string name="journey_settings_saving">Guardando. Espera un momento.</string>
+    <string name="journey_settings_offline">Conecta este equipo para cambiar su configuración. La información cargada anteriormente puede estar desactualizada.</string>
+    <string name="journey_connection_help">Ayuda de conexión</string>
+    <string name="journey_stop_waiting">Parada solicitada. Esperando confirmación del equipo.</string>
+    <string name="journey_stop_unknown">Se desconoce el resultado de la parada. Vuelve a conectarte para revisar la tarea original; no la envíes de nuevo.</string>
+    <string name="journey_scan_hint">Apunta al código de tu ordenador y confirma.</string>
+</resources>

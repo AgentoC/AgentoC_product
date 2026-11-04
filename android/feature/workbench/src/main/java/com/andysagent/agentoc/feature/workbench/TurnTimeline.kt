@@ -551,6 +551,12 @@ fun OperationGroup(
                     summary.operations.forEach { op ->
                         OperationItemRow(op, showTitle = summary.operations.size != 1 || op.title != summary.summaryText,
                             showStatus = summary.operations.size != 1 || summary.failedCount == 0)
+                        op.fileChanges.forEach { file ->
+                            AgentoButton(text = file.path, secondary = true, onClick = {
+                                onOpenFileDiff(FileDiffDetail(path = file.path, additions = file.additions,
+                                    deletions = file.deletions, diffContent = file.diffSummary))
+                            })
+                        }
                     }
                 }
             }

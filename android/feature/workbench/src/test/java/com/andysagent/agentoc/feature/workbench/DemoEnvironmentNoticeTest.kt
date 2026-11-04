@@ -50,7 +50,7 @@ class DemoEnvironmentNoticeTest {
     @Test fun welcomeHasADirectSpecialAccountEntry() {
         var starts = 0
         rule.setContent { AgentocTheme { WelcomeScreen({}, {}, onDemoSignIn = { starts++ }) } }
-        rule.onNodeWithText("Test account sign-in").performScrollTo().assertIsDisplayed().performClick()
+        rule.onNodeWithText("Demo account sign-in").performScrollTo().assertIsDisplayed().performClick()
         assertEquals(1, starts)
     }
 

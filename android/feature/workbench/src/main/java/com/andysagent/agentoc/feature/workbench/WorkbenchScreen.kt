@@ -322,6 +322,7 @@ fun WorkbenchScreen(
     onPairingOnboardingEvent: (PairingOnboardingEvent) -> Unit = {},
     onScanPairing: () -> Unit = {},
     onScanPairingFromWelcome: () -> Unit = onScanPairing,
+    onSetUpComputer: () -> Unit = onScanPairingFromWelcome,
     onOpenSubscription: () -> Unit = {},
     subscriptionInfoOpen: Boolean = false,
     onCloseSubscriptionInfo: () -> Unit = {},
@@ -396,6 +397,7 @@ fun WorkbenchScreen(
                         }
                     },
                     onScanPairing = onScanPairingFromWelcome,
+                    onSetUpComputer = onSetUpComputer,
                     signedIn = welcomeSignedIn,
                     onLearnConnectionMethods = {
                         onPairingOnboardingEvent(PairingOnboardingEvent.LearnConnectionMethods)
@@ -2202,6 +2204,7 @@ private fun ChatSurface(
     // writing the first message.
     val showComposerSuggestions =
         turnGroups.isEmpty() &&
+            !showActiveRunAction && state.stopRequest == StopRequestState.None &&
             !historyTransitioning &&
             state.error == null &&
             state.composerText.isBlank() &&
@@ -2339,6 +2342,8 @@ private fun ChatSurface(
             }
 
             // Layer C: approval or the server-owned queued-message island.
+            JourneyRunFeedback(state, onReconnect = { onEvent(WorkbenchEvent.Retry) },
+                modifier = Modifier.widthIn(max = AgentocSizes.ContentMaxWidth))
             val isTransportFailure = state.error?.let(::isTransportConnectionFailure) == true
             val isOffline = state.connection == AgentConnectionStatus.Disconnected || isTransportFailure
             val activeSummary = when {
@@ -2494,7 +2499,8 @@ private fun ChatSurface(
                 onAddAttachment = { onSetComposerActionSheetOpen(true) },
                 enabled = (!state.isLoading || state.runStatus == AgentRunStatus.Working) &&
                     !state.historyLoading && state.approval == null && !state.approvalResolving,
-                actionEnabled = state.connection == AgentConnectionStatus.Connected && !state.runtimeResolving && state.runtimeModel != null && state.runtimeModelsError == null,
+                actionEnabled = state.connection == AgentConnectionStatus.Connected && state.stopRequest == StopRequestState.None &&
+                    !state.runtimeResolving && state.runtimeModel != null && state.runtimeModelsError == null,
                 attachmentsEnabled = true,
                 runtimeTool = state.runtimeTool,
                 runtimeProvider = state.runtimeProvider,
@@ -2803,6 +2809,10 @@ private fun ChatSurface(
 
                 if (turnGroups.isEmpty() && state.timelineItems.isEmpty() && state.error == null) {
                     item(key = "empty") {
+                        if (showActiveRunAction) {
+                            ActiveRunActionBar(status = state.runStatus, actionState = state.currentAction,
+                                sending = state.pendingTurn?.state == PendingTurnState.Sending)
+                        }
                         // A selected computer remains paired while its carrier
                         // reconnects; do not ask the user to set it up again.
                         if (state.connection != AgentConnectionStatus.Connected && state.activeRemoteTargetId == null) {
@@ -4724,7 +4734,8 @@ private fun SettingsOverviewContent(
     val colors = LocalAgentocColors.current
     var advancedSettingsExpanded by rememberDestinationFlag("settings-advanced-expanded")
     val showAccountPolicy = accountState?.hasVerifiedAccountSession == true
-    val showComputerTools = state.remoteTargets.any { it.instanceId == state.activeRemoteTargetId }
+    val activeTarget = state.remoteTargets.firstOrNull { it.instanceId == state.activeRemoteTargetId }
+    val showComputerTools = activeTarget != null
     val activeWindowsTarget = state.remoteTargets.firstOrNull {
         it.instanceId == state.activeRemoteTargetId && it.platform.equals("windows", ignoreCase = true)
     }
@@ -4799,6 +4810,8 @@ private fun SettingsOverviewContent(
                                     },
                                     leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.ShieldSolid) },
                                     title = stringResource(R.string.settings_permission_mode),
+                                    subtitle = if (!policyEnabled) stringResource(
+                                        if (saving) R.string.journey_settings_saving else R.string.journey_settings_offline) else null,
                                     enabled = policyEnabled,
                                     showDivider = false,
                                     showChevron = true,
@@ -4845,6 +4858,7 @@ private fun SettingsOverviewContent(
                                 AgentoSettingRow(
                                     leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Settings) },
                                     title = stringResource(R.string.settings_workspace_tools),
+                                    subtitle = stringResource(R.string.journey_settings_scope, activeTarget!!.label),
                                     showDivider = advancedSettingsExpanded,
                                     contentHorizontalPadding = 16.dp,
                                     trailing = {
@@ -4867,6 +4881,12 @@ private fun SettingsOverviewContent(
                                     exit = fadeOut(tween(120)) + shrinkVertically(tween(140)),
                                 ) {
                                     Column {
+                                        if (state.connection != AgentConnectionStatus.Connected) {
+                                            Text(stringResource(R.string.journey_settings_offline),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                                    .testTag("settings-offline-explanation"))
+                                        }
                                         SettingsParityEntry(stringResource(R.string.settings_model_providers), 60.dp) { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.ModelProviders)) }
                                         SettingsParityEntry(stringResource(R.string.settings_harnesses), 60.dp) { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Harnesses)) }
                                         SettingsParityEntry(stringResource(R.string.settings_connectors_mcp), 60.dp) { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Connectors)) }
@@ -4885,6 +4905,14 @@ private fun SettingsOverviewContent(
                             onTheme = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Theme)) },
                         )
                         SettingsGroup(title = stringResource(R.string.settings_group_about)) {
+                            AgentoSettingRow(
+                                leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Device) },
+                                title = stringResource(R.string.journey_connection_help),
+                                showChevron = true,
+                                modifier = Modifier.testTag("settings-connection-help"),
+                                contentHorizontalPadding = 16.dp,
+                                onClick = { onEvent(WorkbenchEvent.OpenComputerSetup) },
+                            )
                             AgentoSettingRow(
                                 leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.ShieldSolid) },
                                 title = stringResource(R.string.account_data_title),

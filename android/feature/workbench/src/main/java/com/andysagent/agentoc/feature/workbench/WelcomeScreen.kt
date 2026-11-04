@@ -67,6 +67,7 @@ fun WelcomeScreen(
     onLearnConnectionMethods: () -> Unit = {},
     onSkip: () -> Unit = {},
     onDemoSignIn: (() -> Unit)? = null,
+    onSetUpComputer: () -> Unit = onScanPairing,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalAgentocColors.current
@@ -92,6 +93,7 @@ fun WelcomeScreen(
                 onLearnConnectionMethods = onLearnConnectionMethods,
                 onSkip = onSkip,
                 onDemoSignIn = onDemoSignIn,
+                onSetUpComputer = onSetUpComputer,
             )
         }
     }
@@ -105,6 +107,7 @@ private fun WelcomeConnectionContent(
     onLearnConnectionMethods: () -> Unit,
     onSkip: () -> Unit,
     onDemoSignIn: (() -> Unit)?,
+    onSetUpComputer: () -> Unit,
 ) {
     val colors = LocalAgentocColors.current
 
@@ -148,9 +151,9 @@ private fun WelcomeConnectionContent(
             text = stringResource(
                 // The heading carries the connection context. A short verb
                 // keeps every localized action comfortably within its pill.
-                if (signedIn) R.string.welcome_scan_pairing_code else R.string.settings_sign_in,
+                R.string.journey_setup_computer,
             ),
-            onClick = if (signedIn) onScanPairing else onConnectComputer,
+            onClick = onSetUpComputer,
             modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth(),
             decision = true,
             labelStyle = MaterialTheme.typography.labelLarge.copy(
@@ -160,20 +163,16 @@ private fun WelcomeConnectionContent(
             ),
         )
 
-        if (!signedIn) {
-            Text(
-                text = stringResource(R.string.welcome_sign_in_hint),
-                modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.secondaryContent,
-                textAlign = TextAlign.Center,
-            )
-            onDemoSignIn?.let { onDemo ->
-                QuietAction(text = stringResource(R.string.demo_sign_in_title), onClick = onDemo)
-            }
-        }
+        Spacer(Modifier.height(12.dp))
 
         if (signedIn) {
+            AgentoButton(
+                text = stringResource(R.string.welcome_scan_pairing_code),
+                onClick = onScanPairing,
+                secondary = true,
+                modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth(),
+            )
+            QuietAction(text = stringResource(R.string.welcome_try_direct_connection), onClick = onConnectComputer)
             QuietAction(
                 text = stringResource(R.string.welcome_other_connection_methods),
                 onClick = onLearnConnectionMethods,
@@ -194,10 +193,7 @@ private fun WelcomeConnectionContent(
                 )
             }
         } else {
-            // Pairing is a real secondary path, not an unbounded line of
-            // text with an oversized hit target. Keep it compact and tactile
-            // while leaving sign-in as the only filled action.
-            Spacer(Modifier.height(12.dp))
+            // Keep the existing-code shortcut separate from computer setup.
             AgentoButton(
                 text = stringResource(R.string.welcome_scan_pairing_code),
                 onClick = onScanPairing,
@@ -216,17 +212,15 @@ private fun WelcomeConnectionContent(
                     fontWeight = FontWeight.SemiBold,
                 ),
             )
-            Text(
-                text = stringResource(R.string.welcome_pairing_hint),
-                modifier = Modifier.padding(top = 12.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.secondaryContent,
-                textAlign = TextAlign.Center,
-            )
             QuietAction(
                 text = stringResource(R.string.welcome_other_connection_methods),
                 onClick = onLearnConnectionMethods,
             )
+            Spacer(Modifier.height(16.dp))
+            QuietAction(text = stringResource(R.string.settings_sign_in), onClick = onConnectComputer)
+            onDemoSignIn?.let { onDemo ->
+                QuietAction(text = stringResource(R.string.demo_sign_in_title), onClick = onDemo)
+            }
         }
     }
 }

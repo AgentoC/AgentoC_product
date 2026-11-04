@@ -23,7 +23,7 @@ class DemoSignInDialogTest {
     @Test fun invalidFormCannotSignInAndExplainsRealWorkspace() {
         var dismisses = 0
         rule.setContent { AgentocTheme { DemoSignInDialog(DemoSignInUiState(open = true), {}, {}, {}, { dismisses++ }) } }
-        rule.onNodeWithText("Test account sign-in").assertIsDisplayed()
+        rule.onNodeWithText("Demo account sign-in").assertIsDisplayed()
         rule.onNodeWithText("This demo workspace is shared with other testers. Do not enter personal or sensitive information in chats. Use sample data only.").assertIsDisplayed()
         rule.onNodeWithText("Sign in").assertIsNotEnabled()
         rule.onNodeWithText("Cancel").performClick(); assertEquals(1, dismisses)

@@ -31,6 +31,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -42,6 +44,100 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class WorkbenchViewModelTest {
+    @Test
+    fun `stop waits for authoritative completion and suppresses repeated requests`() = runTest {
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        try {
+            val task = Session("a", "Running", status = SessionStatus.Working)
+            val repo = FakeSessionRepository(sessions = listOf(task))
+            val vm = ChatViewModel(repo); advanceUntilIdle()
+            vm.onEvent(ChatEvent.CancelRun); vm.onEvent(ChatEvent.CancelRun); runCurrent()
+            assertEquals(listOf("a"), repo.cancelledSessions)
+            assertEquals(StopRequestState.AwaitingConfirmation, vm.state.value.stopRequest)
+            assertEquals(com.andysagent.agentoc.core.agentui.AgentRunStatus.Working, vm.state.value.runStatus)
+            repo.setSessions(listOf(task.copy(status = SessionStatus.Cancelled))); advanceUntilIdle()
+            assertEquals(StopRequestState.None, vm.state.value.stopRequest)
+            assertEquals(com.andysagent.agentoc.core.agentui.AgentRunStatus.Cancelled, vm.state.value.runStatus)
+        } finally { Dispatchers.resetMain() }
+    }
+
+    @Test
+    fun `stop result stays on the original computer when identical session ids are switched`() = runTest {
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        try {
+            val gate = CompletableDeferred<Unit>()
+            val a = FakeSessionRepository(sessions = listOf(Session("same", "A", status = SessionStatus.Working)), cancelGate = gate)
+            val b = FakeSessionRepository(sessions = listOf(Session("same", "B", status = SessionStatus.Working)))
+            val switching = com.andysagent.agentoc.core.domain.SwitchingSessionRepository(backgroundScope)
+            switching.switchTo(a)
+            val vm = ChatViewModel(switching); advanceUntilIdle()
+            vm.onEvent(ChatEvent.CancelRun); advanceUntilIdle()
+            switching.switchTo(b); advanceUntilIdle()
+            gate.complete(Unit); runCurrent()
+            assertEquals(listOf("same"), a.cancelledSessions)
+            assertTrue(b.cancelledSessions.isEmpty())
+            assertEquals(StopRequestState.None, vm.state.value.stopRequest)
+            switching.switchTo(a); runCurrent()
+            assertEquals(StopRequestState.AwaitingConfirmation, vm.state.value.stopRequest)
+            advanceUntilIdle()
+        } finally { Dispatchers.resetMain() }
+    }
+
+    @Test
+    fun `acknowledged stop without terminal state becomes recoverable without resending`() = runTest {
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        try {
+            val repo = FakeSessionRepository(sessions = listOf(Session("a", "A", status = SessionStatus.Working)))
+            val vm = ChatViewModel(repo); advanceUntilIdle()
+            vm.onEvent(ChatEvent.CancelRun); runCurrent()
+            assertEquals(StopRequestState.AwaitingConfirmation, vm.state.value.stopRequest)
+            advanceTimeBy(15_000); runCurrent()
+            assertEquals(StopRequestState.OutcomeUnknown, vm.state.value.stopRequest)
+            assertEquals(com.andysagent.agentoc.core.agentui.AgentRunStatus.Working, vm.state.value.runStatus)
+            assertEquals(1, repo.cancelledSessions.size)
+            assertTrue(repo.sentTexts.isEmpty())
+        } finally { Dispatchers.resetMain() }
+    }
+
+    @Test
+    fun `an earlier stop timeout cannot change a later request in the same session`() = runTest {
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        try {
+            val task = Session("a", "A", status = SessionStatus.Working)
+            val repo = FakeSessionRepository(sessions = listOf(task))
+            val vm = ChatViewModel(repo); advanceUntilIdle()
+            vm.onEvent(ChatEvent.CancelRun); runCurrent()
+            repo.setSessions(listOf(task.copy(status = SessionStatus.Cancelled))); runCurrent()
+            advanceTimeBy(1_000)
+            repo.setSessions(listOf(task)); runCurrent()
+            vm.onEvent(ChatEvent.CancelRun); runCurrent()
+            advanceTimeBy(14_000); runCurrent()
+            assertEquals(StopRequestState.AwaitingConfirmation, vm.state.value.stopRequest)
+            advanceTimeBy(1_000); runCurrent()
+            assertEquals(StopRequestState.OutcomeUnknown, vm.state.value.stopRequest)
+            assertEquals(2, repo.cancelledSessions.size)
+        } finally { Dispatchers.resetMain() }
+    }
+
+    @Test
+    fun `lost stop response is unknown rather than a stopped task`() = runTest {
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        try {
+            val repo = FakeSessionRepository(sessions = listOf(Session("a", "A", status = SessionStatus.Working)),
+                cancelFailure = java.io.IOException("Lost response"))
+            val vm = ChatViewModel(repo); advanceUntilIdle()
+            vm.onEvent(ChatEvent.CancelRun); advanceUntilIdle()
+            assertEquals(StopRequestState.OutcomeUnknown, vm.state.value.stopRequest)
+            assertEquals(com.andysagent.agentoc.core.agentui.AgentRunStatus.Working, vm.state.value.runStatus)
+            vm.onEvent(ChatEvent.CancelRun); advanceUntilIdle()
+            assertEquals(1, repo.cancelledSessions.size)
+            vm.onEvent(ChatEvent.Retry); advanceUntilIdle()
+            assertEquals(StopRequestState.None, vm.state.value.stopRequest)
+            assertEquals(1, repo.cancelledSessions.size)
+            assertTrue(repo.sentTexts.isEmpty())
+        } finally { Dispatchers.resetMain() }
+    }
+
     @Test
     fun `browsing a runtime does not select a model and cancelling restores the committed choice`() = runTest {
         Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
@@ -1387,6 +1483,8 @@ private class FakeSessionRepository(
     var globalRuntime: RuntimeSelection? = null,
     private val targetId: String? = null,
     private val globalGate: CompletableDeferred<Unit>? = null,
+    private val cancelGate: CompletableDeferred<Unit>? = null,
+    private val cancelFailure: Throwable? = null,
 ) : SessionRepository {
     override val runtimeTargetId: String? get() = targetId
     private val connectionStateValue = MutableStateFlow(connection)
@@ -1398,6 +1496,7 @@ private class FakeSessionRepository(
     private val messageState = MutableStateFlow<List<Message>>(emptyList())
     private val timelineStates = timelines.mapValues { MutableStateFlow(it.value) }.toMutableMap()
     val sentTexts = mutableListOf<String>()
+    val cancelledSessions = mutableListOf<String>()
     val structuredSends = mutableListOf<StructuredSend>()
     val runtimeEffortUpdates = mutableListOf<String?>()
     var runtimeUpdatedBeforeSend = false
@@ -1519,7 +1618,11 @@ private class FakeSessionRepository(
         structuredSends += StructuredSend(text, agentId, attachments, selection)
         sendMessage(sessionId, text, requestId)
     }
-    override suspend fun cancelSession(sessionId: String) = Unit
+    override suspend fun cancelSession(sessionId: String) {
+        cancelledSessions += sessionId
+        cancelGate?.await()
+        cancelFailure?.let { throw it }
+    }
     override suspend fun decideConfirmation(sessionId: String, confirmationId: String, decision: String, requestId: String) = Unit
     override suspend fun resolveApproval(runId: String, batchId: String, decisionsJson: String, requestId: String) = Unit
     override suspend fun resolveApprovedActions(sessionId: String, runId: String, batchId: String, approve: Boolean, requestId: String) {

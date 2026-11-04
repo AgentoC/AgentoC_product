@@ -1,0 +1,34 @@
+<resources>
+    <string name="journey_setup_computer">Configurer mon ordinateur</string>
+    <string name="journey_install_step">Installez sur l’ordinateur</string>
+    <string name="journey_code_step">Affichez le code sur l’ordinateur</string>
+    <string name="journey_scan_step">Scannez avec ce téléphone</string>
+    <string name="journey_installed">C’est installé</string>
+    <string name="journey_code_ready">Code affiché</string>
+    <string name="journey_previous">Précédent</string>
+    <string name="journey_step_count">Étape %1$d sur %2$d</string>
+    <string name="journey_handoff_hint">Envoyez le lien à votre ordinateur et installez AgentoC pour Windows.</string>
+    <string name="journey_share_link">Partager le lien de téléchargement</string>
+    <string name="journey_link_copied">Lien copié</string>
+    <string name="journey_link_failed">Impossible d’ouvrir une autre application. Copiez l’adresse et ouvrez-la sur votre ordinateur.</string>
+    <string name="journey_long_term">Connexion durable</string>
+    <string name="journey_temporary">Accès temporaire</string>
+    <string name="journey_account_instructions">Sur l’ordinateur : Phone pairing → Start phone pairing.\nChoisissez Trusted. Connectez Google sur un des appareils.</string>
+    <string name="journey_temporary_instructions">Sur l’ordinateur : Phone pairing → Start phone pairing.\nSans compte connecté, choisissez Temporary. Confirmez sur l’ordinateur pour un accès de 10 minutes.</string>
+    <string name="journey_have_code">J’ai déjà un code</string>
+    <string name="journey_home_quiet">Rien ne nécessite votre attention pour le moment.</string>
+    <string name="journey_continue_work">Reprendre le travail</string>
+    <string name="journey_connection_uncertain">Connexion indisponible. L’ordinateur peut encore travailler. Reconnectez-vous pour vérifier son état.</string>
+    <string name="journey_show_less">Réduire</string>
+    <string name="journey_show_all_actions">Voir toutes les tâches en attente</string>
+    <string name="journey_task_failed">Récupération nécessaire · ouvrir pour vérifier</string>
+    <string name="journey_reply_needed">En attente de votre réponse</string>
+    <string name="journey_approval_needed">En attente de votre autorisation</string>
+    <string name="journey_settings_scope">S’applique à : %1$s</string>
+    <string name="journey_settings_saving">Enregistrement en cours. Patientez.</string>
+    <string name="journey_settings_offline">Connectez cet ordinateur pour modifier sa configuration. Les informations déjà chargées peuvent être périmées.</string>
+    <string name="journey_connection_help">Aide à la connexion</string>
+    <string name="journey_stop_waiting">Arrêt demandé. En attente de confirmation de l’ordinateur.</string>
+    <string name="journey_stop_unknown">Le résultat de l’arrêt est inconnu. Reconnectez-vous pour vérifier la tâche initiale ; ne la soumettez pas à nouveau.</string>
+    <string name="journey_scan_hint">Visez le code affiché sur votre ordinateur, puis confirmez.</string>
+</resources>

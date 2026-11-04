@@ -82,7 +82,7 @@
     <string name="settings_version">Versión</string>
     <string name="settings_computer_label">Ordenador: %1$s</string>
     <string name="settings_model_providers">Proveedores de modelos</string>
-    <string name="settings_connectors_mcp">Conectores y MCP</string>
+    <string name="settings_connectors_mcp">Conexiones de aplicaciones y herramientas</string>
     <string name="settings_workspace_files">Archivos del espacio de trabajo</string>
     <string name="settings_scheduled_work">Trabajo programado</string>
     <string name="settings_usage">Uso</string>
@@ -156,7 +156,7 @@
     <string name="language_label_korean">한국어</string>
     <string name="language_label_french">Français</string>
     <string name="language_label_spanish">Español</string>
-    <string name="settings_harnesses">Harnesses</string>
+    <string name="settings_harnesses">Herramientas de ejecución de IA</string>
     <string name="workbench_connection_unavailable_title">Conexión no disponible</string>
     <string name="workbench_connection_unavailable_detail">No se pudo reconectar al equipo seleccionado.</string>
     <string name="workbench_reconnect">Reconectar</string>

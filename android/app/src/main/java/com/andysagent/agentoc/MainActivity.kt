@@ -348,6 +348,9 @@ class MainActivity : ComponentActivity() {
         // Network verification and connection continue through their existing UI states.
         splash.setKeepOnScreenCondition { !initialContentGate.ready }
         super.onCreate(savedInstanceState)
+        if (savedInstanceState?.containsKey("agentoc.setup.fromWelcome") == true) {
+            pendingPairingScanFromWelcome = savedInstanceState.getBoolean("agentoc.setup.fromWelcome")
+        }
         pairingScannerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val onboarding = activePairingOnboarding ?: return@registerForActivityResult
             when (result.resultCode) {
@@ -1063,6 +1066,7 @@ class MainActivity : ComponentActivity() {
                     sessionSearchQuery = shellState.sessionSearchQuery,
                     connection = shellState.connection,
                     runStatus = chatState.runStatus,
+                    stopRequest = chatState.stopRequest,
                     currentAction = chatState.currentAction,
                     serverRunActivity = chatState.serverRunActivity,
                     sessionTitle = chatState.sessionTitle,
@@ -1317,9 +1321,12 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onScanPairing = {
-                        pendingPairingScanFromWelcome = false
+                        startPairingScan(pairingOnboarding, returnToWelcomeOnFailure = false)
                     },
                     onScanPairingFromWelcome = {
+                        startPairingScan(pairingOnboarding, returnToWelcomeOnFailure = true)
+                    },
+                    onSetUpComputer = {
                         pendingPairingScanFromWelcome = true
                     },
                     onOpenSubscription = {
@@ -1332,6 +1339,7 @@ class MainActivity : ComponentActivity() {
                     },
                     onEvent = eventHandler@{ event ->
                         when (event) {
+                            WorkbenchEvent.OpenComputerSetup -> pendingPairingScanFromWelcome = false
                             is WorkbenchEvent.SelectDestination -> shell.onEvent(AppShellEvent.SelectDestination(event.destination))
                             is WorkbenchEvent.OpenSettingsPage -> {
                                 shell.onEvent(AppShellEvent.OpenSettingsPage(event.page))
@@ -1800,6 +1808,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        pendingPairingScanFromWelcome?.let { outState.putBoolean("agentoc.setup.fromWelcome", it) }
         outState.putStringArrayList("agentoc.navigation.consumed", ArrayList(consumedNotificationKeys))
         navigationIntakeKey?.let { outState.putString("agentoc.navigation.intakeKey", it) }
         pendingSessionNavigation?.let { outState.putString("agentoc.navigation.pending", AppApiJson.encodeToString(it)) }

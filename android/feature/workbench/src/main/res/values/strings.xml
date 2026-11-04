@@ -98,8 +98,8 @@
     <string name="settings_version">Version</string>
     <string name="settings_computer_label">Computer: %1$s</string>
     <string name="settings_model_providers">Model providers</string>
-    <string name="settings_harnesses">Harnesses</string>
-    <string name="settings_connectors_mcp">Connectors &amp; MCP</string>
+    <string name="settings_harnesses">AI runtime tools</string>
+    <string name="settings_connectors_mcp">Apps &amp; tool connections</string>
     <string name="settings_workspace_files">Workspace files</string>
     <string name="settings_scheduled_work">Scheduled work</string>
     <string name="settings_usage">Usage</string>
@@ -438,7 +438,7 @@
     <string name="project_new_folder">New folder</string>
     <string name="project_folder_name">Folder name</string>
     <string name="account_pairing_waiting">Signing in automatically. Keep both devices online.</string>
-    <string name="demo_sign_in_title">Test account sign-in</string>
+    <string name="demo_sign_in_title">Demo account sign-in</string>
     <string name="demo_sign_in_description">This demo workspace is shared with other testers. Do not enter personal or sensitive information in chats. Use sample data only.</string>
     <string name="demo_sign_in_username">Demo username</string>
     <string name="demo_sign_in_password">Demo password</string>

@@ -1,0 +1,34 @@
+<resources>
+    <string name="journey_setup_computer">Set up my computer</string>
+    <string name="journey_install_step">Install on your computer</string>
+    <string name="journey_code_step">Show the computer code</string>
+    <string name="journey_scan_step">Scan with this phone</string>
+    <string name="journey_installed">Installed</string>
+    <string name="journey_code_ready">Code ready</string>
+    <string name="journey_previous">Previous</string>
+    <string name="journey_step_count">Step %1$d of %2$d</string>
+    <string name="journey_handoff_hint">Send this link to your computer and install AgentoC for Windows.</string>
+    <string name="journey_share_link">Share download link</string>
+    <string name="journey_link_copied">Link copied</string>
+    <string name="journey_link_failed">Could not open another app. Copy the address and open it on your computer.</string>
+    <string name="journey_long_term">Long-term connection</string>
+    <string name="journey_temporary">Temporary access</string>
+    <string name="journey_account_instructions">On your computer: Phone pairing → Start phone pairing.\nChoose Trusted. Sign in to Google on either device.</string>
+    <string name="journey_temporary_instructions">On your computer: Phone pairing → Start phone pairing.\nIf signed out, choose Temporary. Confirm on the computer for 10 minutes of access.</string>
+    <string name="journey_have_code">I already have a code</string>
+    <string name="journey_home_quiet">Nothing needs your attention right now.</string>
+    <string name="journey_continue_work">Continue working</string>
+    <string name="journey_connection_uncertain">Connection unavailable. The computer may still be working. Reconnect to check its current status.</string>
+    <string name="journey_show_less">Show less</string>
+    <string name="journey_show_all_actions">Show all pending tasks</string>
+    <string name="journey_task_failed">Needs recovery · open to review</string>
+    <string name="journey_reply_needed">Waiting for your reply</string>
+    <string name="journey_approval_needed">Waiting for your approval</string>
+    <string name="journey_settings_scope">Applies to: %1$s</string>
+    <string name="journey_settings_saving">Saving. Please wait.</string>
+    <string name="journey_settings_offline">Connect this computer to change its settings. Previously loaded information may be out of date.</string>
+    <string name="journey_connection_help">Connection help</string>
+    <string name="journey_stop_waiting">Stop requested. Waiting for the computer to confirm.</string>
+    <string name="journey_stop_unknown">The stop result is unknown. Reconnect to check the original task; do not submit it again.</string>
+    <string name="journey_scan_hint">Point this phone at the code on your computer, then confirm.</string>
+</resources>

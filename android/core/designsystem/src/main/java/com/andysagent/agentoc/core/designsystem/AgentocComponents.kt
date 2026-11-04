@@ -1683,6 +1683,7 @@ fun AgentoDialog(
     actionLayout: AgentoDialogActionLayout = AgentoDialogActionLayout.Horizontal,
     backdropLayer: GraphicsLayer? = null,
     backgroundDimAmount: Float? = null,
+    opaqueFallback: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val colors = LocalAgentocColors.current
@@ -1747,6 +1748,11 @@ fun AgentoDialog(
                     // action never visually intersects the system handle.
                     .padding(bottom = compactBottomSafeArea)
                     .heightIn(max = maxHeight)
+                    // Instructional content must remain readable when the
+                    // caller has no sampled backdrop to defocus page text.
+                    .then(if (opaqueFallback && backdropLayer == null) Modifier.background(
+                        colors.canvas.copy(alpha = 1f), dialogShape,
+                    ) else Modifier)
                     .onGloballyPositioned { coordinates ->
                         val position = coordinates.positionInRoot()
                         backdropOffset = IntOffset(

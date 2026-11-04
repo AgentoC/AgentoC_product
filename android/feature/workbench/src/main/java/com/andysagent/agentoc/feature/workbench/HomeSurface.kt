@@ -39,6 +39,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.testTag
+import com.andysagent.agentoc.core.designsystem.AgentoButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -87,7 +92,7 @@ data class HomeSummaryUi(
 
 object HomeReferenceSpec {
     fun fromSessions(sessions: List<Session>): HomeSummaryUi {
-        val newestFirst = compareByDescending<Session> { it.latestSeq }.thenBy { it.id }
+        val newestFirst = compareByDescending<Session> { it.updatedAt }.thenByDescending { it.latestSeq }.thenBy { it.id }
         return HomeSummaryUi(
             focus = sessions.filter { it.isAttentionUnread() }.sortedWith(newestFirst),
             running = sessions.filter { it.status == SessionStatus.Working }.sortedWith(newestFirst),
@@ -96,6 +101,9 @@ object HomeReferenceSpec {
     }
 
     private fun Session.isAttentionUnread(): Boolean {
+        // Reading an approval does not resolve it. Keep the pending decision
+        // discoverable until the computer reports a different task state.
+        if (status == SessionStatus.WaitingApproval) return true
         if (status != SessionStatus.WaitingApproval && status != SessionStatus.Failed) return false
         val reviewedAt = lastReviewedAt ?: return true
         return reviewedAt < updatedAt
@@ -181,10 +189,9 @@ fun HomeSurface(
 ) {
     val summary = remember(state.sessions) { HomeReferenceSpec.fromSessions(state.sessions) }
     val palette = homePalette()
-    val hasRecoverableConnectionProblem = state.connection in setOf(
-        AgentConnectionStatus.AuthenticationRequired,
-        AgentConnectionStatus.Error,
-    )
+    val hasRecoverableConnectionProblem = state.connection != AgentConnectionStatus.Connected &&
+        (state.activeRemoteTargetId != null || state.connection in setOf(
+            AgentConnectionStatus.AuthenticationRequired, AgentConnectionStatus.Error))
     val isCompletelyEmpty = state.projects.isEmpty() &&
         state.sessions.isEmpty() &&
         state.otherDeviceProjects.isEmpty() &&
@@ -224,13 +231,18 @@ fun HomeSurface(
                 contentAlignment = Alignment.Center,
             ) {
                 HomeEmptyAction(
-                    label = stringResource(R.string.home_create_project),
+                    label = stringResource(if (state.activeRemoteTargetId == null)
+                        R.string.journey_setup_computer else R.string.home_create_project),
                     onClick = {
+                        if (state.activeRemoteTargetId == null) {
+                            onEvent(WorkbenchEvent.OpenComputerSetup)
+                        } else {
                         // The project location flow is hosted by the Chat
                         // root. Navigate there before opening it so the
                         // Home affordance is functional, not just visible.
                         onEvent(WorkbenchEvent.SelectDestination(AgentoDestination.Sessions))
                         onEvent(WorkbenchEvent.OpenProjectDialog)
+                        }
                     },
                 )
             }
@@ -289,8 +301,7 @@ fun HomeSurface(
                     }
                 }
 
-                // A passive offline state is not the user's current work. Keep
-                // Home focused unless an action (sign-in or recovery) is needed.
+                // Offline observations must not imply that remote work stopped.
                 if (hasRecoverableConnectionProblem) {
                     item(key = "connection-notice") {
                         HomeConnectionNotice(
@@ -302,13 +313,19 @@ fun HomeSurface(
                     }
                 }
 
+                if (summary.focus.isEmpty()) {
+                    item(key = "home-quiet") {
+                        Text(stringResource(R.string.journey_home_quiet),
+                            style = MaterialTheme.typography.bodyMedium, color = palette.secondary,
+                            modifier = contentModifier.padding(horizontal = 12.dp).testTag("home-quiet"))
+                    }
+                }
                 if (summary.focus.isNotEmpty()) {
                     item(key = "needs-attention") {
                         NeedsAttentionSection(
                             focusSessions = summary.focus,
                             onSelectSession = { onEvent(WorkbenchEvent.SelectSession(it)) },
                             onMarkSessionRead = { onEvent(WorkbenchEvent.MarkSessionRead(it)) },
-                            onOpenAll = { onEvent(WorkbenchEvent.SelectDestination(AgentoDestination.Sessions)) },
                             palette = palette,
                             modifier = contentModifier,
                         )
@@ -320,7 +337,6 @@ fun HomeSurface(
                         ActiveTasksSection(
                             runningSessions = summary.running,
                             onSelectSession = { onEvent(WorkbenchEvent.SelectSession(it)) },
-                            onOpenAll = { onEvent(WorkbenchEvent.SelectDestination(AgentoDestination.Sessions)) },
                             palette = palette,
                             modifier = contentModifier,
                         )
@@ -334,6 +350,20 @@ fun HomeSurface(
                             remoteTargets = state.remoteTargets,
                             modifier = contentModifier,
                         )
+                    }
+                }
+
+                val continueSession = state.sessions.filter {
+                    it.latestSeq > 0 && it.status !in setOf(SessionStatus.Working, SessionStatus.WaitingApproval)
+                }.maxByOrNull { it.updatedAt }
+                if (continueSession != null) {
+                    item(key = "continue-work") {
+                        HomeSection(title = stringResource(R.string.journey_continue_work), palette = palette,
+                            grouped = true, modifier = contentModifier) {
+                            AgentoButton(continueSession.title, onClick = {
+                                onEvent(WorkbenchEvent.SelectSession(continueSession.id))
+                            }, secondary = true, modifier = Modifier.fillMaxWidth().testTag("home-continue-work"))
+                        }
                     }
                 }
 
@@ -516,8 +546,8 @@ private fun HomeConnectionNotice(
         AgentConnectionStatus.Connecting,
         AgentConnectionStatus.Reconnecting,
         AgentConnectionStatus.Disconnected,
-        AgentConnectionStatus.Connected
-        -> return
+        -> stringResource(R.string.journey_connection_uncertain)
+        AgentConnectionStatus.Connected -> return
         AgentConnectionStatus.AuthenticationRequired -> stringResource(R.string.home_connection_authentication_required)
         AgentConnectionStatus.Error -> stringResource(R.string.home_connection_failed)
     }
@@ -547,8 +577,6 @@ private fun HomeConnectionNotice(
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium,
                 color = palette.primary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
             HomeIconAction(
                 glyph = AgentoWebGlyph.Refresh,
@@ -565,10 +593,11 @@ private fun NeedsAttentionSection(
     focusSessions: List<Session>,
     onSelectSession: (String) -> Unit,
     onMarkSessionRead: (String) -> Unit,
-    onOpenAll: () -> Unit,
     palette: HomePalette,
     modifier: Modifier = Modifier,
 ) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val visibleSessions = if (expanded) focusSessions else focusSessions.take(2)
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(9.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
@@ -586,12 +615,12 @@ private fun NeedsAttentionSection(
                 overflow = TextOverflow.Ellipsis,
             )
             if (focusSessions.size > 2) {
-                val actionLabel = stringResource(R.string.home_view_all_projects)
+                val actionLabel = stringResource(if (expanded) R.string.journey_show_less else R.string.journey_show_all_actions)
                 Text(
                     text = actionLabel,
                     modifier = Modifier
                         .heightIn(min = 48.dp)
-                        .agentoPressScale(pressedScale = 0.96f, onClick = onOpenAll)
+                        .agentoPressScale(pressedScale = 0.96f, onClick = { expanded = !expanded })
                         .padding(horizontal = 6.dp)
                         .semantics {
                             role = Role.Button
@@ -603,7 +632,7 @@ private fun NeedsAttentionSection(
             }
         }
         HomeSectionGroup(palette = palette) {
-            focusSessions.take(2).forEachIndexed { index, session ->
+            visibleSessions.forEachIndexed { index, session ->
                 AttentionRow(
                     session = session,
                     onOpen = { onSelectSession(session.id) },
@@ -613,7 +642,7 @@ private fun NeedsAttentionSection(
                     // already owns the high-priority emphasis for this task.
                     emphasized = false,
                 )
-                if (index < focusSessions.take(2).lastIndex) HomeDivider(palette)
+                if (index < visibleSessions.lastIndex) HomeDivider(palette)
             }
         }
     }
@@ -654,8 +683,13 @@ private fun AttentionRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            Text(stringResource(when {
+                session.status == SessionStatus.Failed -> R.string.journey_task_failed
+                session.waitingAction == "reply" -> R.string.journey_reply_needed
+                else -> R.string.journey_approval_needed
+            }), style = MaterialTheme.typography.bodySmall, color = palette.secondary)
         }
-        HomeIconAction(
+        if (session.status != SessionStatus.WaitingApproval) HomeIconAction(
             glyph = AgentoWebGlyph.Check,
             contentDescription = stringResource(R.string.home_mark_read),
             tint = palette.tertiary,
@@ -668,25 +702,27 @@ private fun AttentionRow(
 private fun ActiveTasksSection(
     runningSessions: List<Session>,
     onSelectSession: (String) -> Unit,
-    onOpenAll: () -> Unit,
     palette: HomePalette,
     modifier: Modifier = Modifier,
 ) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val visibleSessions = if (expanded) runningSessions else runningSessions.take(2)
     HomeSection(
         title = stringResource(R.string.home_active_tasks),
         palette = palette,
         grouped = true,
-        actionLabel = stringResource(R.string.home_view_all_projects).takeIf { runningSessions.size > 2 },
-        onAction = onOpenAll,
+        actionLabel = stringResource(if (expanded) R.string.journey_show_less else R.string.home_view_all_projects)
+            .takeIf { runningSessions.size > 2 },
+        onAction = { expanded = !expanded },
         modifier = modifier,
     ) {
-        runningSessions.take(2).forEachIndexed { index, session ->
+        visibleSessions.forEachIndexed { index, session ->
             RunningTaskRow(
                 title = session.title,
                 onClick = { onSelectSession(session.id) },
                 palette = palette,
             )
-            if (index < runningSessions.take(2).lastIndex) HomeDivider(palette)
+            if (index < visibleSessions.lastIndex) HomeDivider(palette)
         }
     }
 }

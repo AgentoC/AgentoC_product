@@ -1,0 +1,34 @@
+<resources>
+    <string name="journey_setup_computer">내 컴퓨터 설정</string>
+    <string name="journey_install_step">먼저 컴퓨터에 설치</string>
+    <string name="journey_code_step">컴퓨터에 연결 코드 표시</string>
+    <string name="journey_scan_step">이 휴대전화로 스캔</string>
+    <string name="journey_installed">설치 완료</string>
+    <string name="journey_code_ready">코드가 보여요</string>
+    <string name="journey_previous">이전</string>
+    <string name="journey_step_count">%1$d / %2$d단계</string>
+    <string name="journey_handoff_hint">링크를 컴퓨터로 보내 Windows용 AgentoC를 설치하세요.</string>
+    <string name="journey_share_link">다운로드 링크 공유</string>
+    <string name="journey_link_copied">링크 복사됨</string>
+    <string name="journey_link_failed">다른 앱을 열 수 없습니다. 주소를 복사해 컴퓨터에서 여세요.</string>
+    <string name="journey_long_term">장기 연결</string>
+    <string name="journey_temporary">임시 접근</string>
+    <string name="journey_account_instructions">컴퓨터: Phone pairing → Start phone pairing.\nTrusted를 선택하고 한 기기에서 Google에 로그인하세요.</string>
+    <string name="journey_temporary_instructions">컴퓨터: Phone pairing → Start phone pairing.\n로그아웃 상태라면 Temporary를 선택하세요. 컴퓨터에서 승인하면 10분간 이용할 수 있습니다.</string>
+    <string name="journey_have_code">이미 코드가 있어요</string>
+    <string name="journey_home_quiet">지금 처리할 항목이 없습니다.</string>
+    <string name="journey_continue_work">작업 계속하기</string>
+    <string name="journey_connection_uncertain">연결할 수 없습니다. 컴퓨터는 계속 작업 중일 수 있습니다. 다시 연결해 현재 상태를 확인하세요.</string>
+    <string name="journey_show_less">접기</string>
+    <string name="journey_show_all_actions">대기 중인 모든 작업 보기</string>
+    <string name="journey_task_failed">복구 필요 · 열어서 확인</string>
+    <string name="journey_reply_needed">답변을 기다리는 중</string>
+    <string name="journey_approval_needed">승인을 기다리는 중</string>
+    <string name="journey_settings_scope">설정 대상: %1$s</string>
+    <string name="journey_settings_saving">저장 중입니다. 잠시 기다리세요.</string>
+    <string name="journey_settings_offline">설정을 변경하려면 이 컴퓨터에 연결하세요. 이전에 불러온 정보가 최신 상태가 아닐 수 있습니다.</string>
+    <string name="journey_connection_help">연결 도움말</string>
+    <string name="journey_stop_waiting">중지를 요청했습니다. 컴퓨터의 확인을 기다리는 중입니다.</string>
+    <string name="journey_stop_unknown">중지 결과를 알 수 없습니다. 다시 연결해 원래 작업을 확인하세요. 작업을 다시 제출하지 마세요.</string>
+    <string name="journey_scan_hint">컴퓨터 화면의 코드를 비춘 후 확인하세요.</string>
+</resources>

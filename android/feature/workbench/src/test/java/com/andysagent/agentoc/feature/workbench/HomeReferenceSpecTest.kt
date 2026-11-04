@@ -74,11 +74,11 @@ class HomeReferenceSpecTest {
     }
 
     @Test
-    fun `mark read removes attention card until later activity`() {
+    fun `mark read removes reviewed failure until later activity`() {
         val reviewed = Session(
             "waiting",
             "Review export",
-            status = SessionStatus.WaitingApproval,
+            status = SessionStatus.Failed,
             latestSeq = 8,
             updatedAt = 1_000L,
             lastReviewedAt = 1_500L,
@@ -101,5 +101,20 @@ class HomeReferenceSpecTest {
         )
         // Cards without a review stamp are always surfaced.
         assertEquals(listOf("failed"), HomeReferenceSpec.fromSessions(listOf(unreviewed)).focus.map { it.id })
+    }
+
+    @Test
+    fun `reading a pending approval never hides an unresolved decision`() {
+        val waiting = Session("approval", "Approve", status = SessionStatus.WaitingApproval,
+            updatedAt = 1_000L, lastReviewedAt = 2_000L)
+        assertEquals(listOf("approval"), HomeReferenceSpec.fromSessions(listOf(waiting)).focus.map { it.id })
+        assertEquals(emptyList(), HomeReferenceSpec.fromSessions(listOf(waiting.copy(status = SessionStatus.Completed))).focus)
+    }
+
+    @Test
+    fun `Home recency compares time rather than independent session sequence numbers`() {
+        val longOldTask = Session("old", "Old", status = SessionStatus.Working, updatedAt = 1, latestSeq = 900)
+        val newTask = Session("new", "New", status = SessionStatus.Working, updatedAt = 2, latestSeq = 1)
+        assertEquals(listOf("new", "old"), HomeReferenceSpec.fromSessions(listOf(longOldTask, newTask)).running.map { it.id })
     }
 }

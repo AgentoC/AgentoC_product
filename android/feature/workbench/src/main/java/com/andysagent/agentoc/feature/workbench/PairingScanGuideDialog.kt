@@ -1,107 +1,122 @@
 package com.andysagent.agentoc.feature.workbench
 
+import android.content.Intent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
-import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.andysagent.agentoc.core.designsystem.AgentoDialog
-import com.andysagent.agentoc.core.designsystem.AgentoDialogActionLayout
-import com.andysagent.agentoc.core.designsystem.LocalAgentocColors
+import com.andysagent.agentoc.core.designsystem.*
 
 private const val COMPUTER_RELEASES_URL = "https://www.agentoncloud.com/download.html"
 
-/** Shared by every scanner entry, including first run and additional computers. */
+/** One action per step; account and temporary-access details stay contextual. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PairingScanGuideDialog(onScan: () -> Unit, onDismiss: () -> Unit) {
     val clipboard = LocalClipboardManager.current
-    val uriHandler = LocalUriHandler.current
-    // Resolve before entering the dialog window so the selected app language is retained.
-    val title = stringResource(R.string.pairing_setup_guide_title)
-    val scan = stringResource(R.string.pairing_setup_guide_scan)
-    val cancel = stringResource(R.string.pairing_cancel)
-    val install = stringResource(R.string.pairing_setup_guide_install)
-    val open = stringResource(R.string.pairing_setup_guide_open)
-    val copy = stringResource(R.string.pairing_setup_guide_copy)
-    val desktop = stringResource(R.string.pairing_setup_guide_desktop)
-    val scanHelp = stringResource(R.string.pairing_setup_guide_scan_help)
+    val context = LocalContext.current
     val colors = LocalAgentocColors.current
+    var step by rememberSaveable { mutableIntStateOf(0) }
+    var temporary by rememberSaveable { mutableStateOf(false) }
+    var feedback by rememberSaveable { mutableStateOf<Int?>(null) }
+    val stepTitle = stringResource(when (step) {
+        0 -> R.string.journey_install_step
+        1 -> R.string.journey_code_step
+        else -> R.string.journey_scan_step
+    })
+    val progress = stringResource(R.string.journey_step_count, step + 1, 3)
     AgentoDialog(
-        title = title,
-        confirmLabel = scan,
-        dismissLabel = cancel,
-        onConfirm = onScan,
-        onDismiss = onDismiss,
+        title = stepTitle,
+        icon = { Text("${step + 1}", style = MaterialTheme.typography.headlineSmall, color = colors.actionPrimary) },
+        modifier = Modifier.testTag("computer-setup-guide"),
+        confirmLabel = stringResource(when (step) {
+            0 -> R.string.journey_installed
+            1 -> R.string.journey_code_ready
+            else -> R.string.pairing_setup_guide_scan
+        }),
+        confirmModifier = Modifier.testTag("computer-setup-next"),
+        dismissLabel = stringResource(if (step == 0) R.string.pairing_cancel else R.string.journey_previous),
+        onConfirm = { if (step == 2) onScan() else { step++; feedback = null } },
+        onDismiss = { if (step == 0) onDismiss() else { step--; feedback = null } },
+        onDismissRequest = { if (step == 0) onDismiss() else { step--; feedback = null } },
         actionLayout = AgentoDialogActionLayout.PrimaryWithTextDismiss,
+        opaqueFallback = true,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            PairingGuideStep(number = "1", text = install) {
-                Column(
-                    modifier = Modifier.fillMaxWidth()
-                        .padding(top = 10.dp)
-                        .background(colors.primaryContent.copy(alpha = 0.045f), RoundedCornerShape(14.dp))
-                        .padding(start = 12.dp, top = 4.dp, end = 4.dp, bottom = 4.dp),
-                ) {
-                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(COMPUTER_RELEASES_URL, modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = colors.secondaryContent, lineHeight = 17.sp)
-                        IconButton(onClick = { clipboard.setText(AnnotatedString(COMPUTER_RELEASES_URL)) }) {
-                            Icon(Icons.Outlined.ContentCopy, contentDescription = copy,
-                                modifier = Modifier.size(19.dp), tint = colors.secondaryContent)
-                        }
-                    }
-                    TextButton(onClick = { runCatching { uriHandler.openUri(COMPUTER_RELEASES_URL) } }) {
-                        Text(open, style = MaterialTheme.typography.labelLarge, color = colors.actionPrimary)
-                        Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null,
-                            modifier = Modifier.padding(start = 6.dp).size(18.dp), tint = colors.actionPrimary)
-                    }
+        Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth().testTag("computer-setup-step")
+                    .semantics { contentDescription = progress; liveRegion = LiveRegionMode.Polite }) {
+                repeat(3) { index ->
+                    Box(Modifier.weight(1f).height(4.dp).background(
+                        if (index <= step) colors.actionPrimary else colors.subtleOutline, AgentoShapes.Pill))
                 }
             }
-            PairingGuideStep(number = "2", text = desktop)
-            PairingGuideStep(number = "3", text = scanHelp)
+            when (step) {
+                0 -> {
+                    Text(stringResource(if (feedback == R.string.journey_link_failed) R.string.journey_link_failed else R.string.journey_handoff_hint),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AgentoButton(text = stringResource(R.string.journey_share_link), secondary = true,
+                            secondaryContainerColor = colors.canvas.copy(alpha = 0f), labelMaxLines = 2,
+                            contentPadding = PaddingValues(horizontal = 4.dp),
+                            leadingIcon = { AgentoWebIcon(AgentoWebGlyph.Share, null, Modifier.size(24.dp)) },
+                            onClick = {
+                            feedback = null
+                            runCatching {
+                                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, COMPUTER_RELEASES_URL)
+                                }, context.getString(R.string.journey_share_link)))
+                            }.onFailure { feedback = R.string.journey_link_failed }
+                        })
+                        AgentoButton(text = stringResource(if (feedback == R.string.journey_link_copied) R.string.journey_link_copied else R.string.pairing_setup_guide_copy), secondary = true,
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                            secondaryContainerColor = colors.canvas.copy(alpha = 0f), labelMaxLines = 2,
+                            contentPadding = PaddingValues(horizontal = 4.dp),
+                            leadingIcon = { AgentoWebIcon(AgentoWebGlyph.Copy, null, Modifier.size(24.dp)) },
+                            onClick = {
+                            clipboard.setText(AnnotatedString(COMPUTER_RELEASES_URL))
+                            feedback = R.string.journey_link_copied
+                        })
+                    }
+                }
+                1 -> {
+                    Column(Modifier.selectableGroup()) {
+                        SetupConnectionChoice(stringResource(R.string.journey_long_term), !temporary,
+                            "setup-long-term") { temporary = false }
+                        SetupConnectionChoice(stringResource(R.string.journey_temporary), temporary,
+                            "setup-temporary") { temporary = true }
+                    }
+                    Text(stringResource(if (temporary) R.string.journey_temporary_instructions else R.string.journey_account_instructions),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.testTag("computer-setup-method").semantics { liveRegion = LiveRegionMode.Polite })
+                }
+                else -> Text(stringResource(R.string.journey_scan_hint), style = MaterialTheme.typography.bodyLarge)
+            }
         }
     }
 }
 
 @Composable
-private fun PairingGuideStep(number: String, text: String, content: @Composable () -> Unit = {}) {
-    val colors = LocalAgentocColors.current
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-        Box(
-            modifier = Modifier.size(26.dp).background(colors.actionPrimary.copy(alpha = 0.10f), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(number, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
-                color = colors.actionPrimary)
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text, style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
-                color = colors.primaryContent)
-            content()
-        }
-    }
+private fun SetupConnectionChoice(label: String, isSelected: Boolean, tag: String, onClick: () -> Unit) {
+    AgentoSettingRow(title = label, showChevron = false, showDivider = false,
+        contentHorizontalPadding = 4.dp,
+        modifier = Modifier.testTag(tag).semantics { selected = isSelected; role = Role.RadioButton },
+        trailing = {
+            if (isSelected) AgentoWebIcon(AgentoWebGlyph.Check, null,
+                Modifier.size(24.dp), tint = LocalAgentocColors.current.actionPrimary)
+            else Spacer(Modifier.size(24.dp))
+        }, onClick = onClick)
 }

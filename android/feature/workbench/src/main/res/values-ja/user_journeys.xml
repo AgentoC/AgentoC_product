@@ -1,0 +1,34 @@
+<resources>
+    <string name="journey_setup_computer">自分のコンピュータを設定</string>
+    <string name="journey_install_step">まずパソコンにインストール</string>
+    <string name="journey_code_step">パソコンにコードを表示</string>
+    <string name="journey_scan_step">このスマホでスキャン</string>
+    <string name="journey_installed">インストール済み</string>
+    <string name="journey_code_ready">コード表示済み</string>
+    <string name="journey_previous">前へ</string>
+    <string name="journey_step_count">ステップ %1$d / %2$d</string>
+    <string name="journey_handoff_hint">リンクをパソコンに送り、Windows 版 AgentoC をインストールします。</string>
+    <string name="journey_share_link">ダウンロードリンクを共有</string>
+    <string name="journey_link_copied">コピーしました</string>
+    <string name="journey_link_failed">他のアプリを開けませんでした。アドレスをコピーしてコンピュータで開いてください。</string>
+    <string name="journey_long_term">継続的な接続</string>
+    <string name="journey_temporary">一時アクセス</string>
+    <string name="journey_account_instructions">パソコン：Phone pairing → Start phone pairing。\nTrusted を選び、どちらかの端末で Google にログインします。</string>
+    <string name="journey_temporary_instructions">パソコン：Phone pairing → Start phone pairing。\n未ログインなら Temporary を選択。パソコンで承認すると 10 分間利用できます。</string>
+    <string name="journey_have_code">コードを持っています</string>
+    <string name="journey_home_quiet">現在、対応が必要な項目はありません。</string>
+    <string name="journey_continue_work">作業を続ける</string>
+    <string name="journey_connection_uncertain">接続を利用できません。コンピュータの作業は続いている可能性があります。再接続して現在の状態を確認してください。</string>
+    <string name="journey_show_less">折りたたむ</string>
+    <string name="journey_show_all_actions">すべての要対応タスクを表示</string>
+    <string name="journey_task_failed">復旧が必要 · 開いて確認</string>
+    <string name="journey_reply_needed">回答を待っています</string>
+    <string name="journey_approval_needed">承認を待っています</string>
+    <string name="journey_settings_scope">設定対象：%1$s</string>
+    <string name="journey_settings_saving">保存中です。お待ちください。</string>
+    <string name="journey_settings_offline">設定を変更するには、このコンピュータに接続してください。以前読み込んだ情報は最新ではない可能性があります。</string>
+    <string name="journey_connection_help">接続のヘルプ</string>
+    <string name="journey_stop_waiting">停止を要求しました。コンピュータの確認を待っています。</string>
+    <string name="journey_stop_unknown">停止結果が不明です。再接続して元のタスクを確認してください。タスクを再送信しないでください。</string>
+    <string name="journey_scan_hint">パソコン画面のコードにスマホを向け、確認します。</string>
+</resources>

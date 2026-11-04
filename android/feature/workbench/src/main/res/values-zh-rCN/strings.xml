@@ -98,8 +98,8 @@
     <string name="settings_version">版本</string>
     <string name="settings_computer_label">电脑：%1$s</string>
     <string name="settings_model_providers">模型提供商</string>
-    <string name="settings_harnesses">Harness 管理</string>
-    <string name="settings_connectors_mcp">连接器与 MCP</string>
+    <string name="settings_harnesses">AI 运行工具</string>
+    <string name="settings_connectors_mcp">应用与工具连接</string>
     <string name="settings_workspace_files">工作区文件</string>
     <string name="settings_scheduled_work">计划任务</string>
     <string name="settings_usage">用量</string>
@@ -428,7 +428,7 @@
     <string name="attention_error">错误</string>
     <string name="attention_clear_error">知道了</string>
     <string name="account_pairing_waiting">正在自动完成账号登录，请保持两台设备在线。</string>
-    <string name="demo_sign_in_title">特殊测试账号登录</string>
+    <string name="demo_sign_in_title">演示账号登录</string>
     <string name="demo_sign_in_description">此演示工作台由测试者共用。请勿在会话中输入个人隐私或敏感信息，仅使用示例数据。</string>
     <string name="demo_sign_in_username">演示账号</string>
     <string name="demo_sign_in_password">演示密码</string>

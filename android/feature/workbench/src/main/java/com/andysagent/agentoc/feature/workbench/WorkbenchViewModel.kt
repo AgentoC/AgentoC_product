@@ -33,6 +33,7 @@ import com.andysagent.agentoc.core.model.RuntimeModelOption
 import com.andysagent.agentoc.core.domain.RuntimeSelection
 import com.andysagent.agentoc.core.model.RemoteTarget
 import com.andysagent.agentoc.core.model.Session
+import com.andysagent.agentoc.core.model.SessionStatus
 import com.andysagent.agentoc.core.navigation.AgentoDestination
 import com.andysagent.agentoc.core.timeline.TimelineItem
 import com.andysagent.agentoc.core.timeline.TimelineOperationKind
@@ -67,6 +68,7 @@ private const val ARTIFACT_PARSE_OFFLOAD_TEXT_LENGTH = 12_000
 /** Pure render aggregate used by previews and the current Workbench composable. */
 @Immutable
 data class WorkbenchUiState(
+    val stopRequest: StopRequestState = StopRequestState.None,
     val destination: AgentoDestination = AgentoDestination.Home,
     val settingsPage: SettingsPage = SettingsPage.Overview,
     val chatOpen: Boolean = false,
@@ -186,6 +188,7 @@ enum class SettingsPage {
 }
 
 sealed interface WorkbenchEvent {
+    data object OpenComputerSetup : WorkbenchEvent
     data class SelectDestination(val destination: AgentoDestination) : WorkbenchEvent
     data class OpenSettingsPage(val page: SettingsPage) : WorkbenchEvent
     data object CloseSettingsPage : WorkbenchEvent
@@ -402,6 +405,7 @@ class AppShellViewModel(private val repository: SessionRepository) : ViewModel()
 
 @Immutable
 data class ChatUiState(
+    val stopRequest: StopRequestState = StopRequestState.None,
     val connection: AgentConnectionStatus = AgentConnectionStatus.Disconnected,
     val runStatus: AgentRunStatus = AgentRunStatus.Idle,
     val currentAction: RunActionUiState? = null,
@@ -480,6 +484,10 @@ data class PendingTurnUiState(
 )
 
 enum class PendingTurnState { Sending, Accepted, Failed }
+
+/** A request acknowledgement is not proof that the computer has stopped. */
+enum class StopRequestState { None, AwaitingConfirmation, OutcomeUnknown }
+private data class PendingStopRequest(val state: StopRequestState)
 
 sealed interface ChatEvent {
     data class ComposerChanged(val text: String) : ChatEvent
@@ -641,6 +649,7 @@ class ChatViewModel(
     private var knownSessions: List<Session> = emptyList()
     private var knownSessionsRepository: SessionRepository? = null
     private var selectedRepository: SessionRepository? = null
+    private val stopRequests = mutableMapOf<Pair<SessionRepository, String>, PendingStopRequest>()
     private val approvalResolutionLock = Any()
     private val sessionDrafts = mutableMapOf<Pair<SessionRepository, String>, String>()
     // A local echo belongs to one target repository and one session, including
@@ -736,6 +745,9 @@ class ChatViewModel(
             scopedSessions().collectLatest { (fixed, sessions) ->
                 if (fixed !== activeRepository()) return@collectLatest
                 knownSessions = sessions
+                if (fixed != null) sessions.filter {
+                    it.status !in setOf(SessionStatus.Working, SessionStatus.WaitingApproval)
+                }.forEach { stopRequests.remove(fixed to it.id) }
                 knownSessionsRepository = fixed
                 val currentId = mutableState.value.sessionId
                 val selected = sessions.firstOrNull { it.id == currentId }
@@ -2510,11 +2522,36 @@ class ChatViewModel(
     }
 
     private fun cancelRun() {
-        val sessionId = mutableState.value.sessionId ?: return
+        val current = mutableState.value
+        val sessionId = current.sessionId ?: return
+        val fixed = activeRepository() ?: return
+        if (fixed !== selectedRepository || current.connection != AgentConnectionStatus.Connected ||
+            current.runStatus !in setOf(AgentRunStatus.Working, AgentRunStatus.WaitingApproval)) return
+        val key = fixed to sessionId
+        if (key in stopRequests) return
+        val pending = PendingStopRequest(StopRequestState.AwaitingConfirmation)
+        stopRequests[key] = pending
+        updateState { this }
         viewModelScope.launch {
-            runCatching { repository.cancelSession(sessionId) }
-                .onSuccess { refreshSession(sessionId) }
-                .onFailure { showError(it, "Run could not be stopped") }
+            try {
+                fixed.cancelSession(sessionId)
+                // Refresh the captured computer, even if the user navigates
+                // elsewhere. Only its authoritative task state ends waiting.
+                fixed.refreshSessions()
+                fixed.refreshTimeline(sessionId)
+                // An acknowledgement without a terminal task update must not
+                // leave the user waiting forever. Recheck never replays work.
+                kotlinx.coroutines.delay(15_000)
+                if (stopRequests[key] === pending) {
+                    stopRequests[key] = PendingStopRequest(StopRequestState.OutcomeUnknown)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                if (stopRequests[key] === pending) stopRequests[key] = PendingStopRequest(StopRequestState.OutcomeUnknown)
+            } finally {
+                if (selectedRepository === fixed && mutableState.value.sessionId == sessionId) updateState { this }
+            }
         }
     }
 
@@ -2655,10 +2692,29 @@ class ChatViewModel(
     }
 
     private fun retry() {
+        val fixed = activeRepository() ?: return
+        val sessionId = mutableState.value.sessionId
+        val generation = sessionGeneration
         updateState { copy(error = null) }
         viewModelScope.launch {
-            refreshSessions()
-            mutableState.value.sessionId?.let { refreshSession(it) }
+            try {
+                fixed.refreshSessions()
+                // A successful explicit recheck restores the ability to stop
+                // a task that the computer still reports as running. It never
+                // replays either the original message or the stop command.
+                sessionId?.let { id ->
+                    val key = fixed to id
+                    if (stopRequests[key]?.state == StopRequestState.OutcomeUnknown) stopRequests.remove(key)
+                    if (selectedRepository === fixed && isCurrentSession(id, generation)) {
+                        updateState { this }
+                        refreshSession(id, generation)
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                if (activeRepository() === fixed && sessionGeneration == generation) showError(error, "Sessions could not be loaded")
+            }
         }
     }
 
@@ -2722,7 +2778,10 @@ class ChatViewModel(
 
     private fun updateState(transform: ChatUiState.() -> ChatUiState) {
         val previous = mutableState.value
-        val next = previous.transform()
+        val transformed = previous.transform()
+        val next = transformed.copy(stopRequest = transformed.sessionId?.let { id ->
+            selectedRepository?.let { stopRequests[it to id]?.state }
+        } ?: StopRequestState.None)
         // A normal error must never inherit the auto-dismiss behavior of an
         // earlier connectivity error merely because an intermediate action
         // cleared the banner first.
