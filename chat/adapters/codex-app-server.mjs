@@ -38,6 +38,7 @@ export function createCodexAppServerAdapter() {
   // Without this, text_delta is visible while streaming but vanishes as soon
   // as the client refreshes from history.
   const agentMessageTextByItemId = new Map();
+  const reasoningTextByItemId = new Map();
   // App-server text deltas have no transport event id. Keep a monotonic
   // ordinal per provider item so reconnect/replay can identify an immutable
   // delta without collapsing legitimate repeated characters.
@@ -68,6 +69,7 @@ export function createCodexAppServerAdapter() {
       return parseAppServerMessage(obj, {
         planTextByItemId,
         agentMessageTextByItemId,
+        reasoningTextByItemId,
         autoApprovedIds,
         textDeltaOrdinalByItemId,
       });
@@ -162,7 +164,7 @@ function parseAppServerMessage(message, state = {}) {
 
     case 'item/reasoning/textDelta':
     case 'item/reasoning/summaryTextDelta':
-      return parseReasoningDelta(message.params);
+      return parseReasoningDelta(message.params, state, message.method);
 
     case 'item/commandExecution/outputDelta':
     case 'command/exec/outputDelta':
@@ -513,16 +515,24 @@ function agentMessageStreamId(params = {}, item = null, known = {}) {
   return `${threadId || 'thread'}:${turnId || 'turn'}:anonymous`;
 }
 
-function parseReasoningDelta(params) {
+function parseReasoningDelta(params, state = {}, method = '') {
   const delta = typeof params?.delta === 'string' ? params.delta : '';
   if (!delta) return [];
   const providerItemId = readProviderItemId(params);
   const providerThreadId = readPlanThreadId(params);
   const providerTurnId = readPlanTurnId(params);
+  if (providerItemId && state.reasoningTextByItemId instanceof Map) {
+    const current = state.reasoningTextByItemId.get(providerItemId) || { summary: new Map(), content: new Map() };
+    const sections = method.includes('summaryTextDelta') ? current.summary : current.content;
+    const index = Number.isInteger(params?.summaryIndex) ? params.summaryIndex
+      : Number.isInteger(params?.contentIndex) ? params.contentIndex : 0;
+    sections.set(index, `${sections.get(index) || ''}${delta}`.slice(0, 256 * 1024));
+    state.reasoningTextByItemId.set(providerItemId, current);
+  }
   return [reasoningEvent(delta, {
     provider: 'codex',
     runtimeFamily: CODEX_APP_SERVER_RUNTIME_FAMILY,
-    ...(providerItemId ? { providerItemId } : {}),
+    ...(providerItemId ? { providerItemId, providerMessageId: providerItemId } : {}),
     ...(providerThreadId ? { providerThreadId } : {}),
     ...(providerTurnId ? { providerTurnId } : {}),
     providerBlockId: providerItemId || 'thinking:0',
@@ -720,7 +730,14 @@ function parseThreadItem(item, lifecycle = 'completed', params = {}, state = {})
       const parts = [
         ...(Array.isArray(item.summary) ? item.summary : []),
         ...(Array.isArray(item.content) ? item.content : []),
-      ].filter(Boolean);
+      ].map((part) => typeof part === 'string' ? part : typeof part?.text === 'string' ? part.text : '').filter(Boolean);
+      const buffered = providerItemId ? state.reasoningTextByItemId?.get(providerItemId) : null;
+      if (parts.length === 0 && lifecycle === 'completed' && buffered) {
+        for (const sections of [buffered.summary, buffered.content]) {
+          parts.push(...[...sections.entries()].sort(([left], [right]) => left - right).map(([, value]) => value));
+        }
+      }
+      if (lifecycle === 'completed' && providerItemId) state.reasoningTextByItemId?.delete(providerItemId);
       if (parts.length > 0) events.push(reasoningEvent(parts.join('\n\n'), {
         ...(providerItemId ? { providerMessageId: providerItemId, providerBlockId: providerItemId } : {}),
         reasoningLifecycle: lifecycle === 'completed' ? 'completed' : 'delta',

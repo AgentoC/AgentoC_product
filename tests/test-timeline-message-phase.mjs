@@ -31,6 +31,36 @@ const codexThinking = createCodexAppServerAdapter().parseLine(JSON.stringify({ m
 } })).find((event) => event.type === 'reasoning');
 assert.equal(codexThinking?.reasoningLifecycle, 'completed');
 assert.equal(codexThinking?.providerMessageId, 'reasoning-1');
+const streamedThinking = createCodexAppServerAdapter();
+const firstReasoning = streamedThinking.parseLine(JSON.stringify({ method: 'item/reasoning/summaryTextDelta',
+  params: { itemId: 'reasoning-stream', summaryIndex: 0, delta: 'Inspecting ' },
+})).find((event) => event.type === 'reasoning');
+streamedThinking.parseLine(JSON.stringify({ method: 'item/reasoning/summaryTextDelta',
+  params: { itemId: 'reasoning-stream', summaryIndex: 0, delta: 'changes' },
+}));
+const recoveredThinking = streamedThinking.parseLine(JSON.stringify({ method: 'item/completed',
+  params: { item: { id: 'reasoning-stream', type: 'reasoning', summary: [] } },
+})).find((event) => event.type === 'reasoning');
+assert.equal(firstReasoning?.providerMessageId, recoveredThinking?.providerMessageId);
+assert.equal(recoveredThinking?.content, 'Inspecting changes');
+assert.equal(recoveredThinking?.reasoningLifecycle, 'completed');
+streamedThinking.parseLine(JSON.stringify({ method: 'item/reasoning/summaryTextDelta',
+  params: { itemId: 'a', summaryIndex: 1, delta: 'second' },
+}));
+streamedThinking.parseLine(JSON.stringify({ method: 'item/reasoning/summaryTextDelta',
+  params: { itemId: 'a', summaryIndex: 0, delta: 'first' },
+}));
+streamedThinking.parseLine(JSON.stringify({ method: 'item/reasoning/summaryTextDelta',
+  params: { itemId: 'b', summaryIndex: 0, delta: 'other' },
+}));
+const completeA = streamedThinking.parseLine(JSON.stringify({ method: 'item/completed',
+  params: { item: { id: 'a', type: 'reasoning' } },
+})).find((event) => event.type === 'reasoning');
+const completeB = streamedThinking.parseLine(JSON.stringify({ method: 'item/completed',
+  params: { item: { id: 'b', type: 'reasoning' } },
+})).find((event) => event.type === 'reasoning');
+assert.equal(completeA?.content, 'first\n\nsecond');
+assert.equal(completeB?.content, 'other');
 const codexCliThinking = createCodexAdapter().parseLine(JSON.stringify({ type: 'item.completed',
   item: { id: 'reasoning-cli', type: 'reasoning', text: 'Inspecting changes' },
 })).find((event) => event.type === 'reasoning');
