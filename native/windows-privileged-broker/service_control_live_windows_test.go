@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 )
@@ -107,10 +108,57 @@ func TestWindowsServiceControlIsolatedLiveSCM(t *testing.T) {
 		}
 		t.Error("fixture service was not removed")
 	})
+	registryKey, err := registry.OpenKey(registry.LOCAL_MACHINE, `SYSTEM\CurrentControlSet\Services\`+name, windows.WRITE_DAC|windows.WRITE_OWNER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registrySD, err := windows.SecurityDescriptorFromString("D:P(A;;KA;;;SY)(A;;KA;;;BA)")
+	if err != nil {
+		registryKey.Close()
+		t.Fatal(err)
+	}
+	registryDACL, _, err := registrySD.DACL()
+	if err != nil {
+		registryKey.Close()
+		t.Fatal(err)
+	}
+	if err := windows.SetSecurityInfo(windows.Handle(registryKey), windows.SE_REGISTRY_KEY,
+		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION|windows.OWNER_SECURITY_INFORMATION,
+		admins, nil, registryDACL, nil); err != nil {
+		registryKey.Close()
+		t.Fatal(err)
+	}
+	_ = registryKey.Close()
 	hash, err := inspectWindowsServiceControl(name)
 	if err != nil {
 		t.Fatalf("inspect fixture: %v", err)
 	}
+	setRegistryDACL := func(sddl string) {
+		t.Helper()
+		key, err := registry.OpenKey(registry.LOCAL_MACHINE, `SYSTEM\CurrentControlSet\Services\`+name, windows.WRITE_DAC)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer key.Close()
+		sd, err := windows.SecurityDescriptorFromString(sddl)
+		if err != nil {
+			t.Fatal(err)
+		}
+		dacl, _, err := sd.DACL()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := windows.SetSecurityInfo(windows.Handle(key), windows.SE_REGISTRY_KEY,
+			windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setRegistryDACL("D:P(A;;KA;;;SY)(A;;KA;;;BA)(A;;0x00000002;;;BU)")
+	if target, err := openWindowsServiceControl(name, "start-service"); err == nil {
+		_ = target.Close()
+		t.Fatal("service with a user-writable registry key was accepted")
+	}
+	setRegistryDACL("D:P(A;;KA;;;SY)(A;;KA;;;BA)")
 	allowUserWrite := exec.Command(icacls, fixtureDir, "/grant:r", "*S-1-5-32-545:(OI)(CI)M")
 	if output, err := allowUserWrite.CombinedOutput(); err != nil {
 		t.Fatalf("create writable fixture: %v\n%s", err, output)

@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -42,6 +43,11 @@ func validateServiceDefinitionSecurity(sd *windows.SECURITY_DESCRIPTOR, mutation
 			continue
 		}
 		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
+		// CREATOR OWNER is a placeholder for the already-validated owner,
+		// not an independently controllable ordinary-user principal.
+		if sid.String() == "S-1-3-0" {
+			continue
+		}
 		if !ownerPolicyAdmin(sid) && uint32(ace.Mask)&mutationMask != 0 {
 			return errServiceDefinitionUnprotected
 		}
@@ -86,25 +92,56 @@ func validatePinnedServiceImageDirectories(pins []*serviceImagePins) error {
 	return nil
 }
 
-// Check each registry ancestor as well as Parameters. A writable parent or
-// key could otherwise be replaced after the approved ServiceDll was checked.
-func validateSharedServiceRegistrySecurity(name string) error {
+// Every service definition and existing Parameters key must resist ordinary
+// user modification, including own-process services that do not use ServiceDll.
+func validateServiceRegistrySecurity(name string, requireParameters bool) error {
 	if !validServiceControlName(name) {
 		return errServiceDefinitionUnprotected
 	}
 	paths := []string{`SYSTEM`, `SYSTEM\CurrentControlSet`, `SYSTEM\CurrentControlSet\Services`,
 		`SYSTEM\CurrentControlSet\Services\` + name, `SYSTEM\CurrentControlSet\Services\` + name + `\Parameters`}
 	mask := uint32(registry.SET_VALUE | registry.CREATE_SUB_KEY | registry.CREATE_LINK | windows.DELETE | windows.WRITE_DAC | windows.WRITE_OWNER | windows.GENERIC_WRITE | windows.GENERIC_ALL)
-	for _, path := range paths {
+	taintedAncestor := false
+	for index, path := range paths {
 		key, err := registry.OpenKey(registry.LOCAL_MACHINE, path, windows.READ_CONTROL)
 		if err != nil {
+			if !requireParameters && strings.HasSuffix(path, `\Parameters`) && errors.Is(err, windows.ERROR_FILE_NOT_FOUND) {
+				continue
+			}
 			return errServiceDefinitionUnprotected
 		}
 		sd, err := windows.GetSecurityInfo(windows.Handle(key), windows.SE_REGISTRY_KEY, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
 		_ = key.Close()
-		if err != nil || validateServiceDefinitionSecurity(sd, mask) != nil {
+		if err != nil {
 			return errServiceDefinitionUnprotected
+		}
+		taintedAncestor, err = advanceServiceRegistryTrust(index, taintedAncestor, sd, mask)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func advanceServiceRegistryTrust(index int, tainted bool, sd *windows.SECURITY_DESCRIPTOR, mask uint32) (bool, error) {
+	safe := validateServiceDefinitionSecurity(sd, mask) == nil
+	if index < 3 {
+		if !safe {
+			return true, nil
+		}
+		if control, _, err := sd.Control(); err == nil && control&windows.SE_DACL_PROTECTED != 0 {
+			return false, nil
+		}
+		return tainted, nil
+	}
+	if !safe {
+		return tainted, errServiceDefinitionUnprotected
+	}
+	if tainted {
+		control, _, err := sd.Control()
+		if err != nil || control&windows.SE_DACL_PROTECTED == 0 {
+			return true, errServiceDefinitionUnprotected
+		}
+	}
+	return false, nil
 }

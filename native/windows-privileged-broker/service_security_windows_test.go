@@ -52,6 +52,37 @@ func TestServiceRegistrySecurityRejectsWriteAndAllowsRead(t *testing.T) {
 	}
 }
 
+func TestServiceRegistryTrustRequiresProtectedBoundaryBelowWritableAncestor(t *testing.T) {
+	mask := uint32(registry.SET_VALUE | registry.CREATE_SUB_KEY | registry.CREATE_LINK | windows.DELETE | windows.WRITE_DAC | windows.WRITE_OWNER | windows.GENERIC_WRITE | windows.GENERIC_ALL)
+	sd := func(sddl string) *windows.SECURITY_DESCRIPTOR {
+		value, err := windows.SecurityDescriptorFromString(sddl)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
+	unsafe := sd("O:SYD:(A;;KA;;;SY)(A;;KA;;;BU)")
+	inheritedSafe := sd("O:SYD:(A;;KA;;;SY)")
+	protectedSafe := sd("O:SYD:P(A;;KA;;;SY)")
+	tainted, err := advanceServiceRegistryTrust(2, false, unsafe, mask)
+	if err != nil || !tainted {
+		t.Fatal("writable ancestor was trusted")
+	}
+	if _, err := advanceServiceRegistryTrust(3, tainted, inheritedSafe, mask); err == nil {
+		t.Fatal("unprotected child accepted below writable ancestor")
+	}
+	if next, err := advanceServiceRegistryTrust(3, tainted, protectedSafe, mask); err != nil || next {
+		t.Fatal("protected child rejected", err)
+	}
+	if _, err := advanceServiceRegistryTrust(3, false, unsafe, mask); err == nil {
+		t.Fatal("writable service key accepted")
+	}
+	creator := sd("O:BAD:(A;;KA;;;SY)(A;;KA;;;CO)")
+	if err := validateServiceDefinitionSecurity(creator, mask); err != nil {
+		t.Fatal("administrator creator-owner placeholder rejected", err)
+	}
+}
+
 func TestServiceImageDirectoryRejectsUntrustedSiblingWrites(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

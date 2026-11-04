@@ -67,11 +67,9 @@ func openWindowsServiceControl(name, action string) (serviceControlTarget, error
 		windows.CloseServiceHandle(handle)
 		return nil, err
 	}
-	if config.ServiceType&windows.SERVICE_WIN32_SHARE_PROCESS != 0 {
-		if err := validateSharedServiceRegistrySecurity(name); err != nil {
-			windows.CloseServiceHandle(handle)
-			return nil, err
-		}
+	if err := validateServiceRegistrySecurity(name, config.ServiceType&windows.SERVICE_WIN32_SHARE_PROCESS != 0); err != nil {
+		windows.CloseServiceHandle(handle)
+		return nil, err
 	}
 	pins, err := pinWindowsServiceImages(name, config)
 	if err != nil {
@@ -99,10 +97,8 @@ func (s *windowsServiceControlTarget) Fingerprint() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if config.ServiceType&windows.SERVICE_WIN32_SHARE_PROCESS != 0 {
-		if err := validateSharedServiceRegistrySecurity(s.name); err != nil {
-			return "", err
-		}
+	if err := validateServiceRegistrySecurity(s.name, config.ServiceType&windows.SERVICE_WIN32_SHARE_PROCESS != 0); err != nil {
+		return "", err
 	}
 	images, _, err := snapshotWindowsServiceImages(s.name, config)
 	if err != nil || len(images) != len(s.imagePins) {
