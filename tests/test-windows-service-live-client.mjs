@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
 import { readFile, writeFile, rename } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { createWindowsPrivilegedBrokerClient } from '../chat/windows-privileged-broker.mjs';
@@ -21,7 +22,7 @@ if (!relative || relative.startsWith('..') || path.isAbsolute(relative) ||
     !path.basename(dir).startsWith('service-qa-')) throw new Error('Invalid live broker fixture directory');
 
 async function waitForFixture() {
-  const deadline = Date.now() + 40_000;
+  const deadline = Date.now() + (phonePort ? 120_000 : 40_000);
   while (Date.now() < deadline) {
     try { return JSON.parse(await readFile(path.join(dir, 'ready.json'), 'utf8')); }
     catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -30,7 +31,39 @@ async function waitForFixture() {
   throw new Error('Live broker fixture did not become ready');
 }
 let succeeded = false;
+const phonePort = Number(process.env.AGENTOC_BROKER_PHONE_TEST_PORT || 0);
+let phoneServer, phoneReview, phoneDecision, resolvePhoneDecision;
+let phonePublicKey;
+const phoneDecisionPromise = new Promise(resolve => { resolvePhoneDecision = resolve; });
 try {
+  if (phonePort) {
+    assert.ok(Number.isInteger(phonePort) && phonePort > 1024 && phonePort < 65536);
+    phoneServer = createServer((req, res) => {
+      let body = '';
+      req.setEncoding('utf8');
+      req.on('data', chunk => { body += chunk; if (body.length > 8192) req.destroy(); });
+      req.on('end', () => { void (async () => {
+        if (req.method === 'POST' && req.url === '/register' && !phonePublicKey) {
+          const phone = JSON.parse(body);
+          assert.match(phone.deviceId, /^[a-f0-9]{64}$/);
+          assert.match(phone.publicKey, /^[A-Za-z0-9+/]+={0,2}$/);
+          phonePublicKey = phone.publicKey;
+          await writeFile(path.join(dir, 'phone.json'), JSON.stringify(phone), { flag: 'wx' });
+          res.writeHead(200).end('{}');
+        } else if (req.method === 'GET' && req.url === '/review') {
+          res.writeHead(phoneReview ? 200 : 202, { 'content-type': 'application/json' }).end(JSON.stringify(phoneReview || {}));
+        } else if (req.method === 'POST' && req.url === '/decision' && !phoneDecision) {
+          const decision = JSON.parse(body);
+          assert.match(decision.signature, /^[A-Za-z0-9+/]+={0,2}$/);
+          phoneDecision = decision.signature;
+          resolvePhoneDecision(phoneDecision);
+          res.writeHead(200).end('{}');
+        } else res.writeHead(404).end();
+      })().catch(() => res.writeHead(400).end()); });
+    });
+    await new Promise((resolve, reject) => { phoneServer.once('error', reject); phoneServer.listen(phonePort, '127.0.0.1', resolve); });
+    await writeFile(path.join(dir, 'phone-server-ready.json'), JSON.stringify({ port: phonePort }), { flag: 'wx' });
+  }
   const fixture = await waitForFixture();
   assert.match(fixture.pipe, /^\\\\\.\\pipe\\AgentoC\.PrivilegedBroker\.LocalTest\.[a-f0-9]+\.Request$/);
   const fixtureGrant = fixture.proposal?.serviceControl;
@@ -68,7 +101,7 @@ try {
   let controlPlaneOptions;
   let deviceKey;
   let proposal;
-  if (fixture.testSignerKey && fixture.testDeviceKey && healthPipeName) {
+  if (fixture.testSignerKey && (fixture.testDeviceKey || phonePort) && healthPipeName) {
     const context = { sessionId: 'js-session', runId: 'js-run', turnId: 'js-turn', requestKey: 'js-request',
       platform: 'win32', cwd: dir, projectRoot: dir, home: dir };
     const action = buildApprovedAction({ command: `Start-Service ${fixtureGrant.serviceName}` }, context);
@@ -81,7 +114,7 @@ try {
     assert.equal(proposal.duplicate, false);
     assert.equal((await submitOrResumeWindowsServiceProposal(controlPlaneOptions)).duplicate, true);
     assert.equal((await queryWindowsServiceProposal(controlPlaneOptions)).status, 'awaiting_device');
-    deviceKey = createPrivateKey({ key: Buffer.from(fixture.testDeviceKey, 'base64'), format: 'der', type: 'pkcs8' });
+    if (fixture.testDeviceKey) deviceKey = createPrivateKey({ key: Buffer.from(fixture.testDeviceKey, 'base64'), format: 'der', type: 'pkcs8' });
   } else {
     proposal = await client.proposeServiceControl({ grant, signature: fixture.proposal.signature });
   }
@@ -91,7 +124,14 @@ try {
   assert.ok(review);
   if (controlPlaneOptions) {
     grant = review.grant;
-    decisionSignature = sign('sha256', windowsServiceOwnerSigningBytes(grant), deviceKey).toString('base64');
+    if (phonePort) {
+      phoneReview = review;
+      decisionSignature = await Promise.race([phoneDecisionPromise, new Promise((_, reject) => {
+        const timer = setTimeout(() => reject(new Error('Android decision timed out')), 30_000); timer.unref();
+      })]);
+      const phoneKey = createPublicKey({ key: Buffer.from(phonePublicKey, 'base64'), format: 'der', type: 'spki' });
+      assert.equal(verify('sha256', windowsServiceOwnerSigningBytes(grant), phoneKey, Buffer.from(decisionSignature, 'base64')), true);
+    } else decisionSignature = sign('sha256', windowsServiceOwnerSigningBytes(grant), deviceKey).toString('base64');
   } else assert.deepEqual(review.grant, grant);
   const publicKey = createPublicKey({ key: Buffer.from(review.brokerPublicKey, 'base64'), type: 'spki', format: 'der' });
   assert.equal(verify('sha256', windowsServiceReviewSigningBytes(grant), publicKey, Buffer.from(review.brokerSignature, 'base64')), true);
@@ -111,8 +151,9 @@ try {
     deviceId: fixture.approval.deviceId, deviceSignature: decisionSignature })).status, 'succeeded');
   if (controlPlaneOptions) assert.equal((await queryWindowsServiceProposal(controlPlaneOptions)).status, 'succeeded');
   succeeded = true;
-  console.log(`windows-service-live-client: ${controlPlaneOptions ? 'control-plane proposal and ' : ''}signed pending, approval, execution and replay verified through real broker pipe`);
+  console.log(`windows-service-live-client: ${phonePort ? 'Android device signature, ' : ''}${controlPlaneOptions ? 'control-plane proposal and ' : ''}signed pending, approval, execution and replay verified through real broker pipe`);
 } finally {
+  if (phoneServer) await new Promise(resolve => phoneServer.close(resolve));
   const temporary = path.join(dir, 'result.json.tmp');
   await writeFile(temporary, JSON.stringify({ success: succeeded, ...(succeeded ? {} : { error: 'Node client test failed' }) }), { flag: 'wx' });
   await rename(temporary, path.join(dir, 'result.json'));

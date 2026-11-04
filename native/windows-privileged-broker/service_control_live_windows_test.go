@@ -281,6 +281,30 @@ func TestWindowsServiceControlIsolatedLiveSCM(t *testing.T) {
 	if crossDir := os.Getenv("AGENTOC_BROKER_LIVE_CLIENT_DIR"); crossDir != "" {
 		requireLivePipeTestDir(t, crossDir)
 		run("stop-service", svc.Stopped)
+		phoneID := ""
+		if os.Getenv("AGENTOC_BROKER_LIVE_ANDROID") == "1" {
+			var phone struct {
+				DeviceID  string `json:"deviceId"`
+				PublicKey string `json:"publicKey"`
+			}
+			readLivePipeJSON(t, filepath.Join(crossDir, "phone.json"), &phone)
+			if err := validateDeviceIDAndKey(phone.DeviceID, phone.PublicKey); err != nil {
+				t.Fatal("invalid isolated Android device identity")
+			}
+			// This is a disposable test store. Enrollment is seeded only for
+			// this fixture; the real enrollment protocol is tested separately.
+			if err := store.transact(func(next *persistedBrokerState) error {
+				if next.OwnerID != "owner" {
+					return errStateInvalid
+				}
+				next.Devices[phone.DeviceID] = brokerDevice{DeviceID: phone.DeviceID, OwnerID: "owner", PublicKey: phone.PublicKey, AddedAt: time.Now().UTC()}
+				next.PolicyGeneration++
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			phoneID = phone.DeviceID
+		}
 		crossGrant := grant
 		crossGrant.RequestID, crossGrant.Nonce = "cross-process-request", "zyxwvutsrqponmlkjihgfedc123456"
 		crossSignature := base64.RawURLEncoding.EncodeToString(ed25519.Sign(private, serviceControlSigningBytes(crossGrant)))
@@ -288,6 +312,9 @@ func TestWindowsServiceControlIsolatedLiveSCM(t *testing.T) {
 			Proposal: brokerRequest{Version: protocolVersion, Type: "service.propose", ServiceControl: &crossGrant, Signature: crossSignature},
 			Approval: brokerRequest{Version: protocolVersion, Type: "service.approve", RequestID: crossGrant.RequestID, DeviceID: deviceID,
 				DeviceSignature: signApprovalMessage(t, deviceKey, serviceControlOwnerSigningBytes(crossGrant))}}
+		if phoneID != "" {
+			payload.Approval.DeviceID, payload.Approval.DeviceSignature = phoneID, ""
+		}
 		if os.Getenv("AGENTOC_BROKER_LIVE_JS_CONTROL_PLANE") == "1" {
 			// Fresh test-only keys authorize only this disposable broker and
 			// randomly named fixture service; they never come from an install.
@@ -295,13 +322,15 @@ func TestWindowsServiceControlIsolatedLiveSCM(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			deviceDER, err := x509.MarshalPKCS8PrivateKey(deviceKey)
-			if err != nil {
-				t.Fatal(err)
-			}
 			payload.HealthPipe = base + ".Health"
 			payload.TestSignerKey = base64.StdEncoding.EncodeToString(signerDER)
-			payload.TestDeviceKey = base64.StdEncoding.EncodeToString(deviceDER)
+			if phoneID == "" {
+				deviceDER, err := x509.MarshalPKCS8PrivateKey(deviceKey)
+				if err != nil {
+					t.Fatal(err)
+				}
+				payload.TestDeviceKey = base64.StdEncoding.EncodeToString(deviceDER)
+			}
 		}
 		writeLivePipeJSON(t, filepath.Join(crossDir, "ready.json"), payload)
 		if payload.TestSignerKey != "" {
