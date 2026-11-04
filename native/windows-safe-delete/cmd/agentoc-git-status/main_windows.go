@@ -24,11 +24,27 @@ import (
 )
 
 type request struct {
-	SchemaVersion int      `json:"schemaVersion"`
-	Executable    string   `json:"executable"`
-	SHA256        string   `json:"sha256"`
-	Cwd           string   `json:"cwd"`
-	Args          []string `json:"args"`
+	SchemaVersion int          `json:"schemaVersion"`
+	Executable    string       `json:"executable"`
+	SHA256        string       `json:"sha256"`
+	Cwd           string       `json:"cwd"`
+	Args          []string     `json:"args"`
+	Dependencies  []dependency `json:"dependencies,omitempty"`
+}
+
+type dependency struct {
+	Executable string `json:"executable"`
+	SHA256     string `json:"sha256"`
+}
+
+func decodeDigest(value string) ([sha256.Size]byte, error) {
+	var digest [sha256.Size]byte
+	decoded, err := hex.DecodeString(value)
+	if err != nil || len(decoded) != sha256.Size || value != strings.ToLower(value) {
+		return digest, errors.New("invalid executable digest")
+	}
+	copy(digest[:], decoded)
+	return digest, nil
 }
 
 var statusOptions = map[string]bool{
@@ -97,7 +113,7 @@ func run(args []string, stdout, stderr io.Writer) (int, error) {
 	decoder.DisallowUnknownFields()
 	var input request
 	if decoder.Decode(&input) != nil || decoder.Decode(new(any)) != io.EOF || input.SchemaVersion != 1 ||
-		!strings.EqualFold(filepath.Base(input.Executable), "git.exe") || !validStatusArgs(input.Args) {
+		!strings.EqualFold(filepath.Base(input.Executable), "git.exe") || !validStatusArgs(input.Args) || len(input.Dependencies) > 32 {
 		return 0, errors.New("invalid Git status request")
 	}
 	if !filepath.IsAbs(input.Cwd) || len(filepath.VolumeName(input.Cwd)) != 2 {
@@ -107,12 +123,10 @@ func run(args []string, stdout, stderr io.Writer) (int, error) {
 	if err != nil || !strings.EqualFold(filepath.Clean(actual), filepath.Clean(input.Cwd)) {
 		return 0, errors.New("working directory mismatch")
 	}
-	expected, err := hex.DecodeString(input.SHA256)
-	if err != nil || len(expected) != sha256.Size || input.SHA256 != strings.ToLower(input.SHA256) {
-		return 0, errors.New("invalid executable digest")
+	digest, err := decodeDigest(input.SHA256)
+	if err != nil {
+		return 0, err
 	}
-	var digest [sha256.Size]byte
-	copy(digest[:], expected)
 	env, err := safeEnvironment(os.Environ())
 	if err != nil {
 		return 0, err
@@ -122,6 +136,31 @@ func run(args []string, stdout, stderr io.Writer) (int, error) {
 		return 0, errors.New("Git executable identity unavailable")
 	}
 	defer pin.Close()
+	// Callers must establish a complete dependency set and trust its digests.
+	// Pinning only this supplied set is deliberately not authorization.
+	seen := map[string]bool{strings.ToLower(filepath.Clean(input.Executable)): true}
+	var dependencies []*safedelete.PinnedExecutablePath
+	defer func() {
+		for i := len(dependencies) - 1; i >= 0; i-- {
+			_ = dependencies[i].Close()
+		}
+	}()
+	for _, dep := range input.Dependencies {
+		key := strings.ToLower(filepath.Clean(dep.Executable))
+		if seen[key] {
+			return 0, errors.New("duplicate executable dependency")
+		}
+		seen[key] = true
+		depDigest, err := decodeDigest(dep.SHA256)
+		if err != nil {
+			return 0, err
+		}
+		depPin, err := safedelete.OpenPinnedExecutablePath(dep.Executable, depDigest)
+		if err != nil {
+			return 0, errors.New("Git dependency identity unavailable")
+		}
+		dependencies = append(dependencies, depPin)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	commandArgs := append([]string{"--no-pager", "-c", "core.fsmonitor=false", "--no-optional-locks"}, input.Args...)
