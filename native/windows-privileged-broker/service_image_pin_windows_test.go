@@ -192,6 +192,8 @@ func TestManagedServiceRejectsInlineAndAmbiguousEntry(t *testing.T) {
 		{`C:\tools\dotnet.exe`, "exec", "--additionalprobingpath", `C:\evil`, `C:\app\app.dll`},
 		{`C:\tools\dotnet.exe`, "run"},
 		{`C:\tools\java.exe`, "-cp", `C:\app`, "Main"},
+		{`C:\Windows\System32\mshta.exe`, "https://example.invalid/remote.hta"},
+		{`C:\Windows\System32\wsl.exe`, "bash", "-c", "echo test"},
 		{`C:\Windows\System32\cmd.exe`, "/c", `C:\scripts\one.cmd & calc.exe`},
 		{`C:\Windows\System32\cmd.exe`, "/c", `C:\scripts\one.cmd`, "&", "calc.exe"},
 		{`C:\Windows\System32\wscript.exe`, "relative.vbs"},

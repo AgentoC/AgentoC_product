@@ -30,6 +30,12 @@ type windowsServiceControlTarget struct {
 	imagePins []*serviceImagePins
 }
 
+func runWindowsServiceControl(ctx context.Context, request serviceControlRequest) serviceControlOutcome {
+	return runServiceControl(ctx, request, func(name string) (serviceControlTarget, error) {
+		return openWindowsServiceControl(name, request.Action)
+	})
+}
+
 func openWindowsServiceControl(name, action string) (serviceControlTarget, error) {
 	if !validServiceControlName(name) {
 		return nil, errors.New("invalid service name")
@@ -452,6 +458,8 @@ func serviceCommandFileDependencies(arguments []string) ([]string, error) {
 			return nil, errors.New("service library entry is invalid")
 		}
 		return serviceExplicitCodeFile(library, ".dll")
+	case "mshta.exe", "regsvr32.exe", "bash.exe", "wsl.exe", "sh.exe":
+		return nil, errors.New("service host code source cannot be verified")
 	default:
 		return nil, nil
 	}

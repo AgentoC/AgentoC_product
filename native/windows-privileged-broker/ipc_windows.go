@@ -89,19 +89,20 @@ func newBrokerIPCServerForPipeNamesAndAdmin(store *brokerStore, controlPlaneSID 
 		return nil, fmt.Errorf("create Broker stop event: %w", err)
 	}
 	server := &brokerIPCServer{
-		store:            store,
-		target:           windowsBrokerTargetController{},
-		serviceInspector: inspectWindowsServiceControl,
-		autoInstaller:    windowsAutoInstaller{},
-		ownerInstaller:   runInstalledOwnerInstall,
-		ownerPolicy:      readInstalledOwnerPolicy,
-		ownerAvailable:   func(sid string) bool { _, err := discoverOwnerSession(sid); return err == nil },
-		controlPlaneSID:  controlPlaneSID,
-		healthPipeName:   healthName,
-		requestPipeName:  requestName,
-		adminPipeName:    adminName,
-		stopEvent:        stop,
-		stopCh:           make(chan struct{}),
+		store:             store,
+		target:            windowsBrokerTargetController{},
+		serviceInspector:  inspectWindowsServiceControl,
+		serviceController: runWindowsServiceControl,
+		autoInstaller:     windowsAutoInstaller{},
+		ownerInstaller:    runInstalledOwnerInstall,
+		ownerPolicy:       readInstalledOwnerPolicy,
+		ownerAvailable:    func(sid string) bool { _, err := discoverOwnerSession(sid); return err == nil },
+		controlPlaneSID:   controlPlaneSID,
+		healthPipeName:    healthName,
+		requestPipeName:   requestName,
+		adminPipeName:     adminName,
+		stopEvent:         stop,
+		stopCh:            make(chan struct{}),
 	}
 	if localTest {
 		validTestName := func(name string) bool {

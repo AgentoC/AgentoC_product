@@ -49,6 +49,10 @@ func TestServiceControlPipeRequiresSignatureAndRunsOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if server.serviceController == nil {
+		t.Fatal("production Windows service controller was not configured")
+	}
+	server.serviceController = nil
 	snap := store.Snapshot()
 	grant := serviceControlGrant{Version: 1, KeyID: "key", BrokerInstallationID: snap.InstallationID, PolicyGeneration: snap.PolicyGeneration,
 		RequestID: "request", SessionID: "session", RunID: "run", TurnID: "turn", ActionID: "action", Nonce: "abcdefghijklmnopqrstuvwx",

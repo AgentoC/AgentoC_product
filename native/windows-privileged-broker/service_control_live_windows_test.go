@@ -228,10 +228,8 @@ func TestWindowsServiceControlIsolatedLiveSCM(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server.serviceController = func(ctx context.Context, request serviceControlRequest) serviceControlOutcome {
-		return runServiceControl(ctx, request, func(target string) (serviceControlTarget, error) {
-			return openWindowsServiceControl(target, request.Action)
-		})
+	if server.serviceController == nil {
+		t.Fatal("production Windows service controller was not configured")
 	}
 	done := make(chan error, 1)
 	go func() { done <- server.Run(context.Background()) }()
