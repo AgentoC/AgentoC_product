@@ -600,6 +600,7 @@ static class ManagedOwnerMsiBridge {
       string detail="";
       if(action=="UpgradeAdmission"&&result.ContainsKey("failureLine")&&result["failureLine"] is int&&result.ContainsKey("failureHResult")&&result["failureHResult"] is int)
        detail=" line="+((int)result["failureLine"]).ToString(System.Globalization.CultureInfo.InvariantCulture)+" hresult="+((int)result["failureHResult"]).ToString(System.Globalization.CultureInfo.InvariantCulture);
+      if(action=="UpgradeAdmission"&&result.ContainsKey("failureStage")&&result["failureStage"] is string&&Regex.IsMatch((string)result["failureStage"],@"\A[a-z-]{1,32}\z"))detail+=" stage="+(string)result["failureStage"];
       EventLog.WriteEntry("AgentoC","Owner MSI "+action+" failed: "+(string)result["code"]+detail,EventLogEntryType.Error,4101);
      }catch{}
     }

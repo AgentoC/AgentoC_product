@@ -79,11 +79,12 @@ function Read-UpgradeReceipt([string]$Name,[int]$Maximum=8192){
  return @{bytes=$bytes;value=$value}
 }
 function Invoke-OwnerUpgradeAdmission {
+ $script:upgradeStage='install-state'
  if(-not [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){throw 'OUG_ADMIN_REQUIRED'}
  if(-not (Test-OwnerServicePreparationPresence $product) -or -not (Test-OwnerServicePreparationPresence (Get-OwnerDataRoot))){throw 'OUG_EXISTING_INSTALL_REQUIRED'}
  foreach($name in @('owner-services.prepare-lock','owner-data.prepare-lock','owner-msi.prepare-lock','owner-msi.upgrade-transaction.json','owner-identity.initialize-lock','owner-activation.prepare-lock','owner-policy.prepare-lock','owner-msi.policy.json','owner-msi.prepared.json')){if(Test-OwnerServicePreparationPresence (Join-Path $product $name)){throw 'OUG_INSTALL_TRANSACTION_PRESENT'}}
  foreach($name in @('owner-policy.install-lock','security\owner-policy.install-lock')){if(Test-OwnerServicePreparationPresence (Join-Path (Get-OwnerInstanceRoot) $name)){throw 'OUG_OWNER_TRANSACTION_PRESENT'}}
- $services=@();foreach($role in @('control','supervisor')){
+ $script:upgradeStage='services';$services=@();foreach($role in @('control','supervisor')){
   $name=if($role -ceq 'control'){'AgentoC-ControlPlane'}else{'AgentoC-RunnerSupervisor'};$service=Get-CimInstance Win32_Service -Filter ("Name='"+$name+"'")
   if(-not $service -or $service.StartName -ine ('NT SERVICE\'+$name) -or $service.State -cne 'Running' -or $service.StartMode -cne 'Auto' -or $service.ProcessId -le 0){throw 'OUG_SERVICE_STATE_REFUSED'}
   $instanceRoot=Get-OwnerInstanceRoot
@@ -99,7 +100,7 @@ function Invoke-OwnerUpgradeAdmission {
   if($token.userSid -cne $expectedSid -or $token.integrityRid -ne 8192 -or $token.sessionId -ne 0 -or $token.elevated -or $token.enabledAdministrators -or @($token.privileges).Count -ne 1 -or $token.privileges[0] -cne 'SeChangeNotifyPrivilege'){throw 'OUG_SERVICE_TOKEN_REFUSED'}
   $services+=@{name=$name;role=$role;sid=$expectedSid;pid=[int]$service.ProcessId;exe=$exe}
  }
- $control=$services|Where-Object {$_.role -ceq 'control'};$executor=$services|Where-Object {$_.role -ceq 'supervisor'}
+ $script:upgradeStage='policy-and-receipts';$control=$services|Where-Object {$_.role -ceq 'control'};$executor=$services|Where-Object {$_.role -ceq 'supervisor'}
  $root=Get-OwnerDataRoot;$ownerRoot=Get-OwnerInstanceRoot;$policyPath=Join-Path $ownerRoot 'security\owner-bootstrap-install.json'
  $policyBytes=Read-OwnerPinnedFile $policyPath @(Get-OwnerAdministrativeSids) $pins
  $policy=[Text.UTF8Encoding]::new($false,$true).GetString($policyBytes)|ConvertFrom-Json;Assert-OwnerInstallPolicy $policy
@@ -120,7 +121,7 @@ function Invoke-OwnerUpgradeAdmission {
  if(@($health.PSObject.Properties).Count -ne 7 -or $health.version -isnot [int] -or $health.version -ne 1 -or $health.purpose -cne 'owner-service-activation-health' -or $health.instanceId -cne $active.instanceId -or $health.observation -cne 'service-processes-running' -or [int]$health.supervisorPid -le 0 -or [int]$health.controlPid -le 0){throw 'OUG_ACTIVE_RECEIPT_INVALID'}
  $healthObserved=[DateTime]::MinValue;if($health.observedAt -isnot [string] -or -not [DateTime]::TryParseExact($health.observedAt,'o',[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::RoundtripKind,[ref]$healthObserved)){throw 'OUG_ACTIVE_RECEIPT_INVALID'}
  if(@($marker.PSObject.Properties).Count -ne 5 -or $marker.version -isnot [int] -or $marker.version -ne 1 -or $marker.purpose -cne 'owner-service-activation' -or $marker.instanceId -cne $active.instanceId -or $marker.preparedSha256 -cne $active.preparedSha256 -or $marker.policyReceiptSha256 -cne $active.policyReceiptSha256){throw 'OUG_ACTIVE_RECEIPT_INVALID'}
- $layout=@(Get-OwnerDataLayout $control.sid $executor.sid $policy.ownerSid);$missing=0
+ $script:upgradeStage='data-layout';$layout=@(Get-OwnerDataLayout $control.sid $executor.sid $policy.ownerSid);$missing=0
  for($parent=(Get-OwnerProgramDataPath);$parent;$parent=[IO.Path]::GetDirectoryName($parent)){$pins.Add([AgentoCOwnerFilePin]::Directory($parent));Assert-OwnerObjectAcl $parent @(Get-OwnerAdministrativeSids) -Ancestor -Pins $pins}
  foreach($row in $layout){
   $path=if($row.relative){Join-Path $root $row.relative}else{$root}
@@ -141,19 +142,19 @@ function Invoke-OwnerUpgradeAdmission {
   $path=if($kind -ceq 'security'){Join-Path $ownerRoot 'security'}else{$policyPath};$acl=if($kind -ceq 'security'){[IO.Directory]::GetAccessControl($path)}else{[IO.File]::GetAccessControl($path)}
   if(-not $acl.AreAccessRulesProtected -or $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -cne 'S-1-5-32-544' -or $acl.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::Access) -cne (New-OwnerPolicySecurity $policy $kind).GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::Access)){throw 'OUG_INSTALL_POLICY_ACL_MISMATCH'}
  }
- $broker=[AgentoCOwnerUpgradeTokenReader]::ReadBroker('AgentoC-PrivilegedBroker')
+ $script:upgradeStage='broker';$broker=[AgentoCOwnerUpgradeTokenReader]::ReadBroker('AgentoC-PrivilegedBroker')
  $brokerBinary=Join-Path $product 'Broker\AgentoC.PrivilegedBroker.exe'
  if(-not $broker -or $broker.account -ine 'LocalSystem' -or $broker.state -ne 4 -or $broker.startType -ne 2 -or $broker.serviceType -ne 16 -or $broker.binary.Trim('"') -ine $brokerBinary){throw 'OUG_BROKER_STATE_REFUSED'}
  Assert-UpgradePath $brokerBinary $false
  return @{ok=$true;readOnly=$true;upgradeAdmitted=$true;credentialContentsRead=$false;identityReused=$true;dataMigration='in-place-preserve';services=@($services|ForEach-Object {@{name=$_.name;role=$_.role;tokenVerified=$true}});dataLayoutVerified=$true;brokerServicePresent=$true;authorityIssued=$false}
 }
 if(-not $upgradeLibraryOnly){
- try{Initialize-OwnerUpgradeTokenReader;$result=Invoke-OwnerUpgradeAdmission;$result|ConvertTo-Json -Compress}
+ try{$script:upgradeStage='token-reader';Initialize-OwnerUpgradeTokenReader;$result=Invoke-OwnerUpgradeAdmission;$result|ConvertTo-Json -Compress}
  catch{$failure=$_;$exception=$failure.Exception.GetBaseException();$code=$exception.Message;if($code -cnotmatch '^OUG_[A-Z_]+$'){$code='OUG_UPGRADE_ADMISSION_FAILED'}
   # Retain only numeric diagnostics: raw exception messages and script paths
   # may contain private installation information. The first stack location is
   # the actual failing statement, rather than this outer catch.
-  $line=0;if($failure.ScriptStackTrace -match '(?i)\bline\s+(\d+)'){$parsed=0;if([int]::TryParse($Matches[1],[ref]$parsed) -and $parsed -gt 0 -and $parsed -le 10000){$line=$parsed}}
-  @{ok=$false;code=$code;failureLine=$line;failureHResult=[int]$exception.HResult;readOnly=$true;upgradeAdmitted=$false;credentialContentsRead=$false;authorityIssued=$false}|ConvertTo-Json -Compress;exit 1}
+  $line=[int]$failure.InvocationInfo.ScriptLineNumber;$firstStack=($failure.ScriptStackTrace -split "`r?`n")[0];if($firstStack -match '(\d+)\D*$'){$parsed=0;if([int]::TryParse($Matches[1],[ref]$parsed) -and $parsed -gt 0 -and $parsed -le 10000){$line=$parsed}}
+  @{ok=$false;code=$code;failureStage=$script:upgradeStage;failureLine=$line;failureHResult=[int]$exception.HResult;readOnly=$true;upgradeAdmitted=$false;credentialContentsRead=$false;authorityIssued=$false}|ConvertTo-Json -Compress;exit 1}
  finally{for($index=$pins.Count-1;$index -ge 0;$index--){$pins[$index].Dispose()}}
 }
