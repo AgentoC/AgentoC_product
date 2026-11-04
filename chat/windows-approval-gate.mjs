@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { analyzeWindowsFileChanges, analyzeWindowsPowerShell, decideWindowsPowerShellActions } from './windows-powershell-actions.mjs';
-import { analyzeWindowsBash } from './windows-bash-actions.mjs';
+import { analyzeWindowsBash, parseLiteralBashWords } from './windows-bash-actions.mjs';
 import { parseWindowsPowerShellAst } from './windows-powershell-ast.mjs';
 import { isKnownFileGate } from './privileged-gate.mjs';
 import { resolveWindowsSystemPaths } from './windows-system-paths.mjs';
@@ -150,8 +150,19 @@ export async function decideWindowsApproval(approval, state = {}, { analyze = an
     if (approval?.kind !== 'command') return { decision: 'prompt', reason: 'non-command request requires owner decision' };
     if (approval?.providerMethod === 'can_use_tool' && toolName === 'Bash') {
       command = typeof params.input?.command === 'string' ? params.input.command : '';
-      platform = 'bash';
-      result = await analyzeWindowsBash(command, context);
+      // Claude on Windows exposes a Bash tool. When it explicitly invokes
+      // the trusted system PowerShell, parse the quoted inner script using
+      // the native PowerShell AST. Bare shell names and MSYS drive mappings
+      // do not attest which executable Bash will actually run.
+      const argv = parseLiteralBashWords(command);
+      const invocation = argv ? readWindowsPowerShellInvocation({ params: { command: argv } }) : null;
+      if (invocation) {
+        platform = 'powershell';
+        result = await analyze(invocation.command, context, { executable: invocation.executable });
+      } else {
+        platform = 'bash';
+        result = await analyzeWindowsBash(command, context);
+      }
     } else {
     const invocation = await invocationReader(approval);
     if (!invocation) return { decision: 'prompt', reason: 'Windows shell or command identity cannot be verified' };

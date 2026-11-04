@@ -66,5 +66,25 @@ if (process.platform === 'win32') {
   assert.equal((await decideWindowsApproval(serialized, { ...state, riskMode: 'full-auto' }, { analyze: safe })).decision, 'auto-allow');
   const fake = { ...serialized, params: { command: `'C:\\untrusted\\powershell.exe' -NoProfile -Command 'Get-Date'` } };
   assert.equal((await decideWindowsApproval(fake, state, { analyze: safe })).decision, 'prompt');
+  const quote = value => `'${value.replaceAll("'", `'"'"'`)}'`;
+  const script = "Get-Content 'readme.txt'";
+  const bashRequest = text => ({ kind: 'command', providerMethod: 'can_use_tool', params: { tool_name: 'Bash', input: { command: text } } });
+  const bashWrapped = `${quote(executable)} -NoProfile -NonInteractive -Command ${quote(script)}`;
+  let observed;
+  const analyzeInner = async (inner, _context, options) => { observed = { inner, executable: options.executable }; return safe(); };
+  for (const riskMode of ['recommended', 'full-auto']) {
+    const result = await decideWindowsApproval(bashRequest(bashWrapped), { ...state, riskMode }, { analyze: analyzeInner });
+    assert.equal(result.decision, 'auto-allow');
+    assert.equal(result.risk.platform, 'powershell');
+    assert.deepEqual(observed, { inner: script, executable });
+  }
+  for (const unsafe of [
+    `powershell.exe -NoProfile -Command ${quote(script)}`,
+    `${quote('C:\\untrusted\\powershell.exe')} -NoProfile -Command ${quote(script)}`,
+    `${quote(executable)} -Command ${quote(script)}`,
+    `${quote(executable)} -NoProfile -EncodedCommand ZQ==`,
+    `${bashWrapped}; echo unexpected`,
+    `${bashWrapped} > output.txt`,
+  ]) assert.equal((await decideWindowsApproval(bashRequest(unsafe), state, { analyze: safe })).decision, 'prompt', unsafe);
 }
 console.log('windows-approval-gate: shared decision and harness boundary checks passed');
