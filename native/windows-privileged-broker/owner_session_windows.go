@@ -34,23 +34,29 @@ func verifyOwnerSessionToken(token windows.Token, expectedSID string, expectedSe
 	if sessionErr != nil || typeErr != nil || elevationErr != nil || session != expectedSession || tokenType != windows.TokenPrimary || elevation != 0 {
 		return errOwnerSessionUnavailable
 	}
-	// Never accept a High/System integrity token as a user-level install token,
-	// including configurations where the elevation bit alone is insufficient.
+	integrity, err := ownerTokenIntegritySID(token)
+	if err != nil || integrity != "S-1-16-8192" {
+		return errOwnerSessionUnavailable
+	}
+	return nil
+}
+
+func ownerTokenIntegritySID(token windows.Token) (string, error) {
 	var required uint32
 	_ = windows.GetTokenInformation(token, windows.TokenIntegrityLevel, nil, 0, &required)
 	if required < uint32(unsafe.Sizeof(windows.Tokenmandatorylabel{})) || required > 4096 {
-		return errOwnerSessionUnavailable
+		return "", errOwnerSessionUnavailable
 	}
 	data := make([]byte, required)
 	var returned uint32
 	if windows.GetTokenInformation(token, windows.TokenIntegrityLevel, &data[0], required, &returned) != nil || returned > required || returned < uint32(unsafe.Sizeof(windows.Tokenmandatorylabel{})) {
-		return errOwnerSessionUnavailable
+		return "", errOwnerSessionUnavailable
 	}
 	label := (*windows.Tokenmandatorylabel)(unsafe.Pointer(&data[0]))
-	if label.Label.Sid == nil || label.Label.Sid.String() != "S-1-16-8192" {
-		return errOwnerSessionUnavailable
+	if label.Label.Sid == nil {
+		return "", errOwnerSessionUnavailable
 	}
-	return nil
+	return label.Label.Sid.String(), nil
 }
 
 // discoverOwnerSession reads current WTS sessions and obtains their actual
