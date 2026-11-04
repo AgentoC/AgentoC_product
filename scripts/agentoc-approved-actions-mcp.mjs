@@ -39,12 +39,12 @@ function jsonRpcResult(id, result) {
 function actionTool() {
   return {
     name: 'agentoc_request_actions',
-    description: 'Propose related host-administrator actions. For Windows winget installs, use this tool rather than running winget directly: eligible installs may start automatically and dangerous actions go to owner review. An executing status is not completion: call this tool with statusOnly=true and the same requestKey and identical action until it reports succeeded, failed or unknown. Never start another installation when its outcome is unknown; check the original requestKey.',
+    description: 'Propose related host-administrator actions. For Windows winget installs and service control, use this tool rather than running them directly. Eligible installs may start automatically and dangerous actions go to owner review. An executing status is not completion: call this tool with statusOnly=true and the same requestKey and identical action until it reports succeeded, failed or unknown. Never repeat an operation when its outcome is unknown; check the original requestKey.',
     inputSchema: {
       type: 'object',
       properties: {
         requestKey: { type: 'string', description: 'Optional stable idempotency key for a retry of the same proposal.' },
-        statusOnly: { type: 'boolean', description: 'Only check an existing Windows automatic installation by requestKey; never starts an installation.' },
+        statusOnly: { type: 'boolean', description: 'Only check the existing Windows installation or service operation by requestKey; never starts a new operation.' },
         actions: {
           type: 'array',
           minItems: 1,
@@ -146,7 +146,7 @@ function postProposal(config, payload) {
       // A Windows package lookup may query a remote trusted source before the
       // broker accepts the operation. Timing out earlier makes its outcome
       // ambiguous and encourages an unsafe retry with a different request ID.
-      timeout: 120_000,
+      timeout: 11 * 60_000,
     }, (response) => {
       let data = '';
       response.setEncoding('utf8');
@@ -215,6 +215,10 @@ async function requestActions(args, requestId) {
     throw error;
   }
   if (response?.kind === 'automatic_install') {
+    return { kind: response.kind, status: response.status, code: response.code || '', requestId: response.requestId,
+      requestKey, duplicate: response.duplicate === true };
+  }
+  if (response?.kind === 'windows_service_control') {
     return { kind: response.kind, status: response.status, code: response.code || '', requestId: response.requestId,
       requestKey, duplicate: response.duplicate === true };
   }

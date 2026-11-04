@@ -71,6 +71,11 @@ const server = createServer((req, res) => {
       res.end(JSON.stringify({ kind: 'automatic_install', status: 'executing', requestId: 'auto-1', duplicate: false }));
       return;
     }
+    if (payload.requestKey === 'mcp-fixture-service') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ kind: 'windows_service_control', status: 'denied', code: 'DEVICE_DENIED', requestId: 'svc-1' }));
+      return;
+    }
     res.writeHead(202, { 'content-type': 'application/json' });
     res.end(JSON.stringify({
       status: 'awaiting_approval',
@@ -162,6 +167,11 @@ const missingKeyStatus = await request(9, 'tools/call', { name: 'agentoc_request
   statusOnly: true, actions: [{ command: 'winget install Git.Git' }],
 } });
 assert.equal(missingKeyStatus.result.isError, true);
+const service = await request(10, 'tools/call', { name: 'agentoc_request_actions', arguments: {
+  requestKey: 'mcp-fixture-service', actions: [{ command: 'Restart-Service Example' }],
+} });
+assert.deepEqual(JSON.parse(service.result.content[0].text), { kind: 'windows_service_control', status: 'denied', code: 'DEVICE_DENIED',
+  requestId: 'svc-1', requestKey: 'mcp-fixture-service', duplicate: false });
 child.stdin.end();
 await new Promise((resolve, reject) => {
   child.once('exit', resolve);

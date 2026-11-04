@@ -199,7 +199,9 @@ import {
   isApprovedActionExpired,
 } from './approved-actions.mjs';
 import { createApprovedActionStore } from './approved-action-store.mjs';
-import { getWindowsManagedAutoInstallStatus, loadWindowsAutoInstallPublicIdentity, prepareWindowsManagedUserInstall, tryWindowsManagedAutoInstall, verifyWindowsManagedUserInstallAuthorization } from './windows-managed-auto-install.mjs';
+import { getWindowsManagedAutoInstallStatus, loadWindowsAutoInstallPublicIdentity, loadWindowsAutoInstallSigningKey, prepareWindowsManagedUserInstall, tryWindowsManagedAutoInstall, verifyWindowsManagedUserInstallAuthorization } from './windows-managed-auto-install.mjs';
+import { createWindowsPrivilegedBrokerClient } from './windows-privileged-broker.mjs';
+import { queryWindowsServiceProposalFromCommand, submitOrResumeWindowsServiceProposal, waitWindowsServiceProposal } from './windows-service-proposal.mjs';
 import { createWindowsUserInstallStore } from './windows-user-install-store.mjs';
 import { windowsUserInstallOperationFingerprint } from './windows-user-install-executor.mjs';
 import { resolvePrivilegedBatchPolicy, deferWindowsLegacyInstallBatch } from './privileged-permission-profile.mjs';
@@ -4016,6 +4018,13 @@ async function proposeApprovedActionsUnlocked({
     throw Object.assign(new Error('Conflicting installation request modes'), { code: 'AUTO_INSTALL_REQUEST_INVALID' });
   }
   if (autoInstallStatusOnly === true) {
+    if (process.platform === 'win32' && serverActions.length === 1) {
+      const action = buildApprovedAction(serverActions[0], { requestKey: trimString(requestKey), sessionId: run.sessionId,
+        runId: normalizedRunId, turnId: trustedTurnId, cwd: trustedCwd, projectRoot: trustedProjectRoot, home: trustedHome, platform: 'win32' });
+      const status = await queryWindowsServiceProposalFromCommand({ action, authenticatedPrincipalKind: binding.authenticatedPrincipalKind,
+        trustedContext: { cwd: trustedCwd, projectRoot: trustedProjectRoot, home: trustedHome }, client: createWindowsPrivilegedBrokerClient() });
+      if (status) return { ...status, kind: 'windows_service_control', requestKey: trimString(requestKey) };
+    }
     const status = await getWindowsManagedAutoInstallStatus({ binding: { sessionId: run.sessionId, runId: normalizedRunId,
       turnId: trustedTurnId, requestKey: trimString(requestKey), authenticatedPrincipalKind: binding.authenticatedPrincipalKind } });
     return { ...status, kind: 'automatic_install' };
@@ -4023,7 +4032,7 @@ async function proposeApprovedActionsUnlocked({
   const assertInstallActive = async () => {
     const latestRun = await getRun(normalizedRunId);
     const latestSession = await getSession(run.sessionId);
-    if (!latestRun || isTerminalRunState(latestRun.state) || !latestSession || resolveSessionRiskMode(latestSession) !== riskMode
+    if (!latestRun || isTerminalRunState(latestRun.state) || latestRun.cancelRequested === true || !latestSession || resolveSessionRiskMode(latestSession) !== riskMode
         || (run.windowsExecutionSid && latestRun.windowsExecutionSid !== run.windowsExecutionSid)
         || (typeof run.windowsExecutionIsService === 'boolean' && latestRun.windowsExecutionIsService !== run.windowsExecutionIsService)) {
       const error = new Error('Run or permission policy changed before installation');
@@ -4182,6 +4191,27 @@ async function proposeApprovedActionsUnlocked({
     error.code = 'APPROVED_ACTION_AUTO_DENIED';
     error.statusCode = 403;
     throw error;
+  }
+
+  // A service request uses the enrolled device's exact-operation signature.
+  // Keep the tool call alive while the phone reviews it, so the run remains
+  // active and there is one owner decision instead of two separate prompts.
+  if (process.platform === 'win32' && preliminaryActions.length === 1 &&
+      semanticProjections[0]?.decisions?.length === 1 &&
+      semanticProjections[0].decisions[0]?.operation?.target?.kind === 'windows_service') {
+    const key = await loadWindowsAutoInstallSigningKey();
+    if (!key?.kid || !key.privateKey) {
+      throw Object.assign(new Error('Windows service broker signing identity is unavailable'), { code: 'SERVICE_BROKER_NOT_READY' });
+    }
+    const client = createWindowsPrivilegedBrokerClient();
+    const serviceOptions = {
+      action: preliminaryActions[0], projection: semanticProjections[0], riskMode,
+      authenticatedPrincipalKind: binding?.authenticatedPrincipalKind,
+      client, kid: key.kid, privateKey: key.privateKey, assertActive: assertInstallActive,
+    };
+    const proposal = await submitOrResumeWindowsServiceProposal(serviceOptions);
+    const result = await waitWindowsServiceProposal(serviceOptions);
+    return { kind: 'windows_service_control', ...result, requestKey: trimString(requestKey), duplicate: proposal.duplicate === true };
   }
 
   const store = createApprovedActionStore({

@@ -3,7 +3,7 @@ import { generateKeyPairSync, verify } from 'node:crypto';
 import { buildApprovedAction } from '../chat/approved-actions.mjs';
 import { prepareApprovedActionSemanticProjection } from '../chat/approved-action-semantic.mjs';
 import { windowsServiceControlSigningBytes } from '../chat/windows-service-grant.mjs';
-import { submitOrResumeWindowsServiceProposal, queryWindowsServiceProposal, waitWindowsServiceProposal, windowsServiceRequestIds } from '../chat/windows-service-proposal.mjs';
+import { submitOrResumeWindowsServiceProposal, queryWindowsServiceProposal, queryWindowsServiceProposalFromCommand, waitWindowsServiceProposal, windowsServiceRequestIds } from '../chat/windows-service-proposal.mjs';
 
 const context = { sessionId: 'session', runId: 'run', turnId: 'turn', requestKey: 'request', platform: 'win32',
   cwd: 'D:\\work', projectRoot: 'D:\\work', home: 'D:\\home' };
@@ -33,11 +33,14 @@ assert.equal(submitted.grant.serviceName, 'Example');
 assert.equal(submitted.grant.action, 'restart-service');
 assert.equal((await submitOrResumeWindowsServiceProposal(options)).duplicate, true);
 assert.equal((await queryWindowsServiceProposal(options)).status, 'awaiting_device');
+assert.equal((await queryWindowsServiceProposalFromCommand({ ...options, trustedContext: context })).status, 'awaiting_device');
 assert.equal(count, 1); assert.equal(active, 1);
 const mismatchClient = { ...client, status: async id => ({ type: 'result', requestId: id, status: 'awaiting_device',
   serviceControl: { ...submitted.grant, definitionHash: 'b'.repeat(64) } }) };
 await assert.rejects(submitOrResumeWindowsServiceProposal({ ...options, client: mismatchClient }), { code: 'SERVICE_BINDING_CONFLICT' });
 await assert.rejects(queryWindowsServiceProposal({ ...options, client: mismatchClient }), { code: 'SERVICE_BINDING_CONFLICT' });
+const wrongServiceAction = buildApprovedAction({ command: 'Restart-Service Other' }, context);
+await assert.rejects(queryWindowsServiceProposalFromCommand({ ...options, action: wrongServiceAction, trustedContext: context }), { code: 'SERVICE_BINDING_CONFLICT' });
 for (const riskMode of ['full-auto', 'conservative-auto']) {
   await assert.rejects(submitOrResumeWindowsServiceProposal({ ...options, riskMode }), { code: 'SERVICE_PROFILE_DENIED' });
 }
@@ -71,4 +74,5 @@ assert.equal((await waitWindowsServiceProposal({ ...options, client: stalledClie
   monotonicNow: () => clock, delay: async ms => { clock += ms; } })).status, 'unknown');
 const aborted = new AbortController(); aborted.abort();
 assert.equal((await waitWindowsServiceProposal({ ...options, signal: aborted.signal })).status, 'unknown');
+assert.equal((await waitWindowsServiceProposal({ ...options, client: stalledClient, assertActive: async () => { throw new Error('run cancelled'); } })).status, 'unknown');
 console.log('windows-service-proposal: ok');

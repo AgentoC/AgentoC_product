@@ -3,6 +3,7 @@
 import { createHash, randomBytes, sign } from 'node:crypto';
 import { isApprovedActionSemanticProjectionIntact } from './approved-action-semantic.mjs';
 import { computeSemanticManifestHash } from './semantic-operation.mjs';
+import { compileSemanticOperations } from './semantic-compiler.mjs';
 import { windowsServiceControlSigningBytes } from './windows-service-grant.mjs';
 import { publishWindowsBrokerApprovalInvalidation } from './windows-broker-approval-invalidation.mjs';
 
@@ -59,11 +60,38 @@ export async function queryWindowsServiceProposal({ action, projection, authenti
   return { requestId, status: result.status, code: result.code || '' };
 }
 
+// Reconstruct the literal operation from the original command for status-only
+// requests. Do not re-resolve its service definition: it may have changed after
+// the operation completed, but the original outcome must remain queryable.
+export async function queryWindowsServiceProposalFromCommand({ action, trustedContext, authenticatedPrincipalKind, client } = {}) {
+  if (authenticatedPrincipalKind !== 'owner') fail('SERVICE_PROFILE_DENIED', 'Service status requires the owner run');
+  const { requestId, actionId } = windowsServiceRequestIds(action);
+  const compiled = compileSemanticOperations({
+    request: { sessionId: action.sessionId, runId: action.runId, turnId: action.turnId, requestKey: action.requestKey,
+      rawCommand: action.canonicalCommand, executionClass: action.executionClass, tool: 'approved-action', commandForm: 'argv' },
+    trustedContext: { ...trustedContext, platform: 'win32' },
+  });
+  const op = compiled?.operations?.length === 1 ? compiled.operations[0] : null;
+  if (!op || op.primaryAction !== 'service.control' || op.executionClass !== 'host' ||
+      op.target?.kind !== 'windows_service' || op.target?.platform !== 'win32' || op.target?.exact !== true ||
+      op.analysis?.effectsComplete !== true || op.analysis?.unknowns?.length) return null;
+  if (!client || typeof client.status !== 'function') fail('SERVICE_PROPOSAL_UNAVAILABLE', 'Service broker is unavailable');
+  const result = await client.status(requestId);
+  if (result?.type === 'result' && result.requestId === requestId && result.code === 'REQUEST_NOT_FOUND' && !result.status) {
+    return { requestId, status: 'unknown', code: 'SERVICE_REQUEST_NOT_FOUND' };
+  }
+  const grant = result?.serviceControl;
+  if (!grant || !matchesServiceResult(result, action, { serviceName: op.target.serviceName, action: op.target.action,
+    definitionHash: grant.definitionHash }, requestId, actionId)) fail('SERVICE_BINDING_CONFLICT', 'Existing service request does not match this operation');
+  try { windowsServiceControlSigningBytes(grant); } catch { fail('SERVICE_BINDING_CONFLICT', 'Existing service request is invalid'); }
+  return { requestId, status: result.status, code: result.code || '' };
+}
+
 // Observe only the original broker record. A cancelled wait or broken
 // transport cannot establish whether an operation has executed.
 export async function waitWindowsServiceProposal({ action, projection, authenticatedPrincipalKind, client, signal,
-  timeoutMs = 10 * 60_000, intervalMs = 1_000, monotonicNow = () => performance.now(),
-  delay = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
+  timeoutMs = 10 * 60_000 + 10_000, intervalMs = 1_000, monotonicNow = () => performance.now(),
+  delay = ms => new Promise(resolve => setTimeout(resolve, ms)), assertActive } = {}) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || !Number.isFinite(intervalMs) || intervalMs <= 0 ||
       typeof monotonicNow !== 'function' || typeof delay !== 'function') {
     fail('SERVICE_STATUS_INVALID', 'Invalid service status wait');
@@ -80,6 +108,9 @@ export async function waitWindowsServiceProposal({ action, projection, authentic
     }
     if (['succeeded', 'failed', 'denied', 'expired', 'unknown'].includes(result.status)) return result;
     if (!['awaiting_device', 'executing'].includes(result.status)) return unknown();
+    if (typeof assertActive === 'function') {
+      try { await assertActive(); } catch { return unknown(); }
+    }
     const remaining = deadline - monotonicNow();
     if (remaining <= 0 || signal?.aborted) break;
     await delay(Math.min(intervalMs, remaining));
