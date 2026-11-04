@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { parseWindowsPowerShellAst } from '../chat/windows-powershell-ast.mjs';
@@ -38,11 +39,16 @@ const literal = await parseWindowsPowerShellAst("Write-Output '$env:TEMP'");
 assert.equal(literal.dynamicNodes.length, 0);
 const nested = await parseWindowsPowerShellAst('Get-ChildItem . | ForEach-Object { $_.Name }');
 assert.ok(nested.dynamicNodes.length > 0);
-const pwsh = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe';
-if (existsSync(pwsh)) {
+const where = spawnSync('where.exe', ['pwsh.exe'], { encoding: 'utf8', windowsHide: true });
+const pwsh = process.env.AGENTOC_TEST_PWSH || (where.status === 0 ? where.stdout.split(/\r?\n/).find(Boolean) : '');
+if (pwsh && existsSync(pwsh)) {
   const modern = await parseWindowsPowerShellAst('Get-Date; Get-Location', { executable: pwsh });
   assert.match(modern.psVersion, /^7\./);
   assert.deepEqual(modern.commands.map((x) => x.name), ['Get-Date', 'Get-Location']);
+  const modernStatic = await parseWindowsPowerShellAst("[System.IO.File]::WriteAllText('文档.txt', 'hello')", { executable: pwsh });
+  assert.deepEqual(modernStatic.dynamicNodes, []);
+  assert.deepEqual(modernStatic.expressions[0].staticFileCall, { kind: 'write', path: '文档.txt', method: 'WriteAllText' });
+  assert.ok((await parseWindowsPowerShellAst("[System.IO.File]::WriteAllText('a', $env:TEMP)", { executable: pwsh })).dynamicNodes.length);
 }
 await assert.rejects(parseWindowsPowerShellAst('x'.repeat(128 * 1024 + 1)));
 // OS pipe reads may split a multibyte filename across data events.

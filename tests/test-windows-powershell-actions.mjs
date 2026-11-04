@@ -254,4 +254,10 @@ for (const riskMode of ['recommended', 'full-auto']) {
   assert.equal((await decideWindowsApproval(request(`[System.IO.File]::WriteAllText(${outsideFile}, 'x')`), state)).decision, 'auto-allow');
   assert.equal((await decideWindowsApproval(request(`[System.IO.File]::WriteAllText(${protectedFile}, 'x')`), state)).decision, 'prompt');
 }
+if (process.env.AGENTOC_TEST_PWSH) {
+  const modern = await analyzeWindowsPowerShell(`[System.IO.File]::WriteAllText(${ordinaryFile}, 'hello')`, context, { executable: process.env.AGENTOC_TEST_PWSH });
+  assert.equal(decideWindowsPowerShellActions(modern).decision, 'allow');
+  const modernProtected = await analyzeWindowsPowerShell(`[System.IO.File]::WriteAllText(${protectedFile}, 'hello')`, context, { executable: process.env.AGENTOC_TEST_PWSH });
+  assert.equal(decideWindowsPowerShellActions(modernProtected).decision, 'review');
+}
 console.log('windows-powershell-actions: native AST and file policy checks passed');
