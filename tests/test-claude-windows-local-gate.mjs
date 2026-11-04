@@ -65,7 +65,10 @@ const powershell = path.join(process.env.SystemRoot || process.env.WINDIR, 'Syst
 const dotnetScript = `[System.IO.File]::WriteAllText('${artifact.replaceAll("'", "''")}', 'dotnet fixture')`;
 const dotnetCommand = `${bashQuote(powershell)} -NoProfile -NonInteractive -Command ${bashQuote(dotnetScript)}`;
 const guidanceMarker = path.join(root, 'admin-command-ran.txt');
-const guidanceScript = `Start-Service -Name 'AgentoC-Nonexistent-Fixture'; [System.IO.File]::WriteAllText('${guidanceMarker.replaceAll("'", "''")}', 'unexpected')`;
+const guidanceAction = process.env.AGENTOC_QA_CLAUDE_ELEVATION_REGISTRY === '1'
+  ? "Set-ItemProperty -LiteralPath 'HKLM:\\Software\\AgentoC-Nonexistent-Fixture' -Name Value -Value 1 -WhatIf"
+  : "Start-Service -Name 'AgentoC-Nonexistent-Fixture'";
+const guidanceScript = `${guidanceAction}; [System.IO.File]::WriteAllText('${guidanceMarker.replaceAll("'", "''")}', 'unexpected')`;
 const guidanceCommand = `${bashQuote(powershell)} -NoProfile -NonInteractive -Command ${bashQuote(guidanceScript)}`;
 let requests = 0;
 let preflights = 0; let submissions = 0; let toolResultObserved = false; let guidanceObserved = false;
