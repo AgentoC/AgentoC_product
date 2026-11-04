@@ -16,7 +16,8 @@ if (process.platform !== 'win32' || process.env.AGENTOC_RUN_CODEX_LOCAL_GATE !==
   process.exit(0);
 }
 if (!process.env.AGENTOC_TEST_CODEX_BINARY || !path.isAbsolute(process.env.AGENTOC_TEST_CODEX_BINARY)) throw new Error('absolute test Codex binary path required');
-const home = await mkdtemp(path.join(tmpdir(), 'agentoc-codex-local-gate-'));
+const home = await mkdtemp(path.join(tmpdir(), process.env.AGENTOC_QA_CODEX_UNICODE === '1'
+  ? 'agentoc-codex-local-gate-项目 空格-' : 'agentoc-codex-local-gate-'));
 const alternateCwd = path.join(home, 'alternate-workdir');
 if (process.env.AGENTOC_QA_HOOK_WORKDIR === '1' || process.env.AGENTOC_QA_HOOK_MANAGED_DELETE === '1') await mkdir(alternateCwd);
 process.env.AGENTOC_INSTANCE_ROOT = path.join(home, 'instance');

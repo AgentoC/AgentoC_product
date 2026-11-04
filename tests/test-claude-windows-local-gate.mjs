@@ -11,7 +11,8 @@ if (process.platform !== 'win32' || process.env.AGENTOC_RUN_CLAUDE_LOCAL_GATE !=
 }
 const binary = process.env.AGENTOC_TEST_CLAUDE_BINARY;
 if (!binary || !path.isAbsolute(binary)) throw new Error('absolute Claude executable required');
-const root = await mkdtemp(path.join(os.tmpdir(), 'agentoc-claude-local-gate-'));
+const unicodeFixture = process.env.AGENTOC_QA_CLAUDE_UNICODE === '1';
+const root = await mkdtemp(path.join(os.tmpdir(), unicodeFixture ? 'agentoc-claude-local-gate-项目 空格-' : 'agentoc-claude-local-gate-'));
 const config = path.join(root, 'config');
 await mkdir(config);
 process.env.AGENTOC_INSTANCE_ROOT = path.join(root, 'instance');
@@ -42,7 +43,7 @@ const protectedRoot = path.join(root, 'protected');
 if (protectedCase) await mkdir(protectedRoot);
 const outsideRoot = outsideCase ? await mkdtemp(path.join(os.tmpdir(), 'agentoc-claude-outside-')) : '';
 const outsideFileRoot = outsideFileCase ? await mkdtemp(path.join(os.tmpdir(), 'agentoc-claude-outside-file-')) : '';
-const deleteTarget = path.join(outsideCase ? outsideRoot : protectedCase ? protectedRoot : root, 'delete-fixture');
+const deleteTarget = path.join(outsideCase ? outsideRoot : protectedCase ? protectedRoot : root, unicodeFixture ? '构建 输出' : 'delete-fixture');
 const keepFile = path.join(root, 'keep-fixture.txt');
 if (deleteCase) {
   await mkdir(deleteTarget);
