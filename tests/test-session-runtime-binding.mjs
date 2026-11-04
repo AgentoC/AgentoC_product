@@ -141,6 +141,22 @@ try {
     'risk-gated Codex CLI must fail closed before creating a Run',
   );
 
+  if (process.platform === 'win32') {
+    const autoSession = await createSession(workspace, 'runtime-fake', 'Unsupported autonomous runtime', {
+      riskMode: 'full-auto',
+    });
+    await assert.rejects(
+      () => submitHttpMessage(autoSession.id, 'This runtime cannot enforce the Windows gate.', [], {
+        requestId: 'codex-cli-auto-gate',
+        model: 'fake-model',
+      }),
+      (error) => error?.code === 'PERMISSION_PROFILE_UNSUPPORTED_RUNTIME'
+        && error?.statusCode === 409
+        && /codex-json/.test(error.message),
+      'Windows autonomous mode must reject a runtime that cannot enforce its approval policy',
+    );
+  }
+
   const parent = await createSession(workspace, agent.id, 'Historical Agent session', {
     templateId: agent.id,
     templateName: agent.name,
