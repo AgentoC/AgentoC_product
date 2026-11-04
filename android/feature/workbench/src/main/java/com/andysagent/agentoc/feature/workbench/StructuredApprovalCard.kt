@@ -248,7 +248,7 @@ private fun StructuredApprovalActionRow(
         else -> Color.Black.copy(alpha = 0.03f)
     }
     val subcardBorder = if (action.selected) {
-        colors.actionPrimary.copy(alpha = 0.50f)
+        colors.accentPrimary.copy(alpha = 0.50f)
     } else {
         if (isDark) AgentoFrostedTokens.SubtleHairline else AgentoFrostedTokens.LightSubtleHairline
     }

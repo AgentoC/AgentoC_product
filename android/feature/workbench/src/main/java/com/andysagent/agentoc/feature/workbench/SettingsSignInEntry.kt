@@ -49,7 +49,7 @@ internal fun SettingsSignInEntry(
             Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) { leadingIcon() }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, fontWeight = FontWeight.Medium), color = colors.primaryContent)
-                Text(actionLabel, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp), color = colors.actionPrimary)
+                Text(actionLabel, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp), color = colors.accentPrimary)
             }
             AgentoWebIcon(AgentoWebGlyph.ChevronRight, null, Modifier.size(16.dp), tint = colors.tertiaryContent)
         }

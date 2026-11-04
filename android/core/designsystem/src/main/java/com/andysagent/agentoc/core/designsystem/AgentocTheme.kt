@@ -258,17 +258,15 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
-// Match the original paired-device action blue. Its midtone is sampled from
-// the supplied reference button; use it as a flat brand color so controls
-// retain the familiar identity without a gradient or highlight edge.
-private val AgentoBrandBlue = Color(0xFF3151B3)
-private val AgentoBrandBlueLight = Color(0xFF7890D6)
-
 private val LightColors = lightColorScheme(
-    primary = AgentoFrostedTokens.AppleBlueLight,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFE5EAF6),
-    onPrimaryContainer = Color(0xFF173B7A),
+    primary = AgentoFrostedTokens.BrandPrimary,
+    onPrimary = AgentoFrostedTokens.OnBrandPrimary,
+    primaryContainer = AgentoFrostedTokens.BrandContainerLight,
+    onPrimaryContainer = Color(0xFF273769),
+    secondary = AgentoFrostedTokens.BrandAccentLight,
+    onSecondary = Color.White,
+    secondaryContainer = AgentoFrostedTokens.BrandContainerLight,
+    onSecondaryContainer = Color(0xFF273769),
     background = Color(0xFFF4F4F7),
     onBackground = Color(0xFF1C1C1E),
     surface = Color(0xFFFFFFFF),
@@ -287,10 +285,14 @@ private val LightColors = lightColorScheme(
 )
 
 private val DarkColors = darkColorScheme(
-    primary = AgentoFrostedTokens.AppleBlueDark,
-    onPrimary = AgentoFrostedTokens.OnAppleBlueDark,
-    primaryContainer = Color(0xFF1C1C1E),
-    onPrimaryContainer = Color(0xFFDCE8FF),
+    primary = AgentoFrostedTokens.BrandPrimary,
+    onPrimary = AgentoFrostedTokens.OnBrandPrimary,
+    primaryContainer = AgentoFrostedTokens.BrandContainerDark,
+    onPrimaryContainer = Color(0xFFDDE4FF),
+    secondary = AgentoFrostedTokens.BrandAccentDark,
+    onSecondary = AgentoFrostedTokens.OnBrandAccentDark,
+    secondaryContainer = AgentoFrostedTokens.BrandContainerDark,
+    onSecondaryContainer = Color(0xFFDDE4FF),
     background = Color(0xFF000000),
     onBackground = Color(0xFFF5F5F7),
     surface = Color(0xFF1C1C1E),
@@ -397,6 +399,11 @@ data class AgentocColors(
     val statusWaiting: Color get() = waiting
     val statusSuccess: Color get() = success
     val statusError: Color get() = error
+    val actionDestructive: Color get() = if (canvas.red < 0.5f) {
+        AgentoFrostedTokens.DestructiveActionDark
+    } else {
+        AgentoFrostedTokens.DestructiveActionLight
+    }
 }
 
 private val LightAgentocColors = AgentocColors(
@@ -420,8 +427,8 @@ private val LightAgentocColors = AgentocColors(
     secondaryContent = Color(0xFF6D6D72),
     tertiaryContent = Color(0xFF8E8E93),
     disabledContent = Color(0xFFAEAEB2),
-    actionPrimary = AgentoFrostedTokens.AppleBlueLight,
-    actionPrimaryContent = Color.White,
+    actionPrimary = AgentoFrostedTokens.BrandPrimary,
+    actionPrimaryContent = AgentoFrostedTokens.OnBrandPrimary,
     floatingControl = Color(0xE6FFFFFF),
     floatingControlContent = Color(0xFF1C1C1E),
     running = AgentoFrostedTokens.AppleGreenLight,
@@ -438,7 +445,7 @@ private val LightAgentocColors = AgentocColors(
     textTertiary = Color(0xFF8E8E93),
     iconPrimary = Color(0xFF1C1C1E),
     iconSecondary = Color(0xFF6D6D72),
-    accentPrimary = AgentoFrostedTokens.AppleBlueLight,
+    accentPrimary = AgentoFrostedTokens.BrandAccentLight,
     onAccentPrimary = Color.White,
     stateRunning = AgentoFrostedTokens.AppleGreenLight,
     stateSuccess = AgentoFrostedTokens.AppleGreenLight,
@@ -458,8 +465,8 @@ private val DarkAgentocColors = AgentocColors(
     secondaryContent = Color.White.copy(alpha = 0.60f),
     tertiaryContent = Color.White.copy(alpha = 0.35f),
     disabledContent = Color.White.copy(alpha = 0.22f),
-    actionPrimary = AgentoFrostedTokens.AppleBlueDark,
-    actionPrimaryContent = AgentoFrostedTokens.OnAppleBlueDark,
+    actionPrimary = AgentoFrostedTokens.BrandPrimary,
+    actionPrimaryContent = AgentoFrostedTokens.OnBrandPrimary,
     floatingControl = Color(0xFF2C2C2E),
     floatingControlContent = Color(0xFFF5F5F7),
     running = AgentoFrostedTokens.AppleGreenDark,
@@ -476,8 +483,8 @@ private val DarkAgentocColors = AgentocColors(
     textTertiary = Color.White.copy(alpha = 0.35f),
     iconPrimary = Color(0xFFF5F5F7),
     iconSecondary = Color.White.copy(alpha = 0.60f),
-    accentPrimary = AgentoFrostedTokens.AppleBlueDark,
-    onAccentPrimary = AgentoFrostedTokens.OnAppleBlueDark,
+    accentPrimary = AgentoFrostedTokens.BrandAccentDark,
+    onAccentPrimary = AgentoFrostedTokens.OnBrandAccentDark,
     stateRunning = AgentoFrostedTokens.AppleGreenDark,
     stateSuccess = AgentoFrostedTokens.AppleGreenDark,
     stateWarning = AgentoFrostedTokens.AppleOrangeDark,
@@ -681,12 +688,12 @@ object AgentoColors {
 
     // 5. 强调与状态语义色 (克制纯正，拒绝荧光渐变)
     val Accent = Color(0xFFFFFFFF)               // 默认极简纯白
-    val AccentPrimary = AgentoBrandBlue           // AgentoC symbol blue: actionable content
-    val Primary = AgentoBrandBlue                 // Main action anchor
+    val AccentPrimary = AgentoFrostedTokens.BrandAccentDark // Legacy dark-surface artwork
+    val Primary = AgentoFrostedTokens.BrandPrimary
     val Success = Color(0xFF438661)              // 成功/完成/在线
     val Warning = Color(0xFFB77B24)              // 审批/等待/警告
     val Error = Color(0xFFC45A52)                // 失败/错误
-    val RunningGlow = AgentoBrandBlue             // 运行状态微光
+    val RunningGlow = Color(0xFF3151B3)           // Existing status glow, independent of brand actions
 
     // 6. 代码暗盒专属底色
     val CodeBlockBackground = Color(0xFF0D0D11)

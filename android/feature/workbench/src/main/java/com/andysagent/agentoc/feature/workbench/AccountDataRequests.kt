@@ -1,5 +1,7 @@
 package com.andysagent.agentoc.feature.workbench
 
+import androidx.compose.material3.ButtonDefaults
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,10 +50,10 @@ internal fun AccountDataRequests() {
 
     Column(Modifier.fillMaxWidth().testTag("account-data-requests"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(stringResource(R.string.account_data_title), style = MaterialTheme.typography.titleMedium, color = colors.primaryContent)
-        TextButton(onClick = { open(ACCOUNT_PRIVACY_URL) }, modifier = Modifier.testTag("account-privacy-open")) {
+        TextButton(onClick = { open(ACCOUNT_PRIVACY_URL) }, modifier = Modifier.testTag("account-privacy-open"), colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) {
             Text(stringResource(R.string.account_privacy_open))
         }
-        TextButton(onClick = { showRequestInstructions = true }, modifier = Modifier.testTag("account-deletion-request")) {
+        TextButton(onClick = { showRequestInstructions = true }, modifier = Modifier.testTag("account-deletion-request"), colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) {
             Text(stringResource(R.string.account_deletion_request))
         }
         Text(stringResource(R.string.account_deletion_request_summary), style = MaterialTheme.typography.bodySmall, color = colors.secondaryContent)

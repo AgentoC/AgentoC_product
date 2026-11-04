@@ -65,7 +65,7 @@ fun PairingScanGuideDialog(onScan: () -> Unit, onDismiss: () -> Unit) {
                     .semantics { contentDescription = progress; liveRegion = LiveRegionMode.Polite }) {
                 repeat(3) { index ->
                     Box(Modifier.weight(1f).height(3.dp).background(
-                        if (index <= step) colors.actionPrimary else colors.subtleOutline, AgentoShapes.Pill))
+                        if (index <= step) colors.accentPrimary else colors.subtleOutline, AgentoShapes.Pill))
                 }
             }
             when (step) {

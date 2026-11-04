@@ -161,7 +161,7 @@ private fun homePalette(): HomePalette {
             primary = colors.primaryContent,
             secondary = colors.secondaryContent,
             tertiary = colors.tertiaryContent,
-            action = colors.actionPrimary,
+            action = colors.accentPrimary,
             attention = Color(0xFFD5A653),
             running = colors.running,
         )
@@ -173,7 +173,7 @@ private fun homePalette(): HomePalette {
             primary = colors.primaryContent,
             secondary = colors.secondaryContent,
             tertiary = colors.tertiaryContent,
-            action = colors.actionPrimary,
+            action = colors.accentPrimary,
             attention = Color(0xFFB77B24),
             running = colors.running,
         )
@@ -878,12 +878,12 @@ private fun HomeEmptyAction(
                 glyph = AgentoWebGlyph.FolderPlus,
                 contentDescription = null,
                 modifier = Modifier.size(19.dp),
-                tint = colors.actionPrimary,
+                tint = colors.accentPrimary,
             )
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                color = colors.actionPrimary,
+                color = colors.accentPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1161,14 +1161,14 @@ private fun BackgroundComputerSummariesSection(
                         modifier = Modifier.size(40.dp),
                         shape = CircleShape,
                         color = colors.actionPrimary.copy(alpha = 0.14f),
-                        contentColor = colors.actionPrimary,
+                        contentColor = colors.accentPrimary,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             AgentoWebIcon(
                                 glyph = AgentoWebGlyph.Monitor,
                                 contentDescription = null,
                                 modifier = Modifier.size(20.dp),
-                                tint = colors.actionPrimary,
+                                tint = colors.accentPrimary,
                             )
                         }
                     }

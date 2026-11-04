@@ -1,5 +1,7 @@
 package com.andysagent.agentoc.feature.workbench
 
+import androidx.compose.material3.ButtonDefaults
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -206,7 +208,7 @@ internal fun SessionsSurface(
                             color = MaterialTheme.colorScheme.error)
                     }
                 },
-                confirmButton = { TextButton(onClick = { dialogMode = null; menuSession = null }, modifier = Modifier.testTag("session-list-dismiss")) { Text(stringResource(R.string.settings_cancel)) } },
+                confirmButton = { TextButton(onClick = { dialogMode = null; menuSession = null }, modifier = Modifier.testTag("session-list-dismiss"), colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) { Text(stringResource(R.string.settings_cancel)) } },
             )
             "rename" -> AgentoDialog(
                 title = stringResource(R.string.workbench_session_rename), confirmLabel = stringResource(R.string.settings_save),
@@ -241,7 +243,7 @@ internal fun SessionsSurface(
                     Text(stringResource(R.string.project_list_rename), Modifier.fillMaxWidth().testTag("project-list-rename").clickable { dialogMode = "project-rename" }.padding(vertical = 14.dp))
                     Text(stringResource(R.string.project_list_delete), Modifier.fillMaxWidth().testTag("project-list-delete").clickable { dialogMode = "project-delete" }.padding(vertical = 14.dp), color = MaterialTheme.colorScheme.error)
                 } },
-                confirmButton = { TextButton(onClick = { dialogMode = null; menuProject = null }) { Text(stringResource(R.string.settings_cancel)) } },
+                confirmButton = { TextButton(onClick = { dialogMode = null; menuProject = null }, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) { Text(stringResource(R.string.settings_cancel)) } },
             )
             "project-rename" -> AgentoDialog(
                 title = stringResource(R.string.project_list_rename), confirmLabel = stringResource(R.string.settings_save),
@@ -260,12 +262,16 @@ internal fun SessionsSurface(
                 confirmButton = { Column {
                     TextButton(modifier = Modifier.testTag("project-delete-keep"), onClick = {
                         onEvent(WorkbenchEvent.DeleteListedProject(state.activeRemoteTargetId, project.id, false)); dialogMode = null; menuProject = null
-                    }) { Text(stringResource(R.string.project_list_delete_keep)) }
+                    },
+                        colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary),
+                    ) { Text(stringResource(R.string.project_list_delete_keep)) }
                     TextButton(modifier = Modifier.testTag("project-delete-all"), onClick = {
                         onEvent(WorkbenchEvent.DeleteListedProject(state.activeRemoteTargetId, project.id, true)); dialogMode = null; menuProject = null
-                    }) { Text(stringResource(R.string.project_list_delete_all), color = MaterialTheme.colorScheme.error) }
+                    },
+                        colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary),
+                    ) { Text(stringResource(R.string.project_list_delete_all), color = MaterialTheme.colorScheme.error) }
                 } },
-                dismissButton = { TextButton(onClick = { dialogMode = null; menuProject = null }) { Text(stringResource(R.string.settings_cancel)) } },
+                dismissButton = { TextButton(onClick = { dialogMode = null; menuProject = null }, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) { Text(stringResource(R.string.settings_cancel)) } },
             )
         }
     }
@@ -620,7 +626,7 @@ private fun L2SessionsHeader(
                 AgentoWebIcon(
                     glyph = AgentoWebGlyph.Back,
                     contentDescription = null,
-                    tint = colors.actionPrimary,
+                    tint = colors.accentPrimary,
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -813,7 +819,7 @@ private fun ProjectIndexSection(
                     glyph = AgentoWebGlyph.Folder,
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
-                    tint = colors.actionPrimary,
+                    tint = colors.accentPrimary,
                 )
                 Text(
                     text = group.project.name,
@@ -947,7 +953,7 @@ private fun SessionMetaRail(
                     modifier = Modifier
                         .size(if (compact) 7.dp else 8.dp)
                         .clip(CircleShape)
-                        .background(AgentoColors.Primary)
+                        .background(LocalAgentocColors.current.accentPrimary)
                         .semantics { contentDescription = unreadDescription },
                 )
             }
@@ -1091,12 +1097,12 @@ private fun EmptyChatList(
                     glyph = AgentoWebGlyph.FolderPlus,
                     contentDescription = null,
                     modifier = Modifier.size(19.dp),
-                    tint = colors.actionPrimary,
+                    tint = colors.accentPrimary,
                 )
                 Text(
                     text = createProjectLabel,
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = colors.actionPrimary,
+                    color = colors.accentPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

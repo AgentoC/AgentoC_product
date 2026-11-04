@@ -51,7 +51,7 @@ fun RoutingSettingsScreen(state: RoutingSettingsUiState, onEvent: (RoutingSettin
                 }
                 ApiSettingsCard {
                 AgentoSettingRow(title = stringResource(R.string.api_no_default), showChevron = false, enabled = !state.saving, contentHorizontalPadding = 0.dp,
-                    trailing = { if (defaultId == null) AgentoWebIcon(AgentoWebGlyph.Check, null, tint = colors.actionPrimary) },
+                    trailing = { if (defaultId == null) AgentoWebIcon(AgentoWebGlyph.Check, null, tint = colors.accentPrimary) },
                     modifier = Modifier.semantics(mergeDescendants = true) { selected = defaultId == null; role = Role.RadioButton; if (state.saving) disabled() },
                     onClick = { onEvent(RoutingSettingsEvent.SelectDefault(null)) })
                 if (state.directory.computers.isEmpty()) Text(stringResource(R.string.api_no_computers), color = colors.secondaryContent)
@@ -59,7 +59,7 @@ fun RoutingSettingsScreen(state: RoutingSettingsUiState, onEvent: (RoutingSettin
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         AgentoSettingRow(title = computer.label.ifBlank { computer.instanceId },
                             showDivider = false, showChevron = false, enabled = !state.saving, contentHorizontalPadding = 0.dp,
-                            trailing = { if (defaultId == computer.instanceId) AgentoWebIcon(AgentoWebGlyph.Check, null, tint = colors.actionPrimary) },
+                            trailing = { if (defaultId == computer.instanceId) AgentoWebIcon(AgentoWebGlyph.Check, null, tint = colors.accentPrimary) },
                             modifier = Modifier.weight(1f).semantics(mergeDescendants = true) { selected = defaultId == computer.instanceId; role = Role.RadioButton; if (state.saving) disabled() },
                             onClick = { onEvent(RoutingSettingsEvent.SelectDefault(computer.instanceId)) })
                         AgentoToolbarIconButton(

@@ -1,5 +1,7 @@
 package com.andysagent.agentoc.feature.workbench
 
+import androidx.compose.material3.ButtonDefaults
+
 import com.andysagent.agentoc.core.designsystem.AgentoBackdropTone
 
 import androidx.compose.animation.core.animateFloat
@@ -408,8 +410,8 @@ private fun RunIslandCardContent(
                         enabled = !pendingRequest.submitting,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("run-island-request").runIslandReadingItem(),
                         shape = RoundedCornerShape(16.dp),
-                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                            contentColor = colors.actionPrimary,
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = colors.accentPrimary,
                             containerColor = colors.actionPrimary.copy(alpha = 0.08f),
                         ),
                     ) {
@@ -493,7 +495,7 @@ private fun RunIslandExpansionHandle(
                     glyph = AgentoWebGlyph.ChevronDown,
                     contentDescription = null,
                     modifier = Modifier.height(20.dp).width(20.dp).graphicsLayer { rotationZ = 180f * detailsProgress() },
-                    tint = colors.actionPrimary,
+                    tint = colors.accentPrimary,
                 )
             }
         }

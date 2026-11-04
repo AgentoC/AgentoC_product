@@ -438,7 +438,7 @@ private fun ChangedFilesSection(
                             glyph = AgentoWebGlyph.File,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = AgentoFrostedTokens.AppleBlueLight,
+                            tint = LocalAgentocColors.current.accentPrimary,
                         )
                         Text(
                             text = file.path,
@@ -639,7 +639,7 @@ fun DiffViewerModal(
                             glyph = AgentoWebGlyph.File,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
-                            tint = AgentoFrostedTokens.AppleBlueLight,
+                            tint = LocalAgentocColors.current.accentPrimary,
                         )
                         Text(
                             text = diffFile.path,
@@ -701,14 +701,14 @@ fun DiffViewerModal(
                         val lineBg = when {
                             isAdd -> Color(0xFF34C759).copy(alpha = if (isDark) 0.16f else 0.12f)
                             isDel -> Color(0xFFEF4444).copy(alpha = if (isDark) 0.16f else 0.12f)
-                            isHeader -> AgentoFrostedTokens.AppleBlueLight.copy(alpha = if (isDark) 0.12f else 0.08f)
+                            isHeader -> LocalAgentocColors.current.accentPrimary.copy(alpha = if (isDark) 0.12f else 0.08f)
                             else -> Color.Transparent
                         }
 
                         val lineTextColor = when {
                             isAdd -> Color(0xFF34C759)
                             isDel -> Color(0xFFEF4444)
-                            isHeader -> AgentoFrostedTokens.AppleBlueLight
+                            isHeader -> LocalAgentocColors.current.accentPrimary
                             else -> colors.primaryContent
                         }
 
@@ -794,7 +794,7 @@ fun FileDiffSummaryCard(
                         glyph = AgentoWebGlyph.File,
                         contentDescription = null,
                         modifier = Modifier.size(15.dp),
-                        tint = AgentoColors.Primary,
+                        tint = LocalAgentocColors.current.accentPrimary,
                     )
                     Text(
                         text = "File Changes: ${files.size} files",
@@ -817,14 +817,14 @@ fun FileDiffSummaryCard(
                 Surface(
                     onClick = { files.firstOrNull()?.let(onOpenFileDiff) },
                     shape = RoundedCornerShape(percent = 50),
-                    color = AgentoColors.Primary.copy(alpha = 0.12f),
+                    color = LocalAgentocColors.current.accentPrimary.copy(alpha = 0.12f),
                 ) {
                     Text(
                         text = "Diff",
                         style = AgentocTextStyles.caption.copy(
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 11.sp,
-                            color = AgentoColors.Primary,
+                            color = LocalAgentocColors.current.accentPrimary,
                         ),
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                     )

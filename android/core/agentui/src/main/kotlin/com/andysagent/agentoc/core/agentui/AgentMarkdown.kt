@@ -949,7 +949,7 @@ fun MarkdownBlockRenderer(
                                                     .padding(top = 2.dp)
                                                     .size(16.dp),
                                                 shape = RoundedCornerShape(4.dp),
-                                                color = if (item.checked) AgentoColors.AccentPrimary else AgentoColors.SurfaceLevel2,
+                                                color = if (item.checked) LocalAgentocColors.current.actionPrimary else AgentoColors.SurfaceLevel2,
                                                 border = null,
                                             ) {
                                                 if (item.checked) {
@@ -957,7 +957,7 @@ fun MarkdownBlockRenderer(
                                                         AgentoWebIcon(
                                                             glyph = AgentoWebGlyph.Check,
                                                             contentDescription = null,
-                                                            tint = Color.White,
+                                                            tint = LocalAgentocColors.current.actionPrimaryContent,
                                                             modifier = Modifier.size(12.dp),
                                                         )
                                                     }
@@ -1334,7 +1334,7 @@ fun MermaidDiagramBlock(
                         glyph = AgentoWebGlyph.TargetArrow,
                         contentDescription = null,
                         modifier = Modifier.size(14.dp),
-                        tint = AgentoColors.Primary,
+                        tint = LocalAgentocColors.current.accentPrimary,
                     )
                     Text(
                         text = "Mermaid · ${block.diagramType.replaceFirstChar { it.uppercase() }}",
@@ -1517,7 +1517,7 @@ private fun MermaidVisualView(
                                     modifier = Modifier
                                         .size(6.dp)
                                         .background(
-                                            if (idx == 0) AgentoColors.Success else if (idx == nodes.lastIndex) AgentoColors.Primary else AgentoFrostedTokens.AppleBlueLight,
+                                            if (idx == 0) AgentoColors.Success else LocalAgentocColors.current.accentPrimary,
                                             CircleShape,
                                         ),
                                 )
@@ -1555,7 +1555,7 @@ private fun MermaidVisualView(
                                 glyph = AgentoWebGlyph.ChevronRight,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
-                                tint = AgentoColors.Primary.copy(alpha = 0.8f),
+                                tint = LocalAgentocColors.current.accentPrimary.copy(alpha = 0.8f),
                             )
                         }
                     }

@@ -117,7 +117,7 @@ fun SubscriptionInfoScreen(
                     title = "More phone connections",
                     detail = "Keep your mobile surfaces signed in to one account.",
                     glyph = AgentoWebGlyph.Device,
-                    tint = Color(0xFF0A84FF),
+                    tint = LocalAgentocColors.current.accentPrimary,
                 )
                 AgentoDivider(modifier = Modifier.padding(start = 76.dp))
                 SubscriptionInfoRow(

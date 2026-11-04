@@ -1,5 +1,7 @@
 package com.andysagent.agentoc.core.designsystem
 
+import androidx.compose.material3.ButtonDefaults
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
@@ -60,8 +62,8 @@ fun AgentoConnectionProgress(
                     Text(title, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
                     Text(detail, style = MaterialTheme.typography.bodyMedium, color = colors.textSecondary, textAlign = TextAlign.Center)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = onExit) { Text(exitLabel) }
-                        if (showRetry) TextButton(onClick = onRetry) { Text(retryLabel) }
+                        TextButton(onClick = onExit, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) { Text(exitLabel) }
+                        if (showRetry) TextButton(onClick = onRetry, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) { Text(retryLabel) }
                     }
                 }
             }

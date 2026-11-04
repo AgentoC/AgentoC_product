@@ -80,18 +80,25 @@ object AgentoFrostedTokens {
         Color(0xFFF2F2F7), // Apple systemGroupedBackground
     )
 
-    // Apple System Vibrant Colors (HIG)
-    // Dark Mode
-    // The two "AppleBlue" tokens carry the AgentoC logo brand blue (sampled
-    // from the logo gradient's midtone ~#1E8CE8). They keep their historical
-    // names because every accent surface in the app references them.
-    val AppleBlueDark = Color(0xFF2E8FE8)
-    // White on this bright blue is only 3.38:1. Use deep ink for contained
-    // actions; the blue itself remains unchanged for links and accents.
-    val OnAppleBlueDark = Color(0xFF001B33)
-    // Destructive text actions use the same >=4.5:1 target as other labels.
-    // White is suitable for a stop glyph, but not small text on these reds.
-    val OnDestructiveAction = Color(0xFF260704)
+    // A deeper shade of the launcher mark's blue-violet dot makes white
+    // button labels readable in both themes. Foreground accents adapt separately.
+    val BrandPrimary = Color(0xFF566DD0)
+    val OnBrandPrimary = Color.White
+    val BrandAccentLight = Color(0xFF536AC2)
+    val BrandAccentDark = Color(0xFF8EA8FF)
+    val OnBrandAccentDark = Color(0xFF0B0F17)
+    val BrandContainerLight = Color(0xFFEDF0FD)
+    val BrandContainerDark = Color(0xFF232C48)
+
+    // Historical names retained for source compatibility with integrations.
+    val AppleBlueDark = BrandAccentDark
+    val OnAppleBlueDark = OnBrandAccentDark
+    // Semantic status colors retain their own meaning.
+    // Red filled actions use white labels. These deeper reds are independent
+    // of error/status colors and keep small labels legible in either theme.
+    val DestructiveActionLight = Color(0xFFC8322C)
+    val DestructiveActionDark = Color(0xFFD13B34)
+    val OnDestructiveAction = Color.White
     val AppleGreenDark = Color(0xFF30D158)
     val AppleIndigoDark = Color(0xFF5E5CE6)
     val AppleOrangeDark = Color(0xFFFF9F0A)
@@ -102,7 +109,7 @@ object AgentoFrostedTokens {
     val AppleYellowDark = Color(0xFFFFD60A)
 
     // Light Mode
-    val AppleBlueLight = Color(0xFF1173D6)
+    val AppleBlueLight = BrandAccentLight
     val AppleGreenLight = Color(0xFF34C759)
     val AppleIndigoLight = Color(0xFF5856D6)
     val AppleOrangeLight = Color(0xFFFF9500)

@@ -1,5 +1,7 @@
 package com.andysagent.agentoc.feature.workbench
 
+import androidx.compose.material3.ButtonDefaults
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -839,7 +841,7 @@ private fun QuestionOptionRow(
         },
         border = BorderStroke(
             0.5.dp,
-            if (selected) colors.actionPrimary.copy(alpha = 0.60f)
+            if (selected) colors.accentPrimary.copy(alpha = 0.60f)
             else if (isDark) AgentoFrostedTokens.SubtleHairline
             else AgentoFrostedTokens.LightSubtleHairline,
         ),
@@ -901,7 +903,7 @@ private fun QuestionOptionRow(
                 Icon(
                     imageVector = Icons.Outlined.CheckCircleOutline,
                     contentDescription = null,
-                    tint = colors.actionPrimary,
+                    tint = colors.accentPrimary,
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -1089,7 +1091,7 @@ private fun AttentionActions(
                         item.approval?.actions.orEmpty().count { it.state in setOf("proposed", "classified", "waiting_user") }),
                         Modifier.weight(1f), color = colors.tertiaryContent, style = MaterialTheme.typography.labelSmall)
                 } else Spacer(Modifier.weight(1f))
-                TextButton(onClick = { onOpenSession(item.sessionId) }, enabled = !resolving) {
+                TextButton(onClick = { onOpenSession(item.sessionId) }, enabled = !resolving, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) {
                     Text(stringResource(R.string.attention_details),
                         color = if (resolving) colors.disabledContent else colors.secondaryContent)
                 }
@@ -1113,7 +1115,7 @@ private fun AttentionActions(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                TextButton(onClick = { onEvent(AttentionEvent.ClearError) }, enabled = !resolving) {
+                TextButton(onClick = { onEvent(AttentionEvent.ClearError) }, enabled = !resolving, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) {
                     Text(stringResource(R.string.attention_clear_error), color = colors.secondaryContent)
                 }
             }

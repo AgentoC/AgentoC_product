@@ -716,7 +716,7 @@ private fun RowScope.NavigationDockTab(
                     // Only the glyph/text alpha mask enters this small layer;
                     // the glass substrate and selection lens are never tinted.
                     foregroundPaint.colorFilter = ColorFilter.tint(
-                        lerp(inactiveColor, colors.actionPrimary, emphasis()))
+                        lerp(inactiveColor, colors.accentPrimary, emphasis()))
                     val canvas = drawContext.canvas
                     canvas.saveLayer(Rect(Offset.Zero, size), foregroundPaint)
                     drawContent()

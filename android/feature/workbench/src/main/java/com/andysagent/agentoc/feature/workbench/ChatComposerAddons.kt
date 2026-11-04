@@ -404,7 +404,7 @@ private fun ComposerActionRow(
                 glyph = glyph,
                 contentDescription = null,
                 modifier = Modifier.size(15.dp),
-                tint = if (checked == true) colors.actionPrimary else colors.primaryContent,
+                tint = if (checked == true) colors.accentPrimary else colors.primaryContent,
             )
         }
     }
@@ -503,10 +503,10 @@ private fun AdaptiveComposerModeRow(
             Row(labelModifier, verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(Modifier.size(32.dp).clip(CircleShape)
-                    .background(if (checked) AgentoColors.Primary.copy(alpha = 0.15f) else AgentoColors.SurfaceLevel2),
+                    .background(if (checked) LocalAgentocColors.current.accentPrimary.copy(alpha = 0.15f) else AgentoColors.SurfaceLevel2),
                     contentAlignment = Alignment.Center) {
                     AgentoWebIcon(glyph, contentDescription = null, modifier = Modifier.size(16.dp),
-                        tint = if (checked) AgentoColors.Primary else colors.secondaryContent)
+                        tint = if (checked) LocalAgentocColors.current.accentPrimary else colors.secondaryContent)
                 }
                 Text(title, modifier = Modifier.weight(1f), style = style, color = colors.primaryContent)
             }
@@ -1117,7 +1117,7 @@ fun DocumentAttachmentThumbnailCard(
 
     val (badgeBg, badgeTint) = when {
         isPdf -> (if (isDark) Color(0x33E53935) else Color(0x1FE53935)) to Color(0xFFE53935)
-        isCode -> (if (isDark) Color(0x33007AFF) else Color(0x1F007AFF)) to Color(0xFF007AFF)
+        isCode -> colors.accentPrimary.copy(alpha = if (isDark) 0.20f else 0.12f) to colors.accentPrimary
         isSheet -> (if (isDark) Color(0x332E7D32) else Color(0x1F2E7D32)) to Color(0xFF2E7D32)
         else -> (if (isDark) Color(0x28FFFFFF) else Color(0x12000000)) to colors.secondaryContent
     }
@@ -1439,7 +1439,7 @@ private fun ComposerRailAction(label: String, onClick: () -> Unit) {
         .clickable(role = Role.Button, onClick = onClick)
         .padding(horizontal = 12.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
         Text(label, style = MaterialTheme.typography.labelLarge,
-            color = LocalAgentocColors.current.actionPrimary,
+            color = LocalAgentocColors.current.accentPrimary,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
@@ -1604,7 +1604,7 @@ fun GoalPanelModalBottomSheet(
                                     .background(
                                         when {
                                             isDirty -> colors.stateWarning
-                                            autoContinue -> colors.actionPrimary
+                                            autoContinue -> colors.accentPrimary
                                             else -> colors.stateSuccess
                                         },
                                     ),
@@ -1678,7 +1678,7 @@ fun GoalPanelModalBottomSheet(
                                 color = colors.primaryContent,
                                 lineHeight = 21.sp,
                             ),
-                            cursorBrush = androidx.compose.ui.graphics.SolidColor(colors.actionPrimary),
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(colors.accentPrimary),
                             minLines = 3,
                             maxLines = 6,
                         )
@@ -1819,14 +1819,14 @@ fun AgentPanelModalBottomSheet(
                         modifier = Modifier
                             .size(32.dp)
                             .clip(CircleShape)
-                            .background(AgentoColors.Primary.copy(alpha = 0.15f)),
+                            .background(LocalAgentocColors.current.accentPrimary.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center,
                     ) {
                         AgentoWebIcon(
                             glyph = AgentoWebGlyph.Agent,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
-                            tint = AgentoColors.Primary,
+                            tint = LocalAgentocColors.current.accentPrimary,
                         )
                     }
                     Text(
@@ -1872,10 +1872,10 @@ fun AgentPanelModalBottomSheet(
                     },
                     interactionSource = defaultPress,
                     shape = AgentoShapes.SquircleS,
-                    color = if (isDefaultSelected) AgentoColors.Primary.copy(alpha = 0.08f) else AgentoColors.SurfaceLevel1,
+                    color = if (isDefaultSelected) LocalAgentocColors.current.accentPrimary.copy(alpha = 0.08f) else AgentoColors.SurfaceLevel1,
                     contentColor = colors.primaryContent,
                     border = if (isDefaultSelected) {
-                        BorderStroke(1.dp, AgentoColors.Primary.copy(alpha = 0.35f))
+                        BorderStroke(1.dp, LocalAgentocColors.current.accentPrimary.copy(alpha = 0.35f))
                     } else null,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1898,14 +1898,14 @@ fun AgentPanelModalBottomSheet(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
-                                    .background(if (isDefaultSelected) AgentoColors.Primary.copy(alpha = 0.18f) else AgentoColors.SurfaceLevel2),
+                                    .background(if (isDefaultSelected) LocalAgentocColors.current.accentPrimary.copy(alpha = 0.18f) else AgentoColors.SurfaceLevel2),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 AgentoWebIcon(
                                     glyph = AgentoWebGlyph.Agent,
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp),
-                                    tint = if (isDefaultSelected) AgentoColors.Primary else colors.secondaryContent,
+                                    tint = if (isDefaultSelected) LocalAgentocColors.current.accentPrimary else colors.secondaryContent,
                                 )
                             }
                             Column {
@@ -1927,14 +1927,14 @@ fun AgentPanelModalBottomSheet(
                                 modifier = Modifier
                                     .size(24.dp)
                                     .clip(CircleShape)
-                                    .background(AgentoColors.Primary),
+                                    .background(LocalAgentocColors.current.actionPrimary),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 AgentoWebIcon(
                                     glyph = AgentoWebGlyph.Check,
                                     contentDescription = "Selected",
                                     modifier = Modifier.size(14.dp),
-                                    tint = Color.White,
+                                    tint = colors.actionPrimaryContent,
                                 )
                             }
                         }
@@ -1952,10 +1952,10 @@ fun AgentPanelModalBottomSheet(
                         },
                         interactionSource = agentPress,
                         shape = AgentoShapes.SquircleS,
-                        color = if (isSelected) AgentoColors.Primary.copy(alpha = 0.08f) else AgentoColors.SurfaceLevel1,
+                        color = if (isSelected) LocalAgentocColors.current.accentPrimary.copy(alpha = 0.08f) else AgentoColors.SurfaceLevel1,
                         contentColor = colors.primaryContent,
                         border = if (isSelected) {
-                            BorderStroke(1.dp, AgentoColors.Primary.copy(alpha = 0.35f))
+                            BorderStroke(1.dp, LocalAgentocColors.current.accentPrimary.copy(alpha = 0.35f))
                         } else null,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1978,14 +1978,14 @@ fun AgentPanelModalBottomSheet(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .clip(CircleShape)
-                                        .background(if (isSelected) AgentoColors.Primary.copy(alpha = 0.18f) else AgentoColors.SurfaceLevel2),
+                                        .background(if (isSelected) LocalAgentocColors.current.accentPrimary.copy(alpha = 0.18f) else AgentoColors.SurfaceLevel2),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     AgentoWebIcon(
                                         glyph = if (agent.tool == "claude") AgentoWebGlyph.Terminal else AgentoWebGlyph.Agent,
                                         contentDescription = null,
                                         modifier = Modifier.size(18.dp),
-                                        tint = if (isSelected) AgentoColors.Primary else colors.secondaryContent,
+                                        tint = if (isSelected) LocalAgentocColors.current.accentPrimary else colors.secondaryContent,
                                     )
                                 }
                                 Column {
@@ -2028,14 +2028,14 @@ fun AgentPanelModalBottomSheet(
                                     modifier = Modifier
                                         .size(24.dp)
                                         .clip(CircleShape)
-                                        .background(AgentoColors.Primary),
+                                        .background(LocalAgentocColors.current.actionPrimary),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     AgentoWebIcon(
                                         glyph = AgentoWebGlyph.Check,
                                         contentDescription = "Selected",
                                         modifier = Modifier.size(14.dp),
-                                        tint = Color.White,
+                                        tint = colors.actionPrimaryContent,
                                     )
                                 }
                             }
@@ -2159,14 +2159,14 @@ fun ConnectorPanelModalBottomSheet(
                         modifier = Modifier
                             .size(32.dp)
                             .clip(CircleShape)
-                            .background(AgentoColors.Primary.copy(alpha = 0.15f)),
+                            .background(LocalAgentocColors.current.accentPrimary.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center,
                     ) {
                         AgentoWebIcon(
                             glyph = AgentoWebGlyph.Share,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
-                            tint = AgentoColors.Primary,
+                            tint = LocalAgentocColors.current.accentPrimary,
                         )
                     }
                     Text(
@@ -2482,14 +2482,14 @@ private fun ConnectorStatusCard(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
-                        .background(if (isReady) AgentoColors.Primary.copy(alpha = 0.12f) else AgentoColors.SurfaceLevel2),
+                        .background(if (isReady) LocalAgentocColors.current.accentPrimary.copy(alpha = 0.12f) else AgentoColors.SurfaceLevel2),
                     contentAlignment = Alignment.Center,
                 ) {
                     AgentoWebIcon(
                         glyph = glyph,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
-                        tint = if (isReady) AgentoColors.Primary else colors.secondaryContent,
+                        tint = if (isReady) LocalAgentocColors.current.accentPrimary else colors.secondaryContent,
                     )
                 }
                 Column {
@@ -2518,8 +2518,8 @@ private fun ConnectorStatusCard(
                         onClick = onAction,
                         interactionSource = actionPress,
                         shape = RoundedCornerShape(percent = 50),
-                        color = AgentoColors.Primary.copy(alpha = 0.12f),
-                        contentColor = AgentoColors.Primary,
+                        color = LocalAgentocColors.current.accentPrimary.copy(alpha = 0.12f),
+                        contentColor = LocalAgentocColors.current.accentPrimary,
                         modifier = Modifier.agentoPressScale(interactionSource = actionPress),
                     ) {
                         Text(
@@ -2527,7 +2527,7 @@ private fun ConnectorStatusCard(
                             style = AgentocTextStyles.caption.copy(
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = AgentoColors.Primary,
+                                color = LocalAgentocColors.current.accentPrimary,
                             ),
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         )

@@ -124,7 +124,7 @@ fun DecisionQuestionCard(
                         minLines = 1,
                         maxLines = 5,
                         textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.primaryContent),
-                        cursorBrush = SolidColor(colors.actionPrimary),
+                        cursorBrush = SolidColor(colors.accentPrimary),
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                             .clip(RoundedCornerShape(12.dp)).background(colors.surfaceHigh)
                             .testTag("decision-write-in").semantics { contentDescription = writeInLabel },
@@ -180,7 +180,7 @@ private fun DecisionOptionRow(
     Row(
         modifier = modifier.fillMaxWidth().heightIn(min = 56.dp).clip(shape)
             .background(background)
-            .border(0.75.dp, if (isSelected) colors.actionPrimary else colors.secondaryContent.copy(alpha = 0.16f), shape)
+            .border(0.75.dp, if (isSelected) colors.accentPrimary else colors.secondaryContent.copy(alpha = 0.16f), shape)
             .then(if (isMultiSelect) Modifier.toggleable(value = isSelected, enabled = enabled, role = Role.Checkbox, onValueChange = { onClick() })
                 else Modifier.selectable(selected = isSelected, enabled = enabled, role = Role.RadioButton, onClick = onClick))
             .padding(12.dp),

@@ -1,5 +1,7 @@
 package com.andysagent.agentoc.core.agentui
 
+import com.andysagent.agentoc.core.designsystem.LocalAgentocColors
+
 import android.content.ClipboardManager
 import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -76,7 +78,7 @@ fun MarkdownComposerEditor(
     selectionActive: Boolean = true,
     maxLines: Int = Int.MAX_VALUE,
     textStyle: TextStyle,
-    cursorBrush: Brush = SolidColor(AgentoColors.Primary),
+    cursorBrush: Brush = SolidColor(LocalAgentocColors.current.accentPrimary),
     isDark: Boolean,
     scrollState: ScrollState = rememberScrollState(),
     onTextLayout: (TextLayoutResult) -> Unit = {},

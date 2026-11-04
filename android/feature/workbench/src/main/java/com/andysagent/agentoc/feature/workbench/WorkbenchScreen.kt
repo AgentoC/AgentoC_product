@@ -1,5 +1,7 @@
 package com.andysagent.agentoc.feature.workbench
 
+import androidx.compose.material3.ButtonDefaults
+
 import android.content.Context
 import android.net.Uri
 import android.os.Build
@@ -3357,7 +3359,7 @@ private fun EmptyConversationSuggestionRail(
     modifier: Modifier = Modifier,
 ) {
     val suggestions = listOf(
-        Triple(stringResource(R.string.workbench_suggestion_organize_project), AgentoWebGlyph.Folder, Color(0xFF0A84FF)),
+        Triple(stringResource(R.string.workbench_suggestion_organize_project), AgentoWebGlyph.Folder, LocalAgentocColors.current.accentPrimary),
         Triple(stringResource(R.string.workbench_suggestion_explain_file), AgentoWebGlyph.File, Color(0xFF30D158)),
         Triple(stringResource(R.string.workbench_suggestion_create_plan), AgentoWebGlyph.TargetArrow, Color(0xFFBF5AF2)),
     )
@@ -4214,7 +4216,7 @@ private fun ProjectLocationLoading() {
         CircularProgressIndicator(
             modifier = Modifier.size(24.dp),
             strokeWidth = 2.dp,
-            color = LocalAgentocColors.current.actionPrimary,
+            color = LocalAgentocColors.current.accentPrimary,
         )
     }
 }
@@ -4372,7 +4374,7 @@ private fun ProjectLocationRow(
                         when {
                             selected -> colors.actionPrimary.copy(alpha = 0.20f)
                             leadingGlyph == AgentoWebGlyph.Monitor -> Color(0xFF5E5CE6).copy(alpha = if (isDark) 0.18f else 0.12f)
-                            else -> Color(0xFF0A84FF).copy(alpha = if (isDark) 0.18f else 0.12f)
+                            else -> LocalAgentocColors.current.accentPrimary.copy(alpha = if (isDark) 0.18f else 0.12f)
                         }
                     ),
                 contentAlignment = Alignment.Center,
@@ -4382,9 +4384,9 @@ private fun ProjectLocationRow(
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                     tint = when {
-                        selected -> colors.actionPrimary
+                        selected -> colors.accentPrimary
                         leadingGlyph == AgentoWebGlyph.Monitor -> Color(0xFF5E5CE6)
-                        else -> Color(0xFF0A84FF)
+                        else -> LocalAgentocColors.current.accentPrimary
                     },
                 )
             }
@@ -4394,7 +4396,7 @@ private fun ProjectLocationRow(
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                 ),
-                color = if (selected) colors.actionPrimary else colors.primaryContent,
+                color = if (selected) colors.accentPrimary else colors.primaryContent,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -4403,7 +4405,7 @@ private fun ProjectLocationRow(
                     glyph = AgentoWebGlyph.Check,
                     contentDescription = null,
                     modifier = Modifier.size(AgentocSizes.Icon),
-                    tint = colors.actionPrimary,
+                    tint = colors.accentPrimary,
                 )
             } else if (showChevron) {
                 AgentoWebIcon(
@@ -5053,6 +5055,7 @@ private fun BrokerPhoneEnrollmentDialog(
                                     ),
                                 )
                             },
+                            colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary),
                         ) {
                             Text(stringResource(R.string.windows_broker_enrollment_copy_key))
                         }
@@ -5084,23 +5087,24 @@ private fun BrokerPhoneEnrollmentDialog(
                             completing = false
                         }
                     },
+                    colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary),
                 ) {
                     Text(if (completing) stringResource(R.string.windows_broker_enrollment_registering)
                         else stringResource(R.string.windows_broker_enrollment_confirm))
                 }
             } else {
-                androidx.compose.material3.TextButton(onClick = onDismiss) {
+                androidx.compose.material3.TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) {
                     Text(stringResource(R.string.windows_broker_enrollment_close))
                 }
             }
         },
         dismissButton = {
             if (enrollment == null && !loading && !completed) {
-                androidx.compose.material3.TextButton(onClick = { scope.launch { refreshChallenge() } }) {
+                androidx.compose.material3.TextButton(onClick = { scope.launch { refreshChallenge() } }, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) {
                     Text(stringResource(R.string.windows_broker_enrollment_refresh))
                 }
             } else if (enrollment != null && !completed) {
-                androidx.compose.material3.TextButton(onClick = { scope.launch { refreshChallenge() } }) {
+                androidx.compose.material3.TextButton(onClick = { scope.launch { refreshChallenge() } }, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) {
                     Text(stringResource(R.string.windows_broker_enrollment_refresh))
                 }
             }
@@ -5541,7 +5545,7 @@ private fun SettingsChoiceRow(
     val colors = LocalAgentocColors.current
     val source = remember { MutableInteractionSource() }
     val isDark = colors.canvas.red < 0.5f
-    val accent = if (isDark) colors.accentPrimary else colors.actionPrimary
+    val accent = colors.accentPrimary
     Row(
         modifier = modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp)
             .alpha(if (enabled) 1f else 0.52f)
@@ -5652,7 +5656,7 @@ private fun SettingsOverviewIcon(glyph: AgentoWebGlyph) {
         AgentoWebIcon(
             glyph = glyph,
             contentDescription = null,
-            tint = colors.actionPrimary,
+            tint = colors.accentPrimary,
             modifier = Modifier.size(18.dp),
         )
     }
@@ -5821,7 +5825,7 @@ private fun SettingsGoogleAccountManagement(
 }
 
 @Composable
-private fun colorsForSettings() = com.andysagent.agentoc.core.designsystem.LocalAgentocColors.current
+private fun colorsForSettings() = LocalAgentocColors.current
 
 private fun com.andysagent.agentoc.core.timeline.TimelineOperationKind.toAgentKind(): AgentOperationKind = when (this) {
     com.andysagent.agentoc.core.timeline.TimelineOperationKind.Command -> AgentOperationKind.Command

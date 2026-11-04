@@ -341,7 +341,7 @@ fun TaskComposer(
                             textStyle = AgentocTextStyles.userBody.copy(
                                 color = if (enabled) colors.primaryContent else colors.disabledContent,
                             ),
-                            cursorBrush = SolidColor(AgentoColors.Primary),
+                            cursorBrush = SolidColor(LocalAgentocColors.current.accentPrimary),
                             maxLines = Int.MAX_VALUE,
                             singleLine = false,
                             isDark = isDark,
@@ -430,7 +430,7 @@ fun TaskComposer(
                                 textStyle = AgentocTextStyles.userBody.copy(
                                     color = if (enabled) colors.primaryContent else colors.disabledContent,
                                 ),
-                                cursorBrush = SolidColor(AgentoColors.Primary),
+                                cursorBrush = SolidColor(LocalAgentocColors.current.accentPrimary),
                                 maxLines = 1,
                                 singleLine = true,
                                 isDark = isDark,

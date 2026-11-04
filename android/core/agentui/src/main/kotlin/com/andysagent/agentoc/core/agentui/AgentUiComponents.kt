@@ -1,5 +1,7 @@
 package com.andysagent.agentoc.core.agentui
 
+import androidx.compose.material3.ButtonDefaults
+
 import com.andysagent.agentoc.core.designsystem.AgentoBackdropTone
 import com.andysagent.agentoc.core.designsystem.AgentoComposerShadowTokens
 
@@ -747,7 +749,7 @@ fun StreamingMessageBubble(
 fun AgentoSpeedometerIcon(
     effort: Float,
     modifier: Modifier = Modifier,
-    primaryColor: Color = AgentoFrostedTokens.AppleBlueLight,
+    primaryColor: Color = LocalAgentocColors.current.accentPrimary,
     trackColor: Color = Color(0x308E8E93),
     needleColor: Color = Color.Black,
 ) {
@@ -813,7 +815,7 @@ fun AgentoSpeedometerIcon(
 private fun AgentoBoltIcon(
     filled: Boolean,
     modifier: Modifier = Modifier,
-    tint: Color = AgentoColors.Primary,
+    tint: Color = LocalAgentocColors.current.accentPrimary,
 ) {
     Canvas(modifier) {
         val scaleX = size.width / 24f
@@ -973,9 +975,9 @@ fun EffortSliderPopover(
                         val progress = slider.value.coerceIn(0f, 1f)
                         val y = size.height / 2f
                         drawLine(colors.primaryContent.copy(alpha = 0.16f), Offset(0f, y), Offset(size.width, y), size.height, StrokeCap.Round)
-                        drawLine(colors.actionPrimary, Offset(0f, y), Offset(size.width * progress, y), size.height, StrokeCap.Round)
+                        drawLine(colors.accentPrimary, Offset(0f, y), Offset(size.width * progress, y), size.height, StrokeCap.Round)
                         (0..lastStop).forEach { index ->
-                            drawCircle(if (index.toFloat() / lastStop <= progress) colors.actionPrimary else colors.secondaryContent,
+                            drawCircle(if (index.toFloat() / lastStop <= progress) colors.accentPrimary else colors.secondaryContent,
                                 radius = 2.dp.toPx(), center = Offset(size.width * index / lastStop, y))
                         }
                     }
@@ -989,8 +991,8 @@ fun EffortSliderPopover(
                         stateDescription = selectedLabel
                     },
                 colors = androidx.compose.material3.SliderDefaults.colors(
-                    thumbColor = colors.actionPrimary,
-                    activeTrackColor = colors.actionPrimary,
+                    thumbColor = colors.accentPrimary,
+                    activeTrackColor = colors.accentPrimary,
                     inactiveTrackColor = colors.primaryContent.copy(alpha = 0.12f),
                 ),
             )
@@ -1414,7 +1416,7 @@ internal fun ComposerRuntimePickerOption(
                 glyph = AgentoWebGlyph.Check,
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
-                tint = colors.actionPrimary,
+                tint = colors.accentPrimary,
             )
         } else if (disclosure) {
             AgentoWebIcon(
@@ -1590,11 +1592,12 @@ private fun FullscreenComposerDone(onDismiss: () -> Unit, enabled: Boolean = tru
         onClick = onDismiss,
         enabled = enabled,
         modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 64.dp),
+        colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary),
     ) {
         Text(
             stringResource(R.string.agentui_done),
             style = AgentocTextStyles.projectTitle,
-            color = LocalAgentocColors.current.actionPrimary,
+            color = LocalAgentocColors.current.accentPrimary,
         )
     }
 }
@@ -2100,7 +2103,7 @@ fun AgentComposer(
                             textStyle = editorTextStyle.copy(
                                 color = if (enabled) colors.primaryContent else colors.disabledContent,
                             ),
-                            cursorBrush = SolidColor(AgentoColors.Primary),
+                            cursorBrush = SolidColor(LocalAgentocColors.current.accentPrimary),
                             maxLines = if (compactEditor) 1 else Int.MAX_VALUE,
                             singleLine = compactEditor,
                             selectionActive = isExpanded,
@@ -2239,7 +2242,7 @@ fun AgentComposer(
                                     AgentoSpeedometerIcon(
                                         effort = effort,
                                         modifier = Modifier.size(24.dp),
-                                        primaryColor = AgentoColors.Primary,
+                                        primaryColor = LocalAgentocColors.current.accentPrimary,
                                         trackColor = if (isDark) Color(0x408E8E93) else Color(0x308E8E93),
                                         needleColor = if (isDark) Color.White else Color(0xFF1C1C1E),
                                     )
@@ -2427,7 +2430,7 @@ fun AgentComposer(
                                             glyph = AgentoWebGlyph.TargetArrow,
                                             contentDescription = null,
                                             modifier = Modifier.size(15.dp),
-                                            tint = Color.White,
+                                            tint = colors.actionPrimaryContent,
                                         )
                                         AnimatedVisibility(
                                             visible = isExpanded,
@@ -2449,7 +2452,7 @@ fun AgentComposer(
                                                     style = MaterialTheme.typography.labelMedium.copy(
                                                         fontWeight = FontWeight.SemiBold,
                                                         fontSize = 13.5.sp,
-                                                        color = Color.White,
+                                                        color = colors.actionPrimaryContent,
                                                     ),
                                                     maxLines = 1,
                                                 )
@@ -2696,7 +2699,7 @@ fun ToolCallCard(
                             .width(2.5.dp)
                             .heightIn(min = 20.dp)
                             .background(
-                                if (state.kind == AgentOperationKind.Command) AgentoColors.Primary.copy(alpha = 0.6f)
+                                if (state.kind == AgentOperationKind.Command) LocalAgentocColors.current.accentPrimary.copy(alpha = 0.6f)
                                 else colors.primaryContent.copy(alpha = 0.15f),
                                 RoundedCornerShape(1.dp),
                             ),
@@ -2816,7 +2819,7 @@ fun FileChangeSummaryCard(
                     glyph = AgentoWebGlyph.File,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
-                    tint = AgentoColors.Primary,
+                    tint = LocalAgentocColors.current.accentPrimary,
                 )
 
                 Text(
@@ -2997,7 +3000,7 @@ fun ToolActivityGroupCard(
                     glyph = if (allCompleted) AgentoWebGlyph.Check else if (hasFailed) AgentoWebGlyph.Stop else AgentoWebGlyph.Terminal,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
-                    tint = if (allCompleted) AgentoColors.Success else if (hasFailed) AgentoColors.Error else AgentoColors.Primary,
+                    tint = if (allCompleted) AgentoColors.Success else if (hasFailed) AgentoColors.Error else LocalAgentocColors.current.accentPrimary,
                 )
 
                 Text(
@@ -3059,7 +3062,7 @@ fun TaskStatusCard(
         TaskStatusKind.WaitingInput -> Triple(
             if (isDark) Color(0x18007AFF) else Color(0xFFEFF6FF),
             AgentoWebGlyph.Agent,
-            AgentoColors.Primary,
+            LocalAgentocColors.current.accentPrimary,
         )
         TaskStatusKind.Failed -> Triple(
             if (isDark) Color(0x18EF4444) else Color(0xFFFEF2F2),
@@ -3077,7 +3080,7 @@ fun TaskStatusCard(
         width = 0.75.dp,
         brush = when (state.status) {
             TaskStatusKind.Completed -> SolidColor(AgentoColors.Success.copy(alpha = 0.35f))
-            TaskStatusKind.WaitingInput -> SolidColor(AgentoColors.Primary.copy(alpha = 0.35f))
+            TaskStatusKind.WaitingInput -> SolidColor(LocalAgentocColors.current.accentPrimary.copy(alpha = 0.35f))
             TaskStatusKind.Failed -> SolidColor(AgentoColors.Error.copy(alpha = 0.35f))
             TaskStatusKind.Running -> if (isDark) AgentoFrostedTokens.SpecularBorderDark else AgentoFrostedTokens.SpecularBorderLight
         },
@@ -3850,7 +3853,7 @@ fun RecoverableStatusRow(
                 text = retryLabel,
                 style = com.andysagent.agentoc.core.designsystem.AgentoConversationTypography.Meta.copy(
                     fontWeight = FontWeight.SemiBold,
-                    color = AgentoColors.Primary,
+                    color = LocalAgentocColors.current.accentPrimary,
                 ),
             )
         }
@@ -4031,7 +4034,7 @@ fun RetryCard(
                     Text(
                         state.retryLabel,
                         style = MaterialTheme.typography.labelLarge,
-                        color = colors.actionPrimary,
+                        color = colors.accentPrimary,
                         maxLines = 1,
                     )
                 }

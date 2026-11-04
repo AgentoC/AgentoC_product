@@ -75,7 +75,7 @@ internal fun ProjectSearchDisclosure(
                 value = query, onValueChange = onQueryChanged, enabled = interactive,
                 modifier = Modifier.weight(1f), singleLine = true,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(color = colors.primaryContent),
-                cursorBrush = SolidColor(AgentoColors.Primary),
+                cursorBrush = SolidColor(LocalAgentocColors.current.accentPrimary),
                 decorationBox = { inner ->
                     Box {
                         if (query.isEmpty()) Text(placeholder, style = MaterialTheme.typography.bodyMedium,

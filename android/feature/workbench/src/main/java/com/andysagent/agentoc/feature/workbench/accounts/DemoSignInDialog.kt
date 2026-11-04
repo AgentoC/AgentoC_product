@@ -1,5 +1,9 @@
 package com.andysagent.agentoc.feature.workbench.accounts
 
+import com.andysagent.agentoc.core.designsystem.LocalAgentocColors
+
+import androidx.compose.material3.ButtonDefaults
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -59,10 +63,10 @@ fun DemoSignInDialog(
                 if (state.busy) CircularProgressIndicator()
             }
         },
-        confirmButton = { TextButton(onClick = onSubmit, enabled = state.canSubmit) {
+        confirmButton = { TextButton(onClick = onSubmit, enabled = state.canSubmit, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) {
             Text(stringResource(R.string.demo_sign_in_submit))
         } },
-        dismissButton = { TextButton(onClick = onDismiss, enabled = !state.busy) {
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !state.busy, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) {
             Text(stringResource(R.string.demo_sign_in_cancel))
         } },
     )

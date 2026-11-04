@@ -98,7 +98,7 @@ fun TemporaryShareScreen(state: TemporaryShareUiState, onInstruction: (String) -
                         Text(stringResource(if (target.ready) R.string.temporary_share_target_ready
                             else R.string.temporary_share_target_connecting),
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (target.ready) colors.actionPrimary else colors.secondaryContent)
+                            color = if (target.ready) colors.accentPrimary else colors.secondaryContent)
                     }
                 }
                 state.targets.firstOrNull { it.instanceId == state.selectedInstanceId }?.let { target ->
@@ -168,11 +168,13 @@ fun TemporaryShareScreen(state: TemporaryShareUiState, onInstruction: (String) -
                 if (state.transferProgress != null) LinearProgressIndicator(
                     progress = { state.transferProgress.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth().testTag("temporary-share-progress-bar"),
-                    color = colors.actionPrimary, trackColor = colors.subtleOutline)
-                else LinearProgressIndicator(Modifier.fillMaxWidth(), color = colors.actionPrimary,
+                    color = colors.accentPrimary, trackColor = colors.subtleOutline)
+                else LinearProgressIndicator(Modifier.fillMaxWidth(), color = colors.accentPrimary,
                     trackColor = colors.subtleOutline)
                 TextButton(onClick = onCancel, modifier = Modifier.align(androidx.compose.ui.Alignment.End)
-                    .testTag("temporary-share-cancel")) {
+                    .testTag("temporary-share-cancel"),
+                    colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary),
+                ) {
                     Text(stringResource(R.string.temporary_share_cancel))
                 }
             }
@@ -187,7 +189,7 @@ fun TemporaryShareScreen(state: TemporaryShareUiState, onInstruction: (String) -
                 if (state.resultTruncated) Text(stringResource(R.string.temporary_share_result_truncated),
                     style = MaterialTheme.typography.bodySmall, color = colors.secondaryContent)
             }
-            if (!state.ready) TextButton(onClick = onOpenApp) {
+            if (!state.ready) TextButton(onClick = onOpenApp, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) {
                 Text(stringResource(R.string.temporary_share_open_app))
             }
             Button(onClick = onSubmit,
@@ -200,7 +202,9 @@ fun TemporaryShareScreen(state: TemporaryShareUiState, onInstruction: (String) -
                 }))
             }
             if (state.runId != null && state.ready) OutlinedButton(onClick = onCheckResult,
-                enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
+                enabled = !state.busy, modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = LocalAgentocColors.current.accentPrimary),
+            ) {
                 Text(stringResource(R.string.temporary_share_check_result))
             }
         }

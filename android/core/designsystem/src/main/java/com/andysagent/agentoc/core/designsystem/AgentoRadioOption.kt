@@ -41,7 +41,7 @@ fun AgentoRadioOption(
             .clip(shape)
             .background(if (selected) colors.actionPrimary.copy(alpha = 0.08f) else colors.canvas)
             .border(if (selected) 2.dp else 1.dp,
-                if (selected) colors.actionPrimary else colors.subtleOutline, shape)
+                if (selected) colors.accentPrimary else colors.subtleOutline, shape)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .semantics(mergeDescendants = true) {}
             .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -53,7 +53,7 @@ fun AgentoRadioOption(
             onClick = null,
             modifier = Modifier.size(24.dp).clearAndSetSemantics {},
             colors = RadioButtonDefaults.colors(
-                selectedColor = colors.actionPrimary,
+                selectedColor = colors.accentPrimary,
                 unselectedColor = colors.secondaryContent,
             ),
         )

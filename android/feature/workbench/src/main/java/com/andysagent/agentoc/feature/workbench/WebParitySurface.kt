@@ -121,7 +121,7 @@ fun WebParitySurface(
 ) {
     LaunchedEffect(page, targetId) { onEvent(WebParityEvent.OpenPage(page)) }
     val title = stringResource(page.titleRes())
-    AgentoSurface(modifier.fillMaxSize(), color = com.andysagent.agentoc.core.designsystem.LocalAgentocColors.current.canvas) {
+    AgentoSurface(modifier.fillMaxSize(), color = LocalAgentocColors.current.canvas) {
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             SettingsWebHeader(
                 onBack = { if (state.selectedFile != null) onEvent(WebParityEvent.CloseFile) else onBack() },
@@ -1133,13 +1133,13 @@ private fun DeviceSettingsIcon(glyph: AgentoWebGlyph) {
     Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp))
         .background(colors.actionPrimary.copy(alpha = if (dark) 0.16f else 0.09f)),
         contentAlignment = Alignment.Center) {
-        AgentoWebIcon(glyph, contentDescription = null, modifier = Modifier.size(19.dp), tint = colors.actionPrimary)
+        AgentoWebIcon(glyph, contentDescription = null, modifier = Modifier.size(19.dp), tint = colors.accentPrimary)
     }
 }
 
 @Composable
 private fun DevicesEmptyState() {
-    val colors = com.andysagent.agentoc.core.designsystem.LocalAgentocColors.current
+    val colors = LocalAgentocColors.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1151,14 +1151,14 @@ private fun DevicesEmptyState() {
             modifier = Modifier.size(56.dp),
             shape = com.andysagent.agentoc.core.designsystem.AgentoShapes.SurfaceLargeShape,
             color = colors.navigationSelection,
-            contentColor = colors.actionPrimary,
+            contentColor = colors.accentPrimary,
         ) {
             Box(contentAlignment = Alignment.Center) {
                 AgentoWebIcon(
                     glyph = AgentoWebGlyph.Monitor,
                     contentDescription = null,
                     modifier = Modifier.size(27.dp),
-                    tint = colors.actionPrimary,
+                    tint = colors.accentPrimary,
                 )
             }
         }

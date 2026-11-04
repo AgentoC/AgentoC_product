@@ -1,5 +1,7 @@
 package com.andysagent.agentoc.feature.workbench
 
+import androidx.compose.material3.ButtonDefaults
+
 import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
 import android.graphics.pdf.PdfRenderer
@@ -82,7 +84,7 @@ internal fun ChangedFilePreview(path: String, state: WebParityUiState, onDismiss
         Column(Modifier.fillMaxSize().padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(path.substringAfterLast('/').substringAfterLast('\\'), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.changed_file_close)) }
+                TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) { Text(stringResource(R.string.changed_file_close)) }
             }
             when {
                 state.selectedFile != path || state.fileReadInProgress -> Text(stringResource(R.string.changed_file_loading))
@@ -98,9 +100,9 @@ internal fun ChangedFilePreview(path: String, state: WebParityUiState, onDismiss
                             Image(page.image.asImageBitmap(), contentDescription = stringResource(R.string.changed_file_pdf_page, pageIndex + 1, page.count), modifier = Modifier.fillMaxWidth())
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            TextButton(onClick = { pageIndex-- }, enabled = pageIndex > 0) { Text(stringResource(R.string.changed_file_previous)) }
+                            TextButton(onClick = { pageIndex-- }, enabled = pageIndex > 0, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) { Text(stringResource(R.string.changed_file_previous)) }
                             Text(stringResource(R.string.changed_file_pdf_page, pageIndex + 1, page.count))
-                            TextButton(onClick = { pageIndex++ }, enabled = pageIndex + 1 < page.count) { Text(stringResource(R.string.changed_file_next)) }
+                            TextButton(onClick = { pageIndex++ }, enabled = pageIndex + 1 < page.count, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) { Text(stringResource(R.string.changed_file_next)) }
                         }
                     } else Text(stringResource(if (result == null) R.string.changed_file_loading else R.string.changed_file_unavailable))
                 }

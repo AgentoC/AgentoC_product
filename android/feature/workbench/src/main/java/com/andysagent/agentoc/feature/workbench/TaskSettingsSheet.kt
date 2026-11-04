@@ -149,7 +149,7 @@ fun TaskSettingsSheet(
                             Text(
                                 text = tool.label,
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                                color = if (selected) Color.White else colors.primaryContent,
+                                color = if (selected) colors.actionPrimaryContent else colors.primaryContent,
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                             )
                         }
@@ -183,7 +183,7 @@ fun TaskSettingsSheet(
                                 Text(
                                     text = model.label,
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                                    color = if (selected) Color.White else colors.primaryContent,
+                                    color = if (selected) colors.actionPrimaryContent else colors.primaryContent,
                                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                                 )
                             }
@@ -211,7 +211,7 @@ fun TaskSettingsSheet(
                     Text(
                         text = effortLabel,
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = colors.actionPrimary,
+                        color = colors.accentPrimary,
                     )
                 }
 
@@ -222,8 +222,8 @@ fun TaskSettingsSheet(
                     steps = (lastStop - 1).coerceAtLeast(0),
                     enabled = lastStop > 0,
                     colors = SliderDefaults.colors(
-                        thumbColor = colors.actionPrimary,
-                        activeTrackColor = colors.actionPrimary,
+                        thumbColor = colors.accentPrimary,
+                        activeTrackColor = colors.accentPrimary,
                     ),
                 )
             }
@@ -265,7 +265,7 @@ fun TaskSettingsSheet(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = colors.actionPrimary,
+                            focusedBorderColor = colors.accentPrimary,
                             unfocusedBorderColor = if (isDark) Color(0x33FFFFFF) else Color(0x22000000),
                         ),
                         singleLine = false,

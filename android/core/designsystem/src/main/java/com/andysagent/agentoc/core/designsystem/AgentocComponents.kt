@@ -141,7 +141,7 @@ fun AgentoButton(
         // A secondary action is a small neutral glass control. It should not
         // become another blue contained button competing with the primary.
         secondary -> secondaryContainerColor ?: colors.glassSurface
-        destructive && enabled -> colors.stateError
+        destructive && enabled -> colors.actionDestructive
         // Keep the supplied brand blue intact. Blending it with the light
         // canvas made the control brighter and more Material-like than the
         // actual AgentoC blue.
@@ -224,7 +224,7 @@ fun AgentoTextAction(text: String, onClick: () -> Unit, modifier: Modifier = Mod
     androidx.compose.material3.TextButton(
         onClick = onClick,
         modifier = modifier.defaultMinSize(minHeight = AgentocSpacing.TouchTarget),
-        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+        colors = ButtonDefaults.textButtonColors(
             contentColor = LocalAgentocColors.current.secondaryContent,
         ),
     ) {
@@ -750,8 +750,8 @@ fun AgentoDropdownMenuItem(
 ) {
     val colors = LocalAgentocColors.current
     val interactionSource = remember { MutableInteractionSource() }
-    val resolvedTextColor = textColor ?: if (selected) colors.actionPrimary else colors.primaryContent
-    val resolvedIconColor = iconColor ?: textColor ?: if (selected) colors.actionPrimary else colors.primaryContent
+    val resolvedTextColor = textColor ?: if (selected) colors.accentPrimary else colors.primaryContent
+    val resolvedIconColor = iconColor ?: textColor ?: if (selected) colors.accentPrimary else colors.primaryContent
     CompositionLocalProvider(LocalContentColor provides resolvedTextColor) {
         Row(
             modifier = modifier
@@ -796,7 +796,7 @@ fun AgentoDropdownMenuItem(
                     AgentoWebGlyph.Check,
                     contentDescription = "Selected",
                     modifier = Modifier.size(17.dp),
-                    tint = colors.actionPrimary,
+                    tint = colors.accentPrimary,
                 )
             }
         }
@@ -929,7 +929,7 @@ fun AgentoTextField(
                 keyboardOptions = keyboardOptions,
                 keyboardActions = keyboardActions,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(color = colors.primaryContent),
-                cursorBrush = SolidColor(AgentoColors.Primary),
+                cursorBrush = SolidColor(LocalAgentocColors.current.accentPrimary),
                 modifier = Modifier.fillMaxWidth().then(inputModifier),
             )
         }
@@ -976,7 +976,7 @@ fun AgentoSearchField(
                 onValueChange = onValueChange,
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(color = colors.primaryContent),
-                cursorBrush = SolidColor(AgentoColors.Primary),
+                cursorBrush = SolidColor(LocalAgentocColors.current.accentPrimary),
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -1209,7 +1209,7 @@ fun AgentoSettingRow(
                         AgentoWebIcon(
                             glyph = icon,
                             contentDescription = null,
-                            tint = colors.actionPrimary,
+                            tint = colors.accentPrimary,
                             modifier = Modifier.size(20.dp),
                         )
                     }
@@ -1432,7 +1432,7 @@ fun AgentoSwitch(
                 .size(thumbSize)
                 .shadow(elevation = 2.5.dp, shape = CircleShape)
                 .clip(CircleShape)
-                .background(Color.White),
+                .background(if (checked) colors.actionPrimaryContent else Color.White),
         )
     }
 }
@@ -1521,7 +1521,7 @@ fun AgentoEmptyState(title: String, body: String, modifier: Modifier = Modifier)
                 .background(if (isDark) AgentoFrostedTokens.SurfaceLevel1 else AgentoFrostedTokens.LightSurfaceLevel1),
             contentAlignment = Alignment.Center,
         ) {
-            AgentoWebIcon(AgentoWebGlyph.Agent, contentDescription = null, modifier = Modifier.size(28.dp), tint = colors.actionPrimary)
+            AgentoWebIcon(AgentoWebGlyph.Agent, contentDescription = null, modifier = Modifier.size(28.dp), tint = colors.accentPrimary)
         }
         Text(
             title,
@@ -1588,7 +1588,7 @@ fun AgentoErrorState(title: String, body: String, retryLabel: String? = null, on
             textAlign = TextAlign.Center,
         )
         if (retryLabel != null && onRetry != null) {
-            TextButton(onClick = onRetry) { Text(retryLabel, color = colors.accentPrimary) }
+            TextButton(onClick = onRetry, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) { Text(retryLabel, color = colors.accentPrimary) }
         }
     }
 }

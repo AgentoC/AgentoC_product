@@ -185,13 +185,15 @@ private fun CaptureMaterials(state: CaptureUiState, onEvent: (CaptureEvent) -> U
                         else if (state.importProgress != null) R.string.share_import_waiting else R.string.api_capture_importing),
                         color = if (slot.error == null) colors.secondaryContent else colors.stateError, style = MaterialTheme.typography.bodySmall)
                     slot.error?.let { CaptureError(it) }
-                    if (draft.operationId == null) TextButton(onClick = { onEvent(CaptureEvent.RemoveImport(slot.resourceId)) }, enabled = state.editable) {
+                    if (draft.operationId == null) TextButton(onClick = { onEvent(CaptureEvent.RemoveImport(slot.resourceId)) }, enabled = state.editable, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) {
                         Text(stringResource(R.string.api_capture_skip_file, name), color = colors.secondaryContent)
                     }
                 }
             }
             if (state.editable || draft.input.sharedText.isNotBlank()) TextButton(
-                onClick = onExpand, modifier = Modifier.testTag("capture-material-edit"), enabled = !state.loading) {
+                onClick = onExpand, modifier = Modifier.testTag("capture-material-edit"), enabled = !state.loading,
+                colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary),
+            ) {
                 AgentoWebIcon(if (state.editable) AgentoWebGlyph.Edit else AgentoWebGlyph.Maximize, null, Modifier.size(16.dp), colors.secondaryContent)
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(if (state.editable) R.string.share_edit_material else R.string.share_view_material), color = colors.secondaryContent)
@@ -216,8 +218,8 @@ private fun CaptureImportStatus(progress: CaptureImportProgress) {
         Text(status, color = colors.secondaryContent, style = MaterialTheme.typography.bodySmall)
         if (progress.phase == CaptureImportPhase.COPYING && total != null)
             LinearProgressIndicator(progress = { progress.copiedBytes.toFloat() / total },
-                modifier = Modifier.fillMaxWidth(), color = colors.actionPrimary, trackColor = colors.subtleOutline)
-        else LinearProgressIndicator(Modifier.fillMaxWidth(), color = colors.actionPrimary, trackColor = colors.subtleOutline)
+                modifier = Modifier.fillMaxWidth(), color = colors.accentPrimary, trackColor = colors.subtleOutline)
+        else LinearProgressIndicator(Modifier.fillMaxWidth(), color = colors.accentPrimary, trackColor = colors.subtleOutline)
     }
 }
 
@@ -232,7 +234,7 @@ private fun CaptureComposer(state: CaptureUiState, onEvent: (CaptureEvent) -> Un
         AgentoFrostedGlassBox(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), material = AgentoGlassMaterial.ContentThick,
             shadowElevation = 4.dp) {
             BasicTextField(draft.instruction, { onEvent(CaptureEvent.Instruction(it)) }, enabled = state.editable,
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.primaryContent), cursorBrush = SolidColor(colors.actionPrimary),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.primaryContent), cursorBrush = SolidColor(colors.accentPrimary),
                 minLines = if (compact) 1 else 3, maxLines = if (compact) 3 else 7, modifier = Modifier.fillMaxWidth().padding(if (compact) 12.dp else 20.dp).testTag("capture-instruction")
                     .semantics { contentDescription = label }, decorationBox = { inner ->
                     Box { if (draft.instruction.isEmpty()) Text(stringResource(R.string.share_instruction_hint),
@@ -322,7 +324,9 @@ private fun CaptureConnectionStatusRow(state: CaptureUiState, onEvent: (CaptureE
         Column(Modifier.fillMaxWidth()) {
             Text(stringResource(label), style = MaterialTheme.typography.bodySmall, color = colors.secondaryContent)
             TextButton({ onEvent(CaptureEvent.CheckConnection) }, enabled = state.canCheckConnection,
-                modifier = Modifier.heightIn(min = 48.dp).testTag("capture-connection-check")) {
+                modifier = Modifier.heightIn(min = 48.dp).testTag("capture-connection-check"),
+                colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary),
+            ) {
                 Text(stringResource(R.string.share_connection_check), color = colors.secondaryContent)
             }
         }
@@ -360,7 +364,7 @@ private fun CapturePickerSheet(panel: CapturePanel, state: CaptureUiState, onEve
                     Text(stringResource(when (panel) { CapturePanel.MATERIAL -> R.string.api_capture_source
                         CapturePanel.COMPUTER -> R.string.api_capture_computer; CapturePanel.RUNTIME -> R.string.share_execution }),
                         style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).semantics { heading() })
-                    TextButton(onClick = onDismiss, modifier = Modifier.testTag("capture-sheet-done")) { Text(stringResource(R.string.share_done), color = colors.actionPrimary) }
+                    TextButton(onClick = onDismiss, modifier = Modifier.testTag("capture-sheet-done"), colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) { Text(stringResource(R.string.share_done), color = colors.accentPrimary) }
                 }
                 when (panel) {
                     CapturePanel.MATERIAL -> {
@@ -440,7 +444,9 @@ private fun CapturePickerConnectionRow(targetId: String, state: CaptureUiState, 
             color = colors.secondaryContent)
         TextButton({ onEvent(CaptureEvent.CheckTargetConnection(targetId)) },
             enabled = state.canCheckConnection(targetId),
-            modifier = Modifier.heightIn(min = 48.dp).testTag("capture-connection-check-$targetId")) {
+            modifier = Modifier.heightIn(min = 48.dp).testTag("capture-connection-check-$targetId"),
+            colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary),
+        ) {
             Text(stringResource(R.string.share_connection_check), color = colors.secondaryContent)
         }
     }
@@ -465,7 +471,7 @@ private fun CaptureOption(label: String, subtitle: String?, chosen: Boolean, ena
             Text(label, color = if (enabled) colors.primaryContent else colors.disabledContent, style = MaterialTheme.typography.bodyLarge)
             subtitle?.let { Text(it, color = colors.secondaryContent, style = MaterialTheme.typography.bodySmall) }
         }
-        if (chosen) AgentoWebIcon(AgentoWebGlyph.Check, stringResource(R.string.api_capture_selected), Modifier.size(22.dp), colors.actionPrimary)
+        if (chosen) AgentoWebIcon(AgentoWebGlyph.Check, stringResource(R.string.api_capture_selected), Modifier.size(22.dp), colors.accentPrimary)
     }
 }
 
@@ -478,7 +484,7 @@ private fun CaptureDock(state: CaptureUiState, onEvent: (CaptureEvent) -> Unit, 
         .padding(horizontal = 20.dp, vertical = if (compact) 4.dp else 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (state.busy) {
             if (!compact) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                CircularProgressIndicator(Modifier.size(16.dp), color = colors.actionPrimary, strokeWidth = 2.dp)
+                CircularProgressIndicator(Modifier.size(16.dp), color = colors.accentPrimary, strokeWidth = 2.dp)
                 Text(stringResource(when {
                     draft.input.imports.isNotEmpty() -> R.string.api_capture_importing
                     state.uploadProgress != null -> uploadStageLabel(state.uploadProgress)
@@ -569,7 +575,7 @@ private fun CaptureReceipt(state: CaptureUiState, onEvent: (CaptureEvent) -> Uni
     if (state.selectionMode != CaptureSelectionMode.NONE) CaptureAction(R.string.api_selection_view_saved, state, onEvent, CaptureEvent.ViewSavedTask)
     if (state.selectionMode == CaptureSelectionMode.NONE && accepted) CaptureAction(R.string.api_outputs_title, state, onEvent, CaptureEvent.ViewOutputs)
     var details by rememberSaveable(draft.draftId) { mutableStateOf(false) }
-    TextButton(onClick = { details = !details }) { Text(stringResource(if (details) R.string.share_hide_details else R.string.share_details), color = colors.secondaryContent) }
+    TextButton(onClick = { details = !details }, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) { Text(stringResource(if (details) R.string.share_hide_details else R.string.share_details), color = colors.secondaryContent) }
     if (details) CaptureCard {
         Text(stringResource(R.string.api_capture_frozen), color = colors.secondaryContent)
         SelectionContainer { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -608,8 +614,8 @@ private fun CaptureUploadStatus(progress: TaskUploadProgress) {
                 Formatter.formatShortFileSize(context, progress.fileBytes)), color = colors.secondaryContent,
                 style = MaterialTheme.typography.bodySmall)
             LinearProgressIndicator(progress = { written.toFloat() / progress.fileBytes }, modifier = Modifier.fillMaxWidth(),
-                color = colors.actionPrimary, trackColor = colors.subtleOutline)
-        } else LinearProgressIndicator(Modifier.fillMaxWidth(), color = colors.actionPrimary, trackColor = colors.subtleOutline)
+                color = colors.accentPrimary, trackColor = colors.subtleOutline)
+        } else LinearProgressIndicator(Modifier.fillMaxWidth(), color = colors.accentPrimary, trackColor = colors.subtleOutline)
         Text(stringResource(R.string.share_upload_task_pending), color = colors.secondaryContent, style = MaterialTheme.typography.bodySmall)
     }
 }
@@ -639,7 +645,7 @@ internal fun CaptureGlyph(glyph: AgentoWebGlyph) {
 private fun CaptureLoading() {
     val colors = LocalAgentocColors.current
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = colors.actionPrimary)
+        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = colors.accentPrimary)
         Text(stringResource(R.string.api_loading), color = colors.secondaryContent)
     }
 }

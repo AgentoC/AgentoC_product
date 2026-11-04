@@ -358,7 +358,7 @@ private fun GoalStandardPillContent(
             glyph = AgentoWebGlyph.TargetArrow,
             contentDescription = null,
             modifier = Modifier.size(17.dp),
-            tint = AgentoColors.Primary,
+            tint = LocalAgentocColors.current.accentPrimary,
         )
         Text(
             text = displayText,
@@ -376,7 +376,7 @@ private fun GoalStandardPillContent(
                 .clip(CircleShape)
                 .background(
                     if (isCreatingGoal) colors.primaryContent.copy(alpha = if (isDark) 0.12f else 0.08f)
-                    else if (autoContinue) AgentoColors.Primary.copy(alpha = if (isDark) 0.25f else 0.14f)
+                    else if (autoContinue) LocalAgentocColors.current.accentPrimary.copy(alpha = if (isDark) 0.25f else 0.14f)
                     else colors.primaryContent.copy(alpha = if (isDark) 0.12f else 0.08f)
                 )
                 .clickable(
@@ -397,7 +397,7 @@ private fun GoalStandardPillContent(
                 contentDescription = null,
                 modifier = Modifier.size(12.dp),
                 tint = if (isCreatingGoal) colors.secondaryContent
-                    else if (autoContinue) AgentoColors.Primary
+                    else if (autoContinue) LocalAgentocColors.current.accentPrimary
                     else colors.primaryContent,
             )
         }
@@ -440,7 +440,7 @@ private fun GoalCompactPillContent(
             glyph = AgentoWebGlyph.TargetArrow,
             contentDescription = null,
             modifier = Modifier.size(17.dp),
-            tint = AgentoColors.Primary,
+            tint = LocalAgentocColors.current.accentPrimary,
         )
         Box(
             modifier = Modifier
@@ -456,7 +456,7 @@ private fun GoalCompactPillContent(
                 .clip(CircleShape)
                 .background(
                     if (isCreatingGoal) colors.primaryContent.copy(alpha = if (isDark) 0.12f else 0.08f)
-                    else if (autoContinue) AgentoColors.Primary.copy(alpha = if (isDark) 0.25f else 0.14f)
+                    else if (autoContinue) LocalAgentocColors.current.accentPrimary.copy(alpha = if (isDark) 0.25f else 0.14f)
                     else colors.primaryContent.copy(alpha = if (isDark) 0.12f else 0.08f)
                 )
                 .clickable(
@@ -477,7 +477,7 @@ private fun GoalCompactPillContent(
                 contentDescription = null,
                 modifier = Modifier.size(12.dp),
                 tint = if (isCreatingGoal) colors.secondaryContent
-                    else if (autoContinue) AgentoColors.Primary
+                    else if (autoContinue) LocalAgentocColors.current.accentPrimary
                     else colors.primaryContent,
             )
         }
@@ -508,7 +508,7 @@ private fun GoalCardContent(
     }
     val statusColor = when {
         isDirty -> colors.stateWarning
-        autoContinue -> colors.actionPrimary
+        autoContinue -> colors.accentPrimary
         else -> colors.stateSuccess
     }
     val insetCardBg = colors.primaryContent.copy(alpha = if (isDark) 0.065f else 0.038f)
@@ -615,7 +615,7 @@ private fun GoalCardContent(
                         color = colors.primaryContent,
                         lineHeight = 20.sp,
                     ),
-                    cursorBrush = SolidColor(colors.actionPrimary),
+                    cursorBrush = SolidColor(colors.accentPrimary),
                     minLines = 2,
                     maxLines = 5,
                 )
@@ -789,7 +789,7 @@ private fun QueuePillContent(count: Int, onExpand: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(9.dp),
     ) {
-        Box(Modifier.size(7.dp).background(colors.actionPrimary, CircleShape))
+        Box(Modifier.size(7.dp).background(colors.accentPrimary, CircleShape))
         Text(label, style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium, color = colors.primaryContent,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -887,7 +887,7 @@ private fun QueueCardContent(
                         Box(Modifier.heightIn(min = 48.dp).clickable(role = Role.Button) { onSteer(message) }
                             .padding(horizontal = 13.dp), contentAlignment = Alignment.Center) {
                             Text(stringResource(R.string.composer_steer),
-                                style = MaterialTheme.typography.labelLarge, color = colors.actionPrimary)
+                                style = MaterialTheme.typography.labelLarge, color = colors.accentPrimary)
                         }
                         Box(Modifier.size(48.dp).clickable(role = Role.Button) { onEdit(message) }
                             .semantics { contentDescription = "$editLabel ${index + 1}" },
@@ -1293,7 +1293,7 @@ private fun ApprovalCardContent(
                     Text(
                         text = "Review changes",
                         style = MaterialTheme.typography.labelLarge,
-                        color = colors.actionPrimary,
+                        color = colors.accentPrimary,
                     )
                 }
             }
@@ -1446,7 +1446,7 @@ private fun OfflineStatusDock(
                     glyph = AgentoWebGlyph.Refresh,
                     contentDescription = null,
                     modifier = Modifier.size(12.dp),
-                    tint = colors.actionPrimary,
+                    tint = colors.accentPrimary,
                 )
                 Text(
                     text = "Retry",
@@ -1459,7 +1459,7 @@ private fun OfflineStatusDock(
                             trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
                         ),
                     ),
-                    color = colors.actionPrimary,
+                    color = colors.accentPrimary,
                 )
             }
         }

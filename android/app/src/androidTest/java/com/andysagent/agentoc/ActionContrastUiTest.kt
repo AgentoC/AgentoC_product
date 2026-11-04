@@ -78,11 +78,17 @@ class ActionContrastUiTest {
         assertContrast("Material action", materialInk, materialFill.compositeOver(app.canvas), 4.5f)
         assertEquals("App and Material primary actions must agree", app.actionPrimary, materialFill)
         assertEquals("App and Material action content must agree", app.actionPrimaryContent, materialInk)
+        if (variant in setOf("light", "dark", "system")) {
+            assertEquals("Brand buttons use white labels and glyphs", Color.White, app.actionPrimaryContent)
+            // Standalone text accents must remain legible on neutral surfaces.
+            assertContrast("accent on canvas", app.accentPrimary, app.canvas, 4.5f)
+            assertContrast("accent on surface", app.accentPrimary, app.quietSurface, 4.5f)
+        }
         val screenshot = capture("action-contrast-$variant-${if (dark) "dark" else "light"}")
         try {
             verifyPixels(screenshot, "app-action", app.actionPrimary, app.actionPrimaryContent, app.canvas, 4.5f)
             verifyPixels(screenshot, "material-action", materialFill, materialInk, app.canvas, 4.5f)
-            verifyPixels(screenshot, "destructive-action", app.stateError, AgentoFrostedTokens.OnDestructiveAction, app.canvas, 4.5f)
+            verifyPixels(screenshot, "destructive-action", app.actionDestructive, Color.White, app.canvas, 4.5f)
             verifyPixels(screenshot, "decision-submit", app.actionPrimary, app.actionPrimaryContent, app.surfaceLow.compositeOver(app.canvas), 4.5f)
             verifyPixels(screenshot, "send-action", app.actionPrimary, app.actionPrimaryContent, app.canvas, 3f)
         } finally { screenshot.recycle() }

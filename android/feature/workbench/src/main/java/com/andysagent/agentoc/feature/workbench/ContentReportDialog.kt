@@ -1,5 +1,9 @@
 package com.andysagent.agentoc.feature.workbench
 
+import com.andysagent.agentoc.core.designsystem.LocalAgentocColors
+
+import androidx.compose.material3.ButtonDefaults
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -81,7 +85,7 @@ fun ContentReportDialog(
                     Text(stringResource(reportReasonLabel(ContentReportReason.entries.first { it.wire == saved.payload.reason })))
                     if (saved.payload.details.isNotEmpty()) Text(saved.payload.details)
                     if (saved.payload.includeContent) Text(saved.payload.content)
-                    TextButton(onClick = onRequestClear, enabled = !state.busy) {
+                    TextButton(onClick = onRequestClear, enabled = !state.busy, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) {
                         Text(stringResource(R.string.content_report_clear_local))
                     }
                 } else if (state.selectedReply) {
@@ -110,7 +114,7 @@ fun ContentReportDialog(
                 state.error?.let {
                     Text(stringResource(reportErrorLabel(it)), color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.testTag("content-report-error"))
-                    if (it == ContentReportError.Storage && saved == null) TextButton(onClick = onRequestClear, enabled = !state.busy) {
+                    if (it == ContentReportError.Storage && saved == null) TextButton(onClick = onRequestClear, enabled = !state.busy, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) {
                         Text(stringResource(R.string.content_report_clear_local))
                     }
                 }
@@ -121,19 +125,19 @@ fun ContentReportDialog(
                 enabled = editable && state.reason != null, modifier = Modifier.testTag("content-report-submit")) {
                 Text(stringResource(R.string.content_report_send))
             } else if (saved != null) Column {
-                TextButton(onClick = onCheck, enabled = !state.busy) { Text(stringResource(R.string.content_report_check)) }
-                if (saved.receipt == null) TextButton(onClick = onRetry, enabled = !state.busy) {
+                TextButton(onClick = onCheck, enabled = !state.busy, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) { Text(stringResource(R.string.content_report_check)) }
+                if (saved.receipt == null) TextButton(onClick = onRetry, enabled = !state.busy, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) {
                     Text(stringResource(R.string.content_report_retry))
                 }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.content_report_close)) } },
+        dismissButton = { TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) { Text(stringResource(R.string.content_report_close)) } },
     )
     if (state.clearConfirmation) AlertDialog(onDismissRequest = onCancelClear,
         title = { Text(stringResource(R.string.content_report_clear_local)) },
         text = { Text(stringResource(R.string.content_report_clear_warning)) },
-        confirmButton = { TextButton(onClick = onClear) { Text(stringResource(R.string.content_report_clear_local)) } },
-        dismissButton = { TextButton(onClick = onCancelClear) { Text(stringResource(R.string.content_report_close)) } })
+        confirmButton = { TextButton(onClick = onClear, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) { Text(stringResource(R.string.content_report_clear_local)) } },
+        dismissButton = { TextButton(onClick = onCancelClear, colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) { Text(stringResource(R.string.content_report_close)) } })
 }
 
 internal fun reportReasonLabel(reason: ContentReportReason): Int = when (reason) {

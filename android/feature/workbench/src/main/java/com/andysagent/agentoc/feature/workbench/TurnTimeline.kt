@@ -527,7 +527,7 @@ fun OperationGroup(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 AgentoWebIcon(glyph, null, modifier = Modifier.size(17.dp),
-                    tint = if (summary.isWorking) colors.actionPrimary else colors.secondaryContent)
+                    tint = if (summary.isWorking) colors.accentPrimary else colors.secondaryContent)
                 Text(summary.summaryText, modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium),
                     color = colors.primaryContent, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -576,7 +576,7 @@ private fun OperationItemRow(operation: TimelineItem.Operation, showTitle: Boole
     val statusColor = when (operation.status) {
         TimelineOperationStatus.Completed -> colors.statusSuccess
         TimelineOperationStatus.Failed -> colors.error
-        TimelineOperationStatus.InProgress -> colors.actionPrimary
+        TimelineOperationStatus.InProgress -> colors.accentPrimary
         TimelineOperationStatus.Pending -> colors.secondaryContent
     }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -677,7 +677,7 @@ fun PlanBlock(
                                     .background(
                                         when {
                                             isDone -> colors.stateRunning
-                                            inProgress -> colors.actionPrimary
+                                            inProgress -> colors.accentPrimary
                                             else -> colors.surfaceLow
                                         }
                                     ),
