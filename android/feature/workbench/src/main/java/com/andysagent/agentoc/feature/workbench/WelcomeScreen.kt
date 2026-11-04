@@ -109,9 +109,15 @@ private fun WelcomeConnectionContent(
     val colors = LocalAgentocColors.current
     OnboardingPageContent(
         Modifier.testTag(if (signedIn) "connect-computer-page" else "welcome-entry-page"),
+        footer = {
+            if (!signedIn) {
+                OnboardingTextAction(stringResource(R.string.journey_temporary_entry), onLearnConnectionMethods,
+                    Modifier.testTag("temporary-access-entry"), quiet = true)
+            }
+        },
     ) { compact ->
         DeviceRelationship(compact = compact)
-        Spacer(Modifier.height(if (compact) 20.dp else 28.dp))
+        Spacer(Modifier.height(if (compact) 28.dp else 36.dp))
         Text(stringResource(if (signedIn) R.string.journey_connect_title else R.string.welcome_connect_title),
             style = MaterialTheme.typography.headlineMedium.copy(
                 fontSize = 28.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold,
@@ -124,10 +130,10 @@ private fun WelcomeConnectionContent(
                 fontSize = 15.sp, lineHeight = 24.sp, lineBreak = LineBreak.Heading,
             ), color = colors.secondaryContent,
             textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = 304.dp))
-        Spacer(Modifier.height(if (compact) 24.dp else 36.dp))
+        Spacer(Modifier.height(if (compact) 28.dp else 40.dp))
         AgentoButton(stringResource(if (signedIn) R.string.journey_setup_computer else R.string.settings_sign_in),
             onClick = if (signedIn) onSetUpComputer else onConnectComputer,
-            modifier = Modifier.widthIn(min = 180.dp, max = 280.dp)
+            modifier = Modifier.widthIn(min = 200.dp, max = 280.dp)
                 .testTag(if (signedIn) "connect-my-computer" else "welcome-sign-in"),
             decision = true, labelMaxLines = 2,
             labelStyle = MaterialTheme.typography.labelLarge.copy(fontSize = 16.sp, lineHeight = 22.sp),
@@ -135,10 +141,7 @@ private fun WelcomeConnectionContent(
         if (!signedIn) {
             Spacer(Modifier.height(8.dp))
             OnboardingTextAction(stringResource(R.string.journey_reverse_sign_in), onScanPairing,
-                Modifier.testTag("sign-in-from-computer"))
-            Spacer(Modifier.height(if (compact) 8.dp else 24.dp))
-            OnboardingTextAction(stringResource(R.string.journey_temporary_entry), onLearnConnectionMethods,
-                Modifier.testTag("temporary-access-entry"))
+                Modifier.widthIn(max = 288.dp).testTag("sign-in-from-computer"), quiet = true)
         }
     }
 }

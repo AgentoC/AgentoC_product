@@ -27,19 +27,39 @@ import com.andysagent.agentoc.core.designsystem.*
 @Composable
 internal fun OnboardingPageContent(
     modifier: Modifier = Modifier,
+    header: @Composable () -> Unit = { OnboardingWordmark() },
+    footer: @Composable () -> Unit = {},
     content: @Composable ColumnScope.(compact: Boolean) -> Unit,
 ) {
     BoxWithConstraints(modifier.fillMaxSize()) {
         val compact = maxHeight < 640.dp || LocalDensity.current.fontScale > 1.3f
-        // Anchor the illustration consistently, rather than centering each
-        // differently sized stack. Short screens reclaim decorative whitespace.
-        val topSpace = if (compact) 64.dp else (maxHeight * 0.14f).coerceIn(72.dp, 112.dp)
-        Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                .padding(start = 24.dp, end = 24.dp, top = topSpace, bottom = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) { content(compact) }
+        Column(Modifier.fillMaxSize().padding(top = 8.dp)) {
+            Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp).heightIn(min = 56.dp),
+                contentAlignment = Alignment.Center) { header() }
+            // Keep Back reachable while the body scrolls at larger font sizes.
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                        .heightIn(min = maxHeight).padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Spacer(Modifier.height(0.dp))
+                    Column(Modifier.fillMaxWidth().padding(vertical = if (compact) 24.dp else 40.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally) { content(compact) }
+                    Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.Center) { footer() }
+                }
+            }
+        }
     }
+}
+
+@Composable
+internal fun OnboardingWordmark() {
+    Text("AgentoC", style = AgentocTextStyles.brandDisplay.copy(
+        fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold,
+        letterSpacing = (-0.5).sp,
+    ), color = LocalAgentocColors.current.primaryContent)
 }
 
 @Composable
@@ -48,20 +68,23 @@ internal fun OnboardingTextAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     leadingIcon: AgentoWebGlyph? = null,
+    quiet: Boolean = false,
 ) {
     val colors = LocalAgentocColors.current
+    val tint = if (quiet) colors.secondaryContent else colors.accentPrimary
     TextButton(
         onClick = onClick,
         modifier = modifier.defaultMinSize(minHeight = 48.dp),
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
-        colors = ButtonDefaults.textButtonColors(contentColor = colors.accentPrimary),
+        colors = ButtonDefaults.textButtonColors(contentColor = tint),
     ) {
         leadingIcon?.let {
-            AgentoWebIcon(it, null, Modifier.size(18.dp), tint = colors.accentPrimary)
+            AgentoWebIcon(it, null, Modifier.size(18.dp), tint = tint)
             Spacer(Modifier.width(6.dp))
         }
         Text(text, style = MaterialTheme.typography.bodyMedium.copy(
-            fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium,
+            fontSize = if (quiet) 13.sp else 14.sp, lineHeight = 20.sp,
+            fontWeight = if (quiet) FontWeight.Normal else FontWeight.Medium,
         ), textAlign = TextAlign.Center)
     }
 }
