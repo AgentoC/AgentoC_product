@@ -15,7 +15,7 @@ func TestVerifyOwnerInstallGrant(t *testing.T) {
 	}
 	now := time.UnixMilli(1_800_000_000_000)
 	policy := ownerInstallPolicy{InstanceID: "inst_0123456789abcdef0123456789abcdef", OwnerSID: "S-1-5-21-1-2-3-1001"}
-	grant := ownerInstallGrant{Version: 1, KeyID: "key", BrokerInstallationID: "broker", PolicyGeneration: 7,
+	grant := ownerInstallGrant{Version: 1, KeyID: policy.InstanceID, BrokerInstallationID: "broker", PolicyGeneration: 7,
 		InstanceID: policy.InstanceID, OwnerSID: policy.OwnerSID, RequestID: "request", SessionID: "session", RunID: "run", TurnID: "turn", ActionID: "action",
 		Nonce: "abcdefghijklmnopqrstuvwx", PackageID: "Vendor.App", PackageVersion: "1.2.3", Source: "winget", InstallScope: "user",
 		IssuedMS: now.UnixMilli(), ExpiresMS: now.Add(time.Minute).UnixMilli()}
@@ -25,7 +25,7 @@ func TestVerifyOwnerInstallGrant(t *testing.T) {
 	}
 	signature := base64.RawURLEncoding.EncodeToString(ed25519.Sign(private, message))
 	verify := func(value ownerInstallGrant, pol ownerInstallPolicy, generation uint64, when time.Time) error {
-		return verifyOwnerInstallGrant(value, signature, public, "key", "broker", generation, pol, when)
+		return verifyOwnerInstallGrant(value, signature, public, policy.InstanceID, "broker", generation, pol, when)
 	}
 	if err := verify(grant, policy, 7, now); err != nil {
 		t.Fatalf("valid grant refused: %v", err)

@@ -84,3 +84,14 @@ func (s *brokerStore) FinishOwnerInstall(nonce string, status requestStatus, cod
 	})
 	return result, err
 }
+
+func (s *brokerStore) GetOwnerInstall(requestID string) (ownerInstallRecord, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, record := range s.state.OwnerInstalls {
+		if record.Grant.RequestID == requestID {
+			return record, true
+		}
+	}
+	return ownerInstallRecord{}, false
+}

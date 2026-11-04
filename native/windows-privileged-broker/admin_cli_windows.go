@@ -25,7 +25,8 @@ func runBrokerAdminCLI(args []string) error {
 		return errors.New("APB_ADMIN_COMMAND_REQUIRED")
 	}
 	ownerReset := len(args) == 2 && args[1] == "owner-reset"
-	if ownerReset {
+	configureSigner := len(args) >= 2 && (args[1] == "auto-signer-configure" || args[1] == "auto-signer-from-instance")
+	if ownerReset || configureSigner {
 		if err := requireAdministratorOrSystemForOwnerReset(); err != nil {
 			return err
 		}
@@ -45,6 +46,21 @@ func runBrokerAdminCLI(args []string) error {
 		request = brokerRequest{Version: protocolVersion, Type: "device.revoke", DeviceID: deviceID}
 	case ownerReset:
 		request = brokerRequest{Version: protocolVersion, Type: "owner.reset"}
+	case len(args) == 2 && args[1] == "auto-signer-from-instance":
+		keyID, publicKey, err := readInstalledInstanceSigner()
+		if err != nil {
+			return errors.New("APB_ADMIN_INSTANCE_SIGNER_UNAVAILABLE")
+		}
+		request = brokerRequest{Version: protocolVersion, Type: "auto_signer.configure", TargetID: keyID, PublicKey: publicKey}
+	case len(args) >= 2 && args[1] == "auto-signer-configure":
+		flags := flag.NewFlagSet("auto-signer-configure", flag.ContinueOnError)
+		flags.SetOutput(io.Discard)
+		keyID := flags.String("key-id", "", "trusted control-plane signing key id")
+		publicKey := flags.String("public-key", "", "Ed25519 public key in base64url SPKI DER")
+		if err := flags.Parse(args[2:]); err != nil || flags.NArg() != 0 {
+			return errors.New("APB_ADMIN_SIGNER_ARGUMENTS_INVALID")
+		}
+		request = brokerRequest{Version: protocolVersion, Type: "auto_signer.configure", TargetID: *keyID, PublicKey: *publicKey}
 	case len(args) >= 2 && args[1] == "enrollment-begin":
 		flags := flag.NewFlagSet("enrollment-begin", flag.ContinueOnError)
 		flags.SetOutput(io.Discard)

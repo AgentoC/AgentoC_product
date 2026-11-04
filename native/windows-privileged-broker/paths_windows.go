@@ -158,7 +158,7 @@ func trustedStatePrincipal(sid *windows.SID) bool {
 	if sid.String() == "S-1-5-18" {
 		return true
 	}
-	adminSID, _, _, err := windows.LookupSID("", `BUILTIN\Administrators`)
+	adminSID, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
 	return err == nil && sid.Equals(adminSID)
 }
 
@@ -182,7 +182,7 @@ func verifyStateRootACL(path string, brokerSID *windows.SID) error {
 	if err != nil || acl == nil || acl.AceCount != 3 {
 		return errors.New("APB_STATE_DACL_REFUSED")
 	}
-	adminSID, _, _, err := windows.LookupSID("", `BUILTIN\Administrators`)
+	adminSID, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
 	if err != nil {
 		return errors.New("APB_STATE_ADMIN_SID_UNAVAILABLE")
 	}
@@ -221,7 +221,7 @@ func verifyStateFileACL(path string, brokerSID *windows.SID) error {
 	if err != nil || acl == nil {
 		return errors.New("APB_STATE_FILE_DACL_UNAVAILABLE")
 	}
-	adminSID, _, _, err := windows.LookupSID("", `BUILTIN\Administrators`)
+	adminSID, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
 	if err != nil {
 		return errors.New("APB_STATE_ADMIN_SID_UNAVAILABLE")
 	}
@@ -256,7 +256,7 @@ func verifyStateFileACL(path string, brokerSID *windows.SID) error {
 }
 
 func isLocalAdministratorsSID(sid *windows.SID) bool {
-	adminSID, _, _, err := windows.LookupSID("", `BUILTIN\Administrators`)
+	adminSID, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
 	return err == nil && sid != nil && sid.Equals(adminSID)
 }
 

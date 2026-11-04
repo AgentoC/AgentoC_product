@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -31,7 +32,12 @@ var impersonateNamedPipeClient = windows.NewLazySystemDLL("advapi32.dll").NewPro
 type brokerIPCServer struct {
 	store           *brokerStore
 	target          brokerTargetController
+	autoInstaller   autoInstaller
+	ownerInstaller  func(context.Context, string, string, string) ownerInstallResult
+	ownerPolicy     func() (ownerInstallPolicy, error)
+	executionCtx    context.Context
 	controlPlaneSID *windows.SID
+	testPipeOwner   *windows.SID
 	healthPipeName  string
 	requestPipeName string
 	adminPipeName   string
@@ -40,7 +46,10 @@ type brokerIPCServer struct {
 	requestPipe     windows.Handle
 	adminPipe       windows.Handle
 	stopOnce        sync.Once
+	stopCh          chan struct{}
 	workers         sync.WaitGroup
+	autoMu          sync.Mutex
+	autoCancel      map[string]context.CancelFunc
 	rateMu          sync.Mutex
 	rateWindowStart time.Time
 	rateCount       int
@@ -59,14 +68,14 @@ func newBrokerIPCServer(store *brokerStore) (*brokerIPCServer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve ControlPlane service SID: %w", err)
 	}
-	return newBrokerIPCServerForPipeNamesAndAdmin(store, sid, healthPipeName, requestPipeName, adminPipeName)
+	return newBrokerIPCServerForPipeNamesAndAdmin(store, sid, healthPipeName, requestPipeName, adminPipeName, false)
 }
 
 func newBrokerIPCServerForPipeNames(store *brokerStore, controlPlaneSID *windows.SID, healthName, requestName string) (*brokerIPCServer, error) {
-	return newBrokerIPCServerForPipeNamesAndAdmin(store, controlPlaneSID, healthName, requestName, requestName+".Admin")
+	return newBrokerIPCServerForPipeNamesAndAdmin(store, controlPlaneSID, healthName, requestName, requestName+".Admin", true)
 }
 
-func newBrokerIPCServerForPipeNamesAndAdmin(store *brokerStore, controlPlaneSID *windows.SID, healthName, requestName, adminName string) (*brokerIPCServer, error) {
+func newBrokerIPCServerForPipeNamesAndAdmin(store *brokerStore, controlPlaneSID *windows.SID, healthName, requestName, adminName string, localTest bool) (*brokerIPCServer, error) {
 	if store == nil || controlPlaneSID == nil || healthName == "" || requestName == "" || healthName == requestName || adminName == healthName || adminName == requestName {
 		return nil, errors.New("APB_IPC_CONFIGURATION_INVALID")
 	}
@@ -77,11 +86,35 @@ func newBrokerIPCServerForPipeNamesAndAdmin(store *brokerStore, controlPlaneSID 
 	server := &brokerIPCServer{
 		store:           store,
 		target:          windowsBrokerTargetController{},
+		autoInstaller:   windowsAutoInstaller{},
+		ownerInstaller:  runInstalledOwnerInstall,
+		ownerPolicy:     readInstalledOwnerPolicy,
 		controlPlaneSID: controlPlaneSID,
 		healthPipeName:  healthName,
 		requestPipeName: requestName,
 		adminPipeName:   adminName,
 		stopEvent:       stop,
+		stopCh:          make(chan struct{}),
+	}
+	if localTest {
+		validTestName := func(name string) bool {
+			for _, prefix := range []string{`\\.\pipe\AgentoC.PrivilegedBroker.LocalTest.`, `\\.\pipe\AgentoC.PrivilegedBroker.IdentityTest.`, `\\.\pipe\AgentoC.PrivilegedBroker.RemoteTest.`} {
+				if strings.HasPrefix(name, prefix) {
+					return true
+				}
+			}
+			return false
+		}
+		if !validTestName(healthName) || !validTestName(requestName) {
+			_ = windows.CloseHandle(stop)
+			return nil, errors.New("APB_IPC_TEST_PIPE_NAME_INVALID")
+		}
+		user, userErr := windows.GetCurrentProcessToken().GetTokenUser()
+		if userErr != nil || !user.User.Sid.Equals(controlPlaneSID) {
+			_ = windows.CloseHandle(stop)
+			return nil, errors.New("APB_IPC_TEST_IDENTITY_INVALID")
+		}
+		server.testPipeOwner = controlPlaneSID
 	}
 	server.healthPipe, err = server.createPipe(server.healthPipeName, true, true)
 	if err != nil {
@@ -105,6 +138,9 @@ func newBrokerIPCServerForPipeNamesAndAdmin(store *brokerStore, controlPlaneSID 
 }
 
 func (s *brokerIPCServer) Run(ctx context.Context) error {
+	executionCtx, cancelExecution := context.WithCancel(ctx)
+	defer cancelExecution()
+	s.executionCtx = executionCtx
 	results := make(chan error, 3)
 	s.workers.Add(3)
 	go func() {
@@ -135,17 +171,26 @@ func (s *brokerIPCServer) Run(ctx context.Context) error {
 			ctx = context.Background()
 		}
 	}
+	// Stop any active inspections or installations before waiting for their
+	// connection and execution workers to drain.
+	cancelExecution()
 	s.workers.Wait()
 	_ = windows.CloseHandle(s.stopEvent)
 	return firstErr
 }
 
 func (s *brokerIPCServer) Stop() {
-	s.stopOnce.Do(func() { _ = windows.SetEvent(s.stopEvent) })
+	s.stopOnce.Do(func() {
+		if s.stopCh != nil {
+			close(s.stopCh)
+		}
+		_ = windows.SetEvent(s.stopEvent)
+	})
 }
 
 func (s *brokerIPCServer) servePipe(name string, health bool, initialPipe windows.Handle) error {
 	pipe := initialPipe
+	slots := make(chan struct{}, 8)
 	for {
 		if s.isStopping() {
 			_ = windows.CloseHandle(pipe)
@@ -172,8 +217,33 @@ func (s *brokerIPCServer) servePipe(name string, health bool, initialPipe window
 			return fmt.Errorf("wait for %s client: %w", name, err)
 		}
 		if connected {
-			s.serveConnection(pipe, health)
-			_ = windows.DisconnectNamedPipe(pipe)
+			select {
+			case slots <- struct{}{}:
+			case <-s.stopCh:
+				_ = windows.DisconnectNamedPipe(pipe)
+				_ = windows.CloseHandle(pipe)
+				return nil
+			}
+			// Keep the accepted instance open while creating the next listener,
+			// so the protected pipe name is never momentarily unowned.
+			next, nextErr := s.createPipe(name, health, false)
+			if nextErr != nil {
+				<-slots
+				_ = windows.DisconnectNamedPipe(pipe)
+				_ = windows.CloseHandle(pipe)
+				return nextErr
+			}
+			accepted := pipe
+			s.workers.Add(1)
+			go func() {
+				defer s.workers.Done()
+				defer func() { <-slots }()
+				s.serveConnection(accepted, health)
+				_ = windows.DisconnectNamedPipe(accepted)
+				_ = windows.CloseHandle(accepted)
+			}()
+			pipe = next
+			continue
 		}
 		_ = windows.CloseHandle(pipe)
 		pipe = 0
@@ -225,6 +295,9 @@ func (s *brokerIPCServer) createPipe(name string, health, first bool) (windows.H
 	// 0x0012019B is read/write without FILE_APPEND_DATA, which aliases
 	// FILE_CREATE_PIPE_INSTANCE for named pipes.
 	sddl := pipeSecurityDescriptor(s.controlPlaneSID, health)
+	if s.testPipeOwner != nil && name != s.adminPipeName {
+		sddl += fmt.Sprintf("(A;;GA;;;%s)", s.testPipeOwner.String())
+	}
 	if name == s.adminPipeName {
 		sddl = adminPipeSecurityDescriptor()
 	}
@@ -246,7 +319,7 @@ func (s *brokerIPCServer) createPipe(name string, health, first bool) (windows.H
 	if err != nil {
 		return 0, err
 	}
-	pipe, err := windows.CreateNamedPipe(namePointer, flags, mode, 1, maxIPCFrame+4, maxIPCFrame+4, 0, &sa)
+	pipe, err := windows.CreateNamedPipe(namePointer, flags, mode, 9, maxIPCFrame+4, maxIPCFrame+4, 0, &sa)
 	if err != nil {
 		return 0, fmt.Errorf("create %s: %w", name, err)
 	}
@@ -269,7 +342,7 @@ func allowAdminPipeRequest(userSID string, isAdministrator bool, payload []byte)
 		return isAdministrator
 	}
 	request, err := decodeBrokerRequest(payload)
-	return err == nil && request.Type == "owner.reset"
+	return err == nil && (request.Type == "owner.reset" || request.Type == "auto_signer.configure")
 }
 
 func waitForPipeClient(pipe, stopEvent windows.Handle) (bool, error) {
@@ -369,6 +442,18 @@ func (s *brokerIPCServer) handleAdminRequest(payload []byte) brokerResponse {
 	if err != nil {
 		return newErrorResponse("REQUEST_INVALID")
 	}
+	// Serialize policy changes with claim/start. An old authorization cannot
+	// race a generation change and start after it has been revoked.
+	s.autoMu.Lock()
+	defer s.autoMu.Unlock()
+	beforeGeneration := s.store.Snapshot().PolicyGeneration
+	defer func() {
+		if s.store.Snapshot().PolicyGeneration != beforeGeneration {
+			for _, cancel := range s.autoCancel {
+				cancel()
+			}
+		}
+	}()
 	response := newResponse("result")
 	switch request.Type {
 	case "enrollment.begin":
@@ -421,6 +506,12 @@ func (s *brokerIPCServer) handleAdminRequest(payload []byte) brokerResponse {
 		response.PolicyGeneration = s.store.Snapshot().PolicyGeneration
 		response.Challenge = nil
 		response.Result = &brokerOperationResult{Operation: "target.configure", TargetID: firstBrokerTargetID, Detail: fingerprint}
+	case "auto_signer.configure":
+		if err := s.store.ConfigureAutoInstallSigner(request.TargetID, request.PublicKey, time.Now().UTC()); err != nil {
+			return newErrorResponse("AUTO_SIGNER_CONFIGURATION_DENIED")
+		}
+		response.Code = "AUTO_SIGNER_CONFIGURED"
+		response.PolicyGeneration = s.store.Snapshot().PolicyGeneration
 	default:
 		return newErrorResponse("ADMIN_OPERATION_REFUSED")
 	}
@@ -529,6 +620,14 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 		}
 		response.InstallationID = state.InstallationID
 		response.PolicyGeneration = state.PolicyGeneration
+		backendReady := state.AutoInstallSigner != nil && s.autoInstaller != nil
+		if availability, ok := s.autoInstaller.(interface{ Available() bool }); backendReady && ok {
+			backendReady = availability.Available()
+		}
+		if backendReady {
+			response.AutoInstallReady = true
+			response.AutoInstallKeyID = state.AutoInstallSigner.KeyID
+		}
 		return response
 	}
 	if request.Type == "enrollment.pending" {
@@ -600,9 +699,124 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 			if err := s.attachApprovalAttestation(&response, record.Challenge); err != nil {
 				return newErrorResponse("BROKER_IDENTITY_UNAVAILABLE")
 			}
+		} else if automatic, found := s.store.GetAutoInstall(request.RequestID); found {
+			response.Status = automatic.Status
+			response.Code = automatic.Code
+			grant := automatic.Grant
+			response.AutoInstall = &grant
+		} else if owner, found := s.store.GetOwnerInstall(request.RequestID); found {
+			response.Status, response.Code = owner.Status, owner.Code
+			grant := owner.Grant
+			response.OwnerInstall = &grant
 		} else {
 			response.Code = "REQUEST_NOT_FOUND"
 		}
+		return response
+	}
+	if request.Type == "auto_install.inspect" {
+		inspector, ok := s.autoInstaller.(interface {
+			Inspect(context.Context, string, string) (*selectedInstallerFacts, error)
+		})
+		if !ok {
+			return newErrorResponse("AUTO_INSTALL_INSPECTION_UNAVAILABLE")
+		}
+		parent := s.executionCtx
+		if parent == nil {
+			parent = context.Background()
+		}
+		facts, err := inspector.Inspect(parent, request.AutoInspect.PackageID, request.AutoInspect.PackageVersion)
+		grant := autoInstallGrant{PackageID: request.AutoInspect.PackageID, VersionID: request.AutoInspect.PackageVersion, SelectedInstaller: facts}
+		if err != nil || !validInspectedInstaller(grant) {
+			return newErrorResponse("AUTO_INSTALL_INSPECTION_FAILED")
+		}
+		response := newResponse("auto_install_inspection")
+		response.SelectedInstaller = facts
+		return response
+	}
+	if request.Type == "auto_install.execute" {
+		s.autoMu.Lock()
+		defer s.autoMu.Unlock()
+		if s.autoInstaller == nil {
+			return newErrorResponse("AUTO_INSTALL_UNAVAILABLE")
+		}
+		record, duplicate, err := s.store.ClaimAutoInstall(*request.AutoInstall, request.Signature, time.Now().UTC())
+		if err != nil {
+			if errors.Is(err, errRequestConflict) {
+				return newErrorResponse("REQUEST_ID_CONFLICT")
+			}
+			return newErrorResponse("AUTO_INSTALL_AUTHORIZATION_DENIED")
+		}
+		if !duplicate {
+			parent := s.executionCtx
+			if parent == nil {
+				parent = context.Background()
+			}
+			ctx, cancel := context.WithCancel(parent)
+			if s.autoCancel == nil {
+				s.autoCancel = make(map[string]context.CancelFunc)
+			}
+			s.autoCancel[record.Grant.Nonce] = cancel
+			s.workers.Add(1)
+			go func() {
+				defer s.workers.Done()
+				defer func() {
+					cancel()
+					s.autoMu.Lock()
+					delete(s.autoCancel, record.Grant.Nonce)
+					s.autoMu.Unlock()
+				}()
+				status, code := s.autoInstaller.Install(ctx, record.Grant)
+				_, _ = s.store.FinishAutoInstall(record.Grant.Nonce, status, code, time.Now().UTC())
+			}()
+		}
+		response := newResponse("result")
+		response.RequestID, response.Status, response.Code = record.Grant.RequestID, record.Status, record.Code
+		return response
+	}
+	if request.Type == "owner_install.execute" {
+		s.autoMu.Lock()
+		defer s.autoMu.Unlock()
+		if s.ownerInstaller == nil || s.ownerPolicy == nil {
+			return newErrorResponse("OWNER_INSTALL_UNAVAILABLE")
+		}
+		policy, err := s.ownerPolicy()
+		if err != nil {
+			return newErrorResponse("OWNER_INSTALL_POLICY_UNAVAILABLE")
+		}
+		record, duplicate, err := s.store.ClaimOwnerInstall(*request.OwnerInstall, request.Signature, policy, time.Now().UTC())
+		if err != nil {
+			if errors.Is(err, errRequestConflict) {
+				return newErrorResponse("REQUEST_ID_CONFLICT")
+			}
+			return newErrorResponse("OWNER_INSTALL_AUTHORIZATION_DENIED")
+		}
+		if !duplicate {
+			parent := s.executionCtx
+			if parent == nil {
+				parent = context.Background()
+			}
+			ctx, cancel := context.WithCancel(parent)
+			if s.autoCancel == nil {
+				s.autoCancel = make(map[string]context.CancelFunc)
+			}
+			cancelKey := "owner:" + record.Grant.Nonce
+			s.autoCancel[cancelKey] = cancel
+			s.workers.Add(1)
+			go func() {
+				defer s.workers.Done()
+				defer func() { cancel(); s.autoMu.Lock(); delete(s.autoCancel, cancelKey); s.autoMu.Unlock() }()
+				result := ownerInstallResult{Status: "failed", Code: "OWNER_INSTALL_POLICY_CHANGED"}
+				currentPolicy, policyErr := s.ownerPolicy()
+				state := s.store.Snapshot()
+				if policyErr == nil && currentPolicy == policy && state.PolicyGeneration == record.Grant.PolicyGeneration &&
+					state.AutoInstallSigner != nil && state.AutoInstallSigner.KeyID == record.Grant.KeyID && time.Now().UnixMilli() < record.Grant.ExpiresMS && ctx.Err() == nil {
+					result = s.ownerInstaller(ctx, policy.OwnerSID, record.Grant.PackageID, record.Grant.PackageVersion)
+				}
+				_, _ = s.store.FinishOwnerInstall(record.Grant.Nonce, requestStatus(result.Status), result.Code, time.Now().UTC())
+			}()
+		}
+		response := newResponse("result")
+		response.RequestID, response.Status, response.Code = record.Grant.RequestID, record.Status, record.Code
 		return response
 	}
 	if request.Type == "decision" {
@@ -933,7 +1147,7 @@ func tokenHasExpectedServiceSID(token windows.Token, expected *windows.SID) erro
 }
 
 func isAdministratorToken(token windows.Token) bool {
-	adminSID, _, _, err := windows.LookupSID("", `BUILTIN\Administrators`)
+	adminSID, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
 	if err != nil {
 		return true
 	}

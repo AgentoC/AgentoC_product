@@ -76,6 +76,9 @@ func (runner ownerInstallRunner) install(parent context.Context, ownerSID, packa
 	if !consistent {
 		return failed("OWNER_INSTALL_OWNER_UNAVAILABLE")
 	}
+	if parent.Err() != nil {
+		return failed("OWNER_INSTALL_RUN_CANCELLED")
+	}
 	units := utf16.Encode([]rune(ownerInstallScript))
 	encoded := make([]byte, len(units)*2)
 	for i, unit := range units {

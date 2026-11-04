@@ -22,23 +22,31 @@ const (
 var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
 
 type brokerRequest struct {
-	Version          int    `json:"version"`
-	Type             string `json:"type"`
-	RequestID        string `json:"requestId,omitempty"`
-	Cursor           string `json:"cursor,omitempty"`
-	SessionID        string `json:"sessionId,omitempty"`
-	RunID            string `json:"runId,omitempty"`
-	TurnID           string `json:"turnId,omitempty"`
-	ActionID         string `json:"actionId,omitempty"`
-	Operation        string `json:"operation,omitempty"`
-	TargetID         string `json:"targetId,omitempty"`
-	OwnerID          string `json:"ownerId,omitempty"`
-	DeviceID         string `json:"deviceId,omitempty"`
-	PublicKey        string `json:"publicKey,omitempty"`
-	EnrollmentID     string `json:"enrollmentId,omitempty"`
-	VerificationCode string `json:"verificationCode,omitempty"`
-	Choice           string `json:"choice,omitempty"`
-	Signature        string `json:"signature,omitempty"`
+	Version          int                        `json:"version"`
+	Type             string                     `json:"type"`
+	RequestID        string                     `json:"requestId,omitempty"`
+	Cursor           string                     `json:"cursor,omitempty"`
+	SessionID        string                     `json:"sessionId,omitempty"`
+	RunID            string                     `json:"runId,omitempty"`
+	TurnID           string                     `json:"turnId,omitempty"`
+	ActionID         string                     `json:"actionId,omitempty"`
+	Operation        string                     `json:"operation,omitempty"`
+	TargetID         string                     `json:"targetId,omitempty"`
+	OwnerID          string                     `json:"ownerId,omitempty"`
+	DeviceID         string                     `json:"deviceId,omitempty"`
+	PublicKey        string                     `json:"publicKey,omitempty"`
+	EnrollmentID     string                     `json:"enrollmentId,omitempty"`
+	VerificationCode string                     `json:"verificationCode,omitempty"`
+	Choice           string                     `json:"choice,omitempty"`
+	Signature        string                     `json:"signature,omitempty"`
+	AutoInstall      *autoInstallGrant          `json:"autoInstall,omitempty"`
+	OwnerInstall     *ownerInstallGrant         `json:"ownerInstall,omitempty"`
+	AutoInspect      *autoInstallInspectRequest `json:"autoInspect,omitempty"`
+}
+
+type autoInstallInspectRequest struct {
+	PackageID      string `json:"packageId"`
+	PackageVersion string `json:"packageVersion"`
 }
 
 type brokerResponse struct {
@@ -53,6 +61,11 @@ type brokerResponse struct {
 	InstallationID      string                     `json:"installationId,omitempty"`
 	PolicyGeneration    uint64                     `json:"policyGeneration,omitempty"`
 	ExecutionEnabled    bool                       `json:"executionEnabled"`
+	AutoInstallReady    bool                       `json:"autoInstallReady"`
+	AutoInstallKeyID    string                     `json:"autoInstallKeyId,omitempty"`
+	AutoInstall         *autoInstallGrant          `json:"autoInstall,omitempty"`
+	OwnerInstall        *ownerInstallGrant         `json:"ownerInstall,omitempty"`
+	SelectedInstaller   *selectedInstallerFacts    `json:"selectedInstaller,omitempty"`
 	Challenge           *brokerChallenge           `json:"challenge,omitempty"`
 	EnrollmentChallenge *brokerEnrollmentChallenge `json:"enrollmentChallenge,omitempty"`
 	Result              *brokerOperationResult     `json:"result,omitempty"`
@@ -136,6 +149,15 @@ func decodeBrokerRequest(payload []byte) (brokerRequest, error) {
 }
 
 func validateRequest(request brokerRequest) error {
+	if request.Type != "owner_install.execute" && request.OwnerInstall != nil {
+		return errInvalidRequest
+	}
+	if request.Type != "auto_install.execute" && request.AutoInstall != nil {
+		return errInvalidRequest
+	}
+	if request.Type != "auto_install.inspect" && request.AutoInspect != nil {
+		return errInvalidRequest
+	}
 	switch request.Type {
 	case "health":
 		if hasNonHealthFields(request) {
@@ -194,6 +216,32 @@ func validateRequest(request brokerRequest) error {
 		}
 	case "target.configure":
 		if hasNonHealthFields(request) {
+			return errInvalidRequest
+		}
+	case "auto_signer.configure":
+		if !validRequestID(request.TargetID) || request.PublicKey == "" || request.RequestID != "" || request.Cursor != "" ||
+			request.SessionID != "" || request.RunID != "" || request.TurnID != "" || request.ActionID != "" || request.Operation != "" ||
+			request.OwnerID != "" || request.DeviceID != "" || request.EnrollmentID != "" || request.VerificationCode != "" || request.Choice != "" || request.Signature != "" {
+			return errInvalidRequest
+		}
+		if _, err := parseAutoInstallPublicKey(request.PublicKey); err != nil {
+			return errInvalidRequest
+		}
+	case "auto_install.execute":
+		if request.AutoInstall == nil || request.Signature == "" || len(request.Signature) > 1024 || request.RequestID != "" || request.Cursor != "" ||
+			request.SessionID != "" || request.RunID != "" || request.TurnID != "" || request.ActionID != "" || request.Operation != "" || request.TargetID != "" ||
+			request.OwnerID != "" || request.DeviceID != "" || request.PublicKey != "" || request.EnrollmentID != "" || request.VerificationCode != "" || request.Choice != "" {
+			return errInvalidRequest
+		}
+	case "owner_install.execute":
+		if request.OwnerInstall == nil || request.Signature == "" || len(request.Signature) > 1024 || request.RequestID != "" || request.Cursor != "" ||
+			request.SessionID != "" || request.RunID != "" || request.TurnID != "" || request.ActionID != "" || request.Operation != "" || request.TargetID != "" ||
+			request.OwnerID != "" || request.DeviceID != "" || request.PublicKey != "" || request.EnrollmentID != "" || request.VerificationCode != "" || request.Choice != "" {
+			return errInvalidRequest
+		}
+	case "auto_install.inspect":
+		if request.AutoInspect == nil || !autoInstallPackagePattern.MatchString(request.AutoInspect.PackageID) ||
+			!autoInstallVersionPattern.MatchString(request.AutoInspect.PackageVersion) || hasNonHealthFields(request) || request.AutoInstall != nil {
 			return errInvalidRequest
 		}
 	default:

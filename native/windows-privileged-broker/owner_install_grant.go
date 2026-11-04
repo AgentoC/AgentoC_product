@@ -53,7 +53,7 @@ func verifyOwnerInstallGrant(grant ownerInstallGrant, signature string, publicKe
 			return errOwnerSessionUnavailable
 		}
 	}
-	if grant.Version != 1 || grant.KeyID != keyID || grant.BrokerInstallationID != brokerInstallationID || generation == 0 || grant.PolicyGeneration != generation ||
+	if grant.Version != 1 || grant.KeyID != keyID || keyID != policy.InstanceID || grant.BrokerInstallationID != brokerInstallationID || generation == 0 || grant.PolicyGeneration != generation ||
 		grant.InstanceID != policy.InstanceID || grant.OwnerSID != policy.OwnerSID || !ownerPolicyInstance.MatchString(policy.InstanceID) || !ownerPolicyAccountSID.MatchString(policy.OwnerSID) ||
 		!ownerGrantNonce.MatchString(grant.Nonce) || !ownerGrantPackage.MatchString(grant.PackageID) || !ownerGrantVersion.MatchString(grant.PackageVersion) ||
 		grant.Source != "winget" || grant.InstallScope != "user" || grant.IssuedMS <= 0 || grant.ExpiresMS <= grant.IssuedMS ||

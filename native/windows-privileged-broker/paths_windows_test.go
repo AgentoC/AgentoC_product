@@ -34,6 +34,17 @@ func TestAncestorAclDistinguishesEffectiveWriters(t *testing.T) {
 	}
 }
 
+func TestAdministratorIdentityUsesWellKnownSid(t *testing.T) {
+	admin, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
+	if err != nil || admin.String() != "S-1-5-32-544" || !isLocalAdministratorsSID(admin) || !trustedStatePrincipal(admin) {
+		t.Fatalf("well-known administrator SID not recognized: %v", err)
+	}
+	users, err := windows.CreateWellKnownSid(windows.WinBuiltinUsersSid)
+	if err != nil || isLocalAdministratorsSID(users) || trustedStatePrincipal(users) {
+		t.Fatalf("ordinary users incorrectly trusted: %v", err)
+	}
+}
+
 func TestBrokerStateDirectoryAclIsProtectedAndContainsOnlyTrustedPrincipals(t *testing.T) {
 	serviceSID, err := windows.StringToSid("S-1-5-80-1-2-3-4-5")
 	if err != nil {

@@ -132,7 +132,7 @@ func TestBrokerSignedApprovalRestartsFixedLocalSCMService(t *testing.T) {
 		t.Skip("set AGENTOC_BROKER_RUN_LOCAL_SCM_TARGET_TEST=1 in an elevated local Windows session")
 	}
 	token := windows.GetCurrentProcessToken()
-	admins, _, _, err := windows.LookupSID("", "BUILTIN\\Administrators")
+	admins, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
 	if err != nil {
 		t.Fatal(err)
 	}

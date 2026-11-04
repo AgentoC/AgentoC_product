@@ -26,11 +26,11 @@ func TestOwnerInstallClaimAndRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
-	if err := store.ConfigureAutoInstallSigner("key", base64.RawURLEncoding.EncodeToString(der), now); err != nil {
+	if err := store.ConfigureAutoInstallSigner("inst_0123456789abcdef0123456789abcdef", base64.RawURLEncoding.EncodeToString(der), now); err != nil {
 		t.Fatal(err)
 	}
 	policy := ownerInstallPolicy{InstanceID: "inst_0123456789abcdef0123456789abcdef", OwnerSID: "S-1-5-21-1-2-3-1001"}
-	grant := ownerInstallGrant{Version: 1, KeyID: "key", BrokerInstallationID: store.state.InstallationID, PolicyGeneration: store.state.PolicyGeneration,
+	grant := ownerInstallGrant{Version: 1, KeyID: policy.InstanceID, BrokerInstallationID: store.state.InstallationID, PolicyGeneration: store.state.PolicyGeneration,
 		InstanceID: policy.InstanceID, OwnerSID: policy.OwnerSID, RequestID: "request", SessionID: "session", RunID: "run", TurnID: "turn", ActionID: "action",
 		Nonce: "abcdefghijklmnopqrstuvwx", PackageID: "Vendor.App", PackageVersion: "1.2.3", Source: "winget", InstallScope: "user", IssuedMS: now.UnixMilli(), ExpiresMS: now.Add(time.Minute).UnixMilli()}
 	message, err := ownerInstallGrantBytes(grant)

@@ -4,18 +4,410 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
+
+func TestAutoInstallScriptParsesWithoutExecuting(t *testing.T) {
+	root := os.Getenv("SystemRoot")
+	if root == "" {
+		t.Skip("SystemRoot is unavailable")
+	}
+	shell := filepath.Join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+	parser := `$t=$null; $e=$null; [void][System.Management.Automation.Language.Parser]::ParseInput([Console]::In.ReadToEnd(), [ref]$t, [ref]$e); if ($e.Count -ne 0) { $e | Out-String | Write-Error; exit 1 }`
+	cmd := exec.Command(shell, "-NoProfile", "-NonInteractive", "-Command", parser)
+	cmd.Stdin = strings.NewReader(autoInstallModuleScript)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("PowerShell script did not parse: %v %s", err, output)
+	}
+}
+
+type fakeAutoInstaller struct {
+	calls   atomic.Int32
+	release chan struct{}
+}
+
+type unavailableAutoInstaller struct{ fakeAutoInstaller }
+
+type fakeInspectInstaller struct {
+	fakeAutoInstaller
+	facts       selectedInstallerFacts
+	inspections atomic.Int32
+}
+
+type blockingInspectInstaller struct {
+	fakeAutoInstaller
+	started chan struct{}
+	release chan struct{}
+}
+
+func (f *blockingInspectInstaller) Inspect(ctx context.Context, id, version string) (*selectedInstallerFacts, error) {
+	close(f.started)
+	select {
+	case <-f.release:
+		return &selectedInstallerFacts{ID: id, Version: version, Source: "winget", Scope: "System", Elevation: "ElevationRequired", Type: "Msi", NestedType: "Unknown", Architecture: "X64"}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func TestSlowInspectionDoesNotBlockOtherPipeRequests(t *testing.T) {
+	user, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := openBrokerStore(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	suffix, err := randomID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := `\\.\pipe\AgentoC.PrivilegedBroker.LocalTest.` + suffix
+	server, err := newBrokerIPCServerForPipeNames(store, user.User.Sid, base+".Health", base+".Request")
+	if err != nil {
+		t.Fatal(err)
+	}
+	installer := &blockingInspectInstaller{fakeAutoInstaller: fakeAutoInstaller{release: make(chan struct{})}, started: make(chan struct{}), release: make(chan struct{})}
+	server.autoInstaller = installer
+	serverDone := make(chan error, 1)
+	go func() { serverDone <- server.Run(context.Background()) }()
+	t.Cleanup(func() {
+		server.Stop()
+		select {
+		case err := <-serverDone:
+			if err != nil {
+				t.Error(err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Error("server did not stop")
+		}
+	})
+	inspectionDone := make(chan brokerResponse, 1)
+	go func() {
+		inspectionDone <- exchangeTestPipeRequest(t, base+".Request", brokerRequest{Version: protocolVersion, Type: "auto_install.inspect", AutoInspect: &autoInstallInspectRequest{PackageID: "Vendor.App", PackageVersion: "1.2.3"}})
+	}()
+	select {
+	case <-installer.started:
+	case <-time.After(3 * time.Second):
+		t.Fatal("inspection did not start")
+	}
+	statusDone := make(chan brokerResponse, 1)
+	go func() {
+		statusDone <- exchangeTestPipeRequest(t, base+".Request", brokerRequest{Version: protocolVersion, Type: "status", RequestID: "another-request"})
+	}()
+	select {
+	case status := <-statusDone:
+		if status.Code != "REQUEST_NOT_FOUND" {
+			t.Fatalf("unexpected status: %+v", status)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("slow inspection blocked another request")
+	}
+	close(installer.release)
+	select {
+	case result := <-inspectionDone:
+		if result.Type != "auto_install_inspection" {
+			t.Fatalf("unexpected inspection: %+v", result)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("inspection did not finish")
+	}
+}
+
+func TestStopCancelsActiveInspection(t *testing.T) {
+	user, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := openBrokerStore(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	suffix, err := randomID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := `\\.\pipe\AgentoC.PrivilegedBroker.LocalTest.` + suffix
+	server, err := newBrokerIPCServerForPipeNames(store, user.User.Sid, base+".Health", base+".Request")
+	if err != nil {
+		t.Fatal(err)
+	}
+	installer := &blockingInspectInstaller{fakeAutoInstaller: fakeAutoInstaller{release: make(chan struct{})}, started: make(chan struct{}), release: make(chan struct{})}
+	server.autoInstaller = installer
+	done := make(chan error, 1)
+	go func() { done <- server.Run(context.Background()) }()
+	// The client can be disconnected by shutdown; no response is required.
+	client := make(chan struct{})
+	go func() {
+		defer close(client)
+		name, _ := windows.UTF16PtrFromString(base + ".Request")
+		var pipe windows.Handle
+		var openErr error
+		for i := 0; i < 100; i++ {
+			pipe, openErr = windows.CreateFile(name, pipeClientAccessMask, 0, nil, windows.OPEN_EXISTING, windows.SECURITY_SQOS_PRESENT|windows.SECURITY_IMPERSONATION, 0)
+			if openErr == nil {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if openErr != nil {
+			return
+		}
+		defer windows.CloseHandle(pipe)
+		payload, _ := json.Marshal(brokerRequest{Version: protocolVersion, Type: "auto_install.inspect", AutoInspect: &autoInstallInspectRequest{PackageID: "Vendor.App", PackageVersion: "1.2.3"}})
+		frame := make([]byte, 4+len(payload))
+		binary.LittleEndian.PutUint32(frame[:4], uint32(len(payload)))
+		copy(frame[4:], payload)
+		var written uint32
+		_ = windows.WriteFile(pipe, frame, &written, nil)
+		<-server.stopCh
+	}()
+	select {
+	case <-installer.started:
+	case <-time.After(3 * time.Second):
+		server.Stop()
+		t.Fatal("inspection did not start")
+	}
+	server.Stop()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("shutdown did not cancel inspection")
+	}
+	<-client
+}
+
+func (f *fakeInspectInstaller) Inspect(_ context.Context, _, _ string) (*selectedInstallerFacts, error) {
+	f.inspections.Add(1)
+	return &f.facts, nil
+}
+
+func TestAutoInstallInspectionIsReadOnlyAndBound(t *testing.T) {
+	store, err := openBrokerStore(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	installer := &fakeInspectInstaller{facts: selectedInstallerFacts{ID: "Vendor.App", Version: "1.2.3", Source: "winget", Scope: "System", Elevation: "ElevationRequired", Type: "Msi", NestedType: "Unknown", Architecture: "X64", Locale: "en-US"}}
+	server := &brokerIPCServer{store: store, autoInstaller: installer}
+	request := brokerRequest{Version: protocolVersion, Type: "auto_install.inspect", AutoInspect: &autoInstallInspectRequest{PackageID: "Vendor.App", PackageVersion: "1.2.3"}}
+	response := server.handleRequest(mustJSON(t, request), false)
+	if response.Type != "auto_install_inspection" || response.SelectedInstaller == nil || installer.inspections.Load() != 1 || installer.calls.Load() != 0 {
+		t.Fatalf("inspection failed: %+v", response)
+	}
+	if got := server.handleRequest(mustJSON(t, request), true); got.Code != "HEALTH_PIPE_READ_ONLY" {
+		t.Fatal("health pipe accepted inspection")
+	}
+	installer.facts.Elevation = "ElevationProhibited"
+	if got := server.handleRequest(mustJSON(t, request), false); got.Type != "auto_install_inspection" || got.SelectedInstaller.Elevation != "ElevationProhibited" {
+		t.Fatal("valid prohibited-elevation observation was lost")
+	}
+	installer.facts.Elevation = "ElevationRequired"
+	installer.facts.ID = "Other.App"
+	if got := server.handleRequest(mustJSON(t, request), false); got.Code != "AUTO_INSTALL_INSPECTION_FAILED" {
+		t.Fatal("mismatched inspector response accepted")
+	}
+	request.AutoInspect.PackageID = "Vendor.App;bad"
+	if got := server.handleRequest(mustJSON(t, request), false); got.Code != "REQUEST_INVALID" {
+		t.Fatal("invalid package accepted")
+	}
+	request.AutoInspect.PackageID = "Vendor.App"
+	request.Signature = "unexpected"
+	if got := server.handleRequest(mustJSON(t, request), false); got.Code != "REQUEST_INVALID" {
+		t.Fatal("extra request field accepted")
+	}
+}
+
+func (unavailableAutoInstaller) Available() bool { return false }
+
+func (f *fakeAutoInstaller) Install(ctx context.Context, _ autoInstallGrant) (requestStatus, string) {
+	f.calls.Add(1)
+	select {
+	case <-f.release:
+		return statusSucceeded, "AUTO_INSTALL_SUCCEEDED"
+	case <-ctx.Done():
+		return statusUnknown, "AUTO_INSTALL_OUTCOME_UNKNOWN"
+	}
+}
+
+func TestAutoInstallRequestExecutesOnceAndCanBePolled(t *testing.T) {
+	store, err := openBrokerStore(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	devicePrivate, devicePublic, deviceID := makeApprovalKey(t)
+	enrollment, err := store.BeginEnrollment("owner-local", deviceID, devicePublic, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	message, err := enrollmentSigningBytes(enrollment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CompleteEnrollment(enrollment.EnrollmentID, enrollment.VerificationCode, signApprovalMessage(t, devicePrivate, message), now); err != nil {
+		t.Fatal(err)
+	}
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKIXPublicKey(public)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ConfigureAutoInstallSigner("signer-1", base64.RawURLEncoding.EncodeToString(der), now); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := store.Snapshot()
+	grant := autoInstallGrant{Version: 1, KeyID: "signer-1", BrokerInstallationID: snapshot.InstallationID, PolicyGeneration: snapshot.PolicyGeneration, RequestID: "request-auto", SessionID: "session-1", RunID: "run-1", TurnID: "turn-1", ActionID: "action-1", Nonce: "0123456789abcdefghijklmn", PackageID: "Vendor.App", VersionID: "1.2.3", Source: "winget", InstallScope: "machine", IssuedMS: now.UnixMilli(), ExpiresMS: now.Add(time.Minute).UnixMilli()}
+	bytes, err := autoInstallSigningBytes(grant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := brokerRequest{Version: protocolVersion, Type: "auto_install.execute", AutoInstall: &grant, Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(private, bytes))}
+	installer := &fakeAutoInstaller{release: make(chan struct{})}
+	server := &brokerIPCServer{store: store, autoInstaller: installer}
+	health := server.handleRequest(mustJSON(t, brokerRequest{Version: protocolVersion, Type: "health"}), true)
+	if !health.AutoInstallReady || health.AutoInstallKeyID != "signer-1" || health.InstallationID != snapshot.InstallationID || health.PolicyGeneration != snapshot.PolicyGeneration {
+		t.Fatalf("incorrect auto install health: %+v", health)
+	}
+	server.autoInstaller = &unavailableAutoInstaller{}
+	if health := server.handleRequest(mustJSON(t, brokerRequest{Version: protocolVersion, Type: "health"}), true); health.AutoInstallReady {
+		t.Fatalf("unavailable backend advertised readiness: %+v", health)
+	}
+	server.autoInstaller = installer
+	bad := request
+	bad.Signature = base64.RawURLEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))
+	if got := server.handleRequest(mustJSON(t, bad), false); got.Code != "AUTO_INSTALL_AUTHORIZATION_DENIED" {
+		t.Fatalf("bad signature accepted: %+v", got)
+	}
+	first := server.handleRequest(mustJSON(t, request), false)
+	if first.Status != statusExecuting {
+		t.Fatalf("expected executing: %+v", first)
+	}
+	second := server.handleRequest(mustJSON(t, request), false)
+	if second.Status != statusExecuting {
+		t.Fatalf("duplicate should return existing state: %+v", second)
+	}
+	close(installer.release)
+	server.workers.Wait()
+	if installer.calls.Load() != 1 {
+		t.Fatalf("installer called %d times", installer.calls.Load())
+	}
+	status := server.handleRequest(mustJSON(t, brokerRequest{Version: protocolVersion, Type: "status", RequestID: grant.RequestID}), false)
+	if status.Status != statusSucceeded || status.Code != "AUTO_INSTALL_SUCCEEDED" || status.AutoInstall == nil || *status.AutoInstall != grant {
+		t.Fatalf("bad persisted status: %+v", status)
+	}
+
+	// Rotating administrator trust cancels a running operation and preserves an
+	// unknown outcome, since the child may already have caused side effects.
+	secondInstaller := &fakeAutoInstaller{release: make(chan struct{})}
+	server.autoInstaller = secondInstaller
+	grant.RequestID, grant.Nonce = "request-auto-2", "0123456789abcdefghijklmo"
+	messageBytes, err := autoInstallSigningBytes(grant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.AutoInstall = &grant
+	request.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(private, messageBytes))
+	if got := server.handleRequest(mustJSON(t, request), false); got.Status != statusExecuting {
+		t.Fatalf("second install did not start: %+v", got)
+	}
+	sameSigner := brokerRequest{Version: protocolVersion, Type: "auto_signer.configure", TargetID: "signer-1", PublicKey: base64.RawURLEncoding.EncodeToString(der)}
+	if got := server.handleAdminRequest(mustJSON(t, sameSigner)); got.Code != "AUTO_SIGNER_CONFIGURED" {
+		t.Fatalf("reapplying the signer failed: %+v", got)
+	}
+	if current := server.handleRequest(mustJSON(t, brokerRequest{Version: protocolVersion, Type: "status", RequestID: grant.RequestID}), false); current.Status != statusExecuting {
+		t.Fatalf("unchanged signer interrupted installation: %+v", current)
+	}
+	newPublic, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newDER, err := x509.MarshalPKIXPublicKey(newPublic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rotate := brokerRequest{Version: protocolVersion, Type: "auto_signer.configure", TargetID: "signer-2", PublicKey: base64.RawURLEncoding.EncodeToString(newDER)}
+	if got := server.handleAdminRequest(mustJSON(t, rotate)); got.Code != "AUTO_SIGNER_CONFIGURED" {
+		t.Fatalf("signer rotation failed: %+v", got)
+	}
+	server.workers.Wait()
+	status = server.handleRequest(mustJSON(t, brokerRequest{Version: protocolVersion, Type: "status", RequestID: grant.RequestID}), false)
+	if status.Status != statusUnknown {
+		t.Fatalf("revoked installation must have unknown outcome: %+v", status)
+	}
+}
+
+func TestAutoInstallSignerConfigurationRequiresAdminChannel(t *testing.T) {
+	store, err := openBrokerStore(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := &brokerIPCServer{store: store}
+	now := time.Now().UTC()
+	private, public, deviceID := makeApprovalKey(t)
+	enrollment, err := store.BeginEnrollment("owner-local", deviceID, public, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	challenge, err := enrollmentSigningBytes(enrollment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CompleteEnrollment(enrollment.EnrollmentID, enrollment.VerificationCode, signApprovalMessage(t, private, challenge), now); err != nil {
+		t.Fatal(err)
+	}
+	signer, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKIXPublicKey(signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := brokerRequest{Version: protocolVersion, Type: "auto_signer.configure", TargetID: "signer-1", PublicKey: base64.RawURLEncoding.EncodeToString(der)}
+	encoded := mustJSON(t, request)
+	if got := server.handleRequest(encoded, false); got.Code != "REQUEST_PIPE_OPERATION_REFUSED" {
+		t.Fatalf("request pipe accepted admin operation: %+v", got)
+	}
+	if allowAdminPipeRequest("S-1-5-21-100", false, encoded) {
+		t.Fatal("non-administrator accepted")
+	}
+	if !allowAdminPipeRequest("S-1-5-21-100", true, encoded) {
+		t.Fatal("administrator rejected")
+	}
+	if !allowAdminPipeRequest("S-1-5-18", false, encoded) {
+		t.Fatal("SYSTEM installer could not configure the signer")
+	}
+	if got := server.handleAdminRequest(encoded); got.Code != "AUTO_SIGNER_CONFIGURED" {
+		t.Fatalf("admin signer configuration failed: %+v", got)
+	}
+	if store.Snapshot().AutoInstallSigner.KeyID != "signer-1" {
+		t.Fatal("signer was not persisted")
+	}
+}
 
 func TestRecoverableBrokerPipeConnectError(t *testing.T) {
 	for _, code := range []error{
@@ -301,6 +693,109 @@ func TestBrokerNamedPipesRoundTripLocallyWithoutSCM(t *testing.T) {
 	}
 	if err := validateState(store.Snapshot()); err != nil {
 		t.Fatalf("local IPC state and audit did not validate: %v", err)
+	}
+}
+
+// Exercise the actual Windows named-pipe framing, signature admission, durable
+// claim and status path together. The installer is a no-side-effect fake and
+// this store deliberately has no enrolled phone device.
+func TestAutoInstallNamedPipeWithoutDeviceEnrollment(t *testing.T) {
+	user, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := openBrokerStore(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKIXPublicKey(public)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if err := store.ConfigureAutoInstallSigner("signer-pipe", base64.RawURLEncoding.EncodeToString(der), now); err != nil {
+		t.Fatal(err)
+	}
+	suffix, err := randomID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	healthName := `\\.\pipe\AgentoC.PrivilegedBroker.LocalTest.` + suffix + `.Health.v1`
+	requestName := `\\.\pipe\AgentoC.PrivilegedBroker.LocalTest.` + suffix + `.Request.v1`
+	server, err := newBrokerIPCServerForPipeNames(store, user.User.Sid, healthName, requestName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installer := &fakeInspectInstaller{fakeAutoInstaller: fakeAutoInstaller{release: make(chan struct{})}, facts: selectedInstallerFacts{ID: "Vendor.App", Version: "1.2.3", Source: "winget", Scope: "System", Elevation: "ElevationRequired", Type: "Msi", NestedType: "Unknown", Architecture: "X64", Locale: "en-US"}}
+	server.autoInstaller = installer
+	runResult := make(chan error, 1)
+	go func() { runResult <- server.Run(context.Background()) }()
+	t.Cleanup(func() {
+		server.Stop()
+		select {
+		case err := <-runResult:
+			if err != nil {
+				t.Error(err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Error("server did not stop")
+		}
+	})
+	snapshot := store.Snapshot()
+	grant := autoInstallGrant{Version: 1, KeyID: "signer-pipe", BrokerInstallationID: snapshot.InstallationID, PolicyGeneration: snapshot.PolicyGeneration,
+		RequestID: "pipe-install", SessionID: "session-1", RunID: "run-1", TurnID: "turn-1", ActionID: "action-1", Nonce: "0123456789abcdefghijklmn",
+		PackageID: "Vendor.App", VersionID: "1.2.3", Source: "winget", InstallScope: "machine", IssuedMS: now.UnixMilli(), ExpiresMS: now.Add(time.Minute).UnixMilli()}
+	inspection := exchangeTestPipeRequest(t, requestName, brokerRequest{Version: protocolVersion, Type: "auto_install.inspect", AutoInspect: &autoInstallInspectRequest{PackageID: grant.PackageID, PackageVersion: grant.VersionID}})
+	if inspection.Type != "auto_install_inspection" || inspection.SelectedInstaller == nil || installer.inspections.Load() != 1 || installer.calls.Load() != 0 {
+		t.Fatalf("unexpected pipe inspection response: %+v", inspection)
+	}
+	grant.SelectedInstaller = inspection.SelectedInstaller
+	bytes, err := autoInstallSigningBytes(grant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := brokerRequest{Version: protocolVersion, Type: "auto_install.execute", AutoInstall: &grant, Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(private, bytes))}
+	if health := exchangeTestPipeRequest(t, healthName, brokerRequest{Version: protocolVersion, Type: "health"}); !health.AutoInstallReady {
+		t.Fatalf("not ready: %+v", health)
+	}
+	bad := request
+	bad.Signature = base64.RawURLEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))
+	if result := exchangeTestPipeRequest(t, requestName, bad); result.Code != "AUTO_INSTALL_AUTHORIZATION_DENIED" {
+		t.Fatalf("bad signature was not rejected: %+v", result)
+	}
+	modifiedGrant := grant
+	modifiedFacts := *grant.SelectedInstaller
+	modifiedFacts.Architecture = "Arm64"
+	modifiedGrant.SelectedInstaller = &modifiedFacts
+	modifiedRequest := request
+	modifiedRequest.AutoInstall = &modifiedGrant
+	if result := exchangeTestPipeRequest(t, requestName, modifiedRequest); result.Code != "AUTO_INSTALL_AUTHORIZATION_DENIED" || installer.calls.Load() != 0 {
+		t.Fatalf("modified selection was not rejected before execution: %+v", result)
+	}
+	for i := 0; i < 2; i++ {
+		if result := exchangeTestPipeRequest(t, requestName, request); result.Status != statusExecuting {
+			t.Fatalf("submission %d: %+v", i, result)
+		}
+	}
+	close(installer.release)
+	var status brokerResponse
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		status = exchangeTestPipeRequest(t, requestName, brokerRequest{Version: protocolVersion, Type: "status", RequestID: grant.RequestID})
+		if status.Status != statusExecuting {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if installer.calls.Load() != 1 {
+		t.Fatalf("installer ran %d times", installer.calls.Load())
+	}
+	if status.Status != statusSucceeded || status.AutoInstall == nil || !reflect.DeepEqual(*status.AutoInstall, grant) {
+		t.Fatalf("unexpected status: %+v", status)
 	}
 }
 
