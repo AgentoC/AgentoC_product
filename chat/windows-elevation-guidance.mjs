@@ -10,10 +10,20 @@ const adminCmdlets = new Set(['new-localuser', 'set-localuser', 'remove-localuse
   'new-service', 'remove-service', 'set-service', 'start-service', 'stop-service', 'restart-service',
   'new-netfirewallrule', 'set-netfirewallrule', 'remove-netfirewallrule', 'enable-netfirewallrule', 'disable-netfirewallrule',
   'set-netfirewallprofile', 'set-mppreference', 'add-mppreference', 'remove-mppreference']);
+const registryWriteCmdlets = new Set(['new-item', 'set-item', 'remove-item', 'clear-item',
+  'new-itemproperty', 'set-itemproperty', 'remove-itemproperty', 'clear-itemproperty']);
 const nameOf = value => path.win32.basename(String(value || '').replaceAll('/', '\\')).toLowerCase();
 
 function directAdminProgram(name, args) {
   if (adminCmdlets.has(name)) return true;
+  if (registryWriteCmdlets.has(name)) {
+    let target = args[0] && !String(args[0]).startsWith('-') ? String(args[0]) : '';
+    for (let i = 0; i < args.length; i += 1) {
+      const match = String(args[i] || '').match(/^-(?:literalpath|path)(?::(.*))?$/i);
+      if (match) { target = match[1] ?? String(args[i + 1] || ''); break; }
+    }
+    return /^(?:hklm:\\|registry::hkey_local_machine(?:\\|$))/i.test(target);
+  }
   // Avoid treating queries such as `sc query` and `net user` as writes.
   // In Windows PowerShell, bare `sc` is an alias for Set-Content.
   if (name === 'sc.exe') {
@@ -48,7 +58,7 @@ export function isWindowsAdministrativeArgv(argv) {
 // This is guidance for explicit elevation, not a privilege or risk classifier.
 // Unrecognized and dynamic commands remain with the existing approval policy.
 export async function needsWindowsElevationGuidance(command, shell = 'PowerShell', parse = parseWindowsPowerShellAst) {
-  if (typeof command !== 'string' || !/runas|gsudo|sudo|localuser|localgroup|netfirewall|mppreference|(?:^|[\\/\s'\"])(?:sc|net|reg)(?:\.exe)?['\"]?(?:\s|$)|(?:new|remove|set|start|stop|restart)-service/i.test(command)) return false;
+  if (typeof command !== 'string' || !/runas|gsudo|sudo|localuser|localgroup|netfirewall|mppreference|hklm:|hkey_local_machine|(?:^|[\\/\s'\"])(?:sc|net|reg)(?:\.exe)?['\"]?(?:\s|$)|(?:new|remove|set|start|stop|restart)-service/i.test(command)) return false;
   if (shell === 'Bash') {
     const words = parseLiteralBashWords(command);
     if (!words || words.length < 2) return false;
@@ -72,6 +82,17 @@ export async function needsWindowsElevationGuidance(command, shell = 'PowerShell
   return ast.commands.some(item => {
     const name = nameOf(item.name);
     const elements = item.elements || [];
+    if (registryWriteCmdlets.has(name)) {
+      const args = [];
+      for (const element of elements.slice(1)) {
+        if (element.kind === 'literal') args.push(String(element.value));
+        else if (element.kind === 'parameter') {
+          args.push(`-${element.name}`);
+          if (element.argumentType) args.push(typeof element.value === 'string' ? element.value : '');
+        } else args.push('');
+      }
+      if (directAdminProgram(name, args)) return true;
+    }
     if (directAdminProgram(name, elements.slice(1).map(element => element.kind === 'literal' ? element.value : ''))) return true;
     if (elevationPrograms.has(name)) {
       const arg = elements[1];

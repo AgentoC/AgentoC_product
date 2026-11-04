@@ -23,7 +23,9 @@ if (process.platform === 'win32') {
     'New-NetFirewallRule -DisplayName fixture -WhatIf', 'Disable-NetFirewallRule -DisplayName fixture -WhatIf',
     'Set-NetFirewallProfile -Enabled True -WhatIf', 'Add-MpPreference -ExclusionPath fixture -WhatIf',
     "reg.exe add 'HKLM\\Software\\AgentoCFixture' /v Fixture /d 1", "reg delete 'HKEY_LOCAL_MACHINE\\Software\\Fixture' /v Value",
-    "reg.exe copy 'HKCU\\Software\\Fixture' 'HKLM\\Software\\Fixture'"]) {
+    "reg.exe copy 'HKCU\\Software\\Fixture' 'HKLM\\Software\\Fixture'",
+    "Set-ItemProperty -LiteralPath 'HKLM:\\Software\\Fixture' -Name Value -Value 1",
+    "New-Item 'Registry::HKEY_LOCAL_MACHINE\\Software\\Fixture' -WhatIf"]) {
     assert.equal(await needsWindowsElevationGuidance(command), true, command);
   }
   for (const command of ["Write-Output 'sudo whoami'", 'winget install Git.Git', 'Start-Process notepad.exe',
@@ -32,7 +34,8 @@ if (process.platform === 'win32') {
     'Get-NetFirewallRule', 'Get-NetFirewallProfile', 'Get-MpPreference', "Write-Output 'Set-MpPreference'",
     "reg.exe query 'HKLM\\Software\\Fixture'", "reg.exe add 'HKCU\\Software\\Fixture' /v Value /d 1",
     "reg.exe add 'HKCU\\Software\\Fixture' /v Value /d 'HKLM\\Software\\Text'",
-    "reg.exe copy 'HKLM\\Software\\Fixture' 'HKCU\\Software\\Fixture'", "Write-Output 'reg.exe add HKLM\\Software\\Fixture'"]) {
+    "reg.exe copy 'HKLM\\Software\\Fixture' 'HKCU\\Software\\Fixture'", "Write-Output 'reg.exe add HKLM\\Software\\Fixture'",
+    "Get-ItemProperty 'HKLM:\\Software\\Fixture'", "Set-ItemProperty 'HKCU:\\Software\\Fixture' -Name Value -Value 'HKLM:\\Text'"]) {
     assert.equal(await needsWindowsElevationGuidance(command), false, command);
   }
   assert.equal(await needsWindowsElevationGuidance('sudo whoami', 'Bash'), true);
@@ -41,6 +44,8 @@ if (process.platform === 'win32') {
   assert.equal(await needsWindowsElevationGuidance("reg.exe query 'HKLM\\Software\\Fixture'", 'Bash'), false);
   assert.equal(isWindowsAdministrativeArgv(['reg.exe', 'add', 'HKLM\\Software\\Fixture']), true);
   assert.equal(isWindowsAdministrativeArgv(['reg.exe', 'query', 'HKLM\\Software\\Fixture']), false);
+  assert.equal(isWindowsAdministrativeArgv(['Set-ItemProperty', '-LiteralPath', 'HKLM:\\Software\\Fixture']), true);
+  assert.equal(isWindowsAdministrativeArgv(['Set-ItemProperty', 'HKCU:\\Software\\Fixture', '-Value', 'HKLM:\\Text']), false);
   assert.equal(isWindowsAdministrativeArgv(['sc.exe', 'start', 'fixture']), true);
   assert.equal(isWindowsAdministrativeArgv(['net.exe', 'stop', 'fixture']), true);
   assert.equal(isWindowsAdministrativeArgv(['net.exe', 'start']), false);
