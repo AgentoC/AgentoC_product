@@ -116,7 +116,11 @@ private fun WelcomeConnectionContent(
             }
         },
     ) { compact ->
-        DeviceRelationship(compact = compact)
+        if (signedIn) {
+            DeviceRelationship(compact = compact)
+        } else {
+            AccountConnectionIllustration(compact = compact)
+        }
         Spacer(Modifier.height(if (compact) 28.dp else 36.dp))
         Text(stringResource(if (signedIn) R.string.journey_connect_title else R.string.welcome_connect_title),
             style = MaterialTheme.typography.headlineMedium.copy(
