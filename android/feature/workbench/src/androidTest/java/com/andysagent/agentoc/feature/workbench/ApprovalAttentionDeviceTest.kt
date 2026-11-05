@@ -25,6 +25,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.andysagent.agentoc.core.designsystem.AgentocTheme
 import com.andysagent.agentoc.core.model.Approval
 import com.andysagent.agentoc.core.model.ApprovalAction
+import com.andysagent.agentoc.core.model.ApprovalExplanation
 import com.andysagent.agentoc.core.model.ApprovalOption
 import com.andysagent.agentoc.core.model.ApprovalQuestion
 import com.andysagent.agentoc.core.model.AttentionReducer
@@ -56,6 +57,18 @@ class ApprovalAttentionDeviceTest {
             val id = requireNotNull(state.activeItemId)
             assertEquals(listOf(AttentionEvent.ResolveApproval(id, true), AttentionEvent.ResolveApproval(id, false)), events)
         }
+    }
+
+    @Test fun explanationAppearsAlongsideApprovalControls() {
+        val approval = Approval(id = "a", sessionId = "s", runId = "r", title = "Bash", command = "rm example",
+            explanation = ApprovalExplanation("Removes example", "Deletion is permanent", "Review first"))
+        val state = AttentionReducer.reduce(AttentionUiState(), AttentionReducer.project(listOf(Session("s", "Other session")), listOf(approval))).copy(expanded = true)
+        rule.setContent { AgentocTheme { AttentionSurface(state, onEvent = {}, onOpenSession = {}) } }
+        rule.onNodeWithTag("attention-headline").assertIsDisplayed()
+        rule.onNodeWithText("Review first").assertExists()
+        rule.onNodeWithText(rule.activity.getString(R.string.attention_command, "rm example")).assertExists()
+        rule.onNodeWithText(rule.activity.getString(R.string.attention_approve)).assertIsDisplayed()
+        rule.onNodeWithText(rule.activity.getString(R.string.attention_deny)).assertIsDisplayed()
     }
 
     @Test fun firstQuestionOptionExpandsBeforeItAnswers() {

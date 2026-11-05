@@ -25,11 +25,13 @@ internal fun approvalPresentation(item: AttentionItem): ApprovalPresentation {
     fun String?.value() = this?.trim()?.takeIf(String::isNotEmpty)
     val approval = item.approval
     val headline = sequenceOf(
+        approval?.explanation?.summary,
+        approval?.actions?.firstOrNull()?.explanation?.summary,
         approval?.actions?.firstOrNull()?.summary,
         approval?.actions?.firstOrNull()?.description,
         item.summary, approval?.title, approval?.reason, item.title,
     ).mapNotNull { it.value() }.firstOrNull().orEmpty()
-    val consequence = sequenceOf(approval?.reason, item.reason, item.summary)
+    val consequence = sequenceOf(approval?.explanation?.reason, approval?.reason, item.reason, item.summary)
         .mapNotNull { it.value() }.firstOrNull { it != headline }
     return ApprovalPresentation(headline, consequence)
 }

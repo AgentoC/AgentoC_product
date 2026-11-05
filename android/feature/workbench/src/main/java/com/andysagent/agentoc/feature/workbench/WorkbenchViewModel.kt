@@ -3262,6 +3262,9 @@ private fun RuntimeConnectionState.toAgentConnectionStatus(): AgentConnectionSta
 
 private val selectableApprovalActionStates = setOf("proposed", "classified", "waiting_user")
 
+private fun com.andysagent.agentoc.core.model.ApprovalExplanation.toUiState() =
+    com.andysagent.agentoc.core.agentui.ApprovalExplanationUiState(summary, reason, saferAlternative)
+
 private fun Approval.toUiState(): PermissionRequestUiState = PermissionRequestUiState(
     id = id,
     title = title,
@@ -3279,10 +3282,12 @@ private fun Approval.toUiState(): PermissionRequestUiState = PermissionRequestUi
     filePaths = filePaths,
     grantRoot = grantRoot,
     permissionsJson = permissionsJson,
+    explanation = explanation?.toUiState(),
     actions = actions.map { action ->
         ApprovalActionUiState(
             id = action.id,
             description = action.description,
+            explanation = action.explanation?.toUiState(),
             summary = action.summary ?: action.reason,
             command = action.command,
             cwd = action.cwd,

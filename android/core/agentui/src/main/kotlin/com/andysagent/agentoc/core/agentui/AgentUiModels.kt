@@ -18,6 +18,13 @@ data class ToolCallUiState(
 )
 
 @Immutable
+data class ApprovalExplanationUiState(
+    val summary: String? = null,
+    val reason: String? = null,
+    val saferAlternative: String? = null,
+)
+
+@Immutable
 data class PermissionRequestUiState(
     val id: String,
     val title: String,
@@ -38,6 +45,7 @@ data class PermissionRequestUiState(
     val filePaths: List<String> = emptyList(),
     val grantRoot: String? = null,
     val permissionsJson: String? = null,
+    val explanation: ApprovalExplanationUiState? = null,
 )
 
 @Immutable
@@ -53,6 +61,7 @@ data class ApprovalActionUiState(
     val risk: String? = null,
     val needsPasskey: Boolean = false,
     val selected: Boolean = true,
+    val explanation: ApprovalExplanationUiState? = null,
 )
 
 @Immutable

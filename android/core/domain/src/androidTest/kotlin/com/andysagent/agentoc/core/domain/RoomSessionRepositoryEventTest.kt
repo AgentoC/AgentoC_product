@@ -59,6 +59,26 @@ class RoomSessionRepositoryEventTest {
         assertEquals(SessionStatus.Completed, repository.refreshSessionDetail("session-1")?.status)
         repository.close()
     }
+    @Test fun persistsServerExplanationsForIndividualAndBatchApprovals() = runBlocking {
+        val repository = RoomSessionRepository(database, QueuedTransport(listOf(
+            """{"sessionId":"session-1","events":[{"seq":1,"type":"approval_request","approvalId":"a","runId":"r","title":"Bash","reason":"Provider reason","command":"rm example","explanation":{"summary":"Removes example","reason":"Deletion can be permanent","saferAlternative":"Review first"}},{"seq":2,"type":"privileged_batch_request","batchId":"b","runId":"r","other":[{"opId":"o","explanation":{"summary":"Restart service"}}]},{"seq":3,"type":"approval_request","approvalId":"c","runId":"r","explanation":{"summary":42,"reason":"  "}},{"seq":4,"type":"approved_action_batch_request","batchId":"d","runId":"r","actions":[{"actionId":"x","explanation":{"summary":"Change a setting"}}]}],"latestSeq":4}""",
+        )))
+        repository.refreshEvents("session-1")
+        val approvals = repository.observePendingApprovals("session-1").first()
+        val ordinary = approvals.single { it.id == "a" }
+        assertEquals("Provider reason", ordinary.reason)
+        assertEquals("rm example", ordinary.command)
+        assertEquals("Removes example", ordinary.explanation?.summary)
+        assertEquals("Deletion can be permanent", ordinary.explanation?.reason)
+        assertEquals("Review first", ordinary.explanation?.saferAlternative)
+        assertEquals("Restart service", approvals.single { it.id == "b" }.actions.single().explanation?.summary)
+        assertEquals(null, approvals.single { it.id == "c" }.explanation)
+        assertEquals("Change a setting", approvals.single { it.id == "d" }.actions.single().explanation?.summary)
+        repository.close()
+        val reopened = RoomSessionRepository(database, QueuedTransport(emptyList()))
+        assertEquals("Removes example", reopened.observePendingApprovals("session-1").first().single { it.id == "a" }.explanation?.summary)
+        reopened.close()
+    }
     @Test fun preservesProviderIdentityForMatchingBatchOperations() = runBlocking {
         val repository = RoomSessionRepository(database, QueuedTransport(listOf(
             """{"sessionId":"session-1","events":[{"seq":1,"type":"approval_request","approvalId":"a","runId":"r","providerRequestId":"provider-1","requestId":"turn"},{"seq":2,"type":"privileged_batch_request","batchId":"b","runId":"r","requestId":"turn","other":[{"opId":"o","providerRequestId":"provider-1"}]},{"seq":3,"type":"approval_request","approvalId":"independent","runId":"r","requestId":"turn"}],"latestSeq":3}""",

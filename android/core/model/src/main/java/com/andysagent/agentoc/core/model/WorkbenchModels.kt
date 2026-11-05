@@ -228,6 +228,12 @@ data class ApprovalAuthorization(
     val capabilityRef: String? = null,
 )
 
+data class ApprovalExplanation(
+    val summary: String? = null,
+    val reason: String? = null,
+    val saferAlternative: String? = null,
+)
+
 data class ApprovalAction(
     val id: String,
     val description: String = "",
@@ -245,6 +251,7 @@ data class ApprovalAction(
     val authorization: ApprovalAuthorization? = null,
     val updatedAt: String? = null,
     val identityAliases: Set<String> = emptySet(),
+    val explanation: ApprovalExplanation? = null,
 )
 
 data class ApprovalActionDecision(
@@ -334,6 +341,7 @@ data class Approval(
     val permissionsJson: String? = null,
     val defaultSelectedByCategory: Map<String, Set<String>> = emptyMap(),
     val identityAliases: Set<String> = emptySet(),
+    val explanation: ApprovalExplanation? = null,
 )
 
 data class RunActivity(

@@ -1290,8 +1290,12 @@ private fun ApprovalCardContent(
                     else detail.label?.let { stringResource(it, detail.value) } ?: detail.value)
             }
         }.distinct()
-        if (scopeDetails.isNotEmpty()) {
-            Column(Modifier.fillMaxWidth().heightIn(max = 160.dp).verticalScroll(rememberScrollState())) {
+        if (scopeDetails.isNotEmpty() || approval.explanation != null) {
+            Column(Modifier.fillMaxWidth().heightIn(max = 160.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                approval.explanation?.let { explanation ->
+                    ApprovalExplanationContent(explanation.summary, explanation.reason, explanation.saferAlternative)
+                }
                 scopeDetails.forEach { detail ->
                     Text(detail, style = MaterialTheme.typography.bodySmall, color = colors.secondaryContent)
                 }

@@ -477,4 +477,7 @@
     <string name="changed_file_pdf_page">第 %1$d / %2$d 页</string>
     <string name="changed_file_previous">上一页</string>
     <string name="changed_file_next">下一页</string>
+    <string name="approval_explanation_summary">通俗解释</string>
+    <string name="approval_explanation_reason">为什么需要留意</string>
+    <string name="approval_explanation_alternative">更安全的做法</string>
 </resources>

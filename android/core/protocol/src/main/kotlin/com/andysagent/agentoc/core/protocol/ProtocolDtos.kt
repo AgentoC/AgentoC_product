@@ -681,6 +681,7 @@ data class ApprovedActionDto(
     val resultRef: JsonElement? = null,
     val updatedAt: String? = null,
     val agentDefinition: JsonObject? = null,
+    val explanation: JsonObject? = null,
 )
 
 @Serializable

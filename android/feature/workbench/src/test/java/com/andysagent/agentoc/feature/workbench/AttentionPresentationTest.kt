@@ -2,6 +2,7 @@ package com.andysagent.agentoc.feature.workbench
 
 import com.andysagent.agentoc.core.model.Approval
 import com.andysagent.agentoc.core.model.ApprovalAction
+import com.andysagent.agentoc.core.model.ApprovalExplanation
 import com.andysagent.agentoc.core.model.AttentionItem
 import com.andysagent.agentoc.core.model.AttentionKind
 import kotlin.test.Test
@@ -25,6 +26,14 @@ class AttentionPresentationTest {
     @Test fun `operation and real consequence have distinct roles`() {
         assertEquals(ApprovalPresentation("Export audited report", "Writes a shared report"), approvalPresentation(item))
         assertEquals(ApprovalPresentation("Export report", null), approvalPresentation(item.copy(approval = approval.copy(actions = emptyList(), reason = "Export report"))))
+    }
+
+    @Test fun `server explanation is the overview and original command remains available`() {
+        val described = approval.copy(actions = emptyList(), command = "rm example", explanation = ApprovalExplanation(
+            summary = "Removes an example", reason = "Deletion may be permanent", saferAlternative = "Review it first"))
+        val describedItem = item.copy(approval = described)
+        assertEquals(ApprovalPresentation("Removes an example", "Deletion may be permanent"), approvalPresentation(describedItem))
+        assertTrue(approvalDetails(describedItem, false).any { it.value == "rm example" })
     }
 
     @Test fun `selectable actions are not repeated in technical list and full payload is retained`() {

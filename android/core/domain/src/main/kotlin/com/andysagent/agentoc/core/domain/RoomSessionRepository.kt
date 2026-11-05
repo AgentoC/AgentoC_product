@@ -26,6 +26,7 @@ import com.andysagent.agentoc.core.database.TargetRuntimeSummaryEntity
 import com.andysagent.agentoc.core.database.TargetRuntimeSummaryEventEntity
 import com.andysagent.agentoc.core.model.Attachment
 import com.andysagent.agentoc.core.model.ApprovalAction
+import com.andysagent.agentoc.core.model.ApprovalExplanation
 import com.andysagent.agentoc.core.model.ApprovalActionDecision
 import com.andysagent.agentoc.core.model.ApprovalAuthorization
 import com.andysagent.agentoc.core.model.ApprovalOption
@@ -2904,6 +2905,13 @@ private fun SessionEventDto.legacyStorageEventId(): String = dedupeKey()
 
 private fun SessionEventDto.fingerprint(): String = sessionEventFingerprint()
 
+private fun JsonElement?.toApprovalExplanation(): ApprovalExplanation? {
+    val obj = this as? JsonObject ?: return null
+    fun text(key: String) = (obj[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull?.trim()?.takeIf(String::isNotEmpty)
+    val explanation = ApprovalExplanation(text("summary"), text("reason"), text("saferAlternative"))
+    return explanation.takeIf { it.summary != null || it.reason != null || it.saferAlternative != null }
+}
+
 private fun ApprovalEntity.toDomainApproval(): Approval {
     val details = runCatching { detailsJson?.let { AgentocProtocol.json.parseToJsonElement(it).jsonObject } }.getOrNull()
     val optionsList = details?.get("options")?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
@@ -2942,6 +2950,7 @@ private fun ApprovalEntity.toDomainApproval(): Approval {
                 expiresAt = action["expiresAt"]?.jsonPrimitive?.contentOrNull,
                 authorization = authorization,
                 updatedAt = action["updatedAt"]?.jsonPrimitive?.contentOrNull,
+                explanation = action["explanation"].toApprovalExplanation(),
                 identityAliases = listOf("id", "opId", "approvalId", "providerRequestId", "providerItemId")
                     .mapNotNull { key -> (action[key] as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf(String::isNotEmpty) }.toSet(),
             )
@@ -2998,6 +3007,7 @@ private fun ApprovalEntity.toDomainApproval(): Approval {
         batchId = batchId,
         kind = kind,
         detailsJson = detailsJson,
+        explanation = details?.get("explanation").toApprovalExplanation(),
         reason = reason,
         saferAlternative = saferAlternative,
         approveLabel = approveLabel,
@@ -3049,6 +3059,7 @@ private fun buildApprovalDetails(event: SessionEventDto): String? {
         event.providerRequestId?.let { put("providerRequestId", JsonPrimitive(it)) }
         event.providerItemId?.let { put("providerItemId", JsonPrimitive(it)) }
         event.kind?.let { put("requestKind", JsonPrimitive(it)) }
+        event.explanation?.let { put("explanation", it) }
         event.command?.let { put("command", JsonPrimitive(it)) }
         event.cwd?.let { put("cwd", JsonPrimitive(it)) }
         if (event.filePaths.isNotEmpty()) put("filePaths", buildJsonArray { event.filePaths.forEach { add(JsonPrimitive(it)) } })

@@ -610,6 +610,9 @@ private fun AttentionCard(
                             .verticalScroll(approvalScroll),
                         verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact),
                     ) {
+                        item.approval?.explanation?.let { explanation ->
+                            ApprovalExplanationContent(explanation.summary, explanation.reason, explanation.saferAlternative)
+                        }
                         if (isPrivilegedCategoryBatch) {
                             listOf("privileged_other" to R.string.approval_category_privileged,
                                 "destructive_delete" to R.string.approval_category_delete).forEach { (category, title) ->
@@ -1221,6 +1224,9 @@ private fun ActionBatchDetails(
                 )
                 Column(Modifier.weight(1f)) {
                     Text(action.description.ifBlank { action.summary.orEmpty() }, color = colors.primaryContent, style = MaterialTheme.typography.bodyMedium)
+                    action.explanation?.let { explanation ->
+                        ApprovalExplanationContent(explanation.summary, explanation.reason, explanation.saferAlternative)
+                    }
                     action.command?.takeIf(String::isNotBlank)?.let {
                         Text(it, color = colors.secondaryContent, style = MaterialTheme.typography.bodySmall.copy(
                             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace))
