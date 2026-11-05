@@ -55,7 +55,7 @@ internal static class AgentoCSetup {
                 return process.ExitCode;
             }
         } catch (Exception error) {
-            MessageBox.Show("AgentoC setup could not start.\n\n" + error.Message, "AgentoC Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show("Ragent setup could not start.\n\n" + error.Message, "Ragent Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
         } finally {
             try { if (repairSourcePath != null && File.Exists(repairSourcePath)) File.Delete(repairSourcePath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
