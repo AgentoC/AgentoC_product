@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_models_runtime">モデルと実行環境</string>
+    <string name="settings_scope_account_computers">アカウントのパソコン</string>
+    <string name="settings_provider_via">%1$s 経由で管理</string>
+    <string name="settings_provider_choose">パソコンを選択</string>
+    <string name="settings_provider_connection_needed">接続済みのパソコンを選んでプロバイダーを管理します。読み込み済みの情報は最新でない場合があります。</string>
+    <string name="settings_provider_scope_hint">設定は同じアカウント内で同期できます。一部のログイン情報は各パソコン専用です。</string>
+    <string name="settings_provider_scope_sync">アカウント内で同期可能</string>
+    <string name="settings_provider_scope_local">%1$s 専用</string>
+    <string name="settings_harness_unknown">未接続 · 状態未確認</string>
+    <string name="settings_harness_installed_count">%1$d 台にインストール済み</string>
+    <string name="settings_harness_select_hint">操作するパソコンを選択してください。未接続のパソコンは選択できません。</string>
+    <string name="sp_provider_harness_missing_detail">アカウントのパソコンに対応する Harness をインストールしてから、プロバイダー設定を使用・編集してください。保存済みの設定は削除できます。</string>
+</resources>

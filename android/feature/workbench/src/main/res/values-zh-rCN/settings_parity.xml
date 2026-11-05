@@ -8,7 +8,7 @@
     <string name="sp_provider_harness_status_unavailable">无法获取已安装的 Harness。请检查连接并重试，然后再添加提供商。</string>
     <string name="sp_provider_harness_unknown">状态未知</string>
     <string name="sp_provider_harness_missing">未安装</string>
-    <string name="sp_provider_harness_missing_detail">请先在当前电脑安装此提供商对应的 Harness，再使用或编辑该提供商。仍可删除已保存的配置。</string>
+    <string name="sp_provider_harness_missing_detail">请先在账号下的电脑安装对应 Harness，再使用或编辑提供商配置。仍可删除已保存的配置。</string>
     <string name="sp_rotate_provider">轮换可用的 AgY 提供商</string>
     <string name="sp_none_provider">暂无模型提供商</string>
     <string name="sp_none_provider_detail">添加 API 密钥提供商或使用官方 OAuth 登录。</string>

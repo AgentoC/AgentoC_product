@@ -1421,7 +1421,8 @@ class AndroidRuntimeGraph internal constructor(
             return@coroutineScope listOf(WebHarnessTargetSnapshot(
                 target = WebHarnessTarget(instanceId = control.instanceId, label = control.instanceId,
                     available = true, detail = "Temporary control", installedHarnessIds =
-                    harnesses.filter { it.installed }.mapTo(mutableSetOf()) { it.id }), harnesses = harnesses))
+                    harnesses.filter { it.installed }.mapTo(mutableSetOf()) { it.id },
+                    supportedHarnessIds = harnesses.filter { it.supportedOnPlatform }.mapTo(mutableSetOf()) { it.id }), harnesses = harnesses))
         }
         val computers = configStore.directory.first().computers
         computers.map { target ->
@@ -1445,6 +1446,7 @@ class AndroidRuntimeGraph internal constructor(
                             available = true,
                             detail = "Connected",
                             installedHarnessIds = harnesses.filter { it.installed }.mapTo(mutableSetOf()) { it.id },
+                            supportedHarnessIds = harnesses.filter { it.supportedOnPlatform }.mapTo(mutableSetOf()) { it.id },
                         ),
                         harnesses = harnesses,
                     )

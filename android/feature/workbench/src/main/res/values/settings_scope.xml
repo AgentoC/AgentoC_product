@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_models_runtime">Models &amp; runtimes</string>
+    <string name="settings_scope_account_computers">Computers in your account</string>
+    <string name="settings_provider_via">Managed through %1$s</string>
+    <string name="settings_provider_choose">Choose computer</string>
+    <string name="settings_provider_connection_needed">Choose a connected computer to manage providers. Previously loaded information may be out of date.</string>
+    <string name="settings_provider_scope_hint">Configurations can sync within your account. Some sign-in credentials remain on their own computer.</string>
+    <string name="settings_provider_scope_sync">Can sync within your account</string>
+    <string name="settings_provider_scope_local">Only on %1$s</string>
+    <string name="settings_harness_unknown">Not connected · status unknown</string>
+    <string name="settings_harness_installed_count">Installed on %1$d computers</string>
+    <string name="settings_harness_select_hint">Choose the computers for this action. Disconnected computers cannot be selected.</string>
+</resources>

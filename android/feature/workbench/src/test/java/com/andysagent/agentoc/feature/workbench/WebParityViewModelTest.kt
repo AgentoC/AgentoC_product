@@ -30,6 +30,14 @@ import kotlinx.serialization.json.jsonPrimitive
 @OptIn(ExperimentalCoroutinesApi::class)
 class WebParityViewModelTest {
     @Test
+    fun `provider choices include account harnesses without marking them locally installed`() {
+        val harness = parseWebHarnesses("""{"harnesses":[{"id":"codex","name":"Codex","installed":false,"globallyInstalled":true,"supportedOnPlatform":true,"providerProtocols":["openai-responses"]}]}""").single()
+        assertEquals(false, harness.installed)
+        assertTrue(harness.globallyInstalled)
+        assertEquals(listOf("codex"), installedProviderHarnessChoices(listOf(harness)).map { it.id })
+    }
+
+    @Test
     fun `current session context does not request navigation to chat`() {
         val viewModel = WebParityViewModel(WebParityRepository(RecordingParityTransport()))
 

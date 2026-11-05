@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_models_runtime">模型與執行環境</string>
+    <string name="settings_scope_account_computers">帳號下的電腦</string>
+    <string name="settings_provider_via">透過 %1$s 管理</string>
+    <string name="settings_provider_choose">選擇電腦</string>
+    <string name="settings_provider_connection_needed">選擇一台已連線的電腦來管理供應商。先前載入的資訊可能不是最新狀態。</string>
+    <string name="settings_provider_scope_hint">設定可在帳號內同步，部分登入憑證僅限所屬電腦。</string>
+    <string name="settings_provider_scope_sync">可在帳號內同步</string>
+    <string name="settings_provider_scope_local">僅限 %1$s</string>
+    <string name="settings_harness_unknown">未連線 · 狀態待確認</string>
+    <string name="settings_harness_installed_count">已安裝於 %1$d 台電腦</string>
+    <string name="settings_harness_select_hint">選擇執行操作的電腦，未連線的電腦暫時無法選取。</string>
+    <string name="sp_provider_harness_missing_detail">請先在帳號下的電腦安裝對應 Harness，再使用或編輯供應商設定。仍可刪除已儲存的設定。</string>
+</resources>

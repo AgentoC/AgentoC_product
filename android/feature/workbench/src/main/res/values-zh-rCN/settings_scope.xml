@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_models_runtime">模型与运行环境</string>
+    <string name="settings_scope_account_computers">账号下的电脑</string>
+    <string name="settings_provider_via">通过 %1$s 管理</string>
+    <string name="settings_provider_choose">选择电脑</string>
+    <string name="settings_provider_connection_needed">选择一台已连接的电脑来管理提供商。之前加载的信息可能不是最新状态。</string>
+    <string name="settings_provider_scope_hint">配置可在账号内同步，部分登录凭据仅限所属电脑。</string>
+    <string name="settings_provider_scope_sync">可在账号内同步</string>
+    <string name="settings_provider_scope_local">仅限 %1$s</string>
+    <string name="settings_harness_unknown">未连接 · 状态待确认</string>
+    <string name="settings_harness_installed_count">已安装于 %1$d 台电脑</string>
+    <string name="settings_harness_select_hint">选择执行操作的电脑，未连接的电脑暂不可选。</string>
+</resources>

@@ -4756,6 +4756,9 @@ private fun SettingsSurface(
                     },
                     targetId = state.activeRemoteTargetId,
                     targetLabel = state.remoteTargets.firstOrNull { it.instanceId == state.activeRemoteTargetId }?.label,
+                    onChooseComputer = if (page == SettingsPage.ModelProviders) {
+                        { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.ComputerManagement)) }
+                    } else null,
                     backProgress = backProgress,
                     connectionAvailable = page == SettingsPage.ComputerManagement || state.connection == AgentConnectionStatus.Connected,
                     modifier = Modifier.fillMaxSize(),
@@ -4844,6 +4847,19 @@ private fun SettingsOverviewContent(
                 AgentoSettingRow(leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Info) },
                     title = stringResource(R.string.journey_connection_help), showDivider = false,
                     modifier = Modifier.testTag("settings-connection-help"), onClick = { onEvent(WorkbenchEvent.OpenComputerSetup) })
+            }
+        }
+        item(key = "models-runtime") {
+            SettingsGroup(title = stringResource(R.string.settings_models_runtime),
+                modifier = Modifier.widthIn(max = AgentocSizes.ContentMaxWidth)) {
+                AgentoSettingRow(leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Terminal) },
+                    title = stringResource(R.string.settings_model_providers),
+                    modifier = Modifier.testTag("settings-model-providers"),
+                    onClick = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.ModelProviders)) })
+                AgentoSettingRow(leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Settings) },
+                    title = stringResource(R.string.settings_harnesses), showDivider = false,
+                    modifier = Modifier.testTag("settings-harnesses"),
+                    onClick = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Harnesses)) })
             }
         }
         item(key = "preferences") {
@@ -4943,9 +4959,7 @@ private fun ComputerConfigurationSurface(
                     }
                 }
                 item {
-                    SettingsGroup(title = stringResource(R.string.settings_section_ai), modifier = Modifier.widthIn(max = AgentocSizes.ContentMaxWidth)) {
-                        SettingsParityEntry(stringResource(R.string.settings_model_providers)) { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.ModelProviders)) }
-                        SettingsParityEntry(stringResource(R.string.settings_harnesses)) { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Harnesses)) }
+                    SettingsGroup(modifier = Modifier.widthIn(max = AgentocSizes.ContentMaxWidth)) {
                         AgentoSettingRow(title = stringResource(R.string.settings_connectors_mcp), showDivider = false,
                             onClick = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Connectors)) })
                     }

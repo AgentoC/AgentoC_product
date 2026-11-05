@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_models_runtime">Modelos y entornos</string>
+    <string name="settings_scope_account_computers">Ordenadores de tu cuenta</string>
+    <string name="settings_provider_via">Gestión mediante %1$s</string>
+    <string name="settings_provider_choose">Elegir ordenador</string>
+    <string name="settings_provider_connection_needed">Elige un ordenador conectado para gestionar proveedores. La información cargada puede estar desactualizada.</string>
+    <string name="settings_provider_scope_hint">Las configuraciones pueden sincronizarse en tu cuenta. Algunas credenciales solo pertenecen a su ordenador.</string>
+    <string name="settings_provider_scope_sync">Puede sincronizarse en tu cuenta</string>
+    <string name="settings_provider_scope_local">Solo en %1$s</string>
+    <string name="settings_harness_unknown">Sin conexión · estado desconocido</string>
+    <string name="settings_harness_installed_count">Instalado en %1$d ordenadores</string>
+    <string name="settings_harness_select_hint">Elige los ordenadores para esta acción. Los que no estén conectados no se pueden seleccionar.</string>
+    <string name="sp_provider_harness_missing_detail">Instala el Harness correspondiente en un ordenador de tu cuenta antes de usar o editar la configuración del proveedor. Puedes eliminar las configuraciones guardadas.</string>
+</resources>

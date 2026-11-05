@@ -120,25 +120,37 @@ fun WebParitySurface(
     backContentDescription: String? = null,
     backProgress: Float = 0f,
     connectionAvailable: Boolean = true,
+    onChooseComputer: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     LaunchedEffect(page, targetId) { onEvent(WebParityEvent.OpenPage(page)) }
     val title = stringResource(page.titleRes())
-    CompositionLocalProvider(LocalRemoteSettingsWritable provides connectionAvailable) {
+    // Harness actions route to explicit computers, independently of the active session.
+    val writable = page == WebParityPage.Harnesses || connectionAvailable
+    CompositionLocalProvider(LocalRemoteSettingsWritable provides writable) {
     AgentoSurface(modifier.fillMaxSize(), color = LocalAgentocColors.current.canvas) {
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             SettingsWebHeader(
                 onBack = { if (state.selectedFile != null) onEvent(WebParityEvent.CloseFile) else onBack() },
-                title = title, subtitle = targetLabel,
+                title = title, subtitle = when (page) {
+                    WebParityPage.Harnesses -> stringResource(R.string.settings_scope_account_computers)
+                    WebParityPage.ModelProviders -> targetLabel?.let { stringResource(R.string.settings_provider_via, it) }
+                    else -> targetLabel
+                },
                 backDescription = if (state.selectedFile != null) stringResource(R.string.settings_back_files) else backContentDescription,
                 backTag = if (state.selectedFile != null) "web-parity-back" else "settings-back",
                 onRefresh = { onEvent(WebParityEvent.Refresh) },
                 refreshDescription = stringResource(R.string.settings_refresh_page, title),
                 refreshing = state.refreshing,
             )
-            if (!connectionAvailable) Text(stringResource(R.string.settings_config_offline),
-                color = LocalAgentocColors.current.secondaryContent, style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.widthIn(max = AgentocSizes.ContentMaxWidth).fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp))
+            if (!writable) Column(Modifier.widthIn(max = AgentocSizes.ContentMaxWidth).fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+                Text(stringResource(if (page == WebParityPage.ModelProviders) R.string.settings_provider_connection_needed else R.string.settings_config_offline),
+                    color = LocalAgentocColors.current.secondaryContent, style = MaterialTheme.typography.bodyMedium)
+                onChooseComputer?.let { choose ->
+                    OnboardingTextAction(stringResource(R.string.settings_provider_choose), choose,
+                        modifier = Modifier.testTag("provider-choose-computer"))
+                }
+            }
             WorkbenchBackStackTransition(
                 isOpen = state.selectedFile != null,
                 backProgress = backProgress,
@@ -150,7 +162,8 @@ fun WebParitySurface(
                         when (page) {
                             WebParityPage.Agents -> AgentsAppsPage(state, onEvent, projectId)
                             WebParityPage.Connectors -> ConnectorsPage(state, onEvent)
-                            WebParityPage.ModelProviders -> ProvidersPage(restrictDemoParityState(state, LocalRestrictedDemoEnvironment.current), onEvent)
+                            WebParityPage.ModelProviders -> ProvidersPage(restrictDemoParityState(state, LocalRestrictedDemoEnvironment.current), onEvent, targetLabel,
+                                onChooseComputer.takeIf { connectionAvailable })
                             WebParityPage.Harnesses -> HarnessesPage(restrictDemoParityState(state, LocalRestrictedDemoEnvironment.current), onEvent, targetId)
                             WebParityPage.Devices -> DevicesPage(
                                 state = state,
@@ -197,7 +210,8 @@ private fun RemoteSettingsDialog(title: String, confirmLabel: String, onConfirm:
     confirmModifier: Modifier = Modifier, destructive: Boolean = false, content: @Composable () -> Unit) {
     AgentoDialog(title, confirmLabel, onConfirm, onDismiss, dismissLabel = dismissLabel,
         confirmEnabled = confirmEnabled && LocalRemoteSettingsWritable.current,
-        dismissEnabled = dismissEnabled, confirmModifier = confirmModifier, destructive = destructive, content = content)
+        dismissEnabled = dismissEnabled, confirmModifier = confirmModifier, destructive = destructive,
+        opaqueFallback = true, textureAlpha = 0f, content = content)
 }
 
 /** Translate app-owned fallback messages while preserving unrecognized server diagnostics. */
@@ -507,7 +521,7 @@ private fun ConnectorsPage(state: WebParityUiState, onEvent: (WebParityEvent) ->
 internal data class ProviderHarnessChoice(val id: String, val label: String, val protocols: List<String>)
 
 internal fun installedProviderHarnessChoices(harnesses: List<WebHarness>): List<ProviderHarnessChoice> {
-    return harnesses.filter { it.installed }.mapNotNull { harness ->
+    return harnesses.filter { it.installed || it.globallyInstalled }.mapNotNull { harness ->
         // Older instances lack this capability field; retain their known
         // native clients without inventing support for other runtimes.
         val advertised = harness.providerProtocols ?: when (harness.id) {
@@ -565,7 +579,7 @@ private fun ProviderQuotaSection(snapshot: JsonObject) {
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
-private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> Unit) {
+private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> Unit, targetLabel: String?, onChooseComputer: (() -> Unit)?) {
     val uriHandler = LocalUriHandler.current
     var dialog by remember { mutableStateOf(false) }
     var agentType by remember { mutableStateOf("codex") }
@@ -590,6 +604,14 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
         }
     }
     LazyColumn(contentPadding = navigationContentPadding(), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
+        item(key = "provider-scope") {
+            Column(verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid)) {
+                Text(stringResource(R.string.settings_provider_scope_hint), style = MaterialTheme.typography.bodySmall,
+                    color = LocalAgentocColors.current.secondaryContent)
+                onChooseComputer?.let { choose -> OnboardingTextAction(stringResource(R.string.settings_provider_choose), choose,
+                    modifier = Modifier.testTag("provider-choose-computer")) }
+            }
+        }
         if (!restrictedDemo) item {
             RemoteSettingsAction(stringResource(R.string.sp_add_provider), {
                 editingProvider = null
@@ -610,13 +632,18 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
             item { AgentoEmptyState(stringResource(R.string.sp_none_provider), stringResource(R.string.sp_none_provider_detail)) }
         }
         items(state.providers, key = { it.id }) { provider ->
-            val harnessInstalled = state.providerHarnessesLoaded && state.harnesses.any { it.id == provider.agentType && it.installed }
+            val harnessInstalled = state.providerHarnessesLoaded && state.harnesses.any { it.id == provider.agentType && (it.installed || it.globallyInstalled) }
             SettingsContentCard(Modifier.fillMaxWidth().testTag("provider-card-${provider.id}")) {
               Column(Modifier.fillMaxWidth().padding(AgentocSpacing.Standard), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
                 Row(modifier = Modifier.testTag("provider-info-${provider.id}"), horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact), verticalAlignment = Alignment.Top) {
                     AgentoWebIcon(AgentoWebGlyph.Terminal, null)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid)) {
                         Text(provider.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        val machineLocal = provider.agentType in setOf("codex", "claude", "agy") && provider.authType in setOf("oauth", "oauth-token")
+                        Text(if (machineLocal) stringResource(R.string.settings_provider_scope_local, targetLabel ?: stringResource(R.string.sp_this_computer))
+                            else stringResource(R.string.settings_provider_scope_sync),
+                            style = MaterialTheme.typography.labelMedium, color = LocalAgentocColors.current.secondaryContent,
+                            modifier = Modifier.testTag("provider-scope-${provider.id}"))
                         Text(provider.detail, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     }
                     val status = when {
@@ -771,12 +798,25 @@ private fun HarnessesPage(
     var dialogHarness by remember { mutableStateOf<WebHarness?>(null) }
     var selectedTargetIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val targets = state.harnessTargets
-    val activeTarget = targets.firstOrNull { it.instanceId == targetId }
+    val activeTarget = targets.firstOrNull { it.instanceId == targetId && it.available }
         ?: targets.firstOrNull { it.available }
         ?: targets.firstOrNull()
     val installedIds = activeTarget?.installedHarnessIds
         ?: state.harnesses.filter { it.installed }.mapTo(mutableSetOf()) { it.id }
     val multipleTargets = targets.size > 1
+
+    fun supports(target: WebHarnessTarget, harness: WebHarness) =
+        target.supportedHarnessIds?.contains(harness.id) ?: harness.supportedOnPlatform
+
+    fun candidates(harness: WebHarness, operation: WebHarnessOperation) = targets.filter { target ->
+        when (operation) {
+            WebHarnessOperation.Install -> harness.id !in target.installedHarnessIds
+            WebHarnessOperation.Upgrade, WebHarnessOperation.Uninstall -> harness.id in target.installedHarnessIds
+        }
+    }
+
+    fun eligible(target: WebHarnessTarget, harness: WebHarness, operation: WebHarnessOperation) =
+        target.available && (operation == WebHarnessOperation.Uninstall || supports(target, harness))
 
     fun dispatch(harness: WebHarness, operation: WebHarnessOperation, ids: List<String>) {
         when (operation) {
@@ -787,21 +827,12 @@ private fun HarnessesPage(
     }
 
     fun requestAction(harness: WebHarness, operation: WebHarnessOperation) {
-        val candidates = when (operation) {
-            WebHarnessOperation.Install -> targets
-                .filter { harness.id !in it.installedHarnessIds }
-                .map { it.instanceId }
-            WebHarnessOperation.Upgrade,
-            WebHarnessOperation.Uninstall -> targets.filter { harness.id in it.installedHarnessIds }.map { it.instanceId }
-        }.filter(String::isNotBlank).distinct()
-        if (candidates.isEmpty()) return
-        if ((!multipleTargets || candidates.size == 1) && operation != WebHarnessOperation.Uninstall) {
-            dispatch(harness, operation, candidates)
-        } else {
-            dialogHarness = harness
-            dialogOperation = operation
-            selectedTargetIds = candidates.toSet()
-        }
+        val eligibleIds = candidates(harness, operation).filter { eligible(it, harness, operation) }
+            .map { it.instanceId }.filter(String::isNotBlank).toSet()
+        if (eligibleIds.isEmpty()) return
+        dialogHarness = harness
+        dialogOperation = operation
+        selectedTargetIds = eligibleIds
     }
 
     LazyColumn(modifier = Modifier.testTag("harness-catalog"), contentPadding = navigationContentPadding(), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
@@ -825,11 +856,13 @@ private fun HarnessesPage(
             }
         }
         items(state.harnesses, key = { it.id }) { harness ->
-            val installedCount = targets.count { harness.id in it.installedHarnessIds }
+            val installedCount = targets.count { it.available && harness.id in it.installedHarnessIds }
             val installedOnCurrent = harness.id in installedIds
             val computerLabel = activeTarget?.label?.takeIf(String::isNotBlank) ?: stringResource(R.string.sp_this_computer)
             val targetSummary = if (multipleTargets) {
-                stringResource(R.string.sp_harness_installed_count, installedCount, targets.size)
+                stringResource(R.string.settings_harness_installed_count, installedCount)
+            } else if (activeTarget?.available != true) {
+                stringResource(R.string.settings_harness_unknown)
             } else if (installedOnCurrent) {
                 stringResource(R.string.sp_harness_installed_on, computerLabel)
             } else {
@@ -837,9 +870,8 @@ private fun HarnessesPage(
             }
             val detail = listOfNotNull(
                 targetSummary,
-                harness.version.takeIf(String::isNotBlank)?.let { stringResource(R.string.sp_version_value, it) },
-                harness.installationSource.takeIf(String::isNotBlank)?.let { stringResource(R.string.sp_source_value, it) },
-                if (!harness.supportedOnPlatform) stringResource(R.string.sp_unsupported) else null,
+                harness.version.takeIf { it.isNotBlank() && !multipleTargets }?.let { stringResource(R.string.sp_version_value, it) },
+                harness.installationSource.takeIf { it.isNotBlank() && !multipleTargets }?.let { stringResource(R.string.sp_source_value, it) },
             ).joinToString(" · ")
             SettingsContentCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth().padding(AgentocSpacing.Standard), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
@@ -849,31 +881,40 @@ private fun HarnessesPage(
                             Text(harness.name, style = MaterialTheme.typography.titleSmall)
                             Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        AgentoStatus(stringResource(if (installedOnCurrent) R.string.sp_installed else R.string.sp_not_installed),
-                            if (installedOnCurrent) AgentoStatusTone.Success else AgentoStatusTone.Neutral)
+                    }
+                    targets.forEach { target ->
+                        val status = when {
+                            !target.available -> R.string.settings_harness_unknown
+                            harness.id in target.installedHarnessIds -> R.string.sp_installed
+                            !supports(target, harness) -> R.string.sp_unsupported
+                            else -> R.string.sp_not_installed
+                        }
+                        Text("${target.label} · ${stringResource(status)}", style = MaterialTheme.typography.bodySmall,
+                            color = LocalAgentocColors.current.secondaryContent,
+                            modifier = Modifier.testTag("harness-target-${harness.id}-${target.instanceId}"))
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid)) {
-                            if (!restrictedDemo && installedCount < targets.size) {
+                            if (!restrictedDemo && candidates(harness, WebHarnessOperation.Install).isNotEmpty()) {
                                 RemoteSettingsAction(
                                     stringResource(R.string.sp_install),
                                     { requestAction(harness, WebHarnessOperation.Install) },
-                                    enabled = !state.actionInProgress && harness.supportedOnPlatform,
+                                    enabled = !state.actionInProgress && candidates(harness, WebHarnessOperation.Install).any { eligible(it, harness, WebHarnessOperation.Install) },
                                     secondary = true,
                                     modifier = Modifier.testTag("harness-install-${harness.id}"),
                                 )
                             }
-                            if (!restrictedDemo && installedCount > 0) {
+                            if (!restrictedDemo && candidates(harness, WebHarnessOperation.Upgrade).isNotEmpty()) {
                                 RemoteSettingsAction(
                                     stringResource(R.string.sp_upgrade),
                                     { requestAction(harness, WebHarnessOperation.Upgrade) },
-                                    enabled = !state.actionInProgress && harness.supportedOnPlatform,
+                                    enabled = !state.actionInProgress && candidates(harness, WebHarnessOperation.Upgrade).any { eligible(it, harness, WebHarnessOperation.Upgrade) },
                                     secondary = true,
                                     modifier = Modifier.testTag("harness-upgrade-${harness.id}"),
                                 )
                                 RemoteSettingsAction(
                                     stringResource(R.string.sp_uninstall),
                                     { requestAction(harness, WebHarnessOperation.Uninstall) },
-                                    enabled = !state.actionInProgress,
+                                    enabled = !state.actionInProgress && candidates(harness, WebHarnessOperation.Uninstall).any { eligible(it, harness, WebHarnessOperation.Uninstall) },
                                     secondary = true,
                                     modifier = Modifier.testTag("harness-uninstall-${harness.id}"),
                                 )
@@ -892,14 +933,11 @@ private fun HarnessesPage(
             WebHarnessOperation.Upgrade -> R.string.sp_upgrade
             WebHarnessOperation.Uninstall -> R.string.sp_uninstall
         })
-        val candidates = when (operation) {
-            WebHarnessOperation.Install -> targets.filter { harness.id !in it.installedHarnessIds }
-            WebHarnessOperation.Upgrade,
-            WebHarnessOperation.Uninstall -> targets.filter { harness.id in it.installedHarnessIds }
-        }
+        val candidates = candidates(harness, operation)
+        val eligibleSelectedIds = candidates.filter { it.instanceId in selectedTargetIds && eligible(it, harness, operation) }.map { it.instanceId }
         RemoteSettingsDialog(
             title = stringResource(R.string.sp_operation_title, operationLabel, harness.name),
-            confirmLabel = stringResource(if (operation == WebHarnessOperation.Uninstall) R.string.sp_uninstall else R.string.sp_continue),
+            confirmLabel = operationLabel,
             confirmModifier = Modifier.testTag("harness-operation-confirm"),
             dismissLabel = stringResource(R.string.settings_cancel),
             destructive = operation == WebHarnessOperation.Uninstall,
@@ -910,17 +948,17 @@ private fun HarnessesPage(
                 }
             },
             onConfirm = {
-                val ids = selectedTargetIds.toList()
+                val ids = eligibleSelectedIds
                 dialogOperation = null
                 dialogHarness = null
                 dispatch(harness, operation, ids)
             },
-            confirmEnabled = selectedTargetIds.isNotEmpty() && !state.actionInProgress,
+            confirmEnabled = eligibleSelectedIds.isNotEmpty() && !state.actionInProgress,
             dismissEnabled = !state.actionInProgress,
         ) {
                 Column(verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid)) {
                     Text(
-                        stringResource(if (operation == WebHarnessOperation.Uninstall) R.string.sp_select_uninstall_targets else R.string.sp_select_harness_targets),
+                        stringResource(R.string.settings_harness_select_hint),
                         style = MaterialTheme.typography.bodySmall,
                     )
                     candidates.forEach { target ->
@@ -928,15 +966,17 @@ private fun HarnessesPage(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Checkbox(enabled = LocalRemoteSettingsWritable.current,
-                                checked = target.instanceId in selectedTargetIds,
+                            Checkbox(enabled = eligible(target, harness, operation) && !state.actionInProgress,
+                                modifier = Modifier.testTag("harness-select-${target.instanceId}"),
+                                checked = target.instanceId in eligibleSelectedIds,
                                 onCheckedChange = { checked ->
                                     selectedTargetIds = if (checked) selectedTargetIds + target.instanceId else selectedTargetIds - target.instanceId
                                 },
                             )
                             Column(Modifier.weight(1f)) {
                                 Text(target.label, style = MaterialTheme.typography.bodyMedium)
-                                if (target.detail.isNotBlank()) Text(target.detail, style = MaterialTheme.typography.labelSmall)
+                                if (!target.available) Text(stringResource(R.string.settings_harness_unknown), style = MaterialTheme.typography.labelSmall)
+                                else if (!supports(target, harness)) Text(stringResource(R.string.sp_unsupported), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }

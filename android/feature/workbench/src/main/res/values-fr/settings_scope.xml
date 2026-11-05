@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_models_runtime">Modèles et environnements</string>
+    <string name="settings_scope_account_computers">Ordinateurs du compte</string>
+    <string name="settings_provider_via">Gestion via %1$s</string>
+    <string name="settings_provider_choose">Choisir un ordinateur</string>
+    <string name="settings_provider_connection_needed">Choisissez un ordinateur connecté pour gérer les fournisseurs. Les informations chargées peuvent être obsolètes.</string>
+    <string name="settings_provider_scope_hint">Les configurations peuvent se synchroniser dans le compte. Certains identifiants restent propres à leur ordinateur.</string>
+    <string name="settings_provider_scope_sync">Synchronisation possible dans le compte</string>
+    <string name="settings_provider_scope_local">Uniquement sur %1$s</string>
+    <string name="settings_harness_unknown">Non connecté · état inconnu</string>
+    <string name="settings_harness_installed_count">Installé sur %1$d ordinateurs</string>
+    <string name="settings_harness_select_hint">Choisissez les ordinateurs pour cette opération. Les ordinateurs non connectés ne peuvent pas être sélectionnés.</string>
+    <string name="sp_provider_harness_missing_detail">Installez le Harness correspondant sur un ordinateur du compte avant d’utiliser ou de modifier la configuration du fournisseur. Les configurations enregistrées peuvent toujours être supprimées.</string>
+</resources>

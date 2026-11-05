@@ -8,7 +8,7 @@
     <string name="sp_provider_harness_status_unavailable">Could not load the installed Harnesses. Check the connection and retry before adding a provider.</string>
     <string name="sp_provider_harness_unknown">Status unknown</string>
     <string name="sp_provider_harness_missing">Not installed</string>
-    <string name="sp_provider_harness_missing_detail">Install this provider’s Harness on the current computer before using or editing it. You can still delete the saved configuration.</string>
+    <string name="sp_provider_harness_missing_detail">Install this provider’s Harness on a computer in your account before using or editing its configuration. You can still delete saved configurations.</string>
     <string name="sp_rotate_provider">Rotate eligible AgY providers</string>
     <string name="sp_none_provider">No model providers</string>
     <string name="sp_none_provider_detail">Add an API-key provider or start an official OAuth login.</string>

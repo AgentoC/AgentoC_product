@@ -106,6 +106,7 @@ data class WebHarness(
     val supportedOnPlatform: Boolean = true,
     val installationSource: String = "",
     val providerProtocols: List<String>? = null,
+    val globallyInstalled: Boolean = false,
 )
 
 data class WebHarnessTarget(
@@ -114,6 +115,7 @@ data class WebHarnessTarget(
     val available: Boolean = true,
     val detail: String = "",
     val installedHarnessIds: Set<String> = emptySet(),
+    val supportedHarnessIds: Set<String>? = null,
 )
 
 data class WebHarnessTargetSnapshot(
@@ -790,6 +792,7 @@ fun parseWebHarnesses(payload: JsonObject): List<WebHarness> = payload["harnesse
             supportedOnPlatform = item.boolean("supportedOnPlatform"),
             installationSource = item.string("installationSource") ?: "",
             providerProtocols = (item["providerProtocols"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull },
+            globallyInstalled = item.boolean("globallyInstalled"),
         )
     }
 
