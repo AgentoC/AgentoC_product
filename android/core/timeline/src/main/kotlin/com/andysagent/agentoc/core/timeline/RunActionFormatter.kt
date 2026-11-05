@@ -26,7 +26,7 @@ object RunActionFormatter {
     /** Web-style optimistic tool activity must not wait for a slower HTTP snapshot. */
     fun project(status: RunActionStatus, phase: String?, items: List<TimelineItem>, activity: JsonObject?, runId: String?): RunActionUiState? {
         if (status == RunActionStatus.Other) return null
-        if (status == RunActionStatus.WaitingApproval) return forRun(status, phase, items)
+        if (status == RunActionStatus.WaitingApproval) return forRun(status, phase, items, runId)
         val canonical = fromServer(activity, runId)
         val current = items.drop(items.indexOfLast { it is TimelineItem.Message && it.role == TimelineRole.User } + 1)
         val active = current.filterIsInstance<TimelineItem.Operation>().lastOrNull {
@@ -42,7 +42,7 @@ object RunActionFormatter {
             (canonical == null || genericTool || canonical.kind in setOf("working", "thinking", "think", "responding", "other", "tool"))) {
             return fromOperation(active!!)
         }
-        return fromProgressPlan(items, runId) ?: canonical ?: forRun(status, phase, items)
+        return fromProgressPlan(items, runId) ?: canonical ?: forRun(status, phase, items, runId)
     }
 
     /** Same canonical activity and subject/lifecycle rules as Web run-activity. */
@@ -129,13 +129,15 @@ object RunActionFormatter {
         status: RunActionStatus,
         phase: String?,
         items: List<TimelineItem>,
+        runId: String? = null,
     ): RunActionUiState? {
         if (status !in setOf(RunActionStatus.Working, RunActionStatus.WaitingApproval)) return null
         val operations = items.drop(items.indexOfLast { it is TimelineItem.Message && it.role == TimelineRole.User } + 1)
             .filterIsInstance<TimelineItem.Operation>()
+            .filter { runId.isNullOrBlank() || it.runId.isNullOrBlank() || it.runId == runId }
         val active = operations.asReversed().firstOrNull {
             it.status == TimelineOperationStatus.InProgress || it.status == TimelineOperationStatus.Pending
-        } ?: operations.asReversed().firstOrNull()
+        }
         val action = active?.let(::fromOperation)
         if (status == RunActionStatus.WaitingApproval) {
             return RunActionUiState(
@@ -166,6 +168,9 @@ object RunActionFormatter {
 
     /** Kept separate from the protocol model so tests can exercise this pure projection. */
     enum class RunActionStatus { Working, WaitingApproval, Other }
+
+    /** Historical rows describe their own operation regardless of lifecycle. */
+    fun forOperation(operation: TimelineItem.Operation): RunActionUiState = fromOperation(operation)
 
     private fun fromOperation(operation: TimelineItem.Operation): RunActionUiState {
         if (operation.isReasoning) return RunActionUiState("thinking", "Thinking through the task", operationId = operation.id, presentationVerb = "thinking")

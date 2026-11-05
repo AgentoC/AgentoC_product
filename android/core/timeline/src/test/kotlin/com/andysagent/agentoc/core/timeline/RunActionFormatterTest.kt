@@ -5,6 +5,23 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class RunActionFormatterTest {
+    @Test fun completedOperationDoesNotLookLikeAnActiveAction() {
+        val operation = TimelineItem.Operation("done", 1, TimelineOperationKind.Command, "Search", "rg pattern .",
+            TimelineOperationStatus.Completed)
+        val state = RunActionFormatter.forRun(RunActionFormatter.RunActionStatus.Working, "thinking", listOf(operation))!!
+        assertEquals("thinking", state.presentationVerb)
+        assertEquals(null, state.operationId)
+        assertEquals("search", RunActionFormatter.forOperation(operation).presentationVerb)
+    }
+
+    @Test fun activeOperationFromAnotherRunIsNotShownForCurrentRun() {
+        val operation = TimelineItem.Operation("old", 1, TimelineOperationKind.Command, "Search", "rg pattern .",
+            TimelineOperationStatus.InProgress, runId = "old-run")
+        val state = RunActionFormatter.project(RunActionFormatter.RunActionStatus.Working, "thinking", listOf(operation), null, "current-run")!!
+        assertEquals("thinking", state.presentationVerb)
+        assertEquals(null, state.operationId)
+    }
+
     @Test fun localActionDoesNotExposeCommonCredentialAssignments() {
         val operation = TimelineItem.Operation("search", 1, TimelineOperationKind.Command, "Search", "rg API_TOKEN=secretvalue .",
             TimelineOperationStatus.InProgress)
