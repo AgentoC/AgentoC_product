@@ -1,0 +1,29 @@
+<resources>
+    <string name="onboarding_signed_in">Signed in</string>
+    <string name="onboarding_success_description">Signed in successfully</string>
+    <string name="onboarding_enter_workspace">Open workspace</string>
+    <string name="onboarding_close_guide">Close guide</string>
+    <string name="onboarding_opened">AgentoC is open</string>
+    <string name="onboarding_install_hint">Install and open AgentoC for Windows on your computer.</string>
+    <string name="onboarding_send_link">Send to computer</string>
+    <string name="onboarding_no_desktop_login">Your computer does not need to sign in first.</string>
+    <string name="onboarding_menu_path">On your computer, open “Phone pairing”, then “Start phone pairing”.</string>
+    <string name="onboarding_desktop_preview">On your computer · illustration</string>
+    <string name="onboarding_desktop_formal">Trusted · Google sign-in</string>
+    <string name="onboarding_create_code">Create pairing code</string>
+    <string name="onboarding_scan_handoff">Choose trusted pairing and create a code. Scan it to sign the computer in with your phone account.</string>
+    <string name="onboarding_connect_summary">Open AgentoC on your computer, then scan its code with your phone.</string>
+    <string name="onboarding_lookup_failed_hint">Check your network and try again. Your computer list could not be confirmed.</string>
+    <string name="onboarding_connected_named">Connected to %1$s</string>
+    <string name="onboarding_connecting_named">Connecting to %1$s</string>
+    <string name="onboarding_code_unusable">Get a new pairing code</string>
+    <string name="onboarding_host_unavailable">Computer unavailable</string>
+    <string name="onboarding_begin">Start working</string>
+    <string name="onboarding_details">Technical details</string>
+    <string name="onboarding_hide_details">Hide details</string>
+    <string name="onboarding_generic_error_hint">Check that AgentoC is open on your computer and both devices are online.</string>
+    <string name="onboarding_temporary_path">On your computer, open “Phone pairing” → “Start phone pairing”, choose temporary pairing and create a code.</string>
+    <string name="onboarding_temporary_permissions">After confirmation on the computer, you can manage projects, sessions and agent settings.</string>
+    <string name="onboarding_temporary_expiry">Access ends 10 minutes after the computer confirms. Neither device needs to sign in.</string>
+    <string name="onboarding_camera_hint">Could not open the scanner. Check that the camera is available and camera permission is allowed, then try again.</string>
+</resources>

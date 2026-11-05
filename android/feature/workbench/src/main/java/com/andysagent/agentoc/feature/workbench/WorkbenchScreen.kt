@@ -363,6 +363,7 @@ fun WorkbenchScreen(
         return
     }
     if (googleSignInSuccess != null) {
+        val successAccount = accountsViewModel?.state?.collectAsState()?.value
         BackHandler(onBack = onGoogleSignInSuccessBack)
         GoogleSignInSuccessScreen(
             action = when (googleSignInSuccess) {
@@ -371,6 +372,9 @@ fun WorkbenchScreen(
                 else -> GoogleSignInSuccessAction.EnterApp
             },
             onAction = onGoogleSignInSuccessAction,
+            accountLabel = successAccount?.takeIf { it.hasVerifiedAccountSession }?.accountProfile?.let {
+                it.email?.takeIf(String::isNotBlank) ?: it.displayName
+            },
             modifier = modifier,
         )
         return
@@ -4446,6 +4450,10 @@ internal fun PairingOnboardingDialog(
     onScanPairingFromWelcome: () -> Unit,
     onOpenSubscription: () -> Unit,
 ) {
+    val colors = LocalAgentocColors.current
+    val computerName = state.selectedComputer?.alias?.takeIf { it.isNotBlank() }
+        ?: state.computerAlias.takeIf { it.isNotBlank() }
+    var detailsOpen by remember(state.errorMessage) { mutableStateOf(false) }
     val verifying = state.step == PairingOnboardingStep.Verifying
     val quotaBlocked = state.step == PairingOnboardingStep.Error && state.subscriptionRequired
     val scannerUnavailable = state.step == PairingOnboardingStep.Error && state.scannerUnavailable
@@ -4460,19 +4468,28 @@ internal fun PairingOnboardingDialog(
         PairingOnboardingStep.ComputerSelect -> stringResource(R.string.pairing_connect_selected)
         PairingOnboardingStep.Verifying -> stringResource(R.string.pairing_connecting)
         PairingOnboardingStep.Bound -> stringResource(if (state.temporaryPairing)
-            R.string.temporary_pairing_done else R.string.pairing_continue)
+            R.string.temporary_pairing_done else R.string.onboarding_begin)
         PairingOnboardingStep.Error -> when {
             quotaBlocked -> stringResource(R.string.pairing_view_pro_plans)
-            scannerFailureFromWelcome -> stringResource(R.string.welcome_scan)
+            scannerUnavailable || scannerFailureFromWelcome -> stringResource(R.string.welcome_scan)
             state.canReplaceTemporaryClaim -> stringResource(R.string.temporary_pairing_replace)
-            state.requiresNewCode -> stringResource(R.string.pairing_start_again)
+            state.requiresNewCode -> stringResource(R.string.pairing_setup_guide_scan)
             else -> stringResource(R.string.pairing_try_again)
         }
     }
-    AgentoDialog(
-        title = stringResource(
-            if (scannerUnavailable) R.string.pairing_scanner_title else R.string.pairing_dialog_title,
-        ),
+    OnboardingSheet(
+        modifier = Modifier.testTag("pairing-state-sheet"),
+        title = when {
+            scannerUnavailable -> stringResource(R.string.pairing_scanner_title)
+            verifying -> computerName?.let { stringResource(R.string.onboarding_connecting_named, it) }
+                ?: stringResource(R.string.pairing_connecting)
+            state.step == PairingOnboardingStep.Bound -> computerName?.let { stringResource(R.string.onboarding_connected_named, it) }
+                ?: stringResource(R.string.pairing_connected_status)
+            state.requiresNewCode -> stringResource(R.string.onboarding_code_unusable)
+            state.temporaryPairingFailure == TemporaryPairingFailure.HostUnavailable -> stringResource(R.string.onboarding_host_unavailable)
+            state.step == PairingOnboardingStep.Error -> stringResource(R.string.pairing_connection_failed)
+            else -> stringResource(R.string.pairing_dialog_title)
+        },
         confirmLabel = confirmLabel,
         onConfirm = {
             when (state.step) {
@@ -4489,6 +4506,11 @@ internal fun PairingOnboardingDialog(
                     onOpenSubscription()
                 } else if (scannerFailureFromWelcome) {
                     onScanPairingFromWelcome()
+                } else if (scannerUnavailable) {
+                    onScanPairing()
+                } else if (state.requiresNewCode) {
+                    onEvent(PairingOnboardingEvent.Retry)
+                    if (state.temporaryPairing || state.accountHandoff) onScanPairingFromWelcome() else onScanPairing()
                 } else if (state.canReplaceTemporaryClaim) {
                     onEvent(PairingOnboardingEvent.ReplaceTemporaryClaimAndRetry)
                 } else {
@@ -4510,13 +4532,24 @@ internal fun PairingOnboardingDialog(
             scannerFailureFromWelcome -> stringResource(R.string.pairing_back)
             else -> stringResource(R.string.pairing_cancel)
         },
-        actionLayout = if (scannerUnavailable) {
-            AgentoDialogActionLayout.PrimaryWithTextDismiss
-        } else {
-            AgentoDialogActionLayout.Horizontal
-        },
+        showConfirm = !verifying,
+        showDismiss = state.step != PairingOnboardingStep.Bound,
         confirmEnabled = !verifying && (state.step != PairingOnboardingStep.ComputerSelect || state.selectedComputerIds.isNotEmpty()),
-        icon = { AgentoWebIcon(AgentoWebGlyph.Qr, contentDescription = null) },
+        icon = {
+            if (verifying) AgentoProgress(modifier = Modifier.size(24.dp))
+            else AgentoWebIcon(
+                when (state.step) {
+                    PairingOnboardingStep.Bound -> AgentoWebGlyph.Check
+                    PairingOnboardingStep.Error -> AgentoWebGlyph.Info
+                    else -> AgentoWebGlyph.Monitor
+                }, null, Modifier.size(28.dp),
+                when (state.step) {
+                    PairingOnboardingStep.Bound -> colors.success
+                    PairingOnboardingStep.Error -> colors.stateError
+                    else -> colors.accentPrimary
+                },
+            )
+        },
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
                 when (state.step) {
@@ -4568,7 +4601,6 @@ internal fun PairingOnboardingDialog(
                         AgentoButton(stringResource(R.string.pairing_setup_guide_add_another), onScanPairing, secondary = true)
                     }
                     PairingOnboardingStep.Verifying -> {
-                        AgentoProgress(modifier = Modifier.size(AgentocSizes.Icon))
                         Text(if (state.temporaryPairing) stringResource(R.string.temporary_pairing_waiting)
                             else if (state.accountHandoff) stringResource(R.string.account_pairing_waiting)
                             else stringResource(R.string.pairing_verifying),
@@ -4578,9 +4610,6 @@ internal fun PairingOnboardingDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     PairingOnboardingStep.Bound -> {
-                        AgentoStatus(if (state.temporaryFullControl) stringResource(R.string.temporary_control_status)
-                            else if (state.temporaryPairing) stringResource(R.string.temporary_pairing_status)
-                            else stringResource(R.string.pairing_connected_status), AgentoStatusTone.Success)
                         Text(if (state.temporaryFullControl) stringResource(R.string.temporary_control_connected)
                             else if (state.temporaryPairing) stringResource(R.string.temporary_pairing_connected)
                             else stringResource(R.string.pairing_connected_detail),
@@ -4601,27 +4630,35 @@ internal fun PairingOnboardingDialog(
                                     TemporaryPairingFailure.HostUnavailable -> stringResource(R.string.temporary_pairing_host_unavailable)
                                 }
                                 state.errorMessageRes != null -> stringResource(state.errorMessageRes)
-                                else -> state.errorMessage?.takeIf { it.isNotBlank() }
-                                    ?: stringResource(R.string.pairing_connection_failed)
+                                else -> stringResource(R.string.onboarding_generic_error_hint)
                             }
-                            AgentoErrorText(errorText)
+                            if (!quotaBlocked || state.errorMessageRes != null) Text(errorText,
+                                style = MaterialTheme.typography.bodyMedium, color = colors.primaryContent)
                             if (state.canReplaceTemporaryClaim) {
                                 Text(stringResource(R.string.temporary_pairing_replacement_note),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            Text(
+                            val recoveryHint =
                                 if (state.temporaryPairingFailure != null) {
                                     stringResource(R.string.temporary_pairing_retry_hint)
                                 } else if (quotaBlocked) {
                                     stringResource(R.string.pairing_error_quota_hint)
-                                } else if (state.requiresNewCode) {
+                                } else if (state.requiresNewCode && state.errorMessageRes == null) {
                                     stringResource(R.string.pairing_new_code_hint)
-                                } else {
-                                    stringResource(R.string.pairing_error_retry_hint)
-                                },
+                                } else null
+                            recoveryHint?.let { Text(it,
                                 style = MaterialTheme.typography.bodyMedium,
-                            )
+                            ) }
+                        } else {
+                            Text(stringResource(R.string.onboarding_camera_hint),
+                                style = MaterialTheme.typography.bodyMedium, color = colors.secondaryContent)
+                        }
+                        if (state.errorMessageRes == null && !state.errorMessage.isNullOrBlank()) {
+                            OnboardingTextAction(stringResource(if (detailsOpen) R.string.onboarding_hide_details
+                                else R.string.onboarding_details), { detailsOpen = !detailsOpen }, quiet = true)
+                            if (detailsOpen) Text(state.errorMessage.orEmpty(),
+                                style = MaterialTheme.typography.bodySmall, color = colors.secondaryContent)
                         }
                     }
                 }

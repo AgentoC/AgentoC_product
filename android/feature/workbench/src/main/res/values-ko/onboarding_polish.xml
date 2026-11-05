@@ -1,0 +1,29 @@
+<resources>
+    <string name="onboarding_signed_in">로그인 완료</string>
+    <string name="onboarding_success_description">로그인되었습니다</string>
+    <string name="onboarding_enter_workspace">작업 공간 열기</string>
+    <string name="onboarding_close_guide">안내 닫기</string>
+    <string name="onboarding_opened">AgentoC를 열었어요</string>
+    <string name="onboarding_install_hint">컴퓨터에 Windows용 AgentoC를 설치하고 여세요.</string>
+    <string name="onboarding_send_link">컴퓨터로 보내기</string>
+    <string name="onboarding_no_desktop_login">컴퓨터에서 미리 로그인할 필요는 없습니다.</string>
+    <string name="onboarding_menu_path">컴퓨터에서 “휴대전화 페어링”을 열고 “페어링 시작”을 누르세요.</string>
+    <string name="onboarding_desktop_preview">컴퓨터 화면 예시</string>
+    <string name="onboarding_desktop_formal">정식 페어링 · Google 로그인</string>
+    <string name="onboarding_create_code">페어링 코드 만들기</string>
+    <string name="onboarding_scan_handoff">정식 페어링으로 코드를 만든 뒤 휴대전화로 스캔해 컴퓨터에 로그인하세요.</string>
+    <string name="onboarding_connect_summary">컴퓨터에서 AgentoC를 열고 휴대전화로 코드를 스캔하세요.</string>
+    <string name="onboarding_lookup_failed_hint">네트워크를 확인하고 다시 시도하세요. 컴퓨터 목록을 확인하지 못했습니다.</string>
+    <string name="onboarding_connected_named">%1$s에 연결됨</string>
+    <string name="onboarding_connecting_named">%1$s에 연결 중</string>
+    <string name="onboarding_code_unusable">새 페어링 코드 받기</string>
+    <string name="onboarding_host_unavailable">컴퓨터에 연결할 수 없음</string>
+    <string name="onboarding_begin">시작하기</string>
+    <string name="onboarding_details">기술 정보</string>
+    <string name="onboarding_hide_details">정보 접기</string>
+    <string name="onboarding_generic_error_hint">컴퓨터의 AgentoC가 열려 있고 두 기기가 인터넷에 연결되어 있는지 확인하세요.</string>
+    <string name="onboarding_temporary_path">컴퓨터에서 “휴대전화 페어링” → “페어링 시작”을 열고 임시 페어링을 선택한 뒤 코드를 만드세요.</string>
+    <string name="onboarding_temporary_permissions">컴퓨터에서 승인하면 프로젝트, 세션, 에이전트 설정을 관리할 수 있습니다.</string>
+    <string name="onboarding_temporary_expiry">컴퓨터에서 승인한 뒤 10분 후 접근 권한이 만료됩니다. 두 기기 모두 로그인할 필요가 없습니다.</string>
+    <string name="onboarding_camera_hint">스캐너를 열지 못했습니다. 카메라를 사용할 수 있고 접근 권한이 허용되어 있는지 확인한 뒤 다시 시도하세요.</string>
+</resources>

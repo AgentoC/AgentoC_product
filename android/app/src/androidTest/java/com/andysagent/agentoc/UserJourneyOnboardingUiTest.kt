@@ -104,11 +104,9 @@ class UserJourneyOnboardingUiTest {
         compose.setContent { AgentocTheme { PairingScanGuideDialog({ scans++ }, { dismissed++ }) } }
         compose.onNodeWithText(text(WorkbenchR.string.journey_install_step)).assertIsDisplayed()
         compose.onNodeWithTag("computer-setup-next").performClick()
-        compose.onNodeWithText(text(WorkbenchR.string.journey_account_instructions)).performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("computer-setup-next").performClick()
-        compose.onNodeWithText(text(WorkbenchR.string.journey_scan_step)).assertIsDisplayed()
+        compose.onNodeWithText(text(WorkbenchR.string.onboarding_menu_path)).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText(text(WorkbenchR.string.journey_previous)).performClick()
-        compose.onNodeWithText(text(WorkbenchR.string.journey_account_instructions)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(text(WorkbenchR.string.journey_install_step)).assertIsDisplayed()
         compose.runOnIdle { assertEquals(0, scans); assertEquals(0, dismissed) }
         compose.onNodeWithTag("computer-setup-next").performClick()
         compose.onNodeWithTag("computer-setup-next").performClick()
@@ -119,7 +117,7 @@ class UserJourneyOnboardingUiTest {
         var scanned = false
         compose.setContent { AgentocTheme { PairingScanGuideDialog({ scanned = true }, {}) } }
         compose.onNodeWithText(text(WorkbenchR.string.pairing_setup_guide_copy)).performScrollTo().performClick()
-        compose.onNodeWithText(text(WorkbenchR.string.journey_link_copied)).assertIsDisplayed()
+        compose.onAllNodesWithText(text(WorkbenchR.string.journey_link_copied))[0].assertIsDisplayed()
         compose.runOnIdle { assertTrue(!scanned) }
     }
 
@@ -128,7 +126,10 @@ class UserJourneyOnboardingUiTest {
         compose.onNodeWithTag("computer-setup-next").performClick()
         compose.onNodeWithTag("setup-long-term").assertDoesNotExist()
         compose.onNodeWithTag("setup-temporary").assertDoesNotExist()
-        compose.onNodeWithText(text(WorkbenchR.string.journey_account_instructions)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(text(WorkbenchR.string.onboarding_menu_path)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(text(WorkbenchR.string.onboarding_create_code)).performScrollTo()
+            .performTouchInput { click() }
+        compose.onNodeWithTag("computer-setup-guide").assertExists()
     }
 
     @Test fun setupProgressSurvivesStateRestoration() {
@@ -137,7 +138,31 @@ class UserJourneyOnboardingUiTest {
         compose.onNodeWithTag("computer-setup-next").performClick()
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithText(text(WorkbenchR.string.journey_code_step)).assertIsDisplayed()
-        compose.onNodeWithText(text(WorkbenchR.string.journey_account_instructions)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(text(WorkbenchR.string.onboarding_menu_path)).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun closeOnSecondStepClosesTheGuideInsteadOfGoingBack() {
+        var open by mutableStateOf(true)
+        compose.setContent { AgentocTheme { if (open) PairingScanGuideDialog({}, { open = false }) } }
+        compose.onNodeWithTag("computer-setup-next").performClick()
+        compose.onNodeWithTag("computer-setup-close").performClick()
+        compose.onNodeWithTag("computer-setup-guide").assertDoesNotExist()
+    }
+
+    @Test fun systemBackOnSecondStepClosesTheGuide() {
+        var open by mutableStateOf(true)
+        compose.setContent { AgentocTheme { if (open) PairingScanGuideDialog({}, { open = false }) } }
+        compose.onNodeWithTag("computer-setup-next").performClick()
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithTag("computer-setup-guide").assertDoesNotExist()
+    }
+
+    @Test fun tappingOutsideOnSecondStepClosesTheGuide() {
+        var open by mutableStateOf(true)
+        compose.setContent { AgentocTheme { if (open) PairingScanGuideDialog({}, { open = false }) } }
+        compose.onNodeWithTag("computer-setup-next").performClick()
+        compose.onNodeWithTag("onboarding-scrim").performTouchInput { click(topLeft + androidx.compose.ui.geometry.Offset(2f, 2f)) }
+        compose.onNodeWithTag("computer-setup-guide").assertDoesNotExist()
     }
 
     @Test fun captureWelcomePage() = captureEntry(false)
@@ -192,11 +217,10 @@ class UserJourneyOnboardingUiTest {
                 AgentocTheme(darkTheme = dark) { PairingScanGuideDialog({ scans++ }, {}) }
             }
         }
-        repeat(3) { step ->
+        repeat(2) { step ->
             compose.onNodeWithTag("computer-setup-next").assertIsDisplayed().assertHasClickAction()
             val label = localized.getString(when (step) {
-                0 -> WorkbenchR.string.journey_installed
-                1 -> WorkbenchR.string.journey_code_ready
+                0 -> WorkbenchR.string.onboarding_opened
                 else -> WorkbenchR.string.pairing_setup_guide_scan
             })
             val layouts = mutableListOf<TextLayoutResult>()
@@ -206,8 +230,9 @@ class UserJourneyOnboardingUiTest {
             // size can round down by less than a pixel. Check the visible end
             // and actual line width instead of that rounding-only overflow.
             assertTrue("Primary action label must not be clipped: $label / ${layouts.map { it.size }}",
-                layouts.all { it.getLineEnd(0, visibleEnd = true) == label.length &&
-                    it.getLineRight(0) - it.getLineLeft(0) <= it.size.width + 1f })
+                layouts.all { it.getLineEnd(it.lineCount - 1, visibleEnd = true) == label.length &&
+                    (0 until it.lineCount).all { line ->
+                        it.getLineRight(line) - it.getLineLeft(line) <= it.size.width + 1f } })
             compose.waitForIdle()
             // Semantics can be ready before the separate Dialog window is
             // presented by SurfaceFlinger on Honor. Capture its settled frame.
@@ -221,6 +246,8 @@ class UserJourneyOnboardingUiTest {
             bitmap.recycle()
             if (step == 1) {
                 compose.onNodeWithTag("computer-setup-instructions").performScrollTo().assertIsDisplayed()
+                compose.onNodeWithText(localized.getString(WorkbenchR.string.onboarding_scan_handoff))
+                    .performScrollTo().assertIsDisplayed()
                 compose.onNodeWithTag("computer-setup-next").assertIsDisplayed()
             }
             compose.onNodeWithTag("computer-setup-next").performClick()

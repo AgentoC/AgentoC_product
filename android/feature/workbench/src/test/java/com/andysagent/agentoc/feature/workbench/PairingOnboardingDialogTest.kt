@@ -49,7 +49,8 @@ class PairingOnboardingDialogTest {
         rule.onNodeWithText("已连接").assertIsDisplayed()
         rule.onNodeWithText("这台电脑已关联到 Google 帐号。以后连接时无需再扫码。")
             .assertExists()
-        rule.onNodeWithText("关闭").assertIsDisplayed().assertHasClickAction().performClick()
+        rule.onNodeWithText("开始使用").assertIsDisplayed().assertHasClickAction().performClick()
+        rule.onNodeWithText("关闭").assertDoesNotExist()
         rule.onNodeWithText("取消").assertDoesNotExist()
         assertEquals(PairingOnboardingEvent.Dismiss, received)
     }
@@ -76,8 +77,8 @@ class PairingOnboardingDialogTest {
             requiresNewCode = true,
         ))
 
-        rule.onNodeWithText("重新开始").assertIsDisplayed().assertHasClickAction()
-        rule.onNodeWithText("此配对码不能重复使用。请从电脑获取新码并重新开始。")
+        rule.onNodeWithText("扫描二维码").assertIsDisplayed().assertHasClickAction()
+        rule.onNodeWithText("电脑无法接受此帐号关联请求。请重新开始关联流程。")
             .assertExists()
     }
 

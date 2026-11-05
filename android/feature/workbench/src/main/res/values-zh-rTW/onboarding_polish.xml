@@ -1,0 +1,29 @@
+<resources>
+    <string name="onboarding_signed_in">登入成功</string>
+    <string name="onboarding_success_description">登入成功</string>
+    <string name="onboarding_enter_workspace">進入工作台</string>
+    <string name="onboarding_close_guide">關閉指引</string>
+    <string name="onboarding_opened">已開啟 AgentoC</string>
+    <string name="onboarding_install_hint">在電腦上安裝並開啟 Windows 版 AgentoC。</string>
+    <string name="onboarding_send_link">傳送到電腦</string>
+    <string name="onboarding_no_desktop_login">電腦無需預先登入帳號。</string>
+    <string name="onboarding_menu_path">在電腦上開啟「手機配對」，點選「開始手機配對」。</string>
+    <string name="onboarding_desktop_preview">電腦端局部示意</string>
+    <string name="onboarding_desktop_formal">正式配對 · Google 登入</string>
+    <string name="onboarding_create_code">建立配對碼</string>
+    <string name="onboarding_scan_handoff">選擇正式配對並建立配對碼，再用手機掃碼為電腦登入。</string>
+    <string name="onboarding_connect_summary">在電腦上開啟 AgentoC，用手機掃碼完成連線。</string>
+    <string name="onboarding_lookup_failed_hint">請檢查網路後重試，暫時無法確認帳號下的電腦。</string>
+    <string name="onboarding_connected_named">已連線至 %1$s</string>
+    <string name="onboarding_connecting_named">正在連線 %1$s</string>
+    <string name="onboarding_code_unusable">請取得新的配對碼</string>
+    <string name="onboarding_host_unavailable">暫時無法連線電腦</string>
+    <string name="onboarding_begin">開始使用</string>
+    <string name="onboarding_details">技術詳情</string>
+    <string name="onboarding_hide_details">收起詳情</string>
+    <string name="onboarding_generic_error_hint">確認電腦上的 AgentoC 已開啟，且兩台裝置均已連網。</string>
+    <string name="onboarding_temporary_path">電腦端開啟「手機配對」→「開始手機配對」，選擇暫時配對並建立配對碼。</string>
+    <string name="onboarding_temporary_permissions">電腦確認後，可管理專案、工作階段和代理設定。</string>
+    <string name="onboarding_temporary_expiry">從電腦確認起計時，10 分鐘後存取權限到期。兩端均無需登入。</string>
+    <string name="onboarding_camera_hint">無法開啟掃碼。請確認相機可用並已允許相機權限，再試一次。</string>
+</resources>

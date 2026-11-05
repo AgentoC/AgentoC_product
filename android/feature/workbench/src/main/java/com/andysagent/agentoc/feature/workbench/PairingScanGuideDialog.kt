@@ -1,12 +1,16 @@
 package com.andysagent.agentoc.feature.workbench
 
 import android.content.Intent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -14,106 +18,99 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.andysagent.agentoc.core.designsystem.*
 
 private const val COMPUTER_RELEASES_URL = "https://www.agentoncloud.com/download.html"
 
-/** One action per step; account and temporary-access details stay contextual. */
-@OptIn(ExperimentalLayoutApi::class)
+/** Two preparation pages, then the actual scanner; no extra confirmation page. */
 @Composable
 fun PairingScanGuideDialog(onScan: () -> Unit, onDismiss: () -> Unit) {
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     val colors = LocalAgentocColors.current
-    val instructionStyle = MaterialTheme.typography.bodyMedium.copy(
-        fontSize = 15.sp, lineHeight = 24.sp, lineBreak = LineBreak.Heading,
-    )
     var step by rememberSaveable { mutableIntStateOf(0) }
     var feedback by rememberSaveable { mutableStateOf<Int?>(null) }
-    val stepTitle = stringResource(when (step) {
-        0 -> R.string.journey_install_step
-        1 -> R.string.journey_code_step
-        else -> R.string.journey_scan_step
-    })
-    val progress = stringResource(R.string.journey_step_count, step + 1, 3)
-    AgentoDialog(
-        title = stepTitle,
+    val instructions = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 23.sp)
+    OnboardingSheet(
+        title = stringResource(if (step == 0) R.string.journey_install_step else R.string.journey_code_step),
         modifier = Modifier.testTag("computer-setup-guide"),
-        confirmLabel = stringResource(when (step) {
-            0 -> R.string.journey_installed
-            1 -> R.string.journey_code_ready
-            else -> R.string.pairing_setup_guide_scan
-        }),
+        progressLabel = "${step + 1} / 2",
+        bodyMinHeight = 332.dp,
+        confirmLabel = stringResource(if (step == 0) R.string.onboarding_opened else R.string.pairing_setup_guide_scan),
         confirmModifier = Modifier.testTag("computer-setup-next"),
-        dismissLabel = stringResource(if (step == 0) R.string.pairing_cancel else R.string.journey_previous),
-        onConfirm = { if (step == 2) onScan() else { step++; feedback = null } },
-        onDismiss = { if (step == 0) onDismiss() else { step--; feedback = null } },
-        onDismissRequest = { if (step == 0) onDismiss() else { step--; feedback = null } },
-        actionLayout = AgentoDialogActionLayout.PrimaryWithTextDismiss,
-        opaqueFallback = true,
-        textureAlpha = 0.2f,
+        dismissLabel = stringResource(R.string.journey_previous),
+        showDismiss = step > 0,
+        onConfirm = { if (step == 1) onScan() else { step = 1; feedback = null } },
+        onDismiss = { step = 0; feedback = null },
+        onDismissRequest = onDismiss,
+        onClose = onDismiss,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.width(72.dp).testTag("computer-setup-step")
-                    .semantics { contentDescription = progress; liveRegion = LiveRegionMode.Polite }) {
-                repeat(3) { index ->
-                    Box(Modifier.weight(1f).height(3.dp).background(
-                        if (index <= step) colors.accentPrimary else colors.subtleOutline, AgentoShapes.Pill))
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (step == 0) {
+                Text(stringResource(R.string.onboarding_install_hint), style = instructions, color = colors.primaryContent)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    AgentoWebIcon(AgentoWebGlyph.Monitor, null, Modifier.size(22.dp), colors.accentPrimary)
+                    Text("agentoncloud.com/download.html", style = MaterialTheme.typography.bodyMedium,
+                        color = colors.primaryContent, modifier = Modifier.weight(1f))
                 }
-            }
-            when (step) {
-                0 -> {
-                    Text(stringResource(if (feedback == R.string.journey_link_failed) R.string.journey_link_failed else R.string.journey_handoff_hint),
-                        style = instructionStyle, color = colors.secondaryContent,
-                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OnboardingTextAction(text = stringResource(R.string.journey_share_link),
-                            leadingIcon = AgentoWebGlyph.Share,
-                            onClick = {
-                            feedback = null
-                            runCatching {
-                                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(Intent.EXTRA_TEXT, COMPUTER_RELEASES_URL)
-                                }, context.getString(R.string.journey_share_link)))
-                            }.onFailure { feedback = R.string.journey_link_failed }
-                        })
-                        OnboardingTextAction(text = stringResource(if (feedback == R.string.journey_link_copied) R.string.journey_link_copied else R.string.pairing_setup_guide_copy),
-                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                            leadingIcon = AgentoWebGlyph.Copy,
-                            onClick = {
-                            clipboard.setText(AnnotatedString(COMPUTER_RELEASES_URL))
-                            feedback = R.string.journey_link_copied
-                        })
-                    }
-                }
-                1 -> Text(
-                    emphasizedMenuNames(stringResource(R.string.journey_account_instructions)),
-                    style = instructionStyle, color = colors.secondaryContent,
-                    modifier = Modifier.testTag("computer-setup-instructions"),
-                )
-                else -> Text(stringResource(R.string.journey_scan_hint), style = instructionStyle, color = colors.secondaryContent)
+                OnboardingTextAction(stringResource(R.string.onboarding_send_link), leadingIcon = AgentoWebGlyph.Share,
+                    onClick = {
+                        feedback = null
+                        runCatching {
+                            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, COMPUTER_RELEASES_URL)
+                            }, context.getString(R.string.onboarding_send_link)))
+                        }.onFailure { feedback = R.string.journey_link_failed }
+                    })
+                OnboardingTextAction(stringResource(if (feedback == R.string.journey_link_copied)
+                    R.string.journey_link_copied else R.string.pairing_setup_guide_copy), quiet = true,
+                    leadingIcon = AgentoWebGlyph.Copy, onClick = {
+                        clipboard.setText(AnnotatedString(COMPUTER_RELEASES_URL))
+                        feedback = R.string.journey_link_copied
+                    })
+                Text(stringResource(if (feedback == R.string.journey_link_failed) R.string.journey_link_failed
+                    else R.string.onboarding_no_desktop_login),
+                    style = instructions, color = colors.secondaryContent,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            } else {
+                Text(stringResource(R.string.onboarding_menu_path), style = instructions,
+                    color = colors.primaryContent, modifier = Modifier.testTag("computer-setup-instructions"))
+                PairingDesktopPreview()
+                Text(stringResource(R.string.onboarding_scan_handoff), style = instructions, color = colors.secondaryContent)
             }
         }
     }
 }
 
-/** Emphasize the existing localized menu labels without adding another visual layer. */
+/** Cropped desktop illustration, not interactive controls or a scannable code.
+ * Labels mirror static/chat/cross-device-panel.js and i18n.js.
+ */
 @Composable
-private fun emphasizedMenuNames(instructions: String): AnnotatedString {
+private fun PairingDesktopPreview() {
     val colors = LocalAgentocColors.current
-    return buildAnnotatedString {
-        append(instructions)
-        Regex("「[^」]+」|“[^”]+”|«[^»]+»").findAll(instructions).forEach {
-            addStyle(SpanStyle(color = colors.primaryContent, fontWeight = FontWeight.Medium),
-                it.range.first, it.range.last + 1)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.semantics(mergeDescendants = true) {}) {
+        Text(stringResource(R.string.onboarding_desktop_preview), style = MaterialTheme.typography.labelMedium,
+            color = colors.secondaryContent)
+        Surface(shape = RoundedCornerShape(16.dp), color = colors.canvas,
+            border = BorderStroke(1.dp, colors.subtleOutline)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AgentoWebIcon(AgentoWebGlyph.Monitor, null, Modifier.size(18.dp), colors.secondaryContent)
+                    Text(stringResource(R.string.journey_desktop_tab), style = MaterialTheme.typography.labelLarge,
+                        color = colors.primaryContent)
+                }
+                Text(stringResource(R.string.onboarding_desktop_formal), color = colors.accentPrimary,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium))
+                // A static replica of the desktop action, clearly contained in the illustration.
+                Text(stringResource(R.string.onboarding_create_code),
+                    modifier = Modifier.background(colors.actionPrimary, AgentoShapes.Pill)
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    color = colors.actionPrimaryContent, style = MaterialTheme.typography.labelLarge)
+            }
         }
     }
 }

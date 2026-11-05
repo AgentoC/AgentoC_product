@@ -1,32 +1,13 @@
 package com.andysagent.agentoc.feature.workbench
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Path
@@ -34,149 +15,74 @@ import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.andysagent.agentoc.core.designsystem.AgentoButton
-import com.andysagent.agentoc.core.designsystem.AgentoWebGlyph
-import com.andysagent.agentoc.core.designsystem.AgentoWebIcon
-import com.andysagent.agentoc.core.designsystem.LocalAgentocColors
+import com.andysagent.agentoc.core.designsystem.*
 
 @Composable
 fun GoogleSignInSuccessScreen(
     action: GoogleSignInSuccessAction,
     onAction: (GoogleSignInSuccessAction) -> Unit,
     modifier: Modifier = Modifier,
+    accountLabel: String? = null,
 ) {
     val colors = LocalAgentocColors.current
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(colors.canvas),
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        Box(
-            modifier = Modifier
-                .widthIn(max = 440.dp)
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
-                .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom))
-                .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal)),
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 24.dp, vertical = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                SuccessCheckMark()
-
-                Text(
-                    text = "Signed in",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontSize = 22.sp,
-                        lineHeight = 28.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                    color = colors.primaryContent,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 24.dp),
-                )
-
-                AgentoButton(
-                    text = when (action) {
-                        GoogleSignInSuccessAction.ConnectComputer -> "Connect a computer"
-                        GoogleSignInSuccessAction.OpenSignedInWelcome -> "Continue to connect a computer"
-                        GoogleSignInSuccessAction.EnterApp -> "Enter app"
-                    },
-                    onClick = { onAction(action) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 44.dp),
-                    decision = true,
-                    leadingIcon = if (action == GoogleSignInSuccessAction.OpenSignedInWelcome) {
-                        null
-                    } else {
-                        {
-                            AgentoWebIcon(
-                                glyph = when (action) {
-                                    GoogleSignInSuccessAction.ConnectComputer -> AgentoWebGlyph.MonitorPlus
-                                    GoogleSignInSuccessAction.EnterApp -> AgentoWebGlyph.Home
-                                    GoogleSignInSuccessAction.OpenSignedInWelcome -> error("Icon is not rendered for this action")
-                                },
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = colors.actionPrimaryContent,
-                            )
-                        }
-                    },
-                )
+    Box(modifier.fillMaxSize().background(colors.canvas), contentAlignment = Alignment.TopCenter) {
+        OnboardingPageContent(Modifier.widthIn(max = 440.dp).fillMaxSize().systemBarsPadding()
+            .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))) { compact ->
+            SuccessCheckMark()
+            Spacer(Modifier.height(24.dp))
+            Text(stringResource(R.string.onboarding_signed_in), color = colors.primaryContent,
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp, lineHeight = 36.sp,
+                    fontWeight = FontWeight.SemiBold, letterSpacing = (-0.4).sp),
+                textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
+            accountLabel?.takeIf { it.isNotBlank() }?.let {
+                Spacer(Modifier.height(10.dp))
+                Text(it, color = colors.secondaryContent, style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 280.dp))
             }
+            Spacer(Modifier.height(if (compact) 28.dp else 36.dp))
+            AgentoButton(
+                stringResource(if (action == GoogleSignInSuccessAction.EnterApp) R.string.onboarding_enter_workspace
+                    else R.string.journey_setup_computer),
+                { onAction(action) }, Modifier.widthIn(min = 200.dp, max = 280.dp).testTag("sign-in-success-action"),
+                decision = true, labelMaxLines = 3,
+                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
+                labelStyle = MaterialTheme.typography.labelLarge.copy(fontSize = 16.sp, lineHeight = 22.sp),
+            )
         }
     }
 }
 
 @Composable
-private fun SuccessCheckMark(modifier: Modifier = Modifier) {
+private fun SuccessCheckMark() {
     val colors = LocalAgentocColors.current
-    val ringProgress = remember { Animatable(0f) }
-    val checkProgress = remember { Animatable(0f) }
-
-    LaunchedEffect(Unit) {
-        ringProgress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 520, easing = FastOutSlowInEasing),
-        )
-        checkProgress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 360, easing = LinearOutSlowInEasing),
-        )
+    val motion = LocalMotionPolicy.current.preference
+    val progress = remember { Animatable(if (motion == MotionPreference.Full) 0f else 1f) }
+    val description = stringResource(R.string.onboarding_success_description)
+    LaunchedEffect(motion) {
+        if (motion == MotionPreference.Full) progress.animateTo(1f, tween(320)) else progress.snapTo(1f)
     }
-
-    Canvas(
-        modifier = modifier
-            .size(132.dp)
-            .semantics { contentDescription = "Signed in successfully" },
-    ) {
-        val strokeWidth = 6.dp.toPx()
-        val checkStrokeWidth = 6.5.dp.toPx()
-        val centerX = size.width / 2f
-        val centerY = size.height / 2f
-        val unit = size.minDimension / 132f
-
-        drawArc(
-            color = colors.success,
-            startAngle = -90f,
-            sweepAngle = -360f * ringProgress.value,
-            useCenter = false,
-            style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
-        )
-
-        val checkPath = Path().apply {
-            moveTo(centerX - 29f * unit, centerY + 1f * unit)
-            lineTo(centerX - 8f * unit, centerY + 22f * unit)
-            lineTo(centerX + 31f * unit, centerY - 23f * unit)
+    Canvas(Modifier.size(72.dp).semantics { contentDescription = description }) {
+        val inset = 3.dp.toPx()
+        drawCircle(colors.success.copy(alpha = 0.12f), radius = size.minDimension / 2)
+        val unit = size.minDimension / 72f
+        val path = Path().apply {
+            moveTo(20f * unit, 36f * unit)
+            lineTo(31f * unit, 47f * unit)
+            lineTo(52f * unit, 25f * unit)
         }
-        val measure = PathMeasure().apply { setPath(checkPath, false) }
-        val visibleCheck = Path()
-        measure.getSegment(
-            startDistance = 0f,
-            stopDistance = measure.length * checkProgress.value,
-            destination = visibleCheck,
-            startWithMoveTo = true,
-        )
-        drawPath(
-            path = visibleCheck,
-            color = colors.success,
-            style = Stroke(
-                width = checkStrokeWidth,
-                cap = StrokeCap.Round,
-                join = StrokeJoin.Round,
-            ),
-        )
+        val measure = PathMeasure().apply { setPath(path, false) }
+        val visible = Path()
+        measure.getSegment(0f, measure.length * progress.value, visible, true)
+        drawPath(visible, colors.success, style = Stroke(inset, cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }

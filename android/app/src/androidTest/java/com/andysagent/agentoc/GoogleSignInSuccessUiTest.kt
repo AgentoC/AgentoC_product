@@ -6,6 +6,9 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.test.platform.app.InstrumentationRegistry
+import com.andysagent.agentoc.feature.workbench.R as WorkbenchR
 import com.andysagent.agentoc.core.designsystem.AgentocTheme
 import com.andysagent.agentoc.feature.workbench.GoogleSignInSuccessAction
 import com.andysagent.agentoc.feature.workbench.GoogleSignInSuccessScreen
@@ -14,6 +17,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class GoogleSignInSuccessUiTest {
+    private fun text(id: Int) = InstrumentationRegistry.getInstrumentation().targetContext.getString(id)
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
@@ -29,9 +33,9 @@ class GoogleSignInSuccessUiTest {
             }
         }
 
-        composeRule.onNodeWithContentDescription("Signed in successfully").assertIsDisplayed()
-        composeRule.onNodeWithText("Signed in").assertIsDisplayed()
-        composeRule.onNodeWithText("Connect a computer").performClick()
+        composeRule.onNodeWithContentDescription(text(WorkbenchR.string.onboarding_success_description)).assertExists()
+        composeRule.onNodeWithText(text(WorkbenchR.string.onboarding_signed_in)).assertExists()
+        composeRule.onNodeWithText(text(WorkbenchR.string.journey_setup_computer)).performScrollTo().performClick()
         composeRule.runOnIdle { assertEquals(GoogleSignInSuccessAction.ConnectComputer, action) }
     }
 
@@ -43,11 +47,13 @@ class GoogleSignInSuccessUiTest {
                 GoogleSignInSuccessScreen(
                     action = GoogleSignInSuccessAction.EnterApp,
                     onAction = { action = it },
+                    accountLabel = "test@example.com",
                 )
             }
         }
 
-        composeRule.onNodeWithText("Enter app").performClick()
+        composeRule.onNodeWithText("test@example.com").assertExists()
+        composeRule.onNodeWithText(text(WorkbenchR.string.onboarding_enter_workspace)).performScrollTo().performClick()
         composeRule.runOnIdle { assertEquals(GoogleSignInSuccessAction.EnterApp, action) }
     }
 
@@ -64,7 +70,7 @@ class GoogleSignInSuccessUiTest {
         }
 
         composeRule.onNodeWithText("Continue").assertDoesNotExist()
-        composeRule.onNodeWithText("Continue to connect a computer").performClick()
+        composeRule.onNodeWithText(text(WorkbenchR.string.journey_setup_computer)).performScrollTo().performClick()
         composeRule.runOnIdle { assertEquals(GoogleSignInSuccessAction.OpenSignedInWelcome, action) }
     }
 }

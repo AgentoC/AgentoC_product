@@ -289,7 +289,10 @@ class PairingOnboardingUiTest {
         }
 
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("That QR code has expired.").assertIsDisplayed()
+        composeRule.onNodeWithText("That QR code has expired.").assertDoesNotExist()
+        composeRule.onNodeWithText(workbenchText(WorkbenchR.string.onboarding_generic_error_hint)).assertIsDisplayed()
+        composeRule.onNodeWithText(workbenchText(WorkbenchR.string.onboarding_details)).performScrollTo().performClick()
+        composeRule.onNodeWithText("That QR code has expired.").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText(retry).assertIsDisplayed()
     }
 
@@ -344,7 +347,7 @@ class PairingOnboardingUiTest {
         }
 
         composeRule.onNodeWithText("This Google account has reached the Free plan limit of 1 phone. Upgrade to Pro to link more devices.")
-            .assertIsDisplayed()
+            .assertDoesNotExist()
         composeRule.onNodeWithText(quotaHint).assertIsDisplayed()
         composeRule.onNodeWithText(viewPlans).performClick()
         assertTrue("The subscription action should open the introduction page", opened)
