@@ -1,6 +1,6 @@
 # Third-party notices
 
-AgentoC includes or uses third-party software and assets under their own
+Ragent includes or uses third-party software and assets under their own
 licenses. The following inventory covers identified vendored files; dependency
 and asset review is still in progress and this list is not yet complete.
 
@@ -24,7 +24,7 @@ and asset review is still in progress and this list is not yet complete.
 
 Other npm, Gradle, Android SDK, and runtime dependencies retain their respective
 licenses. Consult their distributed license files; they are not relicensed by
-the AgentoC project license.
+the Ragent project license.
 
 The Android client uses Google ML Kit barcode scanning and Google Play services.
 These dependencies are subject to their own terms, including the [ML Kit terms

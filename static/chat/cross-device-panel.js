@@ -647,7 +647,7 @@
     accountContent.appendChild(card);
     if (status?.capabilities?.accountJoin !== false) {
       body.appendChild(make("h3", "cross-device-card-title", fallback("crossDevice.claim.title", "Connect with your phone")));
-      body.appendChild(make("p", "cross-device-helper", fallback("crossDevice.claim.note", "In the AgentoC app, scan this code to connect this computer to your account.")));
+      body.appendChild(make("p", "cross-device-helper", fallback("crossDevice.claim.note", "In the Ragent app, scan this code to connect this computer to your account.")));
       const qr = make("div", "cross-device-pair-qr desktop-manager-claim-qr");
       qr.setAttribute("role", "img");
       qr.setAttribute("aria-label", fallback("crossDevice.pair.qrLabel", "Pairing QR code"));

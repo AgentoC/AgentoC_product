@@ -1,12 +1,12 @@
 # Source and release boundaries
 
-This repository is prepared from the AgentoC product source. The execution
+This repository is prepared from the Ragent product source. The execution
 host, Android client, web workbench, account service source, TURN credential
 broker source, and selected tests are included in the public tree. Deployment
 credentials, production data, private operational records, and historical design
 archives are excluded.
 
-The public risk benchmark contains the AgentoC-maintained boundary fixture only.
+The public risk benchmark contains the Ragent-maintained boundary fixture only.
 External datasets used in private evaluation are not distributed here, so its
 results are not comparable to the full private benchmark.
 

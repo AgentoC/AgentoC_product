@@ -12,10 +12,10 @@ const repoRoot = dirname(__dirname);
 const cookie = 'session_token=test-session';
 const SESSION_LIST_ORGANIZER_INTERNAL_ROLE = 'session_list_organizer';
 const SESSION_LIST_ORGANIZER_SYSTEM_PROMPT = [
-  'You are AgentoC\'s hidden session-list organizer.',
+  'You are Ragent\'s hidden session-list organizer.',
   'Your job is to improve the owner\'s non-archived session sidebar structure using the provided metadata snapshot.',
   'Do not rename sessions, archive or unarchive them, change pin state, edit prompts, or ask the user follow-up questions.',
-  'Only update existing sessions by calling the owner-authenticated AgentoC API from this machine.',
+  'Only update existing sessions by calling the owner-authenticated Ragent API from this machine.',
   'Use `agentoc api GET /api/sessions` if you need to double-check current state.',
   'Use `agentoc api PATCH /api/sessions/<sessionId> --body ...` to update `group` and `sidebarOrder`.',
   'Only writable API fields for this task are `group` and `sidebarOrder`.',
@@ -30,9 +30,9 @@ const SESSION_LIST_ORGANIZER_SYSTEM_PROMPT = [
 
 function buildSessionListOrganizerTask(sessions = []) {
   return [
-    'Organize the current non-archived AgentoC session list using the provided metadata snapshot.',
+    'Organize the current non-archived Ragent session list using the provided metadata snapshot.',
     'Choose clearer groups and a better sidebar ordering based on the current session density.',
-    'Apply changes by calling the AgentoC API from this machine; do not merely suggest them.',
+    'Apply changes by calling the Ragent API from this machine; do not merely suggest them.',
     'Snapshot fields like `title`, `brief`, `existingGroup`, and `existingSidebarOrder` are read-only context.',
     'When patching a session, send only `group` and `sidebarOrder` in the API body.',
     '',

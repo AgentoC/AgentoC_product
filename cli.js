@@ -59,7 +59,7 @@ function printHelp() {
   console.log(`agentoc v${pkg.version}
 
 Usage:
-  agentoc setup                    Configure the local AgentoC host
+  agentoc setup                    Configure the local Ragent host
   agentoc start                    Start all services
   agentoc stop                     Stop all services
   agentoc restart [service]        Restart services; Linux/macOS chat restart blocks active runs unless --force
@@ -69,12 +69,12 @@ Usage:
   agentoc upgrade-check             Check whether an upgrade can preserve active Runs
   agentoc upgrade-prepare           Enter upgrade drain after validating active Runs
   agentoc provision-host           Plan or execute whole-host provider provisioning
-  agentoc bootstrap-host           Converge a Linux host into a AgentoC host baseline
+  agentoc bootstrap-host           Converge a Linux host into a Ragent host baseline
   agentoc install-profile          Resolve modules from install env and render runtime plan
   agentoc validate-profile         Validate host + profile health and report degradation
   agentoc guest-instance           Create isolated guest instances on this machine
   agentoc chat                     Run chat server in foreground
-  agentoc api                      Call the local AgentoC HTTP API with owner auth
+  agentoc api                      Call the local Ragent HTTP API with owner auth
   agentoc mail                     Manage agent mailbox and send outbound email
   agentoc assistant-message        Append an assistant message with optional local-file attachments
   agentoc pair                     Create a trusted-device pairing QR and short code
@@ -277,7 +277,7 @@ switch (command) {
     break;
 
   case 'release': {
-    console.error('`agentoc release` has been removed. AgentoC now runs the current source tree after restart. Use `agentoc restart chat` for the owner surface.');
+    console.error('`agentoc release` has been removed. Ragent now runs the current source tree after restart. Use `agentoc restart chat` for the owner surface.');
     process.exit(1);
     break;
   }
@@ -475,7 +475,7 @@ Options:
   --required-guards <json> JSON array of typed guards
   --decided-by-session <id> Deciding session id
   --reason <text>          Cancellation reason
-  --base-url <url>         AgentoC base URL
+  --base-url <url>         Ragent base URL
   --json                   Print raw JSON response
   --help                   Show this help
 `);

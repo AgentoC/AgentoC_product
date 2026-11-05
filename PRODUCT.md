@@ -1,4 +1,4 @@
-# AgentoC Product Context Adapter
+# Ragent Product Context Adapter
 
 This file exists so design tooling can find a stable product-context entry point.
 It is not a second product specification.
@@ -11,7 +11,7 @@ Read these sources in order:
 4. `notes/current/user-feedback-log.md` for sanitized product evidence.
 5. `DESIGN.md` for the visual and interaction contract.
 
-For frontend work, treat AgentoC as an operational AI workbench for owner-operators
+For frontend work, treat Ragent as an operational AI workbench for owner-operators
 delegating real digital work from phone and desktop. It is not a marketing site,
 terminal emulator, editor-first IDE, or decorative chatbot. The positioning document
 is the source of truth for the user promise and non-goals.

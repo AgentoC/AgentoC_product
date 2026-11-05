@@ -9,7 +9,7 @@
     "image": "ubuntu-24-04-x64",
     "tags": ["agentoc", "owner"],
     "sshKeys": ["replace-with-digitalocean-ssh-key-fingerprint-or-id"],
-    "repoGitUrl": "https://github.com/AgentoC/AgentoC_product.git",
+    "repoGitUrl": "https://github.com/ragent-app/Ragent_product.git",
     "repoCheckoutPath": "/opt/agentoc",
     "sshUser": "root"
   },

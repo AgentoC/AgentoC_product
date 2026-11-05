@@ -1,6 +1,11 @@
 name: Build Windows setup executable
 on:
   workflow_dispatch:
+    inputs:
+      msi_product_version:
+        description: 'MSI product version newer than the latest published installer'
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
@@ -24,6 +29,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'WiX installation failed' }
           "$env:RUNNER_TEMP\wix" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Build MSI and setup executable
+        env:
+          MSI_PRODUCT_VERSION: ${{ inputs.msi_product_version }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -31,22 +38,23 @@ jobs:
           $out = Join-Path $env:RUNNER_TEMP 'agentoc-release'
           New-Item -ItemType Directory -Force $out | Out-Null
           $msi = Join-Path $out 'AgentoC-inner.msi'
-          # Keep the public version at 0.0.1 while advancing MSI's internal
-          # upgrade order beyond the already installed 0.0.15 package.
-          & "$source\packaging\windows\build-msi.ps1" -SourceRoot $source -OutputPath $msi -Version '0.0.1.0' -MsiProductVersion '0.0.16'
+          # The internal MSI version must advance for every replacement package.
+          $msiVersion = $env:MSI_PRODUCT_VERSION
+          if ($msiVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid MSI product version' }
+          & "$source\packaging\windows\build-msi.ps1" -SourceRoot $source -OutputPath $msi -Version '0.0.1.0' -MsiProductVersion $msiVersion
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $msi)) { throw 'MSI build failed' }
           $brand = Join-Path $env:TEMP ('brand-' + [guid]::NewGuid().ToString('N'))
           & "$source\packaging\windows\generate-brand-assets.ps1" -SourceRoot $source -OutputDirectory $brand
-          $exe = Join-Path $out 'AgentoC-0.0.1-windows-x64-setup.exe'
+          $exe = Join-Path $out 'Ragent-0.0.1-windows-x64-setup.exe'
           & "$source\packaging\windows\build-setup-exe.ps1" -MsiPath $msi -IconPath (Join-Path $brand 'agentoc.ico') -OutputPath $exe
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $exe)) { throw 'EXE build failed' }
           $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
-          [IO.File]::WriteAllText((Join-Path $out 'SHA256SUMS.txt'), "$hash  AgentoC-0.0.1-windows-x64-setup.exe`n", [Text.Encoding]::ASCII)
+          [IO.File]::WriteAllText((Join-Path $out 'SHA256SUMS.txt'), "$hash  Ragent-0.0.1-windows-x64-setup.exe`n", [Text.Encoding]::ASCII)
       - uses: actions/upload-artifact@v4
         with:
           name: agentoc-windows-setup
           path: |
-            ${{ runner.temp }}/agentoc-release/AgentoC-0.0.1-windows-x64-setup.exe
+            ${{ runner.temp }}/agentoc-release/Ragent-0.0.1-windows-x64-setup.exe
             ${{ runner.temp }}/agentoc-release/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7

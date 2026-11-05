@@ -3,7 +3,7 @@
 > Service ownership, security boundaries, and deployment instructions still
 > require release verification.
 
-AgentoC consists of an execution host and client interfaces. The host manages
+Ragent consists of an execution host and client interfaces. The host manages
 sessions and integrates agent runtimes; clients render work and send requests.
 Account, signaling, and relay services support remote connectivity in applicable
 deployments. Their public-source and self-hosting boundaries are still being
@@ -12,7 +12,7 @@ established.
 ```mermaid
 flowchart LR
   Android[Android app] --> Connectivity[Connectivity and pairing]
-  Web[Web UI] --> Host[AgentoC host]
+  Web[Web UI] --> Host[Ragent host]
   Connectivity --> Host
   Host --> Session[Session and execution management]
   Session --> Harness[Harness and provider integrations]

@@ -40,7 +40,7 @@ await rcedit(brandedExe, {
   'file-version': version,
   'product-version': version,
   'version-string': {
-    CompanyName: 'AgentoC',
+    CompanyName: 'Ragent',
     FileDescription: 'Ragent Desktop Manager',
     InternalName: 'AgentoC',
     OriginalFilename: 'AgentoC.exe',

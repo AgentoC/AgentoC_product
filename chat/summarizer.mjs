@@ -987,7 +987,7 @@ async function runSessionLabelSuggestion(sessionMeta, onRename, options = {}) {
     '',
     'Write a JSON object with exactly these fields:',
     shouldGenerateTitle ? '- "title": 2-5 words — a short descriptive session title (for example: "Fix auth bug", "Refactor naming flow").' : '',
-    shouldGenerateGrouping ? '- "group": 1-3 words — a stable display group for similar work (for example: "AgentoC", "Video tooling", "Hiring"). Not a path.' : '',
+    shouldGenerateGrouping ? '- "group": 1-3 words — a stable display group for similar work (for example: "Ragent", "Video tooling", "Hiring"). Not a path.' : '',
     shouldGenerateGrouping ? '- "description": One sentence — a compact hidden description of the work, useful for future regrouping.' : '',
     '',
     'Respond with ONLY valid JSON. No markdown, no explanation.',

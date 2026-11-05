@@ -1,5 +1,5 @@
 [Unit]
-Description=AgentoC embedded mailbox worker
+Description=Ragent embedded mailbox worker
 After=network-online.target agentoc.service agentoc-agent-mail-http-bridge.service
 Wants=network-online.target
 

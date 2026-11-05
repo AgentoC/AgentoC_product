@@ -10,7 +10,6 @@ across devices while the execution host remains under the user's control.
 > supported deployment configurations are still being verified.
 
 Windows x64 early-access packages are available from [GitHub Releases](https://github.com/ragent-app/Ragent_product/releases/latest).
-The current v0.0.1 package predates the rename and still displays AgentoC.
 The installer is unsigned and Windows may display a warning. Review the release
 notes for the package's exact source commit, validation results, and upgrade limitations before installing.
 
@@ -113,7 +112,7 @@ commit it or share it. For example, with `keytool`:
 ```sh
 keytool -genkeypair -keystore /path/to/contributor-debug.keystore \
   -storetype JKS -storepass android -keypass android -alias androiddebugkey \
-  -dname 'CN=AgentoC contributor debug' -keyalg RSA -keysize 2048 -validity 3650
+  -dname 'CN=Ragent contributor debug' -keyalg RSA -keysize 2048 -validity 3650
 ```
 
 Then, from `android/`, run the Gradle wrapper (on Windows use `gradlew.bat`):

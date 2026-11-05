@@ -19,7 +19,7 @@ It complements:
 
 ## 1. Frontend thesis
 
-AgentoC should not be a “thin frontend” in the simplistic sense.
+Ragent should not be a “thin frontend” in the simplistic sense.
 
 The better target is:
 

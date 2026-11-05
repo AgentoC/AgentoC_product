@@ -97,9 +97,9 @@
       sessions: Array.isArray(sessions) ? sessions : [],
     };
     return [
-      "Organize the current non-archived AgentoC session list using the provided metadata snapshot.",
+      "Organize the current non-archived Ragent session list using the provided metadata snapshot.",
       "Choose clearer groups and a better sidebar ordering based on the current session density.",
-      "Apply changes by calling the AgentoC API from this machine; do not merely suggest them.",
+      "Apply changes by calling the Ragent API from this machine; do not merely suggest them.",
       "Snapshot fields like `title`, `brief`, `existingGroup`, and `existingSidebarOrder` are read-only context.",
       "When patching a session, send only `group` and `sidebarOrder` in the API body.",
       "",

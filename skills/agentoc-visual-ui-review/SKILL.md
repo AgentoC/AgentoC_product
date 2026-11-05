@@ -1,9 +1,9 @@
 ---
 name: agentoc-visual-ui-review
-description: Review and improve AgentoC frontend surfaces through synthetic Playwright screenshots, project-specific visual rules, focused browser checks, and bounded fix-and-confirm passes. Use for changes to static/chat CSS or JavaScript, mobile layout, composer, messages, sidebar, Run Sheet, Workbench, readers, menus, sheets, icons, glass surfaces, responsive behavior, or any request to polish, critique, audit, harden, or visually verify AgentoC UI.
+description: Review and improve Ragent frontend surfaces through synthetic Playwright screenshots, project-specific visual rules, focused browser checks, and bounded fix-and-confirm passes. Use for changes to static/chat CSS or JavaScript, mobile layout, composer, messages, sidebar, Run Sheet, Workbench, readers, menus, sheets, icons, glass surfaces, responsive behavior, or any request to polish, critique, audit, harden, or visually verify Ragent UI.
 ---
 
-# AgentoC Visual UI Review
+# Ragent Visual UI Review
 
 Use this workflow to turn frontend review into evidence and implementation, not a prose-only critique.
 

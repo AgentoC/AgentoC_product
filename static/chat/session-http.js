@@ -454,15 +454,15 @@ let sessionListOrganizerInFlight = null;
 let sessionListOrganizerLabelResetTimer = null;
 
 const SESSION_LIST_ORGANIZER_SYSTEM_PROMPT = [
-  "You are AgentoC's hidden session-list organizer.",
+  "You are Ragent's hidden session-list organizer.",
   "Your job is to improve the owner's non-archived session sidebar structure using the provided metadata snapshot.",
   "Do not rename sessions, archive or unarchive them, change pin state, edit prompts, or ask the user follow-up questions.",
-  "Only update existing sessions by calling the owner-authenticated AgentoC API from this machine.",
+  "Only update existing sessions by calling the owner-authenticated Ragent API from this machine.",
   "Use `agentoc api GET /api/sessions` if you need to double-check current state.",
   "Use `agentoc api PATCH /api/sessions/<sessionId> --body ...` to update `group` and `sidebarOrder`.",
   "Only writable API fields for this task are `group` and `sidebarOrder`.",
   "Never send read-only snapshot keys such as `title`, `brief`, `existingGroup`, `existingSidebarOrder`, `currentGroup`, or `currentSidebarOrder` in PATCH bodies.",
-  "Example PATCH body: {\"group\":\"AgentoC\",\"sidebarOrder\":3}",
+  "Example PATCH body: {\"group\":\"Ragent\",\"sidebarOrder\":3}",
   "If `agentoc` is unavailable in PATH, use `node \"$AGENTOC_PROJECT_ROOT/cli.js\" api ...` instead.",
   "`sidebarOrder` must be a positive integer; smaller numbers sort first.",
   "Assign unique contiguous `sidebarOrder` values across the current non-archived sessions you organize.",
@@ -544,9 +544,9 @@ function buildSessionListOrganizerTask(sessions) {
     sessions: Array.isArray(sessions) ? sessions : [],
   };
   return [
-    "Organize the current non-archived AgentoC session list using the provided metadata snapshot.",
+    "Organize the current non-archived Ragent session list using the provided metadata snapshot.",
     "Choose clearer groups and a better sidebar ordering based on the current session density.",
-    "Apply changes by calling the AgentoC API from this machine; do not merely suggest them.",
+    "Apply changes by calling the Ragent API from this machine; do not merely suggest them.",
     "Snapshot fields like `title`, `brief`, `existingGroup`, and `existingSidebarOrder` are read-only context.",
     "When patching a session, send only `group` and `sidebarOrder` in the API body.",
     "",

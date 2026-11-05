@@ -146,9 +146,9 @@ function readConfig(environment = process.env) {
 }
 
 function assertConfig(config) {
-  if (!config.enabled) throw new Error('AgentoC browser capability is unavailable for this runtime');
+  if (!config.enabled) throw new Error('Ragent browser capability is unavailable for this runtime');
   if (!config.token || !config.sessionId || !config.runId || !config.turnId) {
-    throw new Error('AgentoC browser capability is not bound to an active Run');
+    throw new Error('Ragent browser capability is not bound to an active Run');
   }
 }
 

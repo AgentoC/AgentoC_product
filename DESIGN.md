@@ -1,5 +1,5 @@
 ---
-name: AgentoC
+name: Ragent
 description: Quiet, state-first Material 3 operational workbench for directing real AI work.
 colors:
   primary: "#000000"
@@ -87,15 +87,15 @@ components:
     rounded: "{rounded.sheet}"
 ---
 
-# Design System: AgentoC
+# Design System: Ragent
 
 ## Overview
 
 **Creative North Star: "The calm control desk."**
 
-AgentoC is a user-facing control surface for real AI work. It helps a person understand what is happening, decide when a decision is needed, and recover safely when something changes. The interface must therefore feel calm and legible under repeated use; it is not a terminal, a dashboard of ornamental cards, or a visual imitation of an Android app.
+Ragent is a user-facing control surface for real AI work. It helps a person understand what is happening, decide when a decision is needed, and recover safely when something changes. The interface must therefore feel calm and legible under repeated use; it is not a terminal, a dashboard of ornamental cards, or a visual imitation of an Android app.
 
-Material 3 is the system behind that outcome, not a paint treatment. In AgentoC it means: semantic roles instead of local colors, shape as a signal of interaction and containment, tonal surfaces instead of decorative borders, visible state layers, and equal keyboard/touch access. Material's own guidance treats states as distinct interaction feedback and canonical layouts as adaptive scaffolds; this contract adapts those principles to a conversation-first operational workbench rather than copying a platform component library verbatim. [Material 3 states](https://m3.material.io/foundations/interaction/states/overview) and [canonical layouts](https://m3.material.io/foundations/layout/canonical-examples/overview) are useful external references.
+Material 3 is the system behind that outcome, not a paint treatment. In Ragent it means: semantic roles instead of local colors, shape as a signal of interaction and containment, tonal surfaces instead of decorative borders, visible state layers, and equal keyboard/touch access. Material's own guidance treats states as distinct interaction feedback and canonical layouts as adaptive scaffolds; this contract adapts those principles to a conversation-first operational workbench rather than copying a platform component library verbatim. [Material 3 states](https://m3.material.io/foundations/interaction/states/overview) and [canonical layouts](https://m3.material.io/foundations/layout/canonical-examples/overview) are useful external references.
 
 **Key Characteristics:**
 
@@ -123,7 +123,7 @@ The normative implementation sources are `static/chat/chat-m3-tokens.css` (roles
 
 ## Colors
 
-AgentoC uses a restrained neutral foundation with Material role pairs. The light canvas is pure white; containers are cool neutral steps; dark themes use the corresponding deep-neutral steps. The default light values in the frontmatter are an inspection aid, not a second source of truth: explicit theme values live in the M3 token file.
+Ragent uses a restrained neutral foundation with Material role pairs. The light canvas is pure white; containers are cool neutral steps; dark themes use the corresponding deep-neutral steps. The default light values in the frontmatter are an inspection aid, not a second source of truth: explicit theme values live in the M3 token file.
 
 ### Role assignment
 

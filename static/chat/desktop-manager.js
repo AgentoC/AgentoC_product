@@ -28,7 +28,7 @@
     "accountPolicyPanel",
   ].map((id) => doc.getElementById(id)).filter(Boolean);
   const pageCopy = {
-    about: ["desktopManager.page.about.title", "desktopManager.page.about.description", "About", "Version information and updates for AgentoC."],
+    about: ["desktopManager.page.about.title", "desktopManager.page.about.description", "About", "Version information and updates for Ragent."],
     account: [
       "desktopManager.page.account.title",
       "desktopManager.page.account.description",

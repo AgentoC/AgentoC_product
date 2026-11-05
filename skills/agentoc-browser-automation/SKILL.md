@@ -1,7 +1,7 @@
-# AgentoC Browser Automation
+# Ragent Browser Automation
 
 Use the `agentoc-browser` MCP server for browser work. The Skill is guidance;
-the MCP server owns the browser context and AgentoC owns the run, approval,
+the MCP server owns the browser context and Ragent owns the run, approval,
 artifact, and recovery boundaries.
 
 ## Operating rules
@@ -15,13 +15,13 @@ artifact, and recovery boundaries.
   expired confirmation.
 - Treat login, MFA, CAPTCHA, payment, delete, submit, send, publish, export,
   and account-setting controls as high consequence actions. Explain the
-  intended effect in the task response and wait for the AgentoC confirmation.
+  intended effect in the task response and wait for the Ragent confirmation.
 - Never put passwords, cookies, tokens, page source, or hidden form values in a
   request description, event, log, or result summary. A filled value is sent
   only to the browser page after approval and is omitted from approval text.
 - Prefer a screenshot for visual evidence and a download artifact for exported
   files. Return the artifact identity, path, size, and digest from the MCP
-  result so AgentoC can publish it through the normal Run result flow.
+  result so Ragent can publish it through the normal Run result flow.
 - After navigation, a download, or a failed action, take a fresh snapshot and
   verify the page state before retrying. Retrying an approved action requires
   the same exact selector and operation; a changed target requires a new
@@ -31,7 +31,7 @@ artifact, and recovery boundaries.
 
 ## Recovery contract
 
-The browser profile is bound to the AgentoC Session, while the token is bound to
+The browser profile is bound to the Ragent Session, while the token is bound to
 the current Run and turn. A resumed Run can reuse browser state only after the
 server bootstrap creates a new valid binding. The browser MCP must fail closed
 when the binding is missing, stale, or mismatched.

@@ -24,7 +24,7 @@ class CallerConsentSourceActivity : Activity() {
             orientation = LinearLayout.VERTICAL; fitsSystemWindows = true
             addView(status)
             addView(Button(this@CallerConsentSourceActivity).apply {
-                text = "Request AgentoC access"
+                text = "Request Ragent access"
                 setOnClickListener {
                     // Valid requests use the real SDK contract; malformed probes still reach the production validator.
                     val request = runCatching {
