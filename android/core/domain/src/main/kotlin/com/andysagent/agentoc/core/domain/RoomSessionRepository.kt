@@ -2975,6 +2975,14 @@ private fun ApprovalEntity.toDomainApproval(): Approval {
         filePaths = details?.get("filePaths")?.jsonArray.orEmpty().mapNotNull { it.jsonPrimitive.contentOrNull },
         grantRoot = details?.get("grantRoot")?.jsonPrimitive?.contentOrNull,
         permissionsJson = details?.get("permissions")?.toString(),
+        defaultSelectedByCategory = buildMap {
+            val defaults = details?.get("defaultSelected") as? JsonObject
+            fun selected(vararg keys: String): Set<String>? = keys.firstNotNullOfOrNull { key ->
+                (defaults?.get(key) as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }?.toSet()
+            }
+            selected("other", "privileged_other")?.let { put("privileged_other", it) }
+            selected("delete", "destructive_delete")?.let { put("destructive_delete", it) }
+        },
     )
 }
 
@@ -2995,6 +3003,7 @@ private fun buildApprovalDetails(event: SessionEventDto): String? {
         if (event.filePaths.isNotEmpty()) put("filePaths", buildJsonArray { event.filePaths.forEach { add(JsonPrimitive(it)) } })
         event.grantRoot?.let { put("grantRoot", JsonPrimitive(it)) }
         event.permissions?.let { put("permissions", it) }
+        event.defaultSelected?.let { put("defaultSelected", it) }
         if (event.other.isNotEmpty()) put("other", buildJsonArray { event.other.forEach(::add) })
         if (event.delete.isNotEmpty()) put("delete", buildJsonArray { event.delete.forEach(::add) })
         if (event.installAuto.isNotEmpty()) put("installAuto", buildJsonArray { event.installAuto.forEach(::add) })

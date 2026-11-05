@@ -3280,7 +3280,8 @@ private fun Approval.toUiState(): PermissionRequestUiState = PermissionRequestUi
             risk = action.risk,
             needsPasskey = action.needsPasskey,
             selected = action.state in selectableApprovalActionStates
-                && action.category != "destructive_delete",
+                && (action.category?.let { defaultSelectedByCategory[it] }?.contains(action.id)
+                    ?: (action.category != "destructive_delete")),
         )
     },
 )

@@ -331,6 +331,7 @@ data class Approval(
     val filePaths: List<String> = emptyList(),
     val grantRoot: String? = null,
     val permissionsJson: String? = null,
+    val defaultSelectedByCategory: Map<String, Set<String>> = emptyMap(),
 )
 
 data class RunActivity(

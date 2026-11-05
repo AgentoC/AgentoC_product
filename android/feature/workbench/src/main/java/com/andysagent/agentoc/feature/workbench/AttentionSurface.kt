@@ -286,7 +286,9 @@ private fun AttentionCard(
     var selectedActionIds by remember(item.id) {
         mutableStateOf(item.approval?.actions.orEmpty()
             .filter { it.state in setOf("proposed", "classified", "waiting_user") }
-            .filter { !isPrivilegedCategoryBatch || it.category == "privileged_other" }
+            .filter { action -> !isPrivilegedCategoryBatch ||
+                (action.category?.let { item.approval?.defaultSelectedByCategory?.get(it) }?.contains(action.id)
+                    ?: (action.category == "privileged_other")) }
             .map { it.id }.toSet())
     }
     val kindLabel = when {

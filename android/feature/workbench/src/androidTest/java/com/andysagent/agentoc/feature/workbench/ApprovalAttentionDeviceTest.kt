@@ -139,4 +139,21 @@ class ApprovalAttentionDeviceTest {
                 AttentionEvent.ResolvePrivilegedCategory(id, "destructive_delete", emptySet())), events)
         }
     }
+
+    @Test fun privilegedCategoriesHonorServerDefaultSelection() {
+        val approval = Approval(id = "b", sessionId = "s", runId = "r", batchId = "b", title = "Batch",
+            kind = "privileged_batch_request", passkeyRequired = true, actions = listOf(
+                ApprovalAction(id = "o", description = "Restart", category = "privileged_other"),
+                ApprovalAction(id = "d", description = "Delete", category = "destructive_delete"),
+            ), defaultSelectedByCategory = mapOf("privileged_other" to emptySet(), "destructive_delete" to setOf("d")))
+        val state = AttentionReducer.reduce(AttentionUiState(), AttentionReducer.project(listOf(Session("s", "Other session")), listOf(approval))).copy(expanded = true)
+        val events = mutableListOf<AttentionEvent>()
+        rule.setContent { AgentocTheme { AttentionSurface(state, events::add, onOpenSession = {}) } }
+        val approve = rule.onAllNodesWithText(rule.activity.getString(R.string.attention_approve_selected))
+        approve[0].assertIsNotEnabled()
+        approve[1].assertIsEnabled().performClick()
+        rule.runOnIdle {
+            assertEquals(listOf(AttentionEvent.ResolvePrivilegedCategory(requireNotNull(state.activeItemId), "destructive_delete", setOf("d"))), events)
+        }
+    }
 }

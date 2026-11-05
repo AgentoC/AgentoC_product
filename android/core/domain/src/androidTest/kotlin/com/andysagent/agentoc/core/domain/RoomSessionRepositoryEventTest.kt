@@ -41,12 +41,14 @@ import org.junit.Assert.assertTrue
 class RoomSessionRepositoryEventTest {
     @Test fun categoryResponseWithoutDecisionDoesNotInventARejection() = runBlocking {
         val repository = RoomSessionRepository(database, QueuedTransport(listOf(
-            """{"sessionId":"session-1","events":[{"seq":1,"type":"privileged_batch_request","batchId":"b","runId":"r","other":[{"opId":"o","description":"Restart"}],"delete":[{"opId":"d","description":"Remove"}]}],"latestSeq":1}""",
+            """{"sessionId":"session-1","events":[{"seq":1,"type":"privileged_batch_request","batchId":"b","runId":"r","other":[{"opId":"o","description":"Restart"}],"delete":[{"opId":"d","description":"Remove"}],"defaultSelected":{"other":[],"delete":["d"]}}],"latestSeq":1}""",
             """{"sessionId":"session-1","events":[{"seq":2,"type":"privileged_batch_response","batchId":"b","category":"other"}],"latestSeq":2}""",
         )))
         repository.refreshEvents("session-1")
         repository.refreshEvents("session-1")
         val pending = repository.observePendingApprovals("session-1").first().single()
+        assertEquals(emptySet<String>(), pending.defaultSelectedByCategory["privileged_other"])
+        assertEquals(setOf("d"), pending.defaultSelectedByCategory["destructive_delete"])
         assertEquals("resolved", pending.actions.single { it.id == "o" }.state)
         assertEquals("waiting_user", pending.actions.single { it.id == "d" }.state)
         repository.close()
