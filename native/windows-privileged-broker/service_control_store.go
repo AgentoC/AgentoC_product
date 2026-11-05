@@ -74,6 +74,9 @@ func (s *brokerStore) ProposeServiceControl(grant serviceControlGrant, signature
 			result, duplicate = old, true
 			return nil
 		}
+		if msiRequestIDExists(state, grant.RequestID) {
+			return errRequestConflict
+		}
 		for _, old := range state.ServiceControls {
 			if old.Grant.RequestID == grant.RequestID {
 				return errRequestConflict
@@ -202,6 +205,9 @@ func (s *brokerStore) ClaimServiceControl(grant serviceControlGrant, signature s
 			old.Status, old.Code, old.UpdatedAt = statusExecuting, "EXECUTION_STARTED", now.UTC()
 			state.ServiceControls[grant.Nonce], result = old, old
 			return s.appendAudit(state, "service_control.executing", grant.RequestID, result.Code, digest)
+		}
+		if msiRequestIDExists(state, grant.RequestID) {
+			return errRequestConflict
 		}
 		for _, old := range state.ServiceControls {
 			if old.Grant.RequestID == grant.RequestID {

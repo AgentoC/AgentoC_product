@@ -45,6 +45,9 @@ func (s *brokerStore) ClaimOwnerInstall(grant ownerInstallGrant, signature strin
 			result, duplicate = old, true
 			return nil
 		}
+		if msiRequestIDExists(state, grant.RequestID) {
+			return errRequestConflict
+		}
 		for _, old := range state.OwnerInstalls {
 			if old.Grant.RequestID == grant.RequestID {
 				return errRequestConflict

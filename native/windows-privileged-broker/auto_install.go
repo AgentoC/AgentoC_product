@@ -210,6 +210,9 @@ func (s *brokerStore) ClaimAutoInstall(grant autoInstallGrant, signature string,
 			result, duplicate = existing, true
 			return nil
 		}
+		if msiRequestIDExists(state, grant.RequestID) {
+			return errRequestConflict
+		}
 		for _, existing := range state.AutoInstalls {
 			if existing.Grant.RequestID == grant.RequestID {
 				return errRequestConflict
