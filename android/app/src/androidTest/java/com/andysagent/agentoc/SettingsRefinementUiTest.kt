@@ -40,7 +40,7 @@ class SettingsRefinementUiTest {
                 return AccountPermissionPolicy(permissionPolicy = permissionPolicy)
             }
         })
-        vm.onEvent(AccountsEvent.AccountSessionEstablished(GoogleAccountProfile(displayName = "AgentoC 用户", email = "hello@example.test")))
+        vm.onEvent(AccountsEvent.AccountSessionEstablished(GoogleAccountProfile(displayName = "Ragent 用户", email = "hello@example.test")))
         vm.onEvent(AccountsEvent.ConnectionChanged(RuntimeConnectionState.Connected, targetSelected = true))
         return vm
     }

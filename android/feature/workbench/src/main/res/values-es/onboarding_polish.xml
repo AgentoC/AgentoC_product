@@ -3,8 +3,8 @@
     <string name="onboarding_success_description">Sesión iniciada correctamente</string>
     <string name="onboarding_enter_workspace">Abrir espacio de trabajo</string>
     <string name="onboarding_close_guide">Cerrar guía</string>
-    <string name="onboarding_opened">AgentoC está abierto</string>
-    <string name="onboarding_install_hint">Instala y abre AgentoC para Windows en el ordenador.</string>
+    <string name="onboarding_opened">Ragent está abierto</string>
+    <string name="onboarding_install_hint">Instala y abre Ragent para Windows en el ordenador.</string>
     <string name="onboarding_send_link">Enviar al ordenador</string>
     <string name="onboarding_no_desktop_login">No hace falta iniciar sesión antes en el ordenador.</string>
     <string name="onboarding_menu_path">En el ordenador, abre «Vincular teléfono» y pulsa «Iniciar vinculación».</string>
@@ -12,7 +12,7 @@
     <string name="onboarding_desktop_formal">Vinculación de confianza · Google</string>
     <string name="onboarding_create_code">Crear código de vinculación</string>
     <string name="onboarding_scan_handoff">Elige la vinculación de confianza y crea un código. Escanéalo para iniciar sesión en el ordenador con tu cuenta del teléfono.</string>
-    <string name="onboarding_connect_summary">Abre AgentoC en el ordenador y escanea su código con el teléfono.</string>
+    <string name="onboarding_connect_summary">Abre Ragent en el ordenador y escanea su código con el teléfono.</string>
     <string name="onboarding_lookup_failed_hint">Comprueba la conexión y reinténtalo. No se pudo confirmar la lista de ordenadores.</string>
     <string name="onboarding_connected_named">Conectado a %1$s</string>
     <string name="onboarding_connecting_named">Conectando con %1$s</string>
@@ -21,7 +21,7 @@
     <string name="onboarding_begin">Empezar</string>
     <string name="onboarding_details">Detalles técnicos</string>
     <string name="onboarding_hide_details">Ocultar detalles</string>
-    <string name="onboarding_generic_error_hint">Comprueba que AgentoC esté abierto y que ambos dispositivos tengan conexión.</string>
+    <string name="onboarding_generic_error_hint">Comprueba que Ragent esté abierto y que ambos dispositivos tengan conexión.</string>
     <string name="onboarding_temporary_path">En el ordenador, abre «Vincular teléfono» → «Iniciar vinculación», elige la vinculación temporal y crea un código.</string>
     <string name="onboarding_temporary_permissions">Tras confirmar en el ordenador, podrás gestionar proyectos, sesiones y ajustes del agente.</string>
     <string name="onboarding_temporary_expiry">El acceso caduca 10 minutos después de confirmar en el ordenador. No hace falta iniciar sesión en ningún dispositivo.</string>

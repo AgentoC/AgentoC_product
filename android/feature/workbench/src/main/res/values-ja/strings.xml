@@ -79,7 +79,7 @@
     <string name="settings_phone">スマートフォン</string>
     <string name="settings_app_security">アプリのセキュリティ</string>
     <string name="settings_protected">保護されています</string>
-    <string name="settings_version">AgentoC について</string>
+    <string name="settings_version">Ragent について</string>
     <string name="settings_computer_label">コンピューター: %1$s</string>
     <string name="settings_model_providers">モデルプロバイダー</string>
     <string name="settings_connectors_mcp">アプリとツールの接続</string>

@@ -1,6 +1,6 @@
 <resources>
     <string name="api_routing_title">Partage et assistants</string>
-    <string name="api_routing_description">Les partages des autres applications sont envoyés à cet ordinateur par défaut, indépendamment de celui ouvert dans AgentoC.</string>
+    <string name="api_routing_description">Les partages des autres applications sont envoyés à cet ordinateur par défaut, indépendamment de celui ouvert dans Ragent.</string>
     <string name="api_close">Fermer</string>
     <string name="api_loading">Chargement…</string>
     <string name="api_saving">Enregistrement…</string>

@@ -79,7 +79,7 @@
     <string name="settings_phone">Teléfono</string>
     <string name="settings_app_security">Seguridad de la aplicación</string>
     <string name="settings_protected">Protegido</string>
-    <string name="settings_version">Acerca de AgentoC</string>
+    <string name="settings_version">Acerca de Ragent</string>
     <string name="settings_computer_label">Ordenador: %1$s</string>
     <string name="settings_model_providers">Proveedores de modelos</string>
     <string name="settings_connectors_mcp">Conexiones de aplicaciones y herramientas</string>

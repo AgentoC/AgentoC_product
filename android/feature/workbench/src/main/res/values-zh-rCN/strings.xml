@@ -95,7 +95,7 @@
     <string name="settings_phone">手机</string>
     <string name="settings_app_security">应用安全</string>
     <string name="settings_protected">已保护</string>
-    <string name="settings_version">关于 AgentoC</string>
+    <string name="settings_version">关于 Ragent</string>
     <string name="settings_computer_label">电脑：%1$s</string>
     <string name="settings_model_providers">模型提供商</string>
     <string name="settings_harnesses">AI 运行工具</string>

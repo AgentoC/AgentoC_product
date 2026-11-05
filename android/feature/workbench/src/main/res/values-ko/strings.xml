@@ -79,7 +79,7 @@
     <string name="settings_phone">휴대전화</string>
     <string name="settings_app_security">앱 보안</string>
     <string name="settings_protected">보호됨</string>
-    <string name="settings_version">AgentoC 정보</string>
+    <string name="settings_version">Ragent 정보</string>
     <string name="settings_computer_label">컴퓨터: %1$s</string>
     <string name="settings_model_providers">모델 제공업체</string>
     <string name="settings_connectors_mcp">앱 및 도구 연결</string>

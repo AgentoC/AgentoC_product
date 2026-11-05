@@ -5061,7 +5061,7 @@ private fun BrokerPhoneEnrollmentDialog(
                                     as android.content.ClipboardManager
                                 clipboard.setPrimaryClip(
                                     android.content.ClipData.newPlainText(
-                                        "AgentoC Broker device public key",
+                                        "Ragent Broker device public key",
                                         value.publicKeyBase64,
                                     ),
                                 )

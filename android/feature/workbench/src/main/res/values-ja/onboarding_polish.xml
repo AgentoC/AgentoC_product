@@ -3,8 +3,8 @@
     <string name="onboarding_success_description">ログインしました</string>
     <string name="onboarding_enter_workspace">ワークスペースへ</string>
     <string name="onboarding_close_guide">ガイドを閉じる</string>
-    <string name="onboarding_opened">AgentoC を開きました</string>
-    <string name="onboarding_install_hint">パソコンに Windows 版 AgentoC をインストールして開きます。</string>
+    <string name="onboarding_opened">Ragent を開きました</string>
+    <string name="onboarding_install_hint">パソコンに Windows 版 Ragent をインストールして開きます。</string>
     <string name="onboarding_send_link">パソコンに送る</string>
     <string name="onboarding_no_desktop_login">パソコンで先にログインする必要はありません。</string>
     <string name="onboarding_menu_path">パソコンで「スマートフォンのペアリング」を開き、「ペアリングを開始」を押します。</string>
@@ -12,7 +12,7 @@
     <string name="onboarding_desktop_formal">正式なペアリング · Google ログイン</string>
     <string name="onboarding_create_code">ペアリングコードを作成</string>
     <string name="onboarding_scan_handoff">正式なペアリングでコードを作成し、スマートフォンで読み取ってパソコンにログインします。</string>
-    <string name="onboarding_connect_summary">パソコンで AgentoC を開き、スマートフォンでコードを読み取ります。</string>
+    <string name="onboarding_connect_summary">パソコンで Ragent を開き、スマートフォンでコードを読み取ります。</string>
     <string name="onboarding_lookup_failed_hint">ネットワークを確認して再試行してください。パソコン一覧を確認できませんでした。</string>
     <string name="onboarding_connected_named">%1$s に接続しました</string>
     <string name="onboarding_connecting_named">%1$s に接続中</string>
@@ -21,7 +21,7 @@
     <string name="onboarding_begin">利用を開始</string>
     <string name="onboarding_details">技術的な詳細</string>
     <string name="onboarding_hide_details">詳細を閉じる</string>
-    <string name="onboarding_generic_error_hint">パソコンの AgentoC を開き、両方の端末がオンラインか確認してください。</string>
+    <string name="onboarding_generic_error_hint">パソコンの Ragent を開き、両方の端末がオンラインか確認してください。</string>
     <string name="onboarding_temporary_path">パソコンで「スマートフォンのペアリング」→「ペアリングを開始」を開き、一時的なペアリングを選んでコードを作成します。</string>
     <string name="onboarding_temporary_permissions">パソコンで承認すると、プロジェクト、セッション、エージェント設定を管理できます。</string>
     <string name="onboarding_temporary_expiry">パソコンで承認してから 10 分後にアクセス権が失効します。どちらの端末もログイン不要です。</string>

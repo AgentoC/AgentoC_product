@@ -56,7 +56,7 @@ internal fun OnboardingPageContent(
 
 @Composable
 internal fun OnboardingWordmark() {
-    Text("AgentoC", style = AgentocTextStyles.brandDisplay.copy(
+    Text("Ragent", style = AgentocTextStyles.brandDisplay.copy(
         fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold,
         letterSpacing = (-0.5).sp,
     ), color = LocalAgentocColors.current.primaryContent)

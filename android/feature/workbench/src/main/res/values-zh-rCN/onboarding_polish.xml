@@ -3,8 +3,8 @@
     <string name="onboarding_success_description">登录成功</string>
     <string name="onboarding_enter_workspace">进入工作台</string>
     <string name="onboarding_close_guide">关闭指引</string>
-    <string name="onboarding_opened">已打开 AgentoC</string>
-    <string name="onboarding_install_hint">在电脑上安装并打开 Windows 版 AgentoC。</string>
+    <string name="onboarding_opened">已打开 Ragent</string>
+    <string name="onboarding_install_hint">在电脑上安装并打开 Windows 版 Ragent。</string>
     <string name="onboarding_send_link">发送到电脑</string>
     <string name="onboarding_no_desktop_login">电脑无需提前登录账号。</string>
     <string name="onboarding_menu_path">在电脑上打开「手机配对」，点击「开始手机配对」。</string>
@@ -12,7 +12,7 @@
     <string name="onboarding_desktop_formal">正式配对 · Google 登录</string>
     <string name="onboarding_create_code">创建配对码</string>
     <string name="onboarding_scan_handoff">选择正式配对并创建配对码，再用手机扫码为电脑登录。</string>
-    <string name="onboarding_connect_summary">在电脑上打开 AgentoC，用手机扫码完成连接。</string>
+    <string name="onboarding_connect_summary">在电脑上打开 Ragent，用手机扫码完成连接。</string>
     <string name="onboarding_lookup_failed_hint">请检查网络后重试，暂时无法确认账号下的电脑。</string>
     <string name="onboarding_connected_named">已连接到 %1$s</string>
     <string name="onboarding_connecting_named">正在连接 %1$s</string>
@@ -21,7 +21,7 @@
     <string name="onboarding_begin">开始使用</string>
     <string name="onboarding_details">技术详情</string>
     <string name="onboarding_hide_details">收起详情</string>
-    <string name="onboarding_generic_error_hint">确认电脑上的 AgentoC 已打开，且两台设备均已联网。</string>
+    <string name="onboarding_generic_error_hint">确认电脑上的 Ragent 已打开，且两台设备均已联网。</string>
     <string name="onboarding_temporary_path">电脑端打开「手机配对」→「开始手机配对」，选择临时配对并创建配对码。</string>
     <string name="onboarding_temporary_permissions">电脑确认后，可管理项目、会话和代理设置。</string>
     <string name="onboarding_temporary_expiry">从电脑确认起计时，10 分钟后访问权限到期。两端均无需登录。</string>

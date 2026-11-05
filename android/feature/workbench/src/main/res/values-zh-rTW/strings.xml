@@ -79,7 +79,7 @@
     <string name="settings_phone">手機</string>
     <string name="settings_app_security">應用程式安全性</string>
     <string name="settings_protected">已保護</string>
-    <string name="settings_version">關於 AgentoC</string>
+    <string name="settings_version">關於 Ragent</string>
     <string name="settings_computer_label">電腦：%1$s</string>
     <string name="settings_model_providers">模型提供者</string>
     <string name="settings_connectors_mcp">應用程式與工具連線</string>

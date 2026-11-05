@@ -95,7 +95,7 @@
     <string name="settings_phone">Phone</string>
     <string name="settings_app_security">App security</string>
     <string name="settings_protected">Protected</string>
-    <string name="settings_version">About AgentoC</string>
+    <string name="settings_version">About Ragent</string>
     <string name="settings_computer_label">Computer: %1$s</string>
     <string name="settings_model_providers">Model providers</string>
     <string name="settings_harnesses">AI runtime tools</string>

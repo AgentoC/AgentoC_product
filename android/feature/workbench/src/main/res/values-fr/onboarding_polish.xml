@@ -3,8 +3,8 @@
     <string name="onboarding_success_description">Connexion réussie</string>
     <string name="onboarding_enter_workspace">Ouvrir l’espace de travail</string>
     <string name="onboarding_close_guide">Fermer le guide</string>
-    <string name="onboarding_opened">AgentoC est ouvert</string>
-    <string name="onboarding_install_hint">Installez et ouvrez AgentoC pour Windows sur l’ordinateur.</string>
+    <string name="onboarding_opened">Ragent est ouvert</string>
+    <string name="onboarding_install_hint">Installez et ouvrez Ragent pour Windows sur l’ordinateur.</string>
     <string name="onboarding_send_link">Envoyer à l’ordinateur</string>
     <string name="onboarding_no_desktop_login">Il n’est pas nécessaire de se connecter d’abord sur l’ordinateur.</string>
     <string name="onboarding_menu_path">Sur l’ordinateur, ouvrez « Association du téléphone », puis « Démarrer l’association ».</string>
@@ -12,7 +12,7 @@
     <string name="onboarding_desktop_formal">Association de confiance · Google</string>
     <string name="onboarding_create_code">Créer un code d’association</string>
     <string name="onboarding_scan_handoff">Choisissez l’association de confiance et créez un code. Scannez-le pour connecter l’ordinateur avec le compte du téléphone.</string>
-    <string name="onboarding_connect_summary">Ouvrez AgentoC sur l’ordinateur, puis scannez son code avec le téléphone.</string>
+    <string name="onboarding_connect_summary">Ouvrez Ragent sur l’ordinateur, puis scannez son code avec le téléphone.</string>
     <string name="onboarding_lookup_failed_hint">Vérifiez le réseau et réessayez. La liste des ordinateurs n’a pas pu être confirmée.</string>
     <string name="onboarding_connected_named">Connecté à %1$s</string>
     <string name="onboarding_connecting_named">Connexion à %1$s</string>
@@ -21,7 +21,7 @@
     <string name="onboarding_begin">Commencer</string>
     <string name="onboarding_details">Détails techniques</string>
     <string name="onboarding_hide_details">Masquer les détails</string>
-    <string name="onboarding_generic_error_hint">Vérifiez qu’AgentoC est ouvert et que les deux appareils sont en ligne.</string>
+    <string name="onboarding_generic_error_hint">Vérifiez que Ragent est ouvert et que les deux appareils sont en ligne.</string>
     <string name="onboarding_temporary_path">Sur l’ordinateur, ouvrez « Association du téléphone » → « Démarrer l’association », choisissez l’association temporaire et créez un code.</string>
     <string name="onboarding_temporary_permissions">Après confirmation sur l’ordinateur, vous pouvez gérer les projets, les sessions et les réglages de l’agent.</string>
     <string name="onboarding_temporary_expiry">L’accès expire 10 minutes après la confirmation sur l’ordinateur. Aucune connexion au compte n’est nécessaire.</string>
