@@ -48,4 +48,25 @@ class RunActionLocalizationTest {
         rule.onNodeWithText("正在运行 命令").assertIsDisplayed()
         rule.onNodeWithText("运行了 命令").assertIsDisplayed()
     }
+
+    @Test fun questionAndRecoveredFileUseReadableLabels() {
+        val question = RunActionFormatter.fromServer(Json.parseToJsonElement(
+            """{"state":"working","labelKind":"question","subject":"question"}""",
+        ) as JsonObject)!!
+        val read = RunActionFormatter.forOperation(TimelineItem.Operation(
+            "read", 1, TimelineOperationKind.Tool, "Reading file", "G:\\qa\\acceptance.txt",
+            TimelineOperationStatus.Completed, toolName = "read",
+        ))
+        val location = RunActionFormatter.forOperation(TimelineItem.Operation(
+            "pwd", 2, TimelineOperationKind.Command, "Running command", "pwd", TimelineOperationStatus.Completed,
+        ))
+        rule.setContent { AgentocTheme { androidx.compose.foundation.layout.Column {
+            Text(presentRunAction(question))
+            Text(presentCompletedAction(read))
+            Text(presentCompletedAction(location))
+        } } }
+        rule.onNodeWithText("正在提出问题").assertIsDisplayed()
+        rule.onNodeWithText("读取了 acceptance.txt").assertIsDisplayed()
+        rule.onNodeWithText("检查了 当前位置").assertIsDisplayed()
+    }
 }

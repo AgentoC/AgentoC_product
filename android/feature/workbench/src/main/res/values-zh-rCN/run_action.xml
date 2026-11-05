@@ -8,6 +8,8 @@
     <string name="run_action_delegate">正在委派 %1$s</string>
     <string name="run_action_tool">正在使用 %1$s</string>
     <string name="run_action_working">正在处理任务</string>
+    <string name="run_action_question">正在提出问题</string>
+    <string name="run_action_done_question">提出了问题</string>
     <string name="run_action_thinking">正在思考任务</string>
     <string name="run_action_planning">正在规划下一步</string>
     <string name="run_action_starting">正在开始运行</string>
@@ -27,4 +29,5 @@
     <string name="run_subject_file">文件</string>
     <string name="run_subject_task">任务</string>
     <string name="run_subject_changes">工作区改动</string>
+    <string name="run_subject_current_location">当前位置</string>
 </resources>

@@ -16,10 +16,14 @@ class RunActionFormatterTest {
         assertEquals("Running command", RunActionFormatter.forOperation(operation).sentence)
         val projectedRead = TimelineItem.Operation("r", 2, TimelineOperationKind.Tool, "Reading file", "Read", TimelineOperationStatus.Completed, toolName = "read")
         assertEquals("Reading file", RunActionFormatter.forOperation(projectedRead).sentence)
+        assertEquals("Reading acceptance.txt", RunActionFormatter.forOperation(projectedRead.copy(detail = "G:\\qa\\acceptance.txt")).sentence)
         val other = json.parseToJsonElement("""{"state":"working","kind":"other","subject":"other"}""") as kotlinx.serialization.json.JsonObject
         assertEquals("Working on the task", RunActionFormatter.fromServer(other)?.sentence)
         val projectedOther = TimelineItem.Operation("x", 3, TimelineOperationKind.Tool, "Using tool", "", TimelineOperationStatus.InProgress, toolName = "other")
         assertEquals("Working on the task", RunActionFormatter.forOperation(projectedOther).sentence)
+        assertEquals("Asking a question", RunActionFormatter.forOperation(projectedOther.copy(detail = "AskUserQuestion")).sentence)
+        val question = json.parseToJsonElement("""{"state":"working","labelKind":"question","subject":"question"}""") as kotlinx.serialization.json.JsonObject
+        assertEquals("Asking a question", RunActionFormatter.fromServer(question)?.sentence)
     }
     @Test fun completedOperationDoesNotLookLikeAnActiveAction() {
         val operation = TimelineItem.Operation("done", 1, TimelineOperationKind.Command, "Search", "rg pattern .",

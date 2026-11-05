@@ -8,6 +8,8 @@
     <string name="run_action_delegate">Delegating %1$s</string>
     <string name="run_action_tool">Using %1$s</string>
     <string name="run_action_working">Working on the task</string>
+    <string name="run_action_question">Asking a question</string>
+    <string name="run_action_done_question">Asked a question</string>
     <string name="run_action_thinking">Thinking through the task</string>
     <string name="run_action_planning">Planning the next step</string>
     <string name="run_action_starting">Starting the run</string>
@@ -27,4 +29,5 @@
     <string name="run_subject_file">file</string>
     <string name="run_subject_task">the task</string>
     <string name="run_subject_changes">workspace changes</string>
+    <string name="run_subject_current_location">current location</string>
 </resources>

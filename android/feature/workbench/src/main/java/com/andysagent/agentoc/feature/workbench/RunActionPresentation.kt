@@ -18,6 +18,7 @@ internal fun presentRunAction(action: RunActionUiState): String {
         "delegate" -> stringResource(R.string.run_action_delegate, subject)
         "tool" -> stringResource(R.string.run_action_tool, subject)
         "working" -> stringResource(R.string.run_action_working)
+        "question" -> stringResource(R.string.run_action_question)
         "thinking" -> stringResource(R.string.run_action_thinking)
         "planning" -> stringResource(R.string.run_action_planning)
         "starting" -> stringResource(R.string.run_action_starting)
@@ -36,6 +37,7 @@ internal fun presentCompletedAction(action: RunActionUiState): String {
         "inspect" -> stringResource(R.string.run_action_done_inspect, subject)
         "edit" -> stringResource(R.string.run_action_done_edit, subject)
         "execute" -> stringResource(R.string.run_action_done_execute, subject)
+        "question" -> stringResource(R.string.run_action_done_question)
         "delegate" -> stringResource(R.string.run_action_done_delegate, subject)
         "tool" -> stringResource(R.string.run_action_done_tool, subject)
         else -> stringResource(R.string.run_action_done_generic)
@@ -49,5 +51,6 @@ private fun presentActionSubject(subject: String): String = when (subject.lowerc
     "file" -> stringResource(R.string.run_subject_file)
     "the task" -> stringResource(R.string.run_subject_task)
     "workspace changes" -> stringResource(R.string.run_subject_changes)
+    "current location" -> stringResource(R.string.run_subject_current_location)
     else -> subject
 }

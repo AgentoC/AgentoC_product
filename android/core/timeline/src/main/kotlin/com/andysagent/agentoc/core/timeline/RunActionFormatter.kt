@@ -65,6 +65,7 @@ object RunActionFormatter {
         val subject = when {
             kind in setOf("command", "execute", "execute_composite") && rawSubject.lowercase() in setOf("execute", "exec", "bash", "shell", "command") -> "command"
             kind == "read" && rawSubject.lowercase() in setOf("read", "readfile") -> "file"
+            kind == "question" && rawSubject.equals("question", ignoreCase = true) -> ""
             else -> rawSubject
         }
         val lifecycle = value("operationState").ifBlank { value("state") }
@@ -79,6 +80,7 @@ object RunActionFormatter {
             "mcp" -> "Using"; "subagent" -> "Delegating to"; "message" -> "Sending a message to"
             "task_create" -> "Creating task"; "task_update" -> "Updating task"; "task_read" -> "Reading task"
             "task_list" -> "Listing tasks"; "task_stop" -> "Stopping task"; "switch_mode" -> "Switching mode"
+            "question" -> "Asking a question"
             "planning" -> "Planning"; "responding" -> "Responding"; "think", "thinking" -> "Thinking"
             "wait", "waiting" -> "Waiting"; else -> value("label").ifBlank { "Working" }
         }
@@ -106,8 +108,9 @@ object RunActionFormatter {
             if (waiting) " · waiting for provider output" else ""
         val localizable = modelDescription == null && !waiting && !groupedExploration &&
             lifecycle in setOf("running", "working", "started", "in_progress")
-        val presentationVerb = if (!localizable) null else if (isGenericTool) "working" else if (subject.isBlank() && kind !in setOf("command", "execute", "execute_composite")) null else when (kind) {
+        val presentationVerb = if (!localizable) null else if (isGenericTool) "working" else if (subject.isBlank() && kind !in setOf("command", "execute", "execute_composite", "question")) null else when (kind) {
             "command", "execute", "execute_composite" -> "execute"
+            "question" -> "question"
             "file_edit", "edit" -> "edit"
             "read", "list", "inspect", "search" -> kind
             else -> null
@@ -197,6 +200,10 @@ object RunActionFormatter {
             TimelineOperationKind.Unknown -> "working"
         }
         val subject = semantic?.second ?: operation.subject()
+        if (kind == "tool" && operation.detail.trim().equals("AskUserQuestion", ignoreCase = true)) {
+            return RunActionUiState("question", "Asking a question", operation.detail.compact().safeDisplay(), operation.id,
+                presentationVerb = "question")
+        }
         if (kind == "tool" && subject.lowercase() in setOf("other", "unknown", "tool", "execute", "exec")) {
             return RunActionUiState("working", "Working on the task", operation.detail.compact().safeDisplay(), operation.id,
                 presentationVerb = "working")
@@ -234,7 +241,9 @@ object RunActionFormatter {
     private fun TimelineItem.Operation.subject(): String = when {
         isReasoning -> "the task"
         toolName.orEmpty().lowercase() in setOf("read", "write", "edit", "multiedit", "notebookedit") || kind == TimelineOperationKind.FileEdit ->
-            basename(inputField("file_path", "path", "notebook_path") ?: title.takeUnless {
+            basename(inputField("file_path", "path", "notebook_path") ?: detail.takeIf {
+                it.isNotBlank() && !it.contains('\n') && (it.contains('/') || it.contains('\\') || Regex("^[^\\s]+\\.[A-Za-z0-9]{1,12}$").matches(it))
+            } ?: title.takeUnless {
                 it.trim().lowercase() in setOf("read", "reading file", "edit", "editing file", "write", "writing file")
             }.orEmpty().ifBlank { "file" })
         toolName.orEmpty().lowercase() in setOf("grep", "glob", "search") -> inputField("pattern", "query", "glob")?.let { clipSubject(it, 48) } ?: "workspace"
