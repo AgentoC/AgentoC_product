@@ -6,6 +6,12 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import com.andysagent.agentoc.core.designsystem.AgentocTheme
 import com.andysagent.agentoc.core.timeline.RunActionUiState
+import com.andysagent.agentoc.core.timeline.RunActionFormatter
+import com.andysagent.agentoc.core.timeline.TimelineItem
+import com.andysagent.agentoc.core.timeline.TimelineOperationKind
+import com.andysagent.agentoc.core.timeline.TimelineOperationStatus
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,5 +32,20 @@ class RunActionLocalizationTest {
         } } }
         rule.onNodeWithText("正在读取 README.md").assertIsDisplayed()
         rule.onNodeWithText(provider.sentence).assertIsDisplayed()
+    }
+
+    @Test fun genericServerAndHistoricalLabelsAreLocalized() {
+        val running = RunActionFormatter.fromServer(Json.parseToJsonElement(
+            """{"state":"working","kind":"execute","labelKind":"execute","subject":"execute","detail":"Bash"}""",
+        ) as JsonObject)!!
+        val finished = RunActionFormatter.forOperation(TimelineItem.Operation(
+            "op", 1, TimelineOperationKind.Command, "Running command", "Bash", TimelineOperationStatus.Completed,
+        ))
+        rule.setContent { AgentocTheme { androidx.compose.foundation.layout.Column {
+            Text(presentRunAction(running))
+            Text(presentCompletedAction(finished))
+        } } }
+        rule.onNodeWithText("正在运行 命令").assertIsDisplayed()
+        rule.onNodeWithText("运行了 命令").assertIsDisplayed()
     }
 }
