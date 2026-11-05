@@ -2257,6 +2257,21 @@ class RoomSessionRepository(
         }
     }
 
+    override suspend fun resolveRuntimeApprovalWithAnswers(
+        runId: String,
+        approvalId: String,
+        choices: List<String>,
+        customAnswers: List<String>,
+        requestId: String,
+    ) {
+        val body = codec.encode(serializer<RuntimeApprovalDecisionRequestDto>(),
+            RuntimeApprovalDecisionRequestDto("approve_with_answers", requestId, choices, customAnswers = customAnswers))
+        val path = "/api/runs/${encode(runId)}/approvals/${encode(approvalId)}"
+        executePending(runId, requestId, "runtime_approval", path, body) {
+            execute(ApiRequest("POST", path, body, requestId, requestId))
+        }
+    }
+
     override suspend fun updateSessionGoal(sessionId: String, goal: String?, autoContinue: Boolean) {
         val payload = if (goal != null && goal.isNotBlank()) {
             buildJsonObject {

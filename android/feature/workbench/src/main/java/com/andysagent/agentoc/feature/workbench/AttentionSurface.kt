@@ -937,12 +937,11 @@ private fun QuestionAnswerRail(
             selectedOptions[questionIndex] in questions[questionIndex].options.indices ||
                 questionIndex in customAnswerIndexes
         }
-        val canSubmit = answeredCount == questions.size && customAnswerIndexes.size <= 1
+        val canSubmit = answeredCount == questions.size
         val normalizedAnswer = customAnswerIndexes.singleOrNull()?.let { index ->
             customAnswers[index].orEmpty().trim()
         }.orEmpty()
         val status = when {
-            customAnswerIndexes.size > 1 -> "只能自定义回答一个问题"
             canSubmit -> "已回答 ${questions.size}/${questions.size}"
             else -> "请回答所有问题"
         }
@@ -959,6 +958,7 @@ private fun QuestionAnswerRail(
                             itemId = item.id,
                             choices = questions.indices.map { selectedOptions[it] ?: -1 },
                             customAnswer = normalizedAnswer,
+                            customAnswers = questions.indices.map { customAnswers[it].orEmpty().trim() },
                         ),
                     )
                 },

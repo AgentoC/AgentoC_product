@@ -376,6 +376,14 @@ interface SessionRepository {
         customAnswer: String? = null,
         requestId: String = newRequestId(),
     )
+    /** Uses an explicit decision understood only by servers that preserve per-question answers. */
+    suspend fun resolveRuntimeApprovalWithAnswers(
+        runId: String,
+        approvalId: String,
+        choices: List<String>,
+        customAnswers: List<String>,
+        requestId: String = newRequestId(),
+    ) { error("Per-question approval answers are not supported by this repository") }
     suspend fun updateSessionGoal(sessionId: String, goal: String?, autoContinue: Boolean = false) {}
     /** Submits a server-owned plan artifact action; never encodes the action as chat text. */
     suspend fun submitPlanAction(

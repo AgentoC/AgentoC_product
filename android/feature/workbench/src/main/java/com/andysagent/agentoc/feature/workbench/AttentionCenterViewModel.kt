@@ -48,6 +48,7 @@ sealed interface AttentionEvent {
         val itemId: String,
         val choices: List<Int>,
         val customAnswer: String = "",
+        val customAnswers: List<String> = emptyList(),
     ) : AttentionEvent
     data object ClearError : AttentionEvent
 }
@@ -215,6 +216,7 @@ class AttentionCenterViewModel(
                 approvalId = approval.id,
                 choices = event.choices,
                 customAnswer = event.customAnswer,
+                customAnswers = event.customAnswers,
             )
             consumeResolution(event.itemId, outcome)
         }

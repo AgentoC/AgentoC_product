@@ -110,9 +110,8 @@ class ApprovalResolutionCoordinator(private val repository: SessionRepository) {
 
     /**
      * Resolves every question in one approval response. The list is positional:
-     * each entry is an option index, or -1 when that question uses the single
-     * shared custom answer. The server applies that custom answer only to an
-     * unanswered slot, so this client rejects more than one unanswered slot.
+     * each entry is an option index, or -1 when that question uses a custom
+     * answer. Per-question answers use an explicit server capability decision.
      */
     suspend fun resolveQuestionsApproval(
         sessionId: String,
@@ -120,12 +119,14 @@ class ApprovalResolutionCoordinator(private val repository: SessionRepository) {
         choices: List<Int>,
         customAnswer: String = "",
         requestId: String = newRequestId(),
+        customAnswers: List<String> = emptyList(),
     ): Outcome {
         return resolveQuestionChoices(
             sessionId = sessionId,
             approvalId = approvalId,
             choices = choices,
             customAnswer = customAnswer,
+            customAnswers = customAnswers,
             requestId = requestId,
         )
     }
@@ -135,6 +136,7 @@ class ApprovalResolutionCoordinator(private val repository: SessionRepository) {
         approvalId: String,
         choices: List<Int>,
         customAnswer: String,
+        customAnswers: List<String> = emptyList(),
         singleQuestionIndex: Int? = null,
         singleOptionIndex: Int? = null,
         requestId: String,
@@ -165,26 +167,29 @@ class ApprovalResolutionCoordinator(private val repository: SessionRepository) {
                     val options = questions.getOrNull(index)?.options.orEmpty()
                     if (choice >= options.size) return Outcome.Failed("所选选项不存在")
                 }
-                val unansweredCount = normalizedChoices.count { it == -1 }
-                if (answer.isEmpty() && unansweredCount > 0) {
-                    return Outcome.Failed("请回答所有问题")
-                }
-                if (unansweredCount > 1) {
+                if (customAnswers.isNotEmpty() && customAnswers.size != questionCount) return Outcome.Failed("问题回答不完整")
+                val answers = List(questionCount) { index -> customAnswers.getOrNull(index).orEmpty().trim().take(MAX_CUSTOM_ANSWER) }
+                val unanswered = normalizedChoices.indices.filter { normalizedChoices[it] == -1 }
+                if (unanswered.size > 1 && customAnswers.isEmpty() && answer.isNotEmpty()) {
                     return Outcome.Failed("自定义回复只能回答一个问题")
                 }
-                val submittedAnswer = answer.takeIf { it.isNotEmpty() && unansweredCount == 1 }
+                if (unanswered.any { answers[it].isEmpty() && (answer.isEmpty() || unanswered.size != 1) }) {
+                    return Outcome.Failed("请回答所有问题")
+                }
+                val submittedAnswer = unanswered.singleOrNull()?.let { answers[it].ifEmpty { answer } }?.takeIf(String::isNotEmpty)
                 try {
                     val runId = pending.runId
                     if (runId != null) {
-                        repository.resolveRuntimeApproval(
-                            runId = runId,
-                            approvalId = approvalId,
-                            decision = "approve",
-                            choices = normalizedChoices.map(Int::toString),
-                            customAnswer = submittedAnswer,
-                            requestId = requestId,
-                        )
+                        if (unanswered.size > 1) {
+                            repository.resolveRuntimeApprovalWithAnswers(runId, approvalId, normalizedChoices.map(Int::toString), answers, requestId)
+                        } else {
+                            repository.resolveRuntimeApproval(
+                                runId = runId, approvalId = approvalId, decision = "approve",
+                                choices = normalizedChoices.map(Int::toString), customAnswer = submittedAnswer, requestId = requestId,
+                            )
+                        }
                     } else {
+                        if (unanswered.size > 1) return Outcome.Failed("当前会话不支持逐题自定义回复")
                         // Legacy session confirmations carry no question payload;
                         // the resolution still re-validates before approving.
                         repository.decideConfirmation(

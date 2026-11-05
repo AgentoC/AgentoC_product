@@ -309,6 +309,23 @@ class AttentionCenterViewModelTest {
     }
 
     @Test
+    fun `multiple custom answers are submitted independently`() = runTest(dispatcher.scheduler) {
+        val repository = FakeRepository(
+            sessions = listOf(Session(id = "s1", title = "One")),
+            approvals = listOf(Approval(id = "q", sessionId = "s1", title = "Questions", kind = "question", runId = "r",
+                questions = listOf(ApprovalQuestion(question = "First"), ApprovalQuestion(question = "Second")))),
+        )
+        val viewModel = AttentionCenterViewModel(repository)
+        advanceUntilIdle()
+        viewModel.onEvent(AttentionEvent.ResolveQuestions(AttentionReducer.approvalItemId("s1", "q"),
+            choices = listOf(-1, -1), customAnswers = listOf("alpha", "beta")))
+        advanceUntilIdle()
+        assertEquals(listOf("-1", "-1"), repository.lastChoices)
+        assertEquals(listOf("alpha", "beta"), repository.lastCustomAnswers)
+        assertTrue(viewModel.state.value.items.isEmpty())
+    }
+
+    @Test
     fun `resolution failure keeps the item and surfaces an error`() = runTest(dispatcher.scheduler) {
         val repository = FakeRepository(
             sessions = listOf(Session(id = "s1", title = "One")),
@@ -365,6 +382,7 @@ class AttentionCenterViewModelTest {
         var lastDecision: String? = null
         var lastChoices: List<String> = emptyList()
         var lastCustomAnswer: String? = null
+        var lastCustomAnswers: List<String> = emptyList()
         var resolveError: Throwable? = null
 
         override val connectionState: StateFlow<RuntimeConnectionState> =
@@ -424,6 +442,13 @@ class AttentionCenterViewModelTest {
             lastDecision = decision
             lastChoices = choices
             lastCustomAnswer = customAnswer
+        }
+
+        override suspend fun resolveRuntimeApprovalWithAnswers(runId: String, approvalId: String, choices: List<String>, customAnswers: List<String>, requestId: String) {
+            resolveError?.let { throw it }
+            runtimeApprovalCalls += 1
+            lastChoices = choices
+            lastCustomAnswers = customAnswers
         }
 
         override suspend fun resolveApproval(runId: String, batchId: String, decisionsJson: String, requestId: String) = Unit

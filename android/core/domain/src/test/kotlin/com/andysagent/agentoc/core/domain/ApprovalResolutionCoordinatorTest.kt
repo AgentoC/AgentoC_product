@@ -29,6 +29,7 @@ class ApprovalResolutionCoordinatorTest {
         val runtimeApprovals = mutableListOf<Triple<String, String, String>>()
         var lastChoices: List<String> = emptyList()
         var lastCustomAnswer: String? = null
+        var lastCustomAnswers: List<String> = emptyList()
         val confirmations = mutableListOf<Triple<String, String, String>>()
         val refreshes = mutableListOf<String>()
         var findError: Throwable? = null
@@ -107,6 +108,12 @@ class ApprovalResolutionCoordinatorTest {
             lastChoices = choices
             lastCustomAnswer = customAnswer
             runtimeApprovals += Triple(runId, approvalId, decision)
+        }
+
+        override suspend fun resolveRuntimeApprovalWithAnswers(runId: String, approvalId: String, choices: List<String>, customAnswers: List<String>, requestId: String) {
+            lastChoices = choices
+            lastCustomAnswers = customAnswers
+            runtimeApprovals += Triple(runId, approvalId, "approve_with_answers")
         }
 
         override suspend fun resumePendingOperations(): Int = 0
@@ -316,6 +323,19 @@ class ApprovalResolutionCoordinatorTest {
         assertEquals(ApprovalResolutionCoordinator.Outcome.Submitted, outcome)
         assertEquals(listOf("1", "-1"), repository.lastChoices)
         assertEquals("Canary rollout", repository.lastCustomAnswer)
+    }
+
+    @Test
+    fun `multiple custom answers retain their question positions`() = runTest {
+        val repository = FakeRepository()
+        repository.approvals += Approval(id = "q", sessionId = "s1", title = "Questions", runId = "r", kind = "question",
+            questions = listOf(ApprovalQuestion(question = "First"), ApprovalQuestion(question = "Second")))
+        val outcome = ApprovalResolutionCoordinator(repository).resolveQuestionsApproval("s1", "q", listOf(-1, -1),
+            customAnswers = listOf(" first ", " second "))
+        assertEquals(ApprovalResolutionCoordinator.Outcome.Submitted, outcome)
+        assertEquals(listOf("-1", "-1"), repository.lastChoices)
+        assertEquals(listOf("first", "second"), repository.lastCustomAnswers)
+        assertEquals("approve_with_answers", repository.runtimeApprovals.single().third)
     }
 
     @Test
