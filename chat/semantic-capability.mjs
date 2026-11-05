@@ -403,7 +403,7 @@ function isValidSemanticCapabilityAuthMode(capability) {
   if (authMode === SEMANTIC_CAPABILITY_AUTH_MODE_OWNER) return Boolean(credentialId);
   if (authMode === SEMANTIC_CAPABILITY_AUTH_MODE_OWNER_CLICK) return !credentialId;
   if (authMode === SEMANTIC_CAPABILITY_AUTH_MODE_POLICY_AUTO) {
-    return !credentialId && capability?.adapter === SEMANTIC_ADAPTER_WINGET_INSTALL_V1;
+    return !credentialId && [SEMANTIC_ADAPTER_WINGET_INSTALL_V1, SEMANTIC_ADAPTER_MSI_INSTALL_V1].includes(capability?.adapter);
   }
   return false;
 }

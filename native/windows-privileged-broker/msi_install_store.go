@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -11,6 +12,7 @@ import (
 type msiInstallRecord struct {
 	Grant     msiInstallGrant `json:"grant"`
 	Digest    string          `json:"digest"`
+	Binding   string          `json:"binding"`
 	Status    requestStatus   `json:"status"`
 	Code      string          `json:"code"`
 	CreatedAt time.Time       `json:"createdAt"`
@@ -24,7 +26,7 @@ func msiInstallRecords(state *persistedBrokerState) (map[string]msiInstallRecord
 	records := make(map[string]msiInstallRecord)
 	nonces := make(map[string]string)
 	noncesByDigest := make(map[string]string)
-	ids := make(map[string]bool)
+	ids := make(map[string]string)
 	for _, entry := range state.Audit {
 		if !strings.HasPrefix(entry.Event, "msi_install.") {
 			continue
@@ -43,15 +45,23 @@ func msiInstallRecords(state *persistedBrokerState) (map[string]msiInstallRecord
 			nonces[entry.RequestID] = entry.Digest
 			noncesByDigest[entry.Digest] = entry.RequestID
 		case "msi_install.executing":
-			if ids[entry.RequestID] || records[entry.Digest].Digest != "" {
+			if ids[entry.RequestID] != "" || records[entry.Digest].Digest != "" {
 				return nil, errStateInvalid
 			}
 			nonce := noncesByDigest[entry.Digest]
 			if nonce == "" {
 				return nil, errStateInvalid
 			}
-			ids[entry.RequestID] = true
+			ids[entry.RequestID] = entry.Digest
 			records[entry.Digest] = msiInstallRecord{Grant: msiInstallGrant{Nonce: nonce, RequestID: entry.RequestID}, Digest: entry.Digest, Status: statusExecuting, Code: entry.Code, CreatedAt: entry.Timestamp, UpdatedAt: entry.Timestamp}
+		case "msi_install.binding":
+			digest := ids[entry.RequestID]
+			record, ok := records[digest]
+			if !ok || record.Binding != "" {
+				return nil, errStateInvalid
+			}
+			record.Binding = entry.Digest
+			records[digest] = record
 		case "msi_install.succeeded", "msi_install.failed", "msi_install.unknown":
 			record, ok := records[entry.Digest]
 			if !ok || record.Grant.RequestID != entry.RequestID || record.Status != statusExecuting {
@@ -64,10 +74,20 @@ func msiInstallRecords(state *persistedBrokerState) (map[string]msiInstallRecord
 			return nil, errStateInvalid
 		}
 	}
+	for _, record := range records {
+		if record.Binding == "" {
+			return nil, errStateInvalid
+		}
+	}
 	if len(nonces) != len(records) {
 		return nil, errStateInvalid
 	}
 	return records, nil
+}
+
+func msiInstallBinding(grant msiInstallGrant) string {
+	data, _ := json.Marshal([]string{grant.RequestID, grant.SessionID, grant.RunID, grant.TurnID, grant.ActionID, grant.ArtifactPath, grant.ArtifactSHA256})
+	return fmt.Sprintf("%x", sha256.Sum256(data))
 }
 
 func msiRequestIDExists(state *persistedBrokerState, id string) bool {
@@ -150,11 +170,14 @@ func (s *brokerStore) ClaimMSIInstall(grant msiInstallGrant, signature string, n
 		if len(records) >= maxStoredRequests {
 			return errors.New("APB_REQUEST_CAPACITY_REACHED")
 		}
-		result = msiInstallRecord{Grant: grant, Digest: digest, Status: statusExecuting, Code: "EXECUTION_STARTED", CreatedAt: now.UTC(), UpdatedAt: now.UTC()}
+		result = msiInstallRecord{Grant: grant, Digest: digest, Binding: msiInstallBinding(grant), Status: statusExecuting, Code: "EXECUTION_STARTED", CreatedAt: now.UTC(), UpdatedAt: now.UTC()}
 		if err := s.appendAudit(state, "msi_install.nonce", grant.Nonce, "MSI_NONCE_CLAIMED", digest); err != nil {
 			return err
 		}
-		return s.appendAudit(state, "msi_install.executing", grant.RequestID, result.Code, digest)
+		if err := s.appendAudit(state, "msi_install.executing", grant.RequestID, result.Code, digest); err != nil {
+			return err
+		}
+		return s.appendAudit(state, "msi_install.binding", grant.RequestID, "MSI_BINDING", result.Binding)
 	})
 	return result, duplicate, err
 }

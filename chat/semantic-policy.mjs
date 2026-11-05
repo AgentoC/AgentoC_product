@@ -163,6 +163,10 @@ export function bindServerResolution(operation, resolution) {
     ...base,
     target: {
       ...(base.target || {}),
+      ...(base.target?.kind === 'package_artifact' && resolution.scope?.computed === true ? {
+        root: resolution.resourceSnapshot.artifactPath,
+        digest: resolution.resourceSnapshot.artifactDigest,
+      } : {}),
       resourceSnapshot: clone(resolution.resourceSnapshot),
     },
     scope: clone(resolution.scope),

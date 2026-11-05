@@ -26,8 +26,8 @@ export function buildClaudeWindowsInstallBridge({ approval, state, runId, nodePa
   const originalCommand = approval.params?.input?.command;
   if (typeof originalCommand !== 'string' || originalCommand.length > 8192) return null;
   const command = unwrapInstallSentinel(originalCommand);
-  if (!/^\s*winget(?:\.exe)?\s+(?:install|add)(?:\s|$)/i.test(command)) return null;
-  const parsed = mapPowerShellFactsToCandidates(parsePowerShellCommandFacts(command));
+  if (!/^\s*(?:winget(?:\.exe)?\s+(?:install|add)|msiexec(?:\.exe)?\s+\/i)(?:\s|$)/i.test(command)) return null;
+  const parsed = mapPowerShellFactsToCandidates(parsePowerShellCommandFacts(command), { cwd: 'C:\\' });
   if (parsed.candidates.length !== 1 || parsed.candidates[0].primaryAction !== 'package.install' || parsed.unknowns.length) return null;
   const id = String(approval.approvalId || '');
   if (!id || typeof runId !== 'string' || !runId) return null;

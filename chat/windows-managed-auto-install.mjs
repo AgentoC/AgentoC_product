@@ -1,4 +1,4 @@
-import { prepareSemanticApproval, authorizeWindowsAutomaticInstall, authorizeWindowsUserInstall } from './semantic-approval.mjs';
+import { prepareSemanticApproval, authorizeWindowsAutomaticInstall, authorizeWindowsUserInstall, authorizeWindowsMSIAutomaticInstall } from './semantic-approval.mjs';
 import { queryWindowsBrokerAutoInstall, submitOrResumeWindowsBrokerAutoInstall } from './windows-auto-install-authorization.mjs';
 import { createWindowsUserInstallAuthorization } from './windows-auto-install-authorization.mjs';
 import { verifySemanticCapability } from './semantic-capability.mjs';
@@ -6,6 +6,7 @@ import { createWindowsPrivilegedBrokerClient } from './windows-privileged-broker
 import { createPrivateKey, createPublicKey } from 'node:crypto';
 import { loadInstanceIdentity } from '../lib/instance-identity.mjs';
 import { createWindowsUserInstallStore } from './windows-user-install-store.mjs';
+import { submitOrResumeWindowsMSIInstall } from './windows-msi-auto-install.mjs';
 import { submitOrResumeWindowsOwnerBrokerInstall } from './windows-owner-broker-install.mjs';
 
 export async function loadWindowsAutoInstallSigningKey(options = {}) {
@@ -75,12 +76,24 @@ export function verifyWindowsManagedUserInstallAuthorization({ authorization, pi
 export async function tryWindowsManagedAutoInstall({ actions, binding, riskMode, trustedContext, runExecutionIsService = false, preflight = false, platform = process.platform }, deps = {}) {
   if (platform !== 'win32' || !['recommended', 'full-auto'].includes(riskMode) || binding?.authenticatedPrincipalKind !== 'owner' ||
       !Array.isArray(actions) || actions.length !== 1 || typeof actions[0]?.command !== 'string' ||
-      !/^\s*winget(?:\.exe)?\s+(?:install|add)(?:\s|$)/i.test(actions[0].command)) return null;
+      !/^\s*(?:winget(?:\.exe)?\s+(?:install|add)|msiexec(?:\.exe)?\s+\/i)(?:\s|$)/i.test(actions[0].command)) return null;
   const requestBinding = { sessionId: binding.sessionId, runId: binding.runId, turnId: binding.turnId, requestKey: binding.requestKey };
   const prepared = await (deps.prepare || prepareSemanticApproval)({
     request: { ...requestBinding, rawCommand: actions[0].command, executionClass: 'host', tool: 'approved-action', commandForm: 'argv' },
     trustedContext: { ...trustedContext, platform: 'win32' }, callerEvidence: {},
   });
+  if (prepared?.projection?.decisions?.[0]?.operation?.target?.kind === 'package_artifact') {
+    try { authorizeWindowsMSIAutomaticInstall({ prepared, riskMode, kid: 'eligibility-check' }); }
+    catch (error) { if (error?.code === 'SEMANTIC_AUTO_SELECTION_DENIED') return null; throw error; }
+    if (typeof deps.assertActive !== 'function') throw new Error('active run verification is required');
+    await deps.assertActive();
+    if (typeof deps.loadKeys === 'function') await deps.loadKeys();
+    const key = await (deps.getKey || loadWindowsAutoInstallSigningKey)();
+    if (!key?.kid || !key.privateKey) throw Object.assign(new Error('MSI installation signing key is unavailable'), { code: 'AUTO_INSTALL_KEY_UNAVAILABLE' });
+    const client = deps.client || createWindowsPrivilegedBrokerClient();
+    const result = await (deps.submitMSI || submitOrResumeWindowsMSIInstall)({ client, prepared, riskMode, kid: key.kid, privateKey: key.privateKey, assertActive: deps.assertActive, preflight });
+    return preflight ? result : { status: result.status, code: result.code || '', requestId: result.requestId, requestKey: requestBinding.requestKey, duplicate: result.duplicate === true };
+  }
   const ownerScope = runExecutionIsService === true && ['', 'user'].includes(prepared?.projection?.decisions?.[0]?.operation?.target?.requestedInstallScope);
   try {
     // Only the shared, server-derived policy can make this eligible.

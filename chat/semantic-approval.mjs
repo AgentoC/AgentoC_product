@@ -15,6 +15,7 @@ import {
   createSemanticCapability,
   SEMANTIC_CAPABILITY_AUTH_MODE_POLICY_AUTO,
   SEMANTIC_ADAPTER_WINGET_INSTALL_V1,
+  SEMANTIC_ADAPTER_MSI_INSTALL_V1,
 } from './semantic-capability.mjs';
 
 export const SEMANTIC_APPROVAL_PROOF_PURPOSE = 'semantic-capability-approval';
@@ -174,4 +175,22 @@ export function authorizeWindowsAutomaticInstall(options = {}) {
 
 export function authorizeWindowsUserInstall(options = {}) {
   return authorizeWindowsInstallForScopes(options, ['', 'user']);
+}
+
+// The package identity is resolved from the server-side filesystem. Trust in
+// its signature is checked independently by the native broker before signing.
+export function authorizeWindowsMSIAutomaticInstall({ prepared, riskMode = '', kid = '', now } = {}) {
+  if (!['recommended', 'full-auto'].includes(trimString(riskMode))) fail('SEMANTIC_AUTO_PROFILE_DENIED', 'automatic Windows installation is unavailable');
+  const binding = assertBinding(prepared?.binding || {});
+  const decisions = Array.isArray(prepared?.projection?.decisions) ? prepared.projection.decisions : [];
+  const entry = decisions[0], op = entry?.operation, snap = op?.target?.resourceSnapshot;
+  if (decisions.length !== 1 || entry?.decision !== 'ASK' || entry?.unknowns?.length || op?.primaryAction !== 'package.install' ||
+      op?.target?.platform !== 'win32' || op?.executionClass !== 'host' || op?.target?.kind !== 'package_artifact' ||
+      op?.target?.manager !== 'msiexec' || op?.target?.source !== 'local_artifact' || !snap?.artifactIdentity ||
+      !/^[a-f0-9]{64}$/.test(snap?.artifactDigest || '') || op.target.digest !== snap.artifactDigest || op.target.root !== snap.artifactPath) {
+    fail('SEMANTIC_AUTO_SELECTION_DENIED', 'operation is not an eligible Windows MSI installation');
+  }
+  return createSemanticCapability({ selectedDecisions: decisions, adapter: SEMANTIC_ADAPTER_MSI_INSTALL_V1,
+    sessionId: binding.sessionId, runId: binding.runId, turnId: binding.turnId,
+    authMode: SEMANTIC_CAPABILITY_AUTH_MODE_POLICY_AUTO, kid: trimString(kid), now });
 }

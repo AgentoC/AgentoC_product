@@ -94,6 +94,7 @@ type brokerResponse struct {
 	AutoInstallKeyID    string                     `json:"autoInstallKeyId,omitempty"`
 	MSIInstallReady     bool                       `json:"msiInstallReady"`
 	MSIFacts            *msiInspectFacts           `json:"msiFacts,omitempty"`
+	MSIBinding          string                     `json:"msiBinding,omitempty"`
 	MSIDigest           string                     `json:"msiDigest,omitempty"`
 	AutoInstall         *autoInstallGrant          `json:"autoInstall,omitempty"`
 	OwnerInstall        *ownerInstallGrant         `json:"ownerInstall,omitempty"`

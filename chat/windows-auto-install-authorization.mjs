@@ -182,6 +182,10 @@ export async function queryWindowsBrokerAutoInstall({ client, binding } = {}) {
   if (result?.type === 'result' && result.requestId === requestId && result.code === 'REQUEST_NOT_FOUND' && !result.status) {
     return { status: 'unknown', code: 'AUTO_INSTALL_REQUEST_NOT_FOUND', requestId };
   }
+  if (result?.type === 'result' && result.requestId === requestId && /^[a-f0-9]{64}$/.test(result.msiDigest || '') &&
+      /^[a-f0-9]{64}$/.test(result.msiBinding || '') && ['executing','succeeded','failed','unknown'].includes(result.status)) {
+    return { status: result.status, code: result.code || '', requestId, duplicate: true };
+  }
   const grant = result?.autoInstall || result?.ownerInstall;
   if (result?.type !== 'result' || result.requestId !== requestId || !['executing', 'succeeded', 'failed', 'unknown'].includes(result.status) ||
       !grant || !['machine', 'user', 'default'].includes(grant.installScope) || grant.requestId !== requestId || grant.actionId !== actionId || grant.sessionId !== binding.sessionId ||

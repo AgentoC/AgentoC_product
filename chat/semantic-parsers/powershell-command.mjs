@@ -333,11 +333,11 @@ function msiCandidate(program, params, base) {
   return {
     primaryAction: 'package.install',
     effects: ['process.execute'],
-    confidence: 'unknown',
+    confidence: 'high',
     target: { kind: 'package_artifact', platform: 'win32', manager: 'msiexec', root, source: 'local_artifact', digest: 'unverified' },
     evidence: ['msiexec', '/i', `path:${root}`],
-    reasons: [reason(RC.UNKNOWN_TARGET)],
-    unknowns: ['package:artifact-unverified'],
+    reasons: [reason(RC.ORDINARY_OPERATION)],
+    unknowns: [],
   };
 }
 

@@ -181,6 +181,23 @@ function validateRequest(request) {
         typeof request.signature !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(request.signature)) throw brokerError('BROKER_REQUEST_INVALID');
     return;
   }
+  if (request.type === 'msi_install.inspect') {
+    const facts = request.msiInspect;
+    if (!hasOnlyKeys(request, ['version', 'type', 'msiInspect']) || !hasOnlyKeys(facts, ['artifactPath', 'artifactSha256']) ||
+        !validMSIPath(facts?.artifactPath) || !/^[a-f0-9]{64}$/.test(facts?.artifactSha256 || '')) throw brokerError('BROKER_REQUEST_INVALID');
+    return;
+  }
+  if (request.type === 'msi_install.execute') {
+    const grant = request.msiInstall;
+    const keys = ['version','keyId','brokerInstallationId','policyGeneration','requestId','sessionId','runId','turnId','actionId','nonce','artifactPath','artifactSha256','publisherSha256','issuedMs','expiresMs'];
+    if (!hasOnlyKeys(request, ['version','type','msiInstall','signature']) || !hasOnlyKeys(grant,keys) || keys.some((key)=>!Object.hasOwn(grant,key)) || grant.version !== 1 ||
+      !['keyId','brokerInstallationId','requestId','sessionId','runId','turnId','actionId'].every((key)=>validId(grant[key])) ||
+      !Number.isSafeInteger(grant.policyGeneration) || grant.policyGeneration < 1 || !/^[A-Za-z0-9_-]{24,128}$/.test(grant.nonce || '') ||
+      !validMSIPath(grant.artifactPath) || !/^[a-f0-9]{64}$/.test(grant.artifactSha256 || '') || !/^[a-f0-9]{64}$/.test(grant.publisherSha256 || '') ||
+      !Number.isSafeInteger(grant.issuedMs) || !Number.isSafeInteger(grant.expiresMs) || grant.issuedMs <= 0 || grant.expiresMs <= grant.issuedMs || grant.expiresMs - grant.issuedMs > 60000 ||
+      typeof request.signature !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(request.signature)) throw brokerError('BROKER_REQUEST_INVALID');
+    return;
+  }
   if (request.type === 'auto_install.execute') {
     const grant = request.autoInstall;
     const keys = ['version', 'keyId', 'brokerInstallationId', 'policyGeneration', 'requestId', 'sessionId',
@@ -205,6 +222,11 @@ function validateRequest(request) {
     return;
   }
   throw brokerError('BROKER_REQUEST_INVALID');
+}
+
+function validMSIPath(value) {
+  return typeof value === 'string' && /^[A-Za-z]:\\[^:*?"<>|%/\x00-\x1f]+\.msi$/i.test(value) &&
+    value.slice(3).split('\\').every((part) => part && part !== '.' && part !== '..' && !/[. ]$/.test(part));
 }
 
 function validateResponse(response) {
@@ -405,6 +427,17 @@ export function createWindowsPrivilegedBrokerClient({
       version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'decision',
       requestId, deviceId, choice, signature,
     }),
+    executeMSIInstall: ({ grant, signature }) => rpc('request', {
+      version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'msi_install.execute', msiInstall: grant, signature,
+    }),
+    inspectMSIInstall: async ({ artifactPath, artifactSha256 }) => {
+      const response = await rpc('request', { version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'msi_install.inspect', msiInspect: { artifactPath, artifactSha256 } }, 30000);
+      if (response?.type === 'error') throw brokerError(response.code || 'MSI_INSTALL_INSPECTION_FAILED');
+      const facts = response?.msiFacts;
+      if (response?.type !== 'msi_install_inspection' || !hasOnlyKeys(facts, ['artifactPath','artifactSha256','publisherSha256']) ||
+          facts.artifactPath !== artifactPath || facts.artifactSha256 !== artifactSha256 || !/^[a-f0-9]{64}$/.test(facts.publisherSha256 || '')) throw brokerError('BROKER_RESPONSE_INVALID');
+      return facts;
+    },
     executeAutoInstall: ({ grant, signature }) => rpc('request', {
       version: WINDOWS_BROKER_PROTOCOL_VERSION, type: 'auto_install.execute', autoInstall: grant, signature,
     }),

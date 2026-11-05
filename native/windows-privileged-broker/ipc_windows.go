@@ -724,7 +724,7 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 			grant := automatic.Grant
 			response.AutoInstall = &grant
 		} else if msi, found := s.store.GetMSIInstall(request.RequestID); found {
-			response.Status, response.Code, response.MSIDigest = msi.Status, msi.Code, msi.Digest
+			response.Status, response.Code, response.MSIDigest, response.MSIBinding = msi.Status, msi.Code, msi.Digest, msi.Binding
 		} else if owner, found := s.store.GetOwnerInstall(request.RequestID); found {
 			response.Status, response.Code = owner.Status, owner.Code
 			grant := owner.Grant
@@ -939,7 +939,7 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 			}()
 		}
 		response := newResponse("result")
-		response.RequestID, response.Status, response.Code, response.MSIDigest = record.Grant.RequestID, record.Status, record.Code, record.Digest
+		response.RequestID, response.Status, response.Code, response.MSIDigest, response.MSIBinding = record.Grant.RequestID, record.Status, record.Code, record.Digest, record.Binding
 		return response
 	}
 	if request.Type == "auto_install.execute" {
