@@ -282,6 +282,17 @@ export function classifyApprovedAction(action, context = {}) {
   };
 }
 
+// Status lookup first probes whether the command is a service operation.
+// Ordinary install commands can legitimately require no generic approval;
+// only that classification result means there is no service action to probe.
+export function buildOptionalApprovedAction(input = {}, context = {}) {
+  try { return buildApprovedAction(input, context); }
+  catch (error) {
+    if (error?.code === 'APPROVED_ACTION_NOT_REQUIRED') return null;
+    throw error;
+  }
+}
+
 export function buildApprovedAction(input = {}, context = {}) {
   const request = normalizeRequest(input, context.requestKey);
   if (isAgentCreateApprovedAction(input)) {

@@ -192,6 +192,7 @@ import {
 import {
   APPROVED_ACTION_STATE,
   buildApprovedAction,
+  buildOptionalApprovedAction,
   buildApprovedActionAuditEvent,
   computeApprovedActionSelectionHash,
   createApprovedActionClientEventProjection,
@@ -4021,9 +4022,9 @@ async function proposeApprovedActionsUnlocked({
   }
   if (autoInstallStatusOnly === true) {
     if (process.platform === 'win32' && serverActions.length === 1) {
-      const action = buildApprovedAction(serverActions[0], { requestKey: trimString(requestKey), sessionId: run.sessionId,
+      const action = buildOptionalApprovedAction(serverActions[0], { requestKey: trimString(requestKey), sessionId: run.sessionId,
         runId: normalizedRunId, turnId: trustedTurnId, cwd: trustedCwd, projectRoot: trustedProjectRoot, home: trustedHome, platform: 'win32' });
-      const status = await queryWindowsServiceProposalFromCommand({ action, authenticatedPrincipalKind: binding.authenticatedPrincipalKind,
+      const status = action && await queryWindowsServiceProposalFromCommand({ action, authenticatedPrincipalKind: binding.authenticatedPrincipalKind,
         trustedContext: { cwd: trustedCwd, projectRoot: trustedProjectRoot, home: trustedHome }, client: createWindowsPrivilegedBrokerClient() });
       if (status) return { ...status, kind: 'windows_service_control', requestKey: trimString(requestKey) };
     }

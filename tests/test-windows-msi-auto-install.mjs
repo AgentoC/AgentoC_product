@@ -55,3 +55,10 @@ await runWindowsInstallBridge({argv:['node','bridge',Buffer.from(JSON.stringify(
  fetchImpl:async (_url,opts)=>{bodies.push(JSON.parse(opts.body));return bodies.length===1 ? {ok:false,text:async()=>JSON.stringify({code:'MSI_INSTALL_OUTCOME_UNKNOWN'})} : {ok:true,text:async()=>JSON.stringify({kind:'automatic_install',status:'succeeded'})}},writeOutput:value=>{message+=value}});
 assert.equal(bodies.length,2);assert.equal(bodies[1].autoInstallStatusOnly,true);assert.match(message,/completed successfully/);
 console.log('MSI ambiguous submission polls original request');
+
+const { buildOptionalApprovedAction } = await import('../chat/approved-actions.mjs');
+const statusContext = {...binding,cwd:'G:\\work',projectRoot:'G:\\work',home:'G:\\home',platform:'win32'};
+assert.equal(buildOptionalApprovedAction({command:'msiexec /i G:\\work\\test.msi /qn'},statusContext),null);
+assert.ok(buildOptionalApprovedAction({command:'Restart-Service FixtureService'},statusContext));
+assert.throws(()=>buildOptionalApprovedAction({command:''},statusContext),{code:'APPROVED_ACTION_COMMAND_REQUIRED'});
+console.log('MSI status lookup bypasses unrelated service classification');
