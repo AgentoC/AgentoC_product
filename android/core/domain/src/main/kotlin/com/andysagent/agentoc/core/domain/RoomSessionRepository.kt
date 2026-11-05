@@ -993,6 +993,8 @@ class RoomSessionRepository(
             val run = activity?.get("run")?.jsonObject
             val workflowState = item.string("workflowState")
             val rawStatus = item.string("status") ?: workflowState ?: run?.string("state") ?: "idle"
+            val sessionId = item.string("id").orEmpty()
+            val status = preservePendingApprovalStatus(sessionId, rawStatus)
             val waitingAction = item.string("waitingAction")
                 ?: item.string("attentionKind")
                 ?: run?.string("kind")?.takeIf { it.equals("approval", ignoreCase = true) }
@@ -1008,7 +1010,7 @@ class RoomSessionRepository(
                 title = item.string("title") ?: item.string("name") ?: "Unnamed session",
                 projectId = item.string("projectId"),
                 templateId = item.string("templateId"),
-                status = rawStatus,
+                status = status,
                 latestSeq = item["latestSeq"]?.toString()?.trim('"')?.toLongOrNull() ?: 0L,
                 updatedAt = serverUpdatedAt,
                 lastAssistantMessageAt = parseTimestamp(item.string("lastAssistantMessageAt")),
@@ -1119,13 +1121,19 @@ class RoomSessionRepository(
         val root = codec.decode<JsonObject>(serializer<JsonObject>(), response.body)
         val item = root["session"]?.jsonObject ?: root
         if (item.string("id").isNullOrBlank()) return null
-        val entity = sessionEntityFromClientJson(item, dao.getSession(sessionId), authoritative = true)
+        val initial = sessionEntityFromClientJson(item, dao.getSession(sessionId), authoritative = true)
+        val entity = initial.copy(status = preservePendingApprovalStatus(sessionId, initial.status))
         dao.upsertSessions(listOf(entity))
         val result = toDomain(entity)
         if (result.status in setOf(SessionStatus.Completed, SessionStatus.Failed, SessionStatus.Cancelled, SessionStatus.Idle)) {
             liveFeedMuted.remove(sessionId)
         }
         return result
+    }
+
+    private suspend fun preservePendingApprovalStatus(sessionId: String, status: String): String {
+        if (sessionId.isBlank() || status.lowercase() !in setOf("running", "working", "streaming", "starting")) return status
+        return if (dao.getPendingApprovals(sessionId).isNotEmpty()) "waiting_approval" else status
     }
 
     override suspend fun refreshEvents(sessionId: String): RefreshResult {

@@ -39,6 +39,21 @@ import org.junit.Assert.assertTrue
 
 @RunWith(AndroidJUnit4::class)
 class RoomSessionRepositoryEventTest {
+    @Test fun sessionRefreshKeepsPendingApprovalWhileServerReportsRunning() = runBlocking {
+        database.dao().upsertApprovals(listOf(ApprovalEntity(id = "a", sessionId = "session-1", title = "Bash",
+            status = "pending", runId = "r", kind = "approval_request", updatedAt = 1L)))
+        val transport = RecordingTransport().apply {
+            responseBody = """{"sessions":[{"id":"session-1","title":"Task","activity":{"run":{"state":"running"}}}]}"""
+        }
+        val repository = RoomSessionRepository(database, transport)
+        repository.refreshSessions()
+        assertEquals(SessionStatus.WaitingApproval, repository.observeSession("session-1").first()?.status)
+        transport.responseBody = """{"session":{"id":"session-1","title":"Task","status":"running"}}"""
+        assertEquals(SessionStatus.WaitingApproval, repository.refreshSessionDetail("session-1")?.status)
+        transport.responseBody = """{"session":{"id":"session-1","title":"Task","status":"completed"}}"""
+        assertEquals(SessionStatus.Completed, repository.refreshSessionDetail("session-1")?.status)
+        repository.close()
+    }
     @Test fun preservesProviderIdentityForMatchingBatchOperations() = runBlocking {
         val repository = RoomSessionRepository(database, QueuedTransport(listOf(
             """{"sessionId":"session-1","events":[{"seq":1,"type":"approval_request","approvalId":"a","runId":"r","providerRequestId":"provider-1","requestId":"turn"},{"seq":2,"type":"privileged_batch_request","batchId":"b","runId":"r","requestId":"turn","other":[{"opId":"o","providerRequestId":"provider-1"}]},{"seq":3,"type":"approval_request","approvalId":"independent","runId":"r","requestId":"turn"}],"latestSeq":3}""",
