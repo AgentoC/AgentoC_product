@@ -171,29 +171,66 @@ class AttentionCenterViewModel(
         if (current.resolvingItemId != null) return
         val item = current.items.firstOrNull { it.id == event.itemId } ?: return
         val approval = item.approval ?: return
-        if (approval.kind == "privileged_batch_request") return
-        val runId = approval.runId ?: return
-        val batchId = approval.batchId ?: return
-        if (approval.actions.isEmpty() || approval.actions.any { it.needsPasskey }) return
-        val selected = event.selectedActionIds
-        val decisions = approval.actions.map { action ->
-            ApprovalActionDecision(action.id, if (action.id in selected) "approve" else "deny")
-        }
+        if (approval.kind != "approved_action_batch_request" || event.approvalIntent !in setOf("approve", "deny")) return
+        val switching = repository as? SwitchingSessionRepository
+        val fixed = if (switching != null) switching.delegate.value ?: return else repository
         mutableState.update { it.copy(resolvingItemId = event.itemId, error = null) }
         viewModelScope.launch {
-            val outcome = try {
-                repository.resolveApprovedActionBatch(
-                    sessionId = item.sessionId,
-                    runId = runId,
-                    batchId = batchId,
-                    decisions = decisions,
-                    approvalIntent = event.approvalIntent,
-                )
-                ApprovalResolutionCoordinator.Outcome.Submitted
+            var attempted = false
+            try {
+                val pending = fixed.findPendingApproval(item.sessionId, approval.id)
+                    ?.takeIf { it.status == "pending" && it.kind == "approved_action_batch_request" }
+                    ?: error("This approval is no longer pending")
+                val runId = pending.runId ?: error("Approval run is unavailable")
+                val batchId = pending.batchId ?: error("Approval batch is unavailable")
+                val available = pending.actions.filter { it.state in setOf("proposed", "classified", "waiting_user") }
+                require(available.isNotEmpty() && event.selectedActionIds.all { id -> available.any { it.id == id } } &&
+                    (event.approvalIntent != "approve" || event.selectedActionIds.isNotEmpty()) &&
+                    (event.approvalIntent != "deny" || event.selectedActionIds.isEmpty())) { "Approval selection is no longer valid" }
+                val decisions = available.map { action ->
+                    ApprovalActionDecision(action.id, if (action.id in event.selectedActionIds) "approve" else "deny")
+                }
+                val passkeyIds = available.filter { it.id in event.selectedActionIds && it.needsPasskey }.map { it.id }
+                val requestId = newRequestId()
+                val proof = if (passkeyIds.isNotEmpty()) {
+                    val provider = passkeyProvider ?: error("Passkey approval requires the Android system credential provider")
+                    if (switching != null && switching.delegate.value !== fixed) error("The connected computer changed")
+                    provider(fixed.createApprovedActionWebAuthnChallenge(runId, batchId, passkeyIds, requestId).toString())
+                } else null
+                if (switching != null && switching.delegate.value !== fixed) error("The connected computer changed")
+                attempted = true
+                fixed.resolveApprovedActionBatchWithProof(item.sessionId, runId, batchId, decisions, event.approvalIntent, proof, requestId)
+                consumeResolution(event.itemId, ApprovalResolutionCoordinator.Outcome.Submitted)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Throwable) {
-                ApprovalResolutionCoordinator.Outcome.Failed(error.message ?: "审批提交失败")
+                val retryable = when (error) {
+                    is ApiException -> error.retryable
+                    is SessionRepositoryException -> error.retryable
+                    else -> true
+                }
+                if (attempted && retryable) awaitActionBatch(fixed, switching, item.sessionId, approval.id, event.itemId)
+                else mutableState.update { it.copy(resolvingItemId = null, error = error.message ?: "审批提交失败") }
             }
-            consumeResolution(event.itemId, outcome)
+        }
+    }
+
+    private suspend fun awaitActionBatch(fixed: SessionRepository, switching: SwitchingSessionRepository?, sessionId: String, approvalId: String, itemId: String) {
+        mutableState.update { it.copy(error = "Approval submitted; waiting to confirm the result.") }
+        while (true) {
+            delay(2_000)
+            if (switching != null && switching.delegate.value !== fixed) return
+            if (mutableState.value.items.none { it.id == itemId }) return
+            try {
+                if (fixed.refreshEvents(sessionId) is RefreshResult.Applied) {
+                    val pending = fixed.findPendingApproval(sessionId, approvalId)
+                    if (pending == null || pending.status != "pending" || pending.actions.none { it.state in setOf("proposed", "classified", "waiting_user") }) {
+                        consumeResolution(itemId, ApprovalResolutionCoordinator.Outcome.Submitted)
+                        return
+                    }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* Wait for the authoritative result before enabling another decision. */ }
         }
     }
 

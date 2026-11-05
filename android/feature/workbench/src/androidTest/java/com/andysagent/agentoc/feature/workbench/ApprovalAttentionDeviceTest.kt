@@ -140,6 +140,16 @@ class ApprovalAttentionDeviceTest {
         }
     }
 
+    @Test fun passkeyActionBatchCanBeApprovedFromNotification() {
+        val approval = Approval(id = "b", sessionId = "s", runId = "r", batchId = "b", title = "Batch",
+            kind = "approved_action_batch_request", actions = listOf(ApprovalAction(id = "a", description = "Restart", needsPasskey = true)))
+        val state = AttentionReducer.reduce(AttentionUiState(), AttentionReducer.project(listOf(Session("s", "Other session")), listOf(approval))).copy(expanded = true)
+        val events = mutableListOf<AttentionEvent>()
+        rule.setContent { AgentocTheme { AttentionSurface(state, events::add, onOpenSession = {}) } }
+        rule.onNodeWithText(rule.activity.getString(R.string.attention_approve_selected)).assertIsEnabled().performClick()
+        rule.runOnIdle { assertEquals(listOf(AttentionEvent.ResolveActionBatch(requireNotNull(state.activeItemId), setOf("a"))), events) }
+    }
+
     @Test fun privilegedCategoriesHonorServerDefaultSelection() {
         val approval = Approval(id = "b", sessionId = "s", runId = "r", batchId = "b", title = "Batch",
             kind = "privileged_batch_request", passkeyRequired = true, actions = listOf(

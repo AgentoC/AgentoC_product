@@ -139,15 +139,14 @@ object AttentionReducer {
             updatedAt = updatedAt,
             // Batch and passkey resolutions stay inside the session's structured
             // card; the surface never reimplements that protocol.
-            // Approved-action batches can use the same structured decision
-            // endpoint from the global notification. Legacy privileged
-            // category batches and passkey actions must still open the
-            // session-owned checkpoint.
+            // Supported batch formats have their own structured decision
+            // endpoints and can request native passkey verification inline.
             requiresSession = approval.kind != WINDOWS_BROKER_APPROVAL_KIND && (
                 (approval.kind == "privileged_batch_request" && (approval.runId.isNullOrBlank() || approval.batchId.isNullOrBlank() ||
                     approval.actions.none { it.category in setOf("privileged_other", "destructive_delete") })) ||
                 (approval.batchId != null && approval.actions.isEmpty()) ||
-                (approval.kind != "privileged_batch_request" && approval.actions.any { it.needsPasskey }) ||
+                (approval.kind == "approved_action_batch_request" && (approval.runId.isNullOrBlank() || approval.batchId.isNullOrBlank())) ||
+                (approval.kind !in setOf("privileged_batch_request", "approved_action_batch_request") && approval.actions.isNotEmpty()) ||
                 (approval.actions.isEmpty() && approval.passkeyRequired && !approval.isQuestionApproval())
             ),
         )

@@ -7,6 +7,7 @@ import com.andysagent.agentoc.core.domain.SessionRepository
 import com.andysagent.agentoc.core.domain.SwitchingSessionRepository
 import com.andysagent.agentoc.core.model.Approval
 import com.andysagent.agentoc.core.model.ApprovalAction
+import com.andysagent.agentoc.core.model.ApprovalActionDecision
 import com.andysagent.agentoc.core.model.ApprovalOption
 import com.andysagent.agentoc.core.model.ApprovalQuestion
 import com.andysagent.agentoc.core.model.AttentionKind
@@ -442,6 +443,78 @@ class AttentionCenterViewModelTest {
         assertTrue(viewModel.state.value.items.isEmpty())
     }
 
+    @Test
+    fun `approved action batch submits selected passkey proof and denies unselected actions`() = runTest(dispatcher.scheduler) {
+        val repository = FakeRepository(sessions = listOf(Session(id = "s1", title = "One")), approvals = listOf(
+            Approval(id = "b", sessionId = "s1", title = "Batch", kind = "approved_action_batch_request", runId = "r", batchId = "b",
+                actions = listOf(ApprovalAction(id = "a", needsPasskey = true), ApprovalAction(id = "b", needsPasskey = false))),
+        ))
+        val proof = WebAuthnProofDto("id", "raw", WebAuthnProofResponseDto("client", "auth", "sig"))
+        val viewModel = AttentionCenterViewModel(repository, passkeyProvider = { proof })
+        runCurrent()
+        assertTrue(!viewModel.state.value.items.single().requiresSession)
+        viewModel.onEvent(AttentionEvent.ResolveActionBatch(AttentionReducer.approvalItemId("s1", "b"), setOf("a")))
+        runCurrent()
+        assertEquals(listOf("a"), repository.actionChallengeIds)
+        assertEquals(listOf(ApprovalActionDecision("a", "approve"), ApprovalActionDecision("b", "deny")), repository.actionDecisions)
+        assertEquals(proof, repository.lastProof)
+        assertTrue(viewModel.state.value.items.isEmpty())
+    }
+
+    @Test
+    fun `uncertain approved action batch remains locked until confirmed`() = runTest(dispatcher.scheduler) {
+        val repository = FakeRepository(sessions = listOf(Session(id = "s1", title = "One")), approvals = listOf(
+            Approval(id = "b", sessionId = "s1", title = "Batch", kind = "approved_action_batch_request", runId = "r", batchId = "b",
+                actions = listOf(ApprovalAction(id = "a"))),
+        ))
+        repository.actionUncertain = true
+        val viewModel = AttentionCenterViewModel(repository)
+        runCurrent()
+        val id = AttentionReducer.approvalItemId("s1", "b")
+        viewModel.onEvent(AttentionEvent.ResolveActionBatch(id, setOf("a")))
+        runCurrent()
+        assertEquals(id, viewModel.state.value.resolvingItemId)
+        viewModel.onEvent(AttentionEvent.ResolveActionBatch(id, setOf("a")))
+        runCurrent()
+        assertEquals(1, repository.actionCalls)
+        repository.approvalState.value = emptyList()
+        advanceTimeBy(2_000)
+        runCurrent()
+        assertNull(viewModel.state.value.resolvingItemId)
+    }
+
+    @Test
+    fun `denying a passkey batch does not request a credential`() = runTest(dispatcher.scheduler) {
+        val repository = FakeRepository(sessions = listOf(Session(id = "s1", title = "One")), approvals = listOf(
+            Approval(id = "b", sessionId = "s1", title = "Batch", kind = "approved_action_batch_request", runId = "r", batchId = "b",
+                actions = listOf(ApprovalAction(id = "a", needsPasskey = true))),
+        ))
+        val viewModel = AttentionCenterViewModel(repository, passkeyProvider = { error("Unexpected credential request") })
+        runCurrent()
+        viewModel.onEvent(AttentionEvent.ResolveActionBatch(AttentionReducer.approvalItemId("s1", "b"), emptySet(), "deny"))
+        runCurrent()
+        assertEquals(listOf(ApprovalActionDecision("a", "deny")), repository.actionDecisions)
+        assertNull(repository.lastProof)
+        assertTrue(repository.actionChallengeIds.isEmpty())
+    }
+
+    @Test
+    fun `switching computers while obtaining a credential cannot submit to either computer`() = runTest(dispatcher.scheduler) {
+        val original = FakeRepository(sessions = listOf(Session(id = "s1", title = "One")), approvals = listOf(
+            Approval(id = "b", sessionId = "s1", title = "Batch", kind = "approved_action_batch_request", runId = "r", batchId = "b",
+                actions = listOf(ApprovalAction(id = "a", needsPasskey = true))),
+        ))
+        val other = FakeRepository()
+        val switching = SwitchingSessionRepository(CoroutineScope(dispatcher)).apply { switchTo(original) }
+        val proof = WebAuthnProofDto("id", "raw", WebAuthnProofResponseDto("client", "auth", "sig"))
+        val viewModel = AttentionCenterViewModel(switching, passkeyProvider = { switching.switchTo(other); proof })
+        runCurrent()
+        viewModel.onEvent(AttentionEvent.ResolveActionBatch(AttentionReducer.approvalItemId("s1", "b"), setOf("a")))
+        runCurrent()
+        assertEquals(0, original.actionCalls)
+        assertEquals(0, other.actionCalls)
+    }
+
     private class FakeRepository(
         sessions: List<Session> = emptyList(),
         approvals: List<Approval> = emptyList(),
@@ -458,6 +531,10 @@ class AttentionCenterViewModelTest {
         var challengeCalls = 0
         var lastProof: WebAuthnProofDto? = null
         var privilegedUncertain = false
+        var actionChallengeIds: List<String> = emptyList()
+        var actionDecisions: List<ApprovalActionDecision> = emptyList()
+        var actionCalls = 0
+        var actionUncertain = false
 
         override val connectionState: StateFlow<RuntimeConnectionState> =
             MutableStateFlow(RuntimeConnectionState.Connected).asStateFlow()
@@ -523,6 +600,19 @@ class AttentionCenterViewModelTest {
             runtimeApprovalCalls += 1
             lastChoices = choices
             lastCustomAnswers = customAnswers
+        }
+
+        override suspend fun createApprovedActionWebAuthnChallenge(runId: String, batchId: String, selectedActionIds: List<String>, requestId: String): JsonObject {
+            actionChallengeIds = selectedActionIds
+            return buildJsonObject { }
+        }
+
+        override suspend fun resolveApprovedActionBatchWithProof(sessionId: String, runId: String, batchId: String,
+            decisions: List<ApprovalActionDecision>, approvalIntent: String, webauthnProof: WebAuthnProofDto?, requestId: String) {
+            actionCalls += 1
+            actionDecisions = decisions
+            lastProof = webauthnProof
+            if (actionUncertain) error("connection lost after submission")
         }
 
         override suspend fun createPrivilegedCategoryWebAuthnChallenge(runId: String, batchId: String, category: String, checkedOpIds: List<String>, requestId: String): JsonObject {

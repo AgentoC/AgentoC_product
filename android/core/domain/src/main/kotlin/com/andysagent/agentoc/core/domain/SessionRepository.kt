@@ -333,6 +333,7 @@ interface SessionRepository {
         webauthnProof: WebAuthnProofDto? = null,
         requestId: String = newRequestId(),
     ) {
+        require(webauthnProof == null) { "This repository cannot submit a passkey proof" }
         resolveApprovedActionBatch(sessionId, runId, batchId, decisions, approvalIntent, requestId)
     }
 
