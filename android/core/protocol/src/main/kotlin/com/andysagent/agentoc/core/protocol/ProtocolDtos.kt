@@ -1009,6 +1009,7 @@ data class RuntimeApprovalDecisionRequestDto(
     val choices: List<String> = emptyList(),
     val customAnswer: String? = null,
     val customAnswers: List<String> = emptyList(),
+    val multiChoices: List<List<Int>>? = null,
 )
 
 fun parsePairingUri(value: String): PairingUriDto {

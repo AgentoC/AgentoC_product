@@ -385,6 +385,10 @@ interface SessionRepository {
         customAnswers: List<String>,
         requestId: String = newRequestId(),
     ) { error("Per-question approval answers are not supported by this repository") }
+    suspend fun resolveRuntimeApprovalWithMultiChoices(
+        runId: String, approvalId: String, multiChoices: List<List<Int>>, customAnswers: List<String>,
+        requestId: String = newRequestId(),
+    ) { error("Multiple-choice approval answers are not supported by this repository") }
     suspend fun updateSessionGoal(sessionId: String, goal: String?, autoContinue: Boolean = false) {}
     /** Submits a server-owned plan artifact action; never encodes the action as chat text. */
     suspend fun submitPlanAction(

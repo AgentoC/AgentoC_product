@@ -72,6 +72,7 @@ data class DecisionQuestionUiState(
     val submissionError: String? = null,
     val questionGroups: List<ApprovalQuestion> = emptyList(),
     val selectedByQuestion: Map<Int, Int> = emptyMap(),
+    val multiSelectedByQuestion: Map<Int, Set<Int>> = emptyMap(),
     val customByQuestion: Map<Int, String> = emptyMap(),
 )
 
@@ -87,7 +88,7 @@ fun DecisionQuestionCard(
     onMultiWriteInChanged: (Int, String) -> Unit = { _, _ -> },
     onDeny: () -> Unit = {},
 ) {
-    if (state.questionGroups.size > 1) {
+    if (state.questionGroups.size > 1 || state.questionGroups.any { it.isMultiSelect }) {
         MultiDecisionQuestionCard(state, onMultiOptionSelected, onMultiWriteInChanged, onSubmit, onDeny, modifier)
         return
     }
@@ -189,7 +190,7 @@ private fun MultiDecisionQuestionCard(
     val colors = LocalAgentocColors.current
     val editable = !state.isSubmitting && !state.isSubmitted
     val complete = state.questionGroups.indices.all { index ->
-        state.selectedByQuestion[index] in state.questionGroups[index].options.indices ||
+        state.multiSelectedByQuestion[index].orEmpty().isNotEmpty() || state.selectedByQuestion[index] in state.questionGroups[index].options.indices ||
             state.customByQuestion[index].orEmpty().isNotBlank()
     }
     Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = colors.surfaceLow,
@@ -201,8 +202,8 @@ private fun MultiDecisionQuestionCard(
                     Text(question.question, style = MaterialTheme.typography.titleMedium, color = colors.primaryContent,
                         modifier = Modifier.semantics { heading() })
                     question.options.forEachIndexed { optionIndex, option ->
-                        DecisionOptionRow(text = option.label, isSelected = state.selectedByQuestion[questionIndex] == optionIndex,
-                            isMultiSelect = false, isRecommended = false, enabled = editable,
+                        DecisionOptionRow(text = option.label, isSelected = if (question.isMultiSelect) optionIndex in state.multiSelectedByQuestion[questionIndex].orEmpty() else state.selectedByQuestion[questionIndex] == optionIndex,
+                            isMultiSelect = question.isMultiSelect, isRecommended = false, enabled = editable,
                             onClick = { onSelect(questionIndex, optionIndex) }, modifier = Modifier.testTag("decision-$questionIndex-option-$optionIndex"))
                     }
                     val writeInLabel = stringResource(R.string.decision_write_in)

@@ -131,6 +131,33 @@ class ApprovalResolutionCoordinator(private val repository: SessionRepository) {
         )
     }
 
+    suspend fun resolveMultiChoiceQuestions(
+        sessionId: String, approvalId: String, selections: List<List<Int>>, customAnswers: List<String>,
+        requestId: String = newRequestId(),
+    ): Outcome {
+        val read = readPending(sessionId, approvalId)
+        if (read is PendingRead.Error) return Outcome.Failed(read.message)
+        if (read !is PendingRead.Found || read.approval.status != "pending") return Outcome.Stale
+        val pending = read.approval
+        if (pending.requiresStructuredResolution() || !pending.isQuestionApproval()) return Outcome.RequiresSession
+        val questions = pending.resolutionQuestions()
+        if (questions.isEmpty() || selections.size != questions.size || customAnswers.size != questions.size) return Outcome.Failed("问题回答不完整")
+        val answers = customAnswers.map { it.trim().take(MAX_CUSTOM_ANSWER) }
+        for (index in questions.indices) {
+            val question = questions[index]
+            val selected = selections[index]
+            if (selected.distinct().size != selected.size || selected.any { it !in question.options.indices } ||
+                (!question.isMultiSelect && (selected.size > 1 || (selected.isNotEmpty() && answers[index].isNotEmpty()))) ||
+                (selected.isEmpty() && answers[index].isEmpty())) return Outcome.Failed("问题回答无效")
+        }
+        val runId = pending.runId ?: return Outcome.Failed("当前会话不支持多选回答")
+        return try {
+            repository.resolveRuntimeApprovalWithMultiChoices(runId, approvalId, selections, answers, requestId)
+            runCatching { repository.refreshSessionDetail(sessionId) }
+            Outcome.Submitted
+        } catch (error: Throwable) { Outcome.Failed(error.message ?: "提交回答失败") }
+    }
+
     private suspend fun resolveQuestionChoices(
         sessionId: String,
         approvalId: String,

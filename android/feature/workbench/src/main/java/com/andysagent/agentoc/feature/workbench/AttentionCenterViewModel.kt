@@ -58,6 +58,7 @@ sealed interface AttentionEvent {
         val customAnswer: String = "",
         val customAnswers: List<String> = emptyList(),
     ) : AttentionEvent
+    data class ResolveMultiChoices(val itemId: String, val selections: List<List<Int>>, val customAnswers: List<String>) : AttentionEvent
     data object ClearError : AttentionEvent
 }
 
@@ -124,6 +125,7 @@ class AttentionCenterViewModel(
             is AttentionEvent.ResolvePrivilegedCategory -> resolvePrivilegedCategory(event)
             is AttentionEvent.ResolveQuestion -> resolveQuestion(event)
             is AttentionEvent.ResolveQuestions -> resolveQuestions(event)
+            is AttentionEvent.ResolveMultiChoices -> resolveMultiChoices(event)
             AttentionEvent.ClearError -> mutableState.update { it.copy(error = null) }
         }
     }
@@ -322,6 +324,18 @@ class AttentionCenterViewModel(
                 optionIndex = event.optionIndex,
                 customAnswer = event.customAnswer,
             )
+            consumeResolution(event.itemId, outcome)
+        }
+    }
+
+    private fun resolveMultiChoices(event: AttentionEvent.ResolveMultiChoices) {
+        val current = mutableState.value
+        if (current.resolvingItemId != null) return
+        val item = current.items.firstOrNull { it.id == event.itemId } ?: return
+        val approval = item.approval ?: return
+        mutableState.update { it.copy(resolvingItemId = event.itemId, error = null) }
+        viewModelScope.launch {
+            val outcome = coordinator.resolveMultiChoiceQuestions(item.sessionId, approval.id, event.selections, event.customAnswers)
             consumeResolution(event.itemId, outcome)
         }
     }

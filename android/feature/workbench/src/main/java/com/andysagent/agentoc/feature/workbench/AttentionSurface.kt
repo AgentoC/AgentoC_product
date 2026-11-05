@@ -281,7 +281,7 @@ private fun AttentionCard(
             action.risk?.trim()?.lowercase() in setOf("high", "critical", "danger", "dangerous", "severe", "elevated")
         }
     val questions = if (isAskUser) approvalQuestions(item) else emptyList()
-    var selectedOptions by remember(item.id, questions) { mutableStateOf<Map<Int, Int>>(emptyMap()) }
+    var selectedOptions by remember(item.id, questions) { mutableStateOf<Map<Int, Set<Int>>>(emptyMap()) }
     var customAnswers by remember(item.id, questions) { mutableStateOf<Map<Int, String>>(emptyMap()) }
     var selectedActionIds by remember(item.id) {
         mutableStateOf(item.approval?.actions.orEmpty()
@@ -648,8 +648,11 @@ private fun AttentionCard(
                         selectedOptions = selectedOptions,
                         customAnswers = customAnswers,
                         onSelectOption = { questionIndex, optionIndex ->
-                            selectedOptions = selectedOptions + (questionIndex to optionIndex)
-                            customAnswers = customAnswers - questionIndex
+                            val previous = selectedOptions[questionIndex].orEmpty()
+                            val multi = questions[questionIndex].isMultiSelect
+                            val next = if (multi) previous.let { if (optionIndex in it) it - optionIndex else it + optionIndex } else setOf(optionIndex)
+                            selectedOptions = selectedOptions + (questionIndex to next)
+                            if (!multi) customAnswers = customAnswers - questionIndex
                         },
                         onCustomAnswerChange = { questionIndex, answer ->
                             customAnswers = if (answer.isEmpty()) {
@@ -657,7 +660,7 @@ private fun AttentionCard(
                             } else {
                                 customAnswers + (questionIndex to answer)
                             }
-                            if (answer.isNotEmpty()) {
+                            if (answer.isNotEmpty() && !questions[questionIndex].isMultiSelect) {
                                 selectedOptions = selectedOptions - questionIndex
                             }
                         },
@@ -710,7 +713,7 @@ private fun QuestionOptionsBody(
     questions: List<ApprovalQuestion>,
     expanded: Boolean,
     resolving: Boolean,
-    selectedOptions: Map<Int, Int>,
+    selectedOptions: Map<Int, Set<Int>>,
     customAnswers: Map<Int, String>,
     onSelectOption: (Int, Int) -> Unit,
     onCustomAnswerChange: (Int, String) -> Unit,
@@ -718,9 +721,9 @@ private fun QuestionOptionsBody(
 ) {
     val colors = LocalAgentocColors.current
     val options = questions.firstOrNull()?.options.orEmpty()
-    if (questions.size > 1) {
+    if (questions.size > 1 || questions.any { it.isMultiSelect }) {
         val answeredCount = questions.indices.count { questionIndex ->
-            selectedOptions[questionIndex] in questions[questionIndex].options.indices ||
+            selectedOptions[questionIndex].orEmpty().isNotEmpty() ||
                 customAnswers[questionIndex].orEmpty().trim().isNotEmpty()
         }
         Text(
@@ -767,7 +770,7 @@ private fun QuestionOptionsBody(
                             label = option.label,
                             description = option.description,
                             enabled = !resolving,
-                            selected = selectedOptions[questionIndex] == optionIndex,
+                            selected = optionIndex in selectedOptions[questionIndex].orEmpty(),
                             onClick = { onSelectOption(questionIndex, optionIndex) },
                         )
                     }
@@ -965,18 +968,18 @@ private fun QuestionOptionRow(
 private fun QuestionAnswerRail(
     item: AttentionItem,
     questions: List<ApprovalQuestion>,
-    selectedOptions: Map<Int, Int>,
+    selectedOptions: Map<Int, Set<Int>>,
     customAnswers: Map<Int, String>,
     resolving: Boolean,
     onEvent: (AttentionEvent) -> Unit,
 ) {
-    if (questions.size > 1) {
+    if (questions.size > 1 || questions.any { it.isMultiSelect }) {
         val customAnswerIndexes = questions.indices.filter { questionIndex ->
-            selectedOptions[questionIndex] !in questions[questionIndex].options.indices &&
+            selectedOptions[questionIndex].orEmpty().isEmpty() &&
                 customAnswers[questionIndex].orEmpty().trim().isNotEmpty()
         }
         val answeredCount = questions.indices.count { questionIndex ->
-            selectedOptions[questionIndex] in questions[questionIndex].options.indices ||
+            selectedOptions[questionIndex].orEmpty().isNotEmpty() ||
                 questionIndex in customAnswerIndexes
         }
         val canSubmit = answeredCount == questions.size
@@ -995,10 +998,13 @@ private fun QuestionAnswerRail(
             AgentoButton(
                 text = "发送",
                 onClick = {
-                    onEvent(
+                    if (questions.any { it.isMultiSelect }) onEvent(AttentionEvent.ResolveMultiChoices(
+                        item.id, questions.indices.map { selectedOptions[it].orEmpty().sorted() },
+                        questions.indices.map { customAnswers[it].orEmpty().trim() },
+                    )) else onEvent(
                         AttentionEvent.ResolveQuestions(
                             itemId = item.id,
-                            choices = questions.indices.map { selectedOptions[it] ?: -1 },
+                            choices = questions.indices.map { selectedOptions[it].orEmpty().singleOrNull() ?: -1 },
                             customAnswer = normalizedAnswer,
                             customAnswers = questions.indices.map { customAnswers[it].orEmpty().trim() },
                         ),

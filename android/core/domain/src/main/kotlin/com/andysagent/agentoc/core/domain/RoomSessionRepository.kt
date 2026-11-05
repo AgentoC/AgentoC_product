@@ -2257,6 +2257,15 @@ class RoomSessionRepository(
         }
     }
 
+    override suspend fun resolveRuntimeApprovalWithMultiChoices(runId: String, approvalId: String, multiChoices: List<List<Int>>, customAnswers: List<String>, requestId: String) {
+        val body = codec.encode(serializer<RuntimeApprovalDecisionRequestDto>(),
+            RuntimeApprovalDecisionRequestDto("approve_with_multi_choices", requestId, customAnswers = customAnswers, multiChoices = multiChoices))
+        val path = "/api/runs/${encode(runId)}/approvals/${encode(approvalId)}"
+        executePending(runId, requestId, "runtime_approval", path, body) {
+            execute(ApiRequest("POST", path, body, requestId, requestId))
+        }
+    }
+
     override suspend fun resolveRuntimeApprovalWithAnswers(
         runId: String,
         approvalId: String,

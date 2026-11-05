@@ -1199,10 +1199,10 @@ class ChatViewModel(
             is ChatEvent.DecisionWriteInChanged -> updateState {
                 val current = activeDecision
                 if (current != null && current.id == event.questionId) {
-                    if (current.questionGroups.size > 1 && event.questionIndex in current.questionGroups.indices) {
+                    if ((current.questionGroups.size > 1 || current.questionGroups.any { it.isMultiSelect }) && event.questionIndex in current.questionGroups.indices) {
                         copy(activeDecision = current.copy(
                             customByQuestion = current.customByQuestion + (event.questionIndex to event.text),
-                            selectedByQuestion = current.selectedByQuestion - event.questionIndex,
+                            selectedByQuestion = if (event.text.isNotEmpty()) current.selectedByQuestion - event.questionIndex else current.selectedByQuestion,
                         ))
                     } else copy(activeDecision = current.copy(writeInText = event.text))
                 } else this
@@ -1695,8 +1695,14 @@ class ChatViewModel(
         val current = mutableState.value.activeDecision ?: return
         if (current.id != questionId || current.isSubmitted || current.isSubmitting) return
 
-        if (current.questionGroups.size > 1) {
+        if (current.questionGroups.size > 1 || current.questionGroups.any { it.isMultiSelect }) {
             if (questionIndex !in current.questionGroups.indices || optionIndex !in current.questionGroups[questionIndex].options.indices) return
+            if (current.questionGroups[questionIndex].isMultiSelect) {
+                val selected = current.multiSelectedByQuestion[questionIndex].orEmpty()
+                val next = if (optionIndex in selected) selected - optionIndex else selected + optionIndex
+                updateState { copy(activeDecision = current.copy(multiSelectedByQuestion = current.multiSelectedByQuestion + (questionIndex to next))) }
+                return
+            }
             updateState { copy(activeDecision = current.copy(
                 selectedByQuestion = current.selectedByQuestion + (questionIndex to optionIndex),
                 customByQuestion = current.customByQuestion - questionIndex,
@@ -1721,16 +1727,21 @@ class ChatViewModel(
         if (currentDecision.id != questionId || currentDecision.isSubmitted || currentDecision.isSubmitting) return
         val sessionId = mutableState.value.sessionId ?: return
 
-        if (currentDecision.questionGroups.size > 1) {
+        if (currentDecision.questionGroups.size > 1 || currentDecision.questionGroups.any { it.isMultiSelect }) {
             val fixed = selectedRepository ?: return
             val choices = currentDecision.questionGroups.indices.map { currentDecision.selectedByQuestion[it] ?: -1 }
+            val selections = currentDecision.questionGroups.indices.map { index ->
+                if (currentDecision.questionGroups[index].isMultiSelect) currentDecision.multiSelectedByQuestion[index].orEmpty().sorted()
+                else currentDecision.selectedByQuestion[index]?.let { listOf(it) }.orEmpty()
+            }
             val answers = currentDecision.questionGroups.indices.map { currentDecision.customByQuestion[it].orEmpty().trim() }
-            if (choices.indices.any { choices[it] < 0 && answers[it].isBlank() }) return
+            if (selections.indices.any { selections[it].isEmpty() && answers[it].isBlank() }) return
             updateState { copy(activeDecision = currentDecision.copy(isSubmitting = true, submissionError = null)) }
             viewModelScope.launch {
-                val outcome = ApprovalResolutionCoordinator(fixed).resolveQuestionsApproval(
-                    sessionId, currentDecision.approvalId, choices, customAnswers = answers,
-                )
+                val coordinator = ApprovalResolutionCoordinator(fixed)
+                val outcome = if (currentDecision.questionGroups.any { it.isMultiSelect })
+                    coordinator.resolveMultiChoiceQuestions(sessionId, currentDecision.approvalId, selections, answers)
+                else coordinator.resolveQuestionsApproval(sessionId, currentDecision.approvalId, choices, customAnswers = answers)
                 if (!isCurrentSession(sessionId) || mutableState.value.activeDecision?.id != questionId) return@launch
                 when (outcome) {
                     ApprovalResolutionCoordinator.Outcome.Submitted -> {
@@ -2034,7 +2045,7 @@ class ChatViewModel(
                             approval = approval,
                             activeDecision = decision?.let { next -> previous?.let {
                                 next.copy(selectedIndices = it.selectedIndices, writeInText = it.writeInText,
-                                    selectedByQuestion = it.selectedByQuestion, customByQuestion = it.customByQuestion,
+                                    selectedByQuestion = it.selectedByQuestion, multiSelectedByQuestion = it.multiSelectedByQuestion, customByQuestion = it.customByQuestion,
                                     isSubmitted = it.isSubmitted, isSubmitting = it.isSubmitting, submissionError = it.submissionError)
                             } ?: next },
                             resolvingApprovalId = resolvingApprovalId?.takeIf { it == approval?.id },

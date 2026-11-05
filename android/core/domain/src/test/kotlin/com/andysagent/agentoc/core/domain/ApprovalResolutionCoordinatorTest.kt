@@ -30,6 +30,7 @@ class ApprovalResolutionCoordinatorTest {
         var lastChoices: List<String> = emptyList()
         var lastCustomAnswer: String? = null
         var lastCustomAnswers: List<String> = emptyList()
+        var lastMultiChoices: List<List<Int>> = emptyList()
         val confirmations = mutableListOf<Triple<String, String, String>>()
         val refreshes = mutableListOf<String>()
         var findError: Throwable? = null
@@ -114,6 +115,11 @@ class ApprovalResolutionCoordinatorTest {
             lastChoices = choices
             lastCustomAnswers = customAnswers
             runtimeApprovals += Triple(runId, approvalId, "approve_with_answers")
+        }
+        override suspend fun resolveRuntimeApprovalWithMultiChoices(runId: String, approvalId: String, multiChoices: List<List<Int>>, customAnswers: List<String>, requestId: String) {
+            lastMultiChoices = multiChoices
+            lastCustomAnswers = customAnswers
+            runtimeApprovals += Triple(runId, approvalId, "approve_with_multi_choices")
         }
 
         override suspend fun resumePendingOperations(): Int = 0
@@ -323,6 +329,20 @@ class ApprovalResolutionCoordinatorTest {
         assertEquals(ApprovalResolutionCoordinator.Outcome.Submitted, outcome)
         assertEquals(listOf("1", "-1"), repository.lastChoices)
         assertEquals("Canary rollout", repository.lastCustomAnswer)
+    }
+
+    @Test
+    fun `multi select validates each question and preserves selected indexes and custom text`() = runTest {
+        val repository = FakeRepository()
+        repository.approvals += Approval(id = "q", sessionId = "s1", title = "Questions", runId = "r", kind = "question",
+            questions = listOf(ApprovalQuestion(question = "First", isMultiSelect = true, options = listOf(ApprovalOption("A"), ApprovalOption("B"))),
+                ApprovalQuestion(question = "Second", options = listOf(ApprovalOption("C")))))
+        val coordinator = ApprovalResolutionCoordinator(repository)
+        assertEquals(ApprovalResolutionCoordinator.Outcome.Failed("问题回答无效"), coordinator.resolveMultiChoiceQuestions("s1", "q", listOf(listOf(0, 2), emptyList()), listOf("", "answer")))
+        assertTrue(repository.runtimeApprovals.isEmpty())
+        assertEquals(ApprovalResolutionCoordinator.Outcome.Submitted, coordinator.resolveMultiChoiceQuestions("s1", "q", listOf(listOf(0, 1), emptyList()), listOf(" extra ", " answer ")))
+        assertEquals(listOf(listOf(0, 1), emptyList()), repository.lastMultiChoices)
+        assertEquals(listOf("extra", "answer"), repository.lastCustomAnswers)
     }
 
     @Test

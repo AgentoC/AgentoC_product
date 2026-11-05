@@ -85,6 +85,25 @@ class ApprovalAttentionDeviceTest {
         }
     }
 
+    @Test fun multiSelectQuestionSendsAllSelectedOptionsAndCustomText() {
+        val approval = Approval(id = "q", sessionId = "s", runId = "r", title = "Choose",
+            questions = listOf(ApprovalQuestion(question = "Choose features", isMultiSelect = true,
+                options = listOf(ApprovalOption("Feature A"), ApprovalOption("Feature B")))))
+        val state = AttentionReducer.reduce(AttentionUiState(), AttentionReducer.project(listOf(Session("s", "Other session")), listOf(approval))).copy(expanded = true)
+        val events = mutableListOf<AttentionEvent>()
+        rule.setContent { AgentocTheme { AttentionSurface(state, events::add, onOpenSession = {}) } }
+        rule.onNodeWithText("Feature A").performClick()
+        rule.onNodeWithText("Feature B").performClick()
+        rule.onNode(hasSetTextAction() and hasAnyAncestor(hasContentDescription("问题 1 的自定义回复")), useUnmergedTree = true).performTextInput("extra")
+        rule.onNodeWithText("发送").performClick()
+        rule.runOnIdle {
+            assertEquals("Events: $events", 1, events.filterIsInstance<AttentionEvent.ResolveMultiChoices>().size)
+            val answer = events.filterIsInstance<AttentionEvent.ResolveMultiChoices>().single()
+            assertEquals(listOf(listOf(0, 1)), answer.selections)
+            assertEquals(listOf("extra"), answer.customAnswers)
+        }
+    }
+
     @Test fun closingNoticeDoesNotMakeAnApprovalDecision() {
         val approval = Approval(id = "a", sessionId = "s", runId = "r", title = "Run command")
         val state = AttentionReducer.reduce(AttentionUiState(), AttentionReducer.project(listOf(Session("s", "Other session")), listOf(approval)))
@@ -117,6 +136,26 @@ class ApprovalAttentionDeviceTest {
         rule.onNodeWithTag("decision-1-write-in").performTextInput("beta")
         rule.onNodeWithTag("decision-submit").performClick()
         rule.runOnIdle { assertEquals(mapOf(0 to "alpha", 1 to "beta"), submitted) }
+    }
+
+    @Test fun conversationMultiSelectKeepsBothOptionsAndExtraText() {
+        val question = ApprovalQuestion(question = "Features", isMultiSelect = true,
+            options = listOf(ApprovalOption("Feature A"), ApprovalOption("Feature B")))
+        var state by mutableStateOf(DecisionQuestionUiState(id = "q", question = "Features", options = listOf("Feature A", "Feature B"),
+            questionGroups = listOf(question)))
+        var submitted: DecisionQuestionUiState? = null
+        rule.setContent { AgentocTheme { DecisionQuestionCard(state = state, onOptionSelected = {}, onWriteInChanged = {},
+            onSubmit = { submitted = state }, onMultiOptionSelected = { index, option ->
+                state = state.copy(multiSelectedByQuestion = state.multiSelectedByQuestion + (index to (state.multiSelectedByQuestion[index].orEmpty() + option)))
+            }, onMultiWriteInChanged = { index, text -> state = state.copy(customByQuestion = state.customByQuestion + (index to text)) }) } }
+        rule.onNodeWithTag("decision-0-option-0").performClick()
+        rule.onNodeWithTag("decision-0-option-1").performClick()
+        rule.onNodeWithTag("decision-0-write-in").performTextInput("extra")
+        rule.onNodeWithTag("decision-submit").performClick()
+        rule.runOnIdle {
+            assertEquals(setOf(0, 1), submitted?.multiSelectedByQuestion?.get(0))
+            assertEquals("extra", submitted?.customByQuestion?.get(0))
+        }
     }
 
     @Test fun privilegedCategoriesKeepDeleteOptInAndUseSeparateActions() {
