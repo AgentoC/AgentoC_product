@@ -62,6 +62,16 @@ try {
   assert.match(sheetText, /Deletion may be irreversible/);
   assert.match(sheetText, /rm -f/);
   assert.equal((sheetText.match(/May delete: \/tmp\/example_file\.txt/g) || []).length, 1);
+  await page.evaluate(() => { window.AgentoCDecisions.noteResponse({approvalId:'qa'}); window.getApprovalTitle = e => e.reason; });
+  await page.waitForTimeout(250);
+  await page.evaluate(() => window.AgentoCDecisions.noteRequest({type:'approval_request',approvalId:'legacy',kind:'command',
+    reason:'Remove example',command:'if true; then rm example; fi',explanation:{summary:'包含 3 步操作',
+      reason:'命令串联了多个步骤，部分行为无法静态确认',saferAlternative:'拆成单条命令逐步确认后再执行'}}));
+  await page.locator('#decisionSheet .oneui-notification__summary').click();
+  const legacyText = await page.locator('#decisionSheet').innerText();
+  assert.equal((legacyText.match(/Remove example/g) || []).length, 1);
+  assert.doesNotMatch(legacyText, /包含 3 步操作|Run command/);
+  assert.match(legacyText, /Review conditional command/);
   const localePage = await browser.newPage();
   await localePage.setContent('<!doctype html><html><head></head><body></body></html>');
   await localePage.addScriptTag({content: await read('static/chat/i18n.js')});

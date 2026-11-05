@@ -629,7 +629,7 @@ private fun AttentionCard(
                         verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact),
                     ) {
                         item.approval?.explanation?.let { explanation ->
-                            ApprovalExplanationContent(explanation.toExplanationUiState(), skipSummary = localized?.summary == headline && !headlineOverflows, skipReason = localized?.reason != null && localized.reason == presentation.consequence && !consequenceOverflows)
+                            ApprovalExplanationContent(explanation.toExplanationUiState(), skipSummary = (localized?.operation == null && localized?.riskCode != null) || (localized?.summary == headline && !headlineOverflows), skipReason = localized?.reason != null && localized.reason == presentation.consequence && !consequenceOverflows)
                         }
                         if (isPrivilegedCategoryBatch) {
                             listOf("privileged_other" to R.string.approval_category_privileged,
@@ -654,7 +654,8 @@ private fun AttentionCard(
                                 },
                             )
                         }
-                        ApprovalDetails(item, skipActionList = isActionBatch)
+                        ApprovalDetails(item, skipActionList = isActionBatch,
+                            skipProviderDescription = item.approval?.reason == headline && !headlineOverflows)
                         Spacer(Modifier.size(AgentocSpacing.Compact))
                     }
                     }
@@ -1269,9 +1270,9 @@ internal fun approvalLabel(label: String?, fallback: String): String = when {
 }
 
 @Composable
-private fun ApprovalDetails(item: AttentionItem, skipActionList: Boolean) {
+private fun ApprovalDetails(item: AttentionItem, skipActionList: Boolean, skipProviderDescription: Boolean) {
     val colors = LocalAgentocColors.current
-    val details = approvalDetails(item, skipActionList)
+    val details = approvalDetails(item, skipActionList).filterNot { skipProviderDescription && it.label == R.string.approval_provider_description }
     if (details.isEmpty()) return
     Column(
         modifier = Modifier.fillMaxWidth(),

@@ -1303,7 +1303,7 @@ internal fun ApprovalCardContent(
             Column(Modifier.fillMaxWidth().heightIn(max = 160.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 approval.explanation?.let { explanation ->
-                    ApprovalExplanationContent(explanation, skipSummary = localized?.summary == description && !descriptionOverflows)
+                    ApprovalExplanationContent(explanation, skipSummary = (localized?.operation == null && localized?.riskCode != null) || (localized?.summary == description && !descriptionOverflows))
                 }
                 scopeDetails.forEach { detail ->
                     Text(detail, style = MaterialTheme.typography.bodySmall, color = colors.secondaryContent)

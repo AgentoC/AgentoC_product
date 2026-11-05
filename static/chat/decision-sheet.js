@@ -1032,6 +1032,8 @@
     const permText = typeof root.describeApprovalPermissions === "function"
       ? root.describeApprovalPermissions(evt?.permissions)
       : "";
+    const heading = displayApprovalExplanation(evt?.explanation)?.operation ? compactApprovalText(evt)
+      : (typeof root.getApprovalTitle === "function" ? root.getApprovalTitle(evt) : compactApprovalText(evt));
     const fields = [
       // Plan approvals (Claude Code ExitPlanMode) carry the drafted plan body
       // in `reason` as markdown; render it first as the card's core content
@@ -1040,7 +1042,7 @@
       ...(String(evt?.kind || "").toLowerCase() === "plan"
         ? [[tr("approval.detail.plan"), evt?.reason, "markdown"]]
         : []),
-      ...(String(evt?.kind || "").toLowerCase() !== "plan" && evt?.reason ? [[tr("decisionSheet.providerDescription"), evt.reason, false]] : []),
+      ...(String(evt?.kind || "").toLowerCase() !== "plan" && evt?.reason && String(evt.reason).trim() !== heading ? [[tr("decisionSheet.providerDescription"), evt.reason, false]] : []),
       [tr("approval.detail.command"), evt?.command, true],
       [tr("approval.detail.cwd"), evt?.cwd, false],
       [tr("approval.detail.files"),
@@ -1099,7 +1101,7 @@
     // 技术细节（command/cwd/files/...）之后渲染——用户先核对"要执行什么"，
     // 再读"为什么/有没有更安全的做法"。
     const display = displayApprovalExplanation(evt?.explanation);
-    appendExplanation(evt?.explanation, body, Boolean(display?.summary && display.summary === compactApprovalText(evt)));
+    appendExplanation(evt?.explanation, body, Boolean((!display?.operation && display?.riskCode) || (display?.summary && display.summary === compactApprovalText(evt))));
   }
 
   function compactApprovalText(evt) {

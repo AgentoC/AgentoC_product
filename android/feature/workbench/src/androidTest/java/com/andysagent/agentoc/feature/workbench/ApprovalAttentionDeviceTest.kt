@@ -87,6 +87,16 @@ class ApprovalAttentionDeviceTest {
         rule.onNodeWithText(rule.activity.getString(R.string.attention_deny)).assertIsDisplayed()
     }
 
+    @Test fun legacyProviderHeadlineDoesNotRepeatInExpandedDetails() {
+        val approval = Approval(id = "legacy", sessionId = "s", runId = "r", title = "Bash", reason = "Remove example",
+            command = "if true; then rm example; fi", explanation = ApprovalExplanation(
+                reason = "命令串联了多个步骤，部分行为无法静态确认", saferAlternative = "拆成单条命令逐步确认后再执行"))
+        val state = AttentionReducer.reduce(AttentionUiState(), AttentionReducer.project(listOf(Session("s", "Other session")), listOf(approval))).copy(expanded = true)
+        rule.setContent { AgentocTheme { AttentionSurface(state, onEvent = {}, onOpenSession = {}) } }
+        rule.onAllNodesWithText("Remove example").assertCountEquals(1)
+        rule.onAllNodesWithText(rule.activity.getString(R.string.approval_operation_run)).assertCountEquals(0)
+    }
+
     @Test fun batchShowsEachActionsExplanation() {
         val approval = Approval(id = "batch", sessionId = "s", runId = "r", batchId = "batch", title = "Batch", kind = "privileged_batch_request",
             actions = listOf(
