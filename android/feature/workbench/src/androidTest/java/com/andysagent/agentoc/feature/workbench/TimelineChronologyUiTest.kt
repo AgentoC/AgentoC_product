@@ -64,6 +64,27 @@ class TimelineChronologyUiTest {
         rule.onNodeWithText("Page thought").assertIsDisplayed()
     }
 
+    @Test fun completedLegacyTurnRetainsExpandableElapsedRow() {
+        val items = listOf(
+            TimelineItem.Message("u-legacy", 1, TimelineRole.User, "Question", true),
+            TimelineItem.Message("progress-legacy", 2, TimelineRole.Agent, "Checking", true),
+            TimelineItem.Operation("thought-legacy", 3, TimelineOperationKind.Tool, "Thinking", "Reasoning", TimelineOperationStatus.Completed, isReasoning = true),
+            TimelineItem.Message("answer-legacy", 4, TimelineRole.Agent, "Final legacy answer", true),
+        )
+        val turn = TurnGroupProjector().project(items).single()
+        rule.setContent { AgentocTheme { Column {
+            TurnTimelineView(turn, true, null, null, {}, { _, _ -> }, {}, {}, runDuration = { androidx.compose.material3.Text("Elapsed 3s") })
+        } } }
+        rule.onNodeWithText("Final legacy answer").assertIsDisplayed()
+        rule.onNodeWithText("Checking").assertDoesNotExist()
+        rule.onNodeWithTag("turn-process-toggle").assertHasClickAction()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf(rule.activity.getString(R.string.timeline_details_show))))
+            .performClick()
+        rule.onNodeWithText("Checking").assertIsDisplayed()
+        rule.onNodeWithTag("turn-process-toggle")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf(rule.activity.getString(R.string.timeline_details_hide))))
+    }
+
     @Test fun completedTurnCollapsesProcessAndKeepsFinalAnswerVisible() {
         val items = listOf(
             TimelineItem.Message("u", 1, TimelineRole.User, "Inspect the file", true),

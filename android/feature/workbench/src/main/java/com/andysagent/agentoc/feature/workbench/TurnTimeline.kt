@@ -138,10 +138,11 @@ fun TurnTimelineView(
         }
 
         if (turn.entries.isNotEmpty() || runActive) {
-            val (beforeFinal, finalEntries) = splitTurnEntries(turn.entries)
+            val (beforeFinal, finalEntries) = splitTurnEntries(turn.entries,
+                allowTerminalFallback = !runActive && turn.agentMessages.none { !it.completed })
             // While a reply is being generated, render the ordered stream in
-            // the process area. Unknown legacy messages remain visible after
-            // completion instead of guessing which one is the final answer.
+            // the process area. Legacy terminal transcripts may lack a phase;
+            // only a completed reply at the end can be treated as final.
             val hasFinal = turn.entries.any { it is TimelineItem.Message && it.messagePhase == "final_answer" }
             val processEntries = if (runActive && !hasFinal) turn.entries else beforeFinal
             val outsideEntries = if (runActive && !hasFinal) emptyList() else finalEntries

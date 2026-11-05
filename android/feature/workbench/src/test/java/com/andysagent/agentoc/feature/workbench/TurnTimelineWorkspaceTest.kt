@@ -30,6 +30,12 @@ class TurnTimelineWorkspaceTest {
         assertEquals(listOf(progress, thought) to listOf(final), splitTurnEntries(listOf(progress, thought, final)))
         val legacy = final.copy(messagePhase = null)
         assertEquals(emptyList<TimelineItem>() to listOf(progress, thought, legacy), splitTurnEntries(listOf(progress, thought, legacy)))
+        assertEquals(listOf(progress, thought) to listOf(legacy), splitTurnEntries(listOf(progress, thought, legacy), allowTerminalFallback = true))
+        val stillStreaming = legacy.copy(completed = false)
+        assertEquals(emptyList<TimelineItem>() to listOf(progress, thought, stillStreaming), splitTurnEntries(listOf(progress, thought, stillStreaming), allowTerminalFallback = true))
+        assertEquals(emptyList<TimelineItem>() to listOf(legacy, thought), splitTurnEntries(listOf(legacy, thought), allowTerminalFallback = true))
+        val commentary = legacy.copy(messagePhase = "commentary")
+        assertEquals(emptyList<TimelineItem>() to listOf(thought, commentary), splitTurnEntries(listOf(thought, commentary), allowTerminalFallback = true))
     }
 
     private val projector = TurnGroupProjector()

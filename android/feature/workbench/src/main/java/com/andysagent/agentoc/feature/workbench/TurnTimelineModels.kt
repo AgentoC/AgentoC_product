@@ -67,11 +67,19 @@ data class TurnGroup(
     val entries: List<TimelineItem> = emptyList(),
 )
 
-/** Split only when the provider explicitly identifies the final response. */
-internal fun splitTurnEntries(entries: List<TimelineItem>): Pair<List<TimelineItem>, List<TimelineItem>> {
-    val finalIndex = entries.indexOfFirst {
+/** Preserve explicit phases; recover older completed transcripts only when their last entry is a finished reply. */
+internal fun splitTurnEntries(
+    entries: List<TimelineItem>,
+    allowTerminalFallback: Boolean = false,
+): Pair<List<TimelineItem>, List<TimelineItem>> {
+    val explicitIndex = entries.indexOfFirst {
         it is TimelineItem.Message && it.role == TimelineRole.Agent && it.messagePhase == "final_answer"
     }
+    val finalIndex = if (explicitIndex >= 0) explicitIndex else if (allowTerminalFallback) {
+        val last = entries.indexOfLast { it !is TimelineItem.Notice }
+        val reply = entries.getOrNull(last) as? TimelineItem.Message
+        if (reply?.role == TimelineRole.Agent && reply.completed && reply.messagePhase == null) last else -1
+    } else -1
     if (finalIndex < 0) return emptyList<TimelineItem>() to entries
     return entries.take(finalIndex) to entries.drop(finalIndex)
 }
