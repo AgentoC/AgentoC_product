@@ -28,7 +28,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
@@ -43,6 +45,8 @@ class ApprovalReplayDeviceTest {
         val encoded = InstrumentationRegistry.getArguments().getString("approvalFixture")
         assumeTrue(!encoded.isNullOrBlank())
         val body = String(Base64.decode(encoded, Base64.DEFAULT), Charsets.UTF_8)
+        val expectedTarget = JSONObject(body).getJSONArray("events").getJSONObject(0)
+            .getJSONObject("explanation").getJSONArray("targets").getString(0)
         val database = Room.inMemoryDatabaseBuilder(rule.activity, AgentoCDatabase::class.java).allowMainThreadQueries().build()
         val repository = RoomSessionRepository(database, ReplayTransport(body))
         try {
@@ -50,12 +54,13 @@ class ApprovalReplayDeviceTest {
             val approval = repository.observePendingApprovals("replay").first().single()
             assertEquals("delete", approval.explanation?.operation)
             assertEquals(true, approval.explanation?.conditional)
-            assertEquals(listOf("/g/AgentoC/qa/claude-approval-20261105/explanation-fixture-4.txt"), approval.explanation?.targets)
+            assertEquals(listOf(expectedTarget), approval.explanation?.targets)
+            assertTrue(approval.command.orEmpty().contains(expectedTarget))
             val state = AttentionReducer.reduce(AttentionUiState(),
                 AttentionReducer.project(listOf(Session("replay", "Captured Claude approval")), listOf(approval))).copy(expanded = true)
             rule.setContent { AgentocTheme { AttentionSurface(state, onEvent = {}, onOpenSession = {}) } }
             rule.onNodeWithTag("attention-headline").assertIsDisplayed()
-                .assert(hasText("explanation-fixture-4.txt", substring = true))
+                .assert(hasText(expectedTarget, substring = true))
             rule.onNodeWithText(rule.activity.getString(R.string.attention_approve)).assertIsDisplayed()
             rule.onNodeWithText(rule.activity.getString(R.string.attention_deny)).assertIsDisplayed()
         } finally {

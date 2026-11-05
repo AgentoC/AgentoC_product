@@ -99,7 +99,8 @@ try {
     await replay.addScriptTag({content: scripts[3]});
     await replay.evaluate(e => window.AgentoCDecisions.noteRequest(e), captured);
     const title = await replay.locator('#decisionSheet .oneui-notification__title').textContent();
-    assert.match(title, /May delete: .*explanation-fixture-4\.txt/);
+    assert.ok(title.startsWith('May delete: '));
+    assert.ok(title.includes(captured.explanation.targets[0]));
     await replay.locator('#decisionSheet .oneui-notification__summary').click();
     const replayText = await replay.locator('#decisionSheet').innerText();
     assert.match(replayText, /rm -f/);
