@@ -8,6 +8,7 @@
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 import { RUNNER_ENV_ALLOWLIST, pickRunnerEnvAllowlist } from '../lib/runner-env.mjs';
 import { buildWindowsWingetInstallInvocation, WINGET_EXECUTABLE } from '../chat/semantic-windows-adapter.mjs';
@@ -35,6 +36,14 @@ const picked = pickRunnerEnvAllowlist({
 });
 check('allowlist pick strips a worker-set AGENTOC_WINGET_EXECUTABLE', picked.AGENTOC_WINGET_EXECUTABLE === undefined);
 check('allowlist pick strips a worker-set AGENTOC_MSIEXEC_EXECUTABLE', picked.AGENTOC_MSIEXEC_EXECUTABLE === undefined);
+const osEnv = pickRunnerEnvAllowlist({ SystemRoot: 'D:\\WinNT', WINDIR: 'D:\\WinNT', USERPROFILE: 'E:\\Users\\owner',
+  LOCALAPPDATA: 'E:\\Users\\owner\\AppData\\Local', APPDATA: 'E:\\Users\\owner\\AppData\\Roaming',
+  TEMP: 'G:\\temp', TMP: 'G:\\temp', TMPDIR: 'G:\\temp', PATHEXT: '.EXE;.CMD', MY_SERVICE_TOKEN: 'secret' });
+eq('alternate Windows root reaches the runner', osEnv.SystemRoot, 'D:\\WinNT');
+eq('current user profile reaches the runner', osEnv.USERPROFILE, 'E:\\Users\\owner');
+eq('current user local app data reaches the runner', osEnv.LOCALAPPDATA, 'E:\\Users\\owner\\AppData\\Local');
+eq('configured temp stays on its chosen drive', osEnv.TEMP, 'G:\\temp');
+eq('credential-shaped values still do not reach the runner', osEnv.MY_SERVICE_TOKEN, undefined);
 
 // ── I-3 payload: a request can supply package semantics but never an executable
 //    the winget builder derives the executable from the server constant, so a
@@ -49,6 +58,7 @@ const forgedCapability = {
     adapterInput: {
       manager: 'winget',
       source: 'winget',
+      requestedInstallScope: 'machine',
       exact: true,
       packages: ['Git.Git'],
       requestedVersions: [''],
@@ -68,7 +78,7 @@ check('forged argv is ignored', !invocation.argv.includes('--evil'));
 const importWith = (env) => {
   try {
     execFileSync(process.execPath, ['--input-type=module', '-e', "import('./chat/semantic-windows-adapter.mjs')"], {
-      cwd: new URL('..', import.meta.url).pathname,
+      cwd: fileURLToPath(new URL('..', import.meta.url)),
       env: { ...process.env, ...env },
       stdio: ['ignore', 'ignore', 'pipe'],
     });
@@ -80,5 +90,19 @@ const importWith = (env) => {
 eq('relative override is rejected', importWith({ AGENTOC_WINGET_EXECUTABLE: 'winget.exe' }).ok, false);
 eq('UNC override is rejected', importWith({ AGENTOC_WINGET_EXECUTABLE: '\\\\server\\share\\winget.exe' }).ok, false);
 check('valid absolute override imports', importWith({ AGENTOC_WINGET_EXECUTABLE: 'C:\\Tools\\winget.exe' }).ok === true);
+const previousSystemRoot = process.env.SystemRoot;
+const previousMsiexec = process.env.AGENTOC_MSIEXEC_EXECUTABLE;
+let alternateAdapter; let alternateFacts;
+try {
+  process.env.SystemRoot = 'D:\\WinNT';
+  delete process.env.AGENTOC_MSIEXEC_EXECUTABLE;
+  alternateAdapter = await import('../chat/semantic-windows-adapter.mjs?alternate-root');
+  alternateFacts = await import('../chat/windows-runtime-facts-provider.mjs?alternate-root');
+} finally {
+  if (previousSystemRoot === undefined) delete process.env.SystemRoot; else process.env.SystemRoot = previousSystemRoot;
+  if (previousMsiexec === undefined) delete process.env.AGENTOC_MSIEXEC_EXECUTABLE; else process.env.AGENTOC_MSIEXEC_EXECUTABLE = previousMsiexec;
+}
+eq('msiexec follows an alternate system root', alternateAdapter.MSIEXEC_EXECUTABLE, 'D:\\WinNT\\System32\\msiexec.exe');
+eq('facts provider follows an alternate system root', alternateFacts.WINDOWS_POWERSHELL_EXECUTABLE, 'D:\\WinNT\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
 
 console.log(`executor-executable-boundary: ${passed} checks passed`);

@@ -437,11 +437,16 @@ const managedMcpRequestMessage = {
     serverName: 'agentoc_actions_0123456789abcdef',
     threadId: 'thread-123',
     turnId: 'turn-abc',
+    mode: 'form',
+    _meta: { codex_approval_kind: 'mcp_tool_call' },
+    requestedSchema: { type: 'object', properties: {} },
     request: { message: 'Continue with the managed action.' },
   },
 };
 const managedMcpRequest = readCodexAppServerManagedMcpRequest(managedMcpRequestMessage);
 assert.equal(managedMcpRequest.mcpServerName, 'agentoc_actions_0123456789abcdef');
+assert.equal(readCodexAppServerManagedMcpRequest({ ...managedMcpRequestMessage, params: { ...managedMcpRequestMessage.params, _meta: {} } }), null);
+assert.equal(readCodexAppServerManagedMcpRequest({ ...managedMcpRequestMessage, params: { ...managedMcpRequestMessage.params, requestedSchema: { type: 'object', properties: { secret: { type: 'string' } } } } }), null);
 assert.deepEqual(
   buildCodexAppServerApprovalResponseMessage(managedMcpRequest, 'approve'),
   { id: 'mcp-elicitation-1', result: { action: 'accept', content: {} } },

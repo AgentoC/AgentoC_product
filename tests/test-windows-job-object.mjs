@@ -2,10 +2,18 @@ import assert from 'node:assert/strict';
 import {
   isWindowsJobObjectSupported,
   normalizeWindowsEnvironment,
+  resolveWindowsJobHostPaths,
 } from '../lib/windows-job-object.mjs';
 
 assert.equal(isWindowsJobObjectSupported('win32'), true);
 assert.equal(isWindowsJobObjectSupported('linux'), false);
+assert.deepEqual(resolveWindowsJobHostPaths({ SystemRoot: 'D:\\WinNT' }), {
+  cmd: 'D:\\WinNT\\System32\\cmd.exe', root: 'D:\\WinNT',
+});
+assert.deepEqual(resolveWindowsJobHostPaths({ WINDIR: 'E:\\Windows' }), {
+  cmd: 'E:\\Windows\\System32\\cmd.exe', root: 'E:\\Windows',
+});
+assert.equal(resolveWindowsJobHostPaths({ SystemRoot: 'relative' }), null);
 
 const normalized = normalizeWindowsEnvironment({
   Path: 'lower-priority-path',

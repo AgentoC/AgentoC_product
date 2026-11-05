@@ -108,6 +108,44 @@ const validProposal = {
   targetId: WINDOWS_BROKER_TARGET_ID,
 };
 
+{
+  const selectedInstaller = { id: 'Vendor.App', version: '1.2.3', source: 'winget', scope: 'System', elevation: 'ElevationRequired', type: 'Msi', nestedType: 'Unknown', architecture: 'X64', locale: 'en-US' };
+  const { client, sockets } = makeClient({ version: 2, type: 'auto_install_inspection', selectedInstaller });
+  assert.deepEqual(await client.inspectAutoInstall({ packageId: 'Vendor.App', packageVersion: '1.2.3' }), selectedInstaller);
+  const prohibited = makeClient({ version: 2, type: 'auto_install_inspection', selectedInstaller: { ...selectedInstaller, elevation: 'ElevationProhibited' } });
+  assert.equal((await prohibited.client.inspectAutoInstall({ packageId: 'Vendor.App', packageVersion: '1.2.3' })).elevation, 'ElevationProhibited');
+  assert.deepEqual(JSON.parse(sockets[0].written.subarray(4).toString('utf8')), { version: 2, type: 'auto_install.inspect', autoInspect: { packageId: 'Vendor.App', packageVersion: '1.2.3' } });
+  await assert.rejects(client.inspectAutoInstall({ packageId: 'Vendor.App;bad', packageVersion: '1.2.3' }), { code: 'BROKER_REQUEST_INVALID' });
+  const mismatch = makeClient({ version: 2, type: 'auto_install_inspection', selectedInstaller: { ...selectedInstaller, version: 'other' } });
+  await assert.rejects(mismatch.client.inspectAutoInstall({ packageId: 'Vendor.App', packageVersion: '1.2.3' }), { code: 'BROKER_RESPONSE_INVALID' });
+}
+
+{
+  const { client, sockets } = makeClient({ version: 2, type: 'result', status: 'running' });
+  const grant = {
+    version: 1, keyId: 'key-1', brokerInstallationId: 'install-1', policyGeneration: 1,
+    requestId: 'request-1', sessionId: 'session-1', runId: 'run-1', turnId: 'turn-1', actionId: 'action-1',
+    nonce: 'a'.repeat(32), packageId: 'Git.Git', packageVersion: '2.50.1', source: 'winget', installScope: 'machine',
+    issuedMs: 1000, expiresMs: 61000,
+  };
+  const signature = 'A'.repeat(86);
+  assert.equal((await client.executeAutoInstall({ grant, signature })).status, 'running');
+  assert.deepEqual(JSON.parse(sockets[0].written.subarray(4).toString('utf8')), {
+    version: 2, type: 'auto_install.execute', autoInstall: grant, signature,
+  });
+  const selectedInstaller = { id: 'Git.Git', version: '2.50.1', source: 'winget', scope: 'System', elevation: 'ElevationRequired', type: 'Msi', nestedType: 'Unknown', architecture: 'X64', locale: 'en-US' };
+  assert.equal((await client.executeAutoInstall({ grant: { ...grant, selectedInstaller }, signature })).status, 'running');
+  for (const bad of [
+    { ...grant, command: 'arbitrary' }, { ...grant, packageId: 'Git.Git;cmd' },
+    { ...grant, expiresMs: 61001 }, { ...grant, source: 'custom' },
+    { ...grant, installScope: 'user' }, { ...grant, installScope: undefined },
+    { ...grant, selectedInstaller: { ...selectedInstaller, scope: 'User' } },
+    { ...grant, selectedInstaller: { ...selectedInstaller, id: 'Other.App' } },
+    { ...grant, selectedInstaller: { ...selectedInstaller, extra: 'forged' } },
+  ]) await assert.rejects(client.executeAutoInstall({ grant: bad, signature }), { code: 'BROKER_REQUEST_INVALID' });
+  await assert.rejects(client.executeAutoInstall({ grant, signature: 'bad' }), { code: 'BROKER_REQUEST_INVALID' });
+}
+
 assert.deepEqual(resolveWindowsBrokerProfileDecision('full-auto', 'win32'), {
   decision: 'require_device', code: 'BROKER_DEVICE_APPROVAL_REQUIRED',
 });

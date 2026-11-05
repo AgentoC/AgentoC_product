@@ -86,10 +86,10 @@ function readApprovalRequestInfo(payload) {
     return {
       approvalId: `claude:${requestId}`,
       provider: 'claude',
-      kind: toolName === 'Bash' ? 'command' : toolName === 'AskUserQuestion' ? 'question' : toolName === 'ExitPlanMode' ? 'plan' : 'permissions',
+      kind: ['Bash', 'PowerShell'].includes(toolName) ? 'command' : toolName === 'AskUserQuestion' ? 'question' : toolName === 'ExitPlanMode' ? 'plan' : 'permissions',
       toolName,
       toolInput: request.input && typeof request.input === 'object' ? request.input : {},
-      command: toolName === 'Bash' ? formatCommandValue(request.input?.command) : '',
+      command: ['Bash', 'PowerShell'].includes(toolName) ? formatCommandValue(request.input?.command) : '',
     };
   }
   const method = trimString(payload.method);

@@ -89,6 +89,11 @@ try {
   // --- default owner-click policy ---
   delete process.env.AGENTOC_OWNER_HOST_PASSKEY_REQUIRED;
   const clickApproval = await proposeHostBatch('click');
+  const preflight = { ...hostProposal(clickApproval.binding, clickApproval.session.id), autoInstallPreflight: true,
+    actions: [{ command: 'winget install Example.Package' }] };
+  assert.deepEqual(await proposeApprovedActions(preflight), { kind: 'automatic_install_preflight', ready: false });
+  await assert.rejects(proposeApprovedActions({ ...preflight, token: 'wrong-token' }), { code: 'APPROVED_ACTION_TOKEN_INVALID' });
+  assert.equal((await getRun(clickApproval.binding.runId)).approvedActionPending, undefined);
   // A server DENY must never become a waiting_user card, even under the
   // owner-click policy. This leaves capability issuance and the executor out
   // of the request entirely.

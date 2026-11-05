@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 
 import {
   WINDOWS_POWERSHELL_EXECUTABLE,
+  WINDOWS_POWERSHELL_CWD,
   buildWindowsPipePeerInvocation,
   createWindowsNamedPipePeerFactsProvider,
 } from '../chat/windows-named-pipe-peer-facts.mjs';
@@ -37,8 +38,8 @@ const GOOD_FACTS = {
 const inv = buildWindowsPipePeerInvocation();
 eq('powershell executable is absolute system path', inv.file, WINDOWS_POWERSHELL_EXECUTABLE);
 check('args are fixed prefix + one encoded command', inv.args.length === 5 && inv.args[4].length > 0);
-check('env is allowlisted', inv.env === Object.freeze({ SystemRoot: 'C:\\Windows', WINDIR: 'C:\\Windows', PATH: 'C:\\Windows\\System32;C:\\Windows', LANG: 'C' }) || inv.env.LANG === 'C');
-check('cwd is System32', inv.cwd === 'C:\\Windows\\System32');
+check('env is allowlisted', inv.env.LANG === 'C' && Object.keys(inv.env).every((key) => ['SystemRoot', 'WINDIR', 'PATH', 'LANG'].includes(key)));
+eq('cwd is the discovered System32', inv.cwd, WINDOWS_POWERSHELL_CWD);
 check('script embeds the native interop', inv.args[4].length > 1000);
 
 // ── resolveClientPeerFacts: happy path ─────────────────────────────────────────

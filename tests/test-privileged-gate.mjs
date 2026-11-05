@@ -61,7 +61,7 @@ const SENTINEL = (real, { category = 'install', desc = 'test op' } = {}) =>
 // --- gated permission-mode recognition (plan/on-request emit per-tool requests) ---
 {
   for (const gated of ['default', 'plan', 'acceptEdits', 'on-request', 'on-request-workspace-write',
-    'on-request-danger-full-access', 'auto', 'never-read-only']) {
+    'on-request-danger-full-access', 'untrusted-read-only', 'untrusted-workspace-write', 'untrusted-danger-full-access', 'auto', 'never-read-only']) {
     check(`permission mode ${gated} is gated`, isGatedPermissionMode(gated));
   }
   for (const bypass of ['bypassPermissions', 'never-danger-full-access', 'bypass-approvals-and-sandbox']) {

@@ -90,6 +90,13 @@ assert.equal(bashEvents[0].kind, 'command');
 assert.equal(bashEvents[0].title, 'Bash');
 assert.equal(bashEvents[0].reason, 'Delete temp file');
 
+const powershellEvents = adapter.parseLine(JSON.stringify({
+  type: 'control_request', request_id: 'powershell-review',
+  request: { subtype: 'can_use_tool', tool_name: 'PowerShell', input: { command: 'Remove-Item D:\\\\Protected -Recurse' } },
+}));
+assert.equal(powershellEvents[0].kind, 'command');
+assert.equal(powershellEvents[0].command, 'Remove-Item D:\\\\Protected -Recurse');
+
 // Sidecar auto-approvals must never surface as user-facing approvals. The
 // sidecar echoes its synthetic agentoc.approval_response (autoApproved: true)
 // into the stream BEFORE the control_request it answers; the adapter tracks

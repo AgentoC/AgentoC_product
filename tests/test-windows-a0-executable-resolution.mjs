@@ -118,6 +118,9 @@ const psSpec = buildSpawnSpecFromResolvedPath('C:\\scripts\\run.ps1', ['-Name', 
 eq('ps1 spec routes to powershell.exe', psSpec.file, WINDOWS_POWERSHELL_EXECUTABLE);
 eq('ps1 spec fixed -File template', psSpec.args, ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'C:\\scripts\\run.ps1', '-Name', 'x']);
 eq('ps1 spec kind + shell:false', { kind: psSpec.kind, shell: psSpec.shell }, { kind: SPAWN_KIND.PS1, shell: false });
+eq('cmd wrapper uses the actual Windows root', buildSpawnSpecFromResolvedPath('D:\\tools\\provider.cmd', [], { systemEnv: { SystemRoot: 'D:\\WinNT' }, env: { SystemRoot: 'C:\\untrusted' } }).file, 'D:\\WinNT\\System32\\cmd.exe');
+eq('PowerShell wrapper uses the actual Windows root', buildSpawnSpecFromResolvedPath('E:\\tools\\run.ps1', [], { systemEnv: { WINDIR: 'E:\\Windows' } }).file, 'E:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+assert.throws(() => buildSpawnSpecFromResolvedPath('D:\\tools\\provider.cmd', [], { systemEnv: {} }), { code: 'WINDOWS_SYSTEM_PATH_UNAVAILABLE' });
 
 // ---------------------------------------------------------------------------
 // EncodedCommand (UTF-16LE base64)

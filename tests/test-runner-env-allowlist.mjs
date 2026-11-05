@@ -34,7 +34,7 @@ const touchedKeys = [
   'AGENTOC_RUN_STDOUT_QUEUE_MAX_LINES', 'AGENTOC_RUN_STDOUT_QUEUE_MAX_BYTES', 'AGENTOC_RUN_STDOUT_LINE_MAX_BYTES',
   'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
   'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy',
-  'AGENTOC_TEST_MARKER', 'AGENTOC_TEST_TOKEN', 'USERPROFILE', 'AGENTOC_ALLOW_EXTERNAL_TEST_INSTANCE_OVERRIDES',
+  'AGENTOC_TEST_MARKER', 'AGENTOC_TEST_TOKEN', 'USERPROFILE', 'LOCALAPPDATA', 'APPDATA', 'ProgramFiles', 'ProgramW6432', 'ProgramFiles(x86)', 'ProgramData', 'AGENTOC_ALLOW_EXTERNAL_TEST_INSTANCE_OVERRIDES',
 ];
 for (const key of touchedKeys) previousEnv[key] = process.env[key];
 
@@ -46,6 +46,12 @@ try {
   process.env.USER = 'svc';
   process.env.HOME = fixtureHome;
   process.env.USERPROFILE = fixtureHome;
+  process.env.LOCALAPPDATA = join(fixtureHome, 'AppData', 'Local');
+  process.env.APPDATA = join(fixtureHome, 'AppData', 'Roaming');
+  process.env.ProgramFiles = 'F:\\Programs';
+  process.env.ProgramW6432 = 'F:\\Native Programs';
+  process.env['ProgramFiles(x86)'] = 'F:\\Programs x86';
+  process.env.ProgramData = 'F:\\SharedData';
   process.env.AGENTOC_ALLOW_EXTERNAL_TEST_INSTANCE_OVERRIDES = '1';
   process.env.AGENTOC_PROJECT_ROOT = '/opt/agentoc/app';
   process.env.AGENTOC_HARNESS_ROOT = '/opt/agentoc/harnesses';
@@ -117,6 +123,21 @@ try {
     : '/usr/local/bin:/usr/bin:/bin';
   assert.equal(env.PATH, expectedPath, 'PATH must preserve the OS-specific owned-Harness prefix');
   assert.equal(env.LANG, 'C.UTF-8', 'LANG should be inherited');
+  assert.equal(env.USERPROFILE, fixtureHome, 'user profile should reach the runner');
+  assert.equal(env.LOCALAPPDATA, join(fixtureHome, 'AppData', 'Local'), 'local app data should match the runner user');
+  assert.equal(env.ProgramFiles, 'F:\\Programs', 'program files location should reach the sidecar');
+  assert.equal(env.ProgramW6432, 'F:\\Native Programs', 'native program files location should reach the sidecar');
+  assert.equal(env['ProgramFiles(x86)'], 'F:\\Programs x86', '32-bit program files location should reach the sidecar');
+  assert.equal(env.ProgramData, 'F:\\SharedData', 'shared program data location should reach the sidecar');
+  const { systemPathRootsForPlatform } = await import('../chat/risk-policy.mjs');
+  assert.ok(systemPathRootsForPlatform('win32', env).includes('F:\\SharedData'), 'sidecar protects the actual shared program data directory');
+  assert.ok(systemPathRootsForPlatform('win32', env).includes('F:\\Programs x86'), 'sidecar protects the actual 32-bit program files directory');
+  const { readWindowsPowerShellInvocation } = await import('../chat/windows-approval-gate.mjs');
+  const nativePwsh = 'F:\\Native Programs\\PowerShell\\7\\pwsh.exe';
+  assert.equal(readWindowsPowerShellInvocation({ params: { command: [nativePwsh, '-NoProfile', '-Command', 'Get-Date'] } },
+    { systemRoot: 'F:\\Windows', programFiles: env.ProgramW6432 || env.ProgramFiles })?.executable, nativePwsh,
+  'the detached sidecar should recognize native PowerShell 7 using inherited OS paths');
+  assert.equal(env.TEMP, process.env.TEMP, 'the configured task temp should reach the runner');
   assert.equal(env.AGENTOC_PROJECT_ROOT, '/opt/agentoc/app', 'AGENTOC_PROJECT_ROOT should be inherited');
   assert.equal(env.AGENTOC_HARNESS_ROOT, '/opt/agentoc/harnesses', 'AGENTOC_HARNESS_ROOT should reach the sidecar');
   assert.equal(env.AGENTOC_CHAT_BASE_URL, 'http://127.0.0.1:7690', 'AGENTOC_CHAT_BASE_URL should be inherited');
