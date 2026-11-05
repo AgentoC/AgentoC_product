@@ -1256,7 +1256,7 @@ private fun ApprovalCardContent(
                     .background(Color(0xFFF59E0B)),
             )
             Text(
-                text = "Needs your approval",
+                text = stringResource(R.string.journey_approval_needed),
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp,
@@ -1333,7 +1333,7 @@ private fun ApprovalCardContent(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = approval.denyLabel,
+                        text = approvalLabel(approval.denyLabel, stringResource(R.string.attention_deny)),
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 12.5.sp,
@@ -1355,7 +1355,7 @@ private fun ApprovalCardContent(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = approval.approveLabel,
+                        text = approvalLabel(approval.approveLabel, stringResource(R.string.attention_approve)),
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 12.5.sp,

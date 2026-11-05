@@ -57,4 +57,11 @@ class AttentionPresentationTest {
         assertTrue(details.any { it.label == R.string.approval_scope_read && it.value == "/a" })
         assertTrue(details.any { it.label == R.string.approval_scope_write && it.value == "/b" })
     }
+
+    @Test fun `claude optional permission suggestions are not shown as active scope`() {
+        val details = approvalPermissionDetails("""{"suggestions":[{"type":"addRules","destination":"localSettings"}],"network":{"enabled":true},"extra":{"mode":"custom"}}""")
+        assertTrue(details.any { it.label == R.string.approval_scope_network })
+        assertTrue(details.any { it.value.contains("extra") })
+        assertFalse(details.any { it.value.contains("suggestions") })
+    }
 }

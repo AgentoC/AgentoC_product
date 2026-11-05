@@ -58,7 +58,10 @@ internal fun approvalPermissionDetails(value: String?): List<ApprovalDetail> {
                 text?.takeIf(String::isNotBlank)?.let { add(ApprovalDetail(label, it)) }
             }
         }
-        val additional = permissions.filterKeys { it != "network" && it != "fileSystem" }
+        // Claude's suggestions describe optional future permission updates, not
+        // the scope of a one-time approval. They are only applied by the
+        // separate approve-for-session decision, which this card does not offer.
+        val additional = permissions.filterKeys { it != "network" && it != "fileSystem" && it != "suggestions" }
         if (additional.isNotEmpty()) add(ApprovalDetail(R.string.approval_scope_other, JsonObject(additional).toString()))
         val networkExtra = network?.filterKeys { it != "enabled" }.orEmpty()
         if (networkExtra.isNotEmpty()) add(ApprovalDetail(R.string.approval_scope_other, JsonObject(mapOf("network" to JsonObject(networkExtra))).toString()))

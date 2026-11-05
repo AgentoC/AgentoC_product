@@ -1237,7 +1237,7 @@ private fun ActionBatchDetails(
     }
 }
 
-private fun approvalLabel(label: String?, fallback: String): String = when {
+internal fun approvalLabel(label: String?, fallback: String): String = when {
     label.isNullOrBlank() -> fallback
     label.equals("Approve", ignoreCase = true) -> fallback
     label.equals("Deny", ignoreCase = true) -> fallback
