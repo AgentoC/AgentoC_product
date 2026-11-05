@@ -1,12 +1,16 @@
 package com.andysagent.agentoc
 
 import android.graphics.Bitmap
+import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -54,7 +58,7 @@ class NavigationDockDragUiTest {
         rule.waitForIdle()
         val file = File(instrumentation.targetContext.getExternalFilesDir(null), "navigation-drag/$name-$dark.png")
         file.parentFile?.mkdirs()
-        instrumentation.uiAutomation.takeScreenshot().let { bitmap ->
+        rule.onRoot().captureToImage().asAndroidBitmap().let { bitmap ->
             file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }; bitmap.recycle()
         }
     }
@@ -86,7 +90,7 @@ class NavigationDockDragUiTest {
         assertCentered(AgentoDestination.Home)
     }
 
-    @Test fun contactContourRespondsToTouchLocationWithoutChangingHitArea() {
+    @Test fun rigidContactTiltsAtTouchLocationWithoutChangingHitArea() {
         show(actualPages = true)
         val lens = rule.onNodeWithTag("bottom-navigation-selection")
         val original = lens.fetchSemanticsNode().boundsInRoot
@@ -100,26 +104,36 @@ class NavigationDockDragUiTest {
         }
         press(.22f)
         capture("contact-left")
-        val left = lens.captureToImage().toPixelMap()
+        val left = shell().captureToImage().toPixelMap()
         assertEquals(original, lens.fetchSemanticsNode().boundsInRoot)
         shell().performTouchInput { cancel() }
         rule.waitForIdle()
         press(.78f)
         capture("contact-right")
-        val right = lens.captureToImage().toPixelMap()
+        val right = shell().captureToImage().toPixelMap()
         assertEquals(original, lens.fetchSemanticsNode().boundsInRoot)
-        // Both presses have identical tone. Different edge pixels must come
-        // from a contour that follows the contact, not uniform scale or tint.
+        // Both presses have identical tone and scale; their rigid-plane
+        // perspective must differ with the contact position.
         var leftDifference = 0f
         var rightDifference = 0f
-        for (y in 0 until (left.height * .20f).toInt()) {
-            for (x in (left.width * .18f).toInt() until (left.width * .40f).toInt())
+        for (y in 0 until left.height) {
+            for (x in (left.width * .33f).toInt() until (left.width * .50f).toInt())
                 leftDifference += kotlin.math.abs(left[x, y].red - right[x, y].red)
-            for (x in (left.width * .60f).toInt() until (left.width * .82f).toInt())
+            for (x in (left.width * .50f).toInt() until (left.width * .67f).toInt())
                 rightDifference += kotlin.math.abs(left[x, y].red - right[x, y].red)
         }
         assertTrue("Left edge should respond to contact location: $leftDifference", leftDifference > 2f)
         assertTrue("Right edge should respond to contact location: $rightDifference", rightDifference > 2f)
+        fun upperEdge(pixels: androidx.compose.ui.graphics.PixelMap, fraction: Float): Int {
+            val x = (pixels.width * fraction).toInt()
+            val background = pixels[x, 0].red
+            return (0 until pixels.height / 3).first { kotlin.math.abs(pixels[x, it].red - background) > .045f }
+        }
+        for (pixels in listOf(left, right)) {
+            val middle = upperEdge(pixels, .50f)
+            val line = (upperEdge(pixels, .45f) + upperEdge(pixels, .55f)) / 2f
+            assertEquals("The rigid capsule's straight edge must not bend under contact", line, middle.toFloat(), 2f)
+        }
         shell().performTouchInput { cancel() }
         rule.waitForIdle()
         rule.runOnIdle { assertTrue(selections.isEmpty()) }
@@ -136,6 +150,150 @@ class NavigationDockDragUiTest {
         rule.waitForIdle()
         rule.runOnIdle { assertEquals(AgentoDestination.Home, selected); assertTrue(selections.isEmpty()) }
         assertCentered(AgentoDestination.Home)
+    }
+
+    @Test fun offCenterGripStaysUnderTheFingerDuringDrag() {
+        show(actualPages = true)
+        val bounds = shell().fetchSemanticsNode().boundsInRoot
+        val lens = rule.onNodeWithTag("bottom-navigation-selection").fetchSemanticsNode().boundsInRoot
+        val start = Offset(lens.left - bounds.left + lens.width * .22f, bounds.height * .25f)
+        shell().performTouchInput { down(start); moveTo(start + Offset(width * .12f, 0f), 160) }
+        rule.waitForIdle()
+        val moved = rule.onNodeWithTag("bottom-navigation-selection").fetchSemanticsNode().boundsInRoot
+        assertEquals("Dragging must retain the original grip, not recenter under the finger",
+            lens.center.x + bounds.width * .12f, moved.center.x, 2f)
+        capture("rigid-drag-off-center")
+        rule.runOnIdle { assertTrue(selections.isEmpty()) }
+        shell().performTouchInput { cancel() }
+        rule.waitForIdle()
+        assertCentered(AgentoDestination.Home)
+    }
+
+    @Test fun contactRespondsAcrossNinePositionsAndSmallVerticalMovement() {
+        show(actualPages = true)
+        val lens = rule.onNodeWithTag("bottom-navigation-selection")
+        val original = lens.fetchSemanticsNode().boundsInRoot
+        val bounds = shell().fetchSemanticsNode().boundsInRoot
+        val images = mutableListOf<androidx.compose.ui.graphics.PixelMap>()
+        for (row in 0..2) for (column in 0..2) {
+            shell().performTouchInput {
+                down(Offset(original.left - bounds.left + original.width * (.22f + .28f * column),
+                    original.top - bounds.top + original.height * (.18f + .32f * row)))
+            }
+            capture("contact-grid-$row-$column")
+            images += shell().captureToImage().toPixelMap()
+            assertEquals(original, lens.fetchSemanticsNode().boundsInRoot)
+            shell().performTouchInput { cancel() }
+            rule.waitForIdle()
+        }
+        fun difference(a: androidx.compose.ui.graphics.PixelMap, b: androidx.compose.ui.graphics.PixelMap): Float {
+            var total = 0f
+            for (y in 0 until a.height) for (x in 0 until a.width)
+                total += kotlin.math.abs(a[x, y].red - b[x, y].red)
+            return total
+        }
+        for (column in 0..2) {
+            assertTrue("Upper/central pressure must differ", difference(images[column], images[column + 3]) > 8f)
+            assertTrue("Central/lower pressure must differ", difference(images[column + 3], images[column + 6]) > 8f)
+        }
+        // Stay within one tab and move only a small distance in Y, without
+        // entering horizontal drag. Feedback must still follow the new point.
+        shell().performTouchInput { down(Offset(centerX, height * .33f)) }
+        rule.waitForIdle()
+        val before = shell().captureToImage().toPixelMap()
+        shell().performTouchInput { moveTo(Offset(centerX, height * .41f), 100) }
+        rule.waitForIdle()
+        val after = shell().captureToImage().toPixelMap()
+        assertTrue("Small vertical movement must update contact", difference(before, after) > 3f)
+        shell().performTouchInput { cancel() }
+        rule.waitForIdle()
+        rule.runOnIdle { assertTrue(selections.isEmpty()) }
+        assertEquals(original, lens.fetchSemanticsNode().boundsInRoot)
+    }
+
+    @Test fun rigidTiltStaysStableWhileHeldAndReturnsToRest() {
+        show(actualPages = true)
+        rule.mainClock.autoAdvance = false
+        try {
+            shell().performTouchInput { down(Offset(centerX, height * .35f)) }
+            rule.mainClock.advanceTimeBy(400)
+            rule.waitForIdle()
+            shell().performTouchInput { moveTo(Offset(centerX, height * .55f), 48) }
+            rule.mainClock.advanceTimeBy(400)
+            rule.waitForIdle()
+            val moving = rule.onNodeWithTag("bottom-navigation-selection").captureToImage().toPixelMap()
+            capture("rigid-contact-held")
+            rule.mainClock.advanceTimeBy(500)
+            rule.waitForIdle()
+            val held = rule.onNodeWithTag("bottom-navigation-selection").captureToImage().toPixelMap()
+            capture("rigid-contact-held-later")
+            var difference = 0f
+            for (y in 0 until moving.height) for (x in 0 until moving.width)
+                difference += kotlin.math.abs(moving[x, y].red - held[x, y].red)
+            assertTrue("A held rigid button must stay stable: $difference", difference < 3f)
+            shell().performTouchInput { cancel() }
+            rule.mainClock.advanceTimeBy(500)
+            rule.waitForIdle()
+            rule.runOnIdle { assertTrue(selections.isEmpty()) }
+        } finally { rule.mainClock.autoAdvance = true }
+    }
+
+    @Test fun pressureChangesContactBothWhileHeldAndDuringDrag() {
+        show(actualPages = true)
+        val bounds = shell().fetchSemanticsNode().boundsInWindow
+        val downTime = SystemClock.uptimeMillis()
+        fun touch(action: Int, x: Float, pressure: Float) {
+            val properties = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_FINGER }
+            val coordinates = MotionEvent.PointerCoords().apply {
+                this.x = bounds.left + bounds.width * x
+                y = bounds.top + bounds.height * .35f
+                this.pressure = pressure
+                size = .1f
+            }
+            val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, 1,
+                arrayOf(properties), arrayOf(coordinates), 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
+            try { rule.runOnUiThread { rule.activity.window.callback.dispatchTouchEvent(event) } } finally { event.recycle() }
+            rule.waitForIdle()
+        }
+        fun pixels() = rule.onNodeWithTag("bottom-navigation-selection").captureToImage().toPixelMap()
+        fun visibleWidth(): Int {
+            val pixels = shell().captureToImage().toPixelMap()
+            val y = pixels.height / 2
+            val background = pixels[(pixels.width * .25f).toInt(), y].red
+            val occupied = ((pixels.width * .28f).toInt()..(pixels.width * .72f).toInt()).filter {
+                kotlin.math.abs(pixels[it, y].red - background) > .065f
+            }
+            return occupied.last() - occupied.first()
+        }
+        fun assertDifferent(a: androidx.compose.ui.graphics.PixelMap, b: androidx.compose.ui.graphics.PixelMap) {
+            var difference = 0f
+            for (y in 0 until a.height) for (x in 0 until a.width)
+                difference += kotlin.math.abs(a[x, y].red - b[x, y].red)
+            assertTrue("Pressure must visibly change the held surface: $difference", difference > 20f)
+        }
+        try {
+            val restingWidth = visibleWidth()
+            touch(MotionEvent.ACTION_DOWN, .5f, .08f)
+            val light = pixels()
+            val lightWidth = visibleWidth()
+            assertTrue("Pressing should enlarge the rigid capsule", lightWidth > restingWidth)
+            capture("pressure-held-light")
+            touch(MotionEvent.ACTION_MOVE, .5f, 1.4f)
+            assertDifferent(light, pixels())
+            assertTrue("Firmer pressure should enlarge it further", visibleWidth() > lightWidth + 2)
+            capture("pressure-held-firm")
+            touch(MotionEvent.ACTION_MOVE, .70f, 1.4f)
+            touch(MotionEvent.ACTION_MOVE, .72f, 1.4f)
+            val draggingFirm = pixels()
+            capture("pressure-drag-firm")
+            touch(MotionEvent.ACTION_MOVE, .72f, .08f)
+            assertDifferent(draggingFirm, pixels())
+            capture("pressure-drag-light")
+            rule.runOnIdle { assertTrue(selections.isEmpty()) }
+            touch(MotionEvent.ACTION_UP, .72f, 0f)
+            rule.runOnIdle { assertEquals(listOf(AgentoDestination.Settings), selections) }
+            assertCentered(AgentoDestination.Settings)
+        } finally { touch(MotionEvent.ACTION_CANCEL, .72f, 0f) }
     }
 
     @Test fun cancelledPointerAndReturningToStartDoNotSwitch() {

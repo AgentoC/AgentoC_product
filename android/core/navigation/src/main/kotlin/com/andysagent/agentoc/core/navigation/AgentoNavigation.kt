@@ -19,7 +19,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -33,7 +32,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -52,8 +52,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Paint
@@ -534,18 +532,22 @@ fun AgentoBottomNavigation(
     var gestureRevision by remember { mutableStateOf(0) }
     var releasedTarget by remember { mutableStateOf(dockTarget) }
     var contact by remember { mutableStateOf(Offset(.5f, .5f)) }
+    var contactOrigin by remember { mutableStateOf(Offset(.5f, .5f)) }
+    var dragGrip by remember { mutableStateOf(0f) }
     var contactDown by remember { mutableStateOf(false) }
+    val contactPressure = rememberNavigationContactLoad()
+    var contactLoad by contactPressure
     val physicalContactSlot = (contact.x * 3f).toInt().coerceIn(0, 2)
     val contactSlot = if (LocalLayoutDirection.current == LayoutDirection.Rtl) 2 - physicalContactSlot else physicalContactSlot
     val touchingSelection = contactDown && (dragFrame != null || contactSlot == visualDestination.ordinal)
-    val contactStrength by animateFloatAsState(if (touchingSelection) 1f else 0f,
+    val contactStrength by animateFloatAsState(if (touchingSelection) contactLoad else 0f,
         animationSpec = when (policy.preference) {
             MotionPreference.None -> snap()
             MotionPreference.Reduced -> tween(100)
             MotionPreference.Full -> spring(dampingRatio = .85f, stiffness = 700f)
         }, label = "dock-contact")
     val selectionTone by animateFloatAsState(
-        if (touchingSelection) .14f else .10f,
+        if (touchingSelection) .10f + .05f * contactLoad else .10f,
         animationSpec = if (policy.preference == MotionPreference.None) snap() else tween(100), label = "dock-contact-tone")
     if (peerStore == null) {
         LaunchedEffect(dockTarget, policy.preference, gestureRevision) { dockMotion.retarget(dockTarget, policy.preference) }
@@ -630,9 +632,13 @@ fun AgentoBottomNavigation(
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
                             val pointer = event.changes.firstOrNull()
-                            contactDown = pointer?.pressed == true && pointer.position.x in 0f..size.width.toFloat() &&
-                                pointer.position.y in 0f..size.height.toFloat()
-                            if (contactDown && pointer != null) contact = Offset(pointer.position.x / size.width, pointer.position.y / size.height)
+                            contactDown = pointer?.pressed == true && (dragFrame != null ||
+                                (pointer.position.x in 0f..size.width.toFloat() && pointer.position.y in 0f..size.height.toFloat()))
+                            if (contactDown && pointer != null) {
+                                contact = Offset(pointer.position.x / size.width, pointer.position.y / size.height)
+                                if (!pointer.previousPressed) contactOrigin = contact
+                                contactLoad = navigationContactLoad(pointer.pressure)
+                            }
                             if (dragFrame != null) event.changes.firstOrNull()?.position?.let { position ->
                                 dragInside = position.y in -24.dp.toPx()..(size.height + 24.dp.toPx()) &&
                                     position.x in -24.dp.toPx()..(size.width + 24.dp.toPx())
@@ -643,12 +649,20 @@ fun AgentoBottomNavigation(
                 .pointerInput(layoutDirection) {
                     fun updatePointer(position: Offset) {
                         val x = if (layoutDirection == LayoutDirection.Rtl) size.width - position.x else position.x
-                        dragSlot = (x / (size.width / 3f) - .5f).coerceIn(0f, 2f)
+                        dragSlot = (x / (size.width / 3f) - .5f - dragGrip).coerceIn(0f, 2f)
                         dragInside = position.y in -24.dp.toPx()..(size.height + 24.dp.toPx()) &&
                             position.x in -24.dp.toPx()..(size.width + 24.dp.toPx())
                     }
                     detectHorizontalDragGestures(
-                        onDragStart = { position -> dragFrame = currentFrame(); updatePointer(position) },
+                        onDragStart = { position ->
+                            val frame = currentFrame()
+                            val originX = if (layoutDirection == LayoutDirection.Rtl) 1f - contactOrigin.x else contactOrigin.x
+                            val originSlot = originX * 3f - .5f
+                            dragGrip = if (kotlin.math.abs(originSlot - frame.lensSlot) <= .5f)
+                                originSlot - frame.lensSlot else 0f
+                            dragFrame = frame
+                            updatePointer(position)
+                        },
                         onHorizontalDrag = { change, _ -> change.consume(); updatePointer(change.position) },
                         onDragEnd = { currentFinish(false) },
                         onDragCancel = { currentFinish(true) },
@@ -697,18 +711,15 @@ fun AgentoBottomNavigation(
                     modifier = Modifier
                         .height(selectionHeight)
                         .testTag("bottom-navigation-selection")
-                        .drawBehind {
-                            val inset = lensEdgeInset.toPx()
-                            val slotWidth = size.width + inset * 2f
+                        .graphicsLayer {
                             val slot = dockFrame().lensSlot.let { if (layoutDirection == LayoutDirection.Rtl) 2f - it else it }
-                            val localContact = Offset(
-                                (contact.x * slotWidth * 3f - slot * slotWidth - inset) / size.width,
-                                (contact.y * (size.height + inset * 2f) - inset) / size.height,
-                            )
-                            val path = navigationContactPath(size, localContact, contactStrength, 4.dp.toPx())
-                            drawPath(path, colors.primaryContent.copy(alpha = selectionTone))
-                            drawPath(path, colors.primaryContent.copy(alpha = .04f), style = Stroke(.5.dp.toPx()))
-                        },
+                            val pose = navigationContactPose(Offset(contact.x * 3f - slot, contact.y), contactStrength)
+                            rotationX = pose.rotationX; rotationY = pose.rotationY
+                            scaleX = pose.scale; scaleY = pose.scale
+                            cameraDistance = 6f
+                        }
+                        .background(colors.primaryContent.copy(alpha = selectionTone), AgentoShapes.PillShape)
+                        .border(.5.dp, colors.primaryContent.copy(alpha = .04f), AgentoShapes.PillShape),
                 ) {}
 
                 Row(
@@ -723,6 +734,7 @@ fun AgentoBottomNavigation(
                             height = selectionHeight,
                             emphasis = { dockFrame().emphasis[destination.ordinal] },
                             dragActive = dragFrame != null,
+                            contactPressure = contactPressure,
                             onClick = { onDestinationSelected(destination) },
                         )
                     }
@@ -752,6 +764,7 @@ fun AgentoBottomNavigation(
                 sessionRole = onCreateSession != null,
                 backdropLayer = backdropLayer,
                 presence = { dockFrame().actionPresence },
+                contactPressure = contactPressure,
             )
         }
         }) { measurables, constraints ->
@@ -783,6 +796,7 @@ private fun RowScope.NavigationDockTab(
     height: androidx.compose.ui.unit.Dp,
     emphasis: () -> Float,
     dragActive: Boolean,
+    contactPressure: androidx.compose.runtime.MutableState<Float>,
     onClick: () -> Unit,
 ) {
     val colors = LocalAgentocColors.current
@@ -791,23 +805,23 @@ private fun RowScope.NavigationDockTab(
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val policy = LocalMotionPolicy.current
-    var pressPosition by remember { mutableStateOf(Offset.Zero) }
-    LaunchedEffect(interactionSource) {
-        interactionSource.interactions.collect { if (it is PressInteraction.Press) pressPosition = it.pressPosition }
-    }
-    val contactStrength by animateFloatAsState(if (pressed && !isSelected && !dragActive) 1f else 0f,
+    var contact by remember { mutableStateOf(Offset(.5f, .5f)) }
+    var contactLoad by contactPressure
+    val contactStrength by animateFloatAsState(if (pressed && !isSelected && !dragActive) contactLoad else 0f,
         animationSpec = if (policy.preference == MotionPreference.None) snap() else tween(100), label = "tab-contact")
     val foregroundPaint = remember { Paint() }
     Box(
         modifier = Modifier.weight(1f).height(height)
-            .drawBehind {
-                if (contactStrength > 0f) {
-                    val inset = 4.dp.toPx()
-                    val innerSize = androidx.compose.ui.geometry.Size((size.width - inset * 2f).coerceAtLeast(0f), size.height)
-                    val touch = Offset((pressPosition.x - inset) / innerSize.width, pressPosition.y / size.height)
-                    val path = navigationContactPath(innerSize, touch, contactStrength, 4.dp.toPx())
-                    path.translate(Offset(inset, 0f))
-                    drawPath(path, colors.primaryContent.copy(alpha = .07f * contactStrength))
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull()?.let {
+                            if (it.pressed) {
+                                contact = Offset(it.position.x / size.width, it.position.y / size.height)
+                                contactLoad = navigationContactLoad(it.pressure)
+                            }
+                        }
+                    }
                 }
             }
             .clickable(interactionSource = interactionSource, indication = null, role = Role.Tab, onClick = onClick)
@@ -815,6 +829,12 @@ private fun RowScope.NavigationDockTab(
             .semantics { selected = isSelected; contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
+        Box(Modifier.fillMaxSize().padding(horizontal = 4.dp).graphicsLayer {
+            val pose = navigationContactPose(contact, contactStrength)
+            rotationX = pose.rotationX; rotationY = pose.rotationY
+            scaleX = pose.scale; scaleY = pose.scale
+            cameraDistance = 6f
+        }.background(colors.primaryContent.copy(alpha = .07f * contactStrength), AgentoShapes.PillShape))
         Column(
             modifier = Modifier.padding(horizontal = 4.dp)
                 .testTag("bottom-navigation-foreground-${destination.route}")
@@ -867,6 +887,7 @@ private fun ContextualDockAction(
     projectProgress: State<Float>? = null,
     sessionRole: Boolean = false,
     presence: () -> Float = { 1f },
+    contactPressure: androidx.compose.runtime.MutableState<Float>,
 ) {
     val colors = LocalAgentocColors.current
     val actionOffset = remember { mutableStateOf(IntOffset.Zero) }
@@ -877,17 +898,14 @@ private fun ContextualDockAction(
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val policy = LocalMotionPolicy.current
-    val density = LocalDensity.current
     var contact by remember { mutableStateOf(Offset(.5f, .5f)) }
-    val contactStrength by animateFloatAsState(if (pressed && interactive) 1f else 0f,
+    var contactLoad by contactPressure
+    val contactStrength by animateFloatAsState(if (pressed && interactive) contactLoad else 0f,
         animationSpec = when (policy.preference) {
             MotionPreference.None -> snap()
             MotionPreference.Reduced -> tween(100)
             MotionPreference.Full -> spring(dampingRatio = .85f, stiffness = 700f)
         }, label = "creation-contact")
-    val contactShape = remember(contact, contactStrength, density) {
-        GenericShape { size, _ -> addPath(navigationContactPath(size, contact, contactStrength, with(density) { 4.dp.toPx() })) }
-    }
     // The full touch slot stays put. Only the visible disc grows with the dock;
     // its glyph and diffuse shadow are not raster-scaled into a tiny dot.
     Layout(
@@ -905,12 +923,21 @@ private fun ContextualDockAction(
                         awaitPointerEventScope {
                             while (true) {
                                 awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull()?.let {
-                                    if (it.pressed) contact = Offset(it.position.x / size.width, it.position.y / size.height)
+                                    if (it.pressed) {
+                                        contact = Offset(it.position.x / size.width, it.position.y / size.height)
+                                        contactLoad = navigationContactLoad(it.pressure)
+                                    }
                                 }
                             }
                         }
                     }
-                    .agentoAmbientShadow(elevation = 8.dp, shape = contactShape, alpha = .035f, spotAlpha = .015f)
+                    .graphicsLayer {
+                        val pose = navigationContactPose(contact, contactStrength)
+                        rotationX = pose.rotationX; rotationY = pose.rotationY
+                        scaleX = pose.scale; scaleY = pose.scale
+                        cameraDistance = 6f
+                    }
+                    .agentoAmbientShadow(elevation = 8.dp, shape = CircleShape, alpha = .035f, spotAlpha = .015f)
                     .onGloballyPositioned { coordinates ->
                         val position = coordinates.positionInRoot()
                         actionOffset.value = IntOffset(
@@ -918,7 +945,7 @@ private fun ContextualDockAction(
                             pageBackdropOrigin.y - position.y.roundToInt(),
                         )
                     },
-                shape = contactShape,
+                shape = CircleShape,
                 surface = AgentoGlassSurface.Neutral,
                 blurRadius = AgentoFrostedTokens.BlurNavigation,
                 backdropLayer = backdropLayer,
