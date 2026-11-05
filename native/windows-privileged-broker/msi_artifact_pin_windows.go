@@ -14,10 +14,15 @@ import (
 
 const maxPinnedMSIBytes = 2 * 1024 * 1024 * 1024
 
+type msiArtifactPins struct {
+	serviceImagePins
+	path string
+}
+
 // pinWindowsMSIArtifact binds a checked MSI path and its ancestors for the
 // lifetime of the returned pins. This is an integrity primitive only: callers
 // must separately authorize the installation and verify publisher trust.
-func pinWindowsMSIArtifact(raw, expectedDigest string) (*serviceImagePins, error) {
+func pinWindowsMSIArtifact(raw, expectedDigest string) (*msiArtifactPins, error) {
 	path := filepath.Clean(raw)
 	digest := strings.ToLower(expectedDigest)
 	if !filepath.IsAbs(path) || len(filepath.VolumeName(path)) != 2 ||
@@ -35,7 +40,7 @@ func pinWindowsMSIArtifact(raw, expectedDigest string) (*serviceImagePins, error
 			break
 		}
 	}
-	pins := &serviceImagePins{}
+	pins := &msiArtifactPins{path: path}
 	for i := len(ancestors) - 1; i >= 0; i-- {
 		if err := pins.add(ancestors[i], true); err != nil {
 			pins.Close()
