@@ -55,6 +55,9 @@ func TestMSIPublisherSignedFixture(t *testing.T) {
 	if err := verifyPinnedMSIPublisher(pins, publisher); err != nil {
 		t.Fatal(err)
 	}
+	if err := verifyPinnedMSIEmbeddedMedia(pins); err != nil {
+		t.Fatal(err)
+	}
 	if verifyPinnedMSIPublisher(pins, strings.Repeat("0", 64)) == nil {
 		t.Fatal("accepted a different publisher")
 	}
