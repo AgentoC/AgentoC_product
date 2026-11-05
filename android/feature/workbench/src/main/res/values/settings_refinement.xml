@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_section_account">Account</string>
+    <string name="settings_section_ai">AI and tools</string>
+    <string name="settings_section_operations">Files and activity</string>
+    <string name="settings_value_unknown">Not yet available</string>
+    <string name="settings_choose_computer">Choose a computer to configure</string>
+    <string name="settings_connect_to_configure">Connect a computer to configure it</string>
+    <string name="settings_computer_summary">%1$s · %2$s</string>
+    <string name="settings_computer_online">Connected</string>
+    <string name="settings_computer_offline">Disconnected</string>
+    <string name="settings_computer_connecting">Connecting…</string>
+    <string name="settings_computer_unavailable">This computer is no longer available. Choose a computer in device management.</string>
+    <string name="settings_config_offline">Connect this computer to make changes. Previously loaded information may be out of date.</string>
+    <string name="settings_connect_computer">Connect computer</string>
+    <string name="settings_policy_scope">Applies to new sessions on every computer in this account. Existing sessions stay unchanged.</string>
+    <string name="settings_policy_auto_hint">Runs automatically; privileged actions require prior authorization.</string>
+    <string name="settings_policy_approval_hint">Runs routine work automatically and asks when approval is needed.</string>
+    <string name="settings_policy_guarded_hint">Runs within a restricted scope and refuses unresolved requests.</string>
+    <string name="settings_policy_save_error">Could not update the permission mode. The current value is unchanged; try again.</string>
+    <string name="settings_account_checking">Checking account…</string>
+    <string name="settings_account_unverified">Account status could not be confirmed.</string>
+    <string name="settings_theme_black_hint">Uses a pure black background.</string>
+    <string name="settings_theme_amber_hint">Warm amber colors.</string>
+    <string name="settings_theme_dynamic_hint">Colors from your phone wallpaper.</string>
+</resources>

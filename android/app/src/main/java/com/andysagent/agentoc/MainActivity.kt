@@ -1079,6 +1079,7 @@ class MainActivity : ComponentActivity() {
                 val state = WorkbenchUiState(
                     destination = shellState.destination,
                     settingsPage = shellState.settingsPage,
+                    settingsParentPage = shellState.settingsBackStack.lastOrNull() ?: SettingsPage.Overview,
                     chatOpen = shellState.chatOpen,
                     agentOpen = shellState.agentOpen,
                     sessionSearchQuery = shellState.sessionSearchQuery,

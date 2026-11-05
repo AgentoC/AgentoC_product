@@ -39,7 +39,7 @@ class SettingsReconnectContinuityUiTest {
         rule.setContent { AgentocTheme { WorkbenchScreen(state = state.value, accountsViewModel = accounts, onEvent = {}) } }
         rule.onNodeWithTag("settings-permission-mode").performScrollTo().assertIsDisplayed().assertIsEnabled()
         rule.runOnIdle { state.value = state.value.copy(connection = AgentConnectionStatus.Reconnecting) }
-        rule.onNodeWithTag("settings-permission-mode").assertIsDisplayed().assertIsNotEnabled()
+        rule.onNodeWithTag("settings-permission-mode").assertIsDisplayed().assertIsEnabled()
         rule.runOnIdle { state.value = state.value.copy(connection = AgentConnectionStatus.Connected) }
         rule.onNodeWithTag("settings-permission-mode").assertIsDisplayed().assertIsEnabled()
     }

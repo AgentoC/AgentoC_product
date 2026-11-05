@@ -46,8 +46,8 @@
     <string name="run_summary_idle_detail">Send a message to start a task.</string>
     <string name="run_summary_changed_files">Changed files: %1$d</string>
     <string name="settings_group_access">Access</string>
-    <string name="windows_broker_enrollment_title">Windows broker setup</string>
-    <string name="windows_broker_enrollment_subtitle">Register this phone once for privileged approvals</string>
+    <string name="windows_broker_enrollment_title">Phone approval authorization</string>
+    <string name="windows_broker_enrollment_subtitle">Authorize this phone to approve privileged computer operations.</string>
     <string name="windows_broker_enrollment_start_admin">On the Windows computer, run the Broker enrollment command as an administrator with this public key. Then refresh here.</string>
     <string name="windows_broker_enrollment_device_id">Phone device ID: %1$s</string>
     <string name="windows_broker_enrollment_public_key">Existing app device public key</string>
@@ -61,10 +61,10 @@
     <string name="windows_broker_enrollment_refresh">Refresh</string>
     <string name="windows_broker_enrollment_complete">This phone is registered. Future approvals use the shared attention panel and this app’s existing device key.</string>
     <string name="windows_broker_enrollment_close">Close</string>
-    <string name="settings_group_workspace">Workspace</string>
-    <string name="settings_workspace_tools">Workspace tools</string>
-    <string name="settings_group_preferences">Preferences</string>
-    <string name="settings_group_about">About</string>
+    <string name="settings_group_workspace">Computers and connection</string>
+    <string name="settings_workspace_tools">Computer configuration</string>
+    <string name="settings_group_preferences">On this phone</string>
+    <string name="settings_group_about">Help and about</string>
     <string name="welcome_value_summary">Give your computer a task. Review progress and results from your phone.</string>
     <string name="welcome_sign_in_hint">Sign in with Google to keep your computers connected.</string>
     <string name="welcome_pairing_hint">Open Ragent on your computer to get a pairing code. Without signing in, access lasts up to 10 minutes.</string>
@@ -72,7 +72,7 @@
     <string name="settings_back">Back to settings</string>
     <string name="settings_appearance_display">Appearance &amp; display</string>
     <string name="settings_language">Language</string>
-    <string name="settings_theme">Theme</string>
+    <string name="settings_theme">Appearance</string>
     <string name="settings_account_computers">Account &amp; computers</string>
     <string name="settings_sign_in">Sign in</string>
     <string name="settings_google_sign_in_title">Continue with Google?</string>
@@ -95,7 +95,7 @@
     <string name="settings_phone">Phone</string>
     <string name="settings_app_security">App security</string>
     <string name="settings_protected">Protected</string>
-    <string name="settings_version">Version</string>
+    <string name="settings_version">About AgentoC</string>
     <string name="settings_computer_label">Computer: %1$s</string>
     <string name="settings_model_providers">Model providers</string>
     <string name="settings_harnesses">AI runtime tools</string>
@@ -117,7 +117,7 @@
     <string name="settings_save">Save</string>
     <string name="settings_cancel">Cancel</string>
     <string name="settings_google_account">Google account</string>
-    <string name="settings_permission_mode">Account permission mode</string>
+    <string name="settings_permission_mode">Account execution permissions</string>
     <string name="settings_permission_full_auto">Autonomous (default)</string>
     <string name="settings_permission_approval">Ask for approval</string>
     <string name="settings_permission_conservative_auto">Guarded autonomous</string>
@@ -155,13 +155,13 @@
     <string name="language_spanish_title">Español</string>
     <string name="language_spanish_subtitle">Spanish</string>
 
-    <string name="theme_system">System default</string>
+    <string name="theme_system">Follow system</string>
     <string name="theme_system_subtitle">Follows Android system appearance automatically</string>
-    <string name="theme_dark">Dark mode (Dark)</string>
+    <string name="theme_dark">Dark</string>
     <string name="theme_dark_subtitle">Pure obsidian dark surface (#0A0A0C) for focus</string>
-    <string name="theme_light">Light mode (Light)</string>
+    <string name="theme_light">Light</string>
     <string name="theme_light_subtitle">Minimalist clean light canvas (#FDFDFE)</string>
-    <string name="theme_oled">Pure black mode (OLED)</string>
+    <string name="theme_oled">Pure black</string>
     <string name="theme_oled_subtitle">True #000000 black canvas for deep contrast and power saving</string>
     <string name="theme_amber">Amber terminal</string>
     <string name="theme_amber_subtitle">Warm vintage phosphor palette (#0D0C0A) for terminal aesthetic</string>

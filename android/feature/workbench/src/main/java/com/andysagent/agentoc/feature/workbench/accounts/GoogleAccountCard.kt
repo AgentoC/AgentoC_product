@@ -29,6 +29,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -137,6 +139,9 @@ fun GoogleAccountAvatar(
             Text(
                 profileInitials(profile),
                 style = MaterialTheme.typography.titleMedium,
+                // Initials are artwork within a fixed avatar, not body text.
+                fontSize = (size.value * 0.36f / LocalDensity.current.fontScale).sp,
+                maxLines = 1,
                 fontWeight = FontWeight.SemiBold,
                 color = colors.actionPrimaryContent,
             )

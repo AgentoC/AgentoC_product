@@ -273,6 +273,28 @@ class WorkbenchViewModelTest {
     }
 
     @Test
+    fun `computer settings return to their parent and switching tabs clears the stack`() = runTest {
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        try {
+            val shell = AppShellViewModel(FakeSessionRepository())
+            advanceUntilIdle()
+            shell.onEvent(AppShellEvent.OpenSettingsPage(SettingsPage.ComputerConfiguration))
+            shell.onEvent(AppShellEvent.OpenSettingsPage(SettingsPage.ModelProviders))
+            shell.onEvent(AppShellEvent.OpenSettingsPage(SettingsPage.ModelProviders))
+            shell.onEvent(AppShellEvent.CloseSettingsPage)
+            assertEquals(SettingsPage.ComputerConfiguration, shell.state.value.settingsPage)
+            shell.onEvent(AppShellEvent.CloseSettingsPage)
+            assertEquals(SettingsPage.Overview, shell.state.value.settingsPage)
+            assertEquals(emptyList<SettingsPage>(), shell.state.value.settingsBackStack)
+            shell.onEvent(AppShellEvent.OpenSettingsPage(SettingsPage.ComputerConfiguration))
+            shell.onEvent(AppShellEvent.SelectDestination(com.andysagent.agentoc.core.navigation.AgentoDestination.Home))
+            shell.onEvent(AppShellEvent.OpenSettingsPage(SettingsPage.Theme))
+            shell.onEvent(AppShellEvent.CloseSettingsPage)
+            assertEquals(SettingsPage.Overview, shell.state.value.settingsPage)
+        } finally { Dispatchers.resetMain() }
+    }
+
+    @Test
     fun `closing chat preserves the primary destination it opened from`() = runTest {
         Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
         try {

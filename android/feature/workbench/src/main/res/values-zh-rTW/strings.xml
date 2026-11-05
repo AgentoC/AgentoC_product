@@ -45,10 +45,10 @@
     <string name="run_summary_idle_detail">傳送訊息，開始一項任務。</string>
     <string name="run_summary_changed_files">已修改檔案：%1$d</string>
     <string name="settings_group_access">存取權限</string>
-    <string name="settings_group_workspace">工作區</string>
-    <string name="settings_workspace_tools">工作區工具</string>
-    <string name="settings_group_preferences">偏好設定</string>
-    <string name="settings_group_about">關於</string>
+    <string name="settings_group_workspace">電腦與連接</string>
+    <string name="settings_workspace_tools">電腦設定</string>
+    <string name="settings_group_preferences">本機設定</string>
+    <string name="settings_group_about">說明與關於</string>
     <string name="welcome_value_summary">把任務交給電腦，\n在手機上查看進度與結果。</string>
     <string name="welcome_sign_in_hint">登入 Google 帳戶，讓電腦保持長期綁定。</string>
     <string name="welcome_pairing_hint">在電腦版 Ragent 中取得配對碼。未登入時，存取最長持續 10 分鐘。</string>
@@ -56,7 +56,7 @@
     <string name="settings_back">返回設定</string>
     <string name="settings_appearance_display">外觀與顯示</string>
     <string name="settings_language">語言</string>
-    <string name="settings_theme">主題</string>
+    <string name="settings_theme">外觀</string>
     <string name="settings_account_computers">帳戶與電腦</string>
     <string name="settings_sign_in">登入</string>
     <string name="settings_google_sign_in_title">繼續使用 Google？</string>
@@ -79,7 +79,7 @@
     <string name="settings_phone">手機</string>
     <string name="settings_app_security">應用程式安全性</string>
     <string name="settings_protected">已保護</string>
-    <string name="settings_version">版本</string>
+    <string name="settings_version">關於 AgentoC</string>
     <string name="settings_computer_label">電腦：%1$s</string>
     <string name="settings_model_providers">模型提供者</string>
     <string name="settings_connectors_mcp">應用程式與工具連線</string>
@@ -100,7 +100,7 @@
     <string name="settings_save">儲存</string>
     <string name="settings_cancel">取消</string>
     <string name="settings_google_account">Google 帳戶</string>
-    <string name="settings_permission_mode">帳戶權限模式</string>
+    <string name="settings_permission_mode">帳號執行權限</string>
     <string name="settings_permission_full_auto">自主執行（預設）</string>
     <string name="settings_permission_approval">要求核准</string>
     <string name="settings_permission_conservative_auto">審慎自主</string>
@@ -135,13 +135,13 @@
     <string name="language_french_subtitle">法文</string>
     <string name="language_spanish_title">Español</string>
     <string name="language_spanish_subtitle">西班牙文</string>
-    <string name="theme_system">系統預設</string>
+    <string name="theme_system">跟隨系統</string>
     <string name="theme_system_subtitle">自動跟隨 Android 系統外觀</string>
-    <string name="theme_dark">深色模式（Dark）</string>
+    <string name="theme_dark">深色</string>
     <string name="theme_dark_subtitle">純黑曜石深色表面（#0A0A0C），專注工作</string>
-    <string name="theme_light">淺色模式（Light）</string>
+    <string name="theme_light">淺色</string>
     <string name="theme_light_subtitle">簡潔明亮的淺色畫布（#FDFDFE）</string>
-    <string name="theme_oled">純黑模式（OLED）</string>
+    <string name="theme_oled">純黑</string>
     <string name="theme_oled_subtitle">真正的 #000000 黑色畫布，提升對比度並節省電量</string>
     <string name="theme_amber">琥珀終端</string>
     <string name="theme_amber_subtitle">溫暖的復古螢光色調（#0D0C0A）</string>
@@ -435,4 +435,6 @@
     <string name="project_list_delete_detail">請選擇保留專案中的對話，或連同專案一起刪除。</string>
     <string name="project_list_delete_keep">刪除專案，保留對話</string>
     <string name="project_list_delete_all">刪除專案和對話</string>
+    <string name="windows_broker_enrollment_title">手機審批授權</string>
+    <string name="windows_broker_enrollment_subtitle">用這部手機批准電腦上的特權操作。</string>
 </resources>

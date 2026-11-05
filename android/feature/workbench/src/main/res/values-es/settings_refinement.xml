@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_section_account">Cuenta</string>
+    <string name="settings_section_ai">IA y herramientas</string>
+    <string name="settings_section_operations">Archivos y actividad</string>
+    <string name="settings_value_unknown">Aún no disponible</string>
+    <string name="settings_choose_computer">Elige un ordenador para configurar</string>
+    <string name="settings_connect_to_configure">Conecta un ordenador para configurarlo</string>
+    <string name="settings_computer_summary">%1$s · %2$s</string>
+    <string name="settings_computer_online">Conectado</string>
+    <string name="settings_computer_offline">Desconectado</string>
+    <string name="settings_computer_connecting">Conectando…</string>
+    <string name="settings_computer_unavailable">Este ordenador no está disponible. Elige otro en la gestión de dispositivos.</string>
+    <string name="settings_config_offline">Conecta este ordenador para cambiar ajustes. Los datos anteriores pueden estar desactualizados.</string>
+    <string name="settings_connect_computer">Conectar ordenador</string>
+    <string name="settings_policy_scope">Se aplica a nuevas sesiones en todos los ordenadores de la cuenta. No cambia las sesiones existentes.</string>
+    <string name="settings_policy_auto_hint">Ejecución automática; las acciones privilegiadas requieren autorización previa.</string>
+    <string name="settings_policy_approval_hint">Ejecuta tareas rutinarias y solicita aprobación cuando es necesario.</string>
+    <string name="settings_policy_guarded_hint">Ejecuta dentro de límites y rechaza solicitudes que no se pueden resolver.</string>
+    <string name="settings_policy_save_error">No se pudo cambiar el modo. Se conserva el valor actual. Inténtalo de nuevo.</string>
+    <string name="settings_account_checking">Verificando cuenta…</string>
+    <string name="settings_account_unverified">No se pudo confirmar el estado de la cuenta.</string>
+    <string name="settings_theme_black_hint">Usa un fondo negro puro.</string>
+    <string name="settings_theme_amber_hint">Tonos ámbar cálidos.</string>
+    <string name="settings_theme_dynamic_hint">Colores del fondo de pantalla.</string>
+</resources>

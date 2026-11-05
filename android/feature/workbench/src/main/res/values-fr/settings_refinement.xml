@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_section_account">Compte</string>
+    <string name="settings_section_ai">IA et outils</string>
+    <string name="settings_section_operations">Fichiers et activité</string>
+    <string name="settings_value_unknown">Pas encore disponible</string>
+    <string name="settings_choose_computer">Choisir un ordinateur à configurer</string>
+    <string name="settings_connect_to_configure">Connecter un ordinateur pour le configurer</string>
+    <string name="settings_computer_summary">%1$s · %2$s</string>
+    <string name="settings_computer_online">Connecté</string>
+    <string name="settings_computer_offline">Déconnecté</string>
+    <string name="settings_computer_connecting">Connexion…</string>
+    <string name="settings_computer_unavailable">Cet ordinateur est indisponible. Choisissez un ordinateur dans la gestion des appareils.</string>
+    <string name="settings_config_offline">Connectez cet ordinateur pour modifier les réglages. Les informations précédentes peuvent être anciennes.</string>
+    <string name="settings_connect_computer">Connecter</string>
+    <string name="settings_policy_scope">Concerne les nouvelles sessions sur tous les ordinateurs du compte. Les sessions existantes restent inchangées.</string>
+    <string name="settings_policy_auto_hint">Exécution automatique ; les actions privilégiées nécessitent une autorisation préalable.</string>
+    <string name="settings_policy_approval_hint">Exécute les tâches courantes et demande une approbation si nécessaire.</string>
+    <string name="settings_policy_guarded_hint">Exécute dans un périmètre restreint et refuse les demandes non résolues.</string>
+    <string name="settings_policy_save_error">Impossible de modifier le mode. La valeur actuelle est conservée. Réessayez.</string>
+    <string name="settings_account_checking">Vérification du compte…</string>
+    <string name="settings_account_unverified">Impossible de confirmer le statut du compte.</string>
+    <string name="settings_theme_black_hint">Utilise un fond noir pur.</string>
+    <string name="settings_theme_amber_hint">Des tons ambrés chaleureux.</string>
+    <string name="settings_theme_dynamic_hint">Couleurs du fond d’écran du téléphone.</string>
+</resources>

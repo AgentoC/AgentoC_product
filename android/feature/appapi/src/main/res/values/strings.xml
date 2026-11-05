@@ -1,6 +1,6 @@
 <resources>
     <string name="api_routing_title">Sharing and agents</string>
-    <string name="api_routing_description">Shares use this default computer even when another computer is open in the app. Aliases help identify a computer in requests.</string>
+    <string name="api_routing_description">Shares from other apps go to this computer by default. This does not follow the computer currently open in AgentoC.</string>
     <string name="api_close">Close</string>
     <string name="api_loading">Loading…</string>
     <string name="api_saving">Saving…</string>

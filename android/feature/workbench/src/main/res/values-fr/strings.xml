@@ -45,10 +45,10 @@
     <string name="run_summary_idle_detail">Envoyez un message pour commencer une tâche.</string>
     <string name="run_summary_changed_files">Fichiers modifiés : %1$d</string>
     <string name="settings_group_access">Accès</string>
-    <string name="settings_group_workspace">Espace de travail</string>
-    <string name="settings_workspace_tools">Outils de travail</string>
-    <string name="settings_group_preferences">Préférences</string>
-    <string name="settings_group_about">À propos</string>
+    <string name="settings_group_workspace">Ordinateurs et connexion</string>
+    <string name="settings_workspace_tools">Configuration de l’ordinateur</string>
+    <string name="settings_group_preferences">Sur ce téléphone</string>
+    <string name="settings_group_about">Aide et informations</string>
     <string name="welcome_value_summary">Confiez une tâche à votre ordinateur. Suivez les progrès et les résultats sur votre téléphone.</string>
     <string name="welcome_sign_in_hint">Connectez-vous avec Google pour garder vos ordinateurs associés.</string>
     <string name="welcome_pairing_hint">Obtenez un code dans Ragent sur votre ordinateur. Sans connexion au compte, cet accès dure au maximum 10 minutes.</string>
@@ -56,7 +56,7 @@
     <string name="settings_back">Retour aux paramètres</string>
     <string name="settings_appearance_display">Apparence et affichage</string>
     <string name="settings_language">Langue</string>
-    <string name="settings_theme">Thème</string>
+    <string name="settings_theme">Apparence</string>
     <string name="settings_account_computers">Compte et ordinateurs</string>
     <string name="settings_sign_in">Se connecter</string>
     <string name="settings_google_sign_in_title">Continuer avec Google ?</string>
@@ -79,7 +79,7 @@
     <string name="settings_phone">Téléphone</string>
     <string name="settings_app_security">Sécurité de l’application</string>
     <string name="settings_protected">Protégé</string>
-    <string name="settings_version">Version</string>
+    <string name="settings_version">À propos d’AgentoC</string>
     <string name="settings_computer_label">Ordinateur : %1$s</string>
     <string name="settings_model_providers">Fournisseurs de modèles</string>
     <string name="settings_connectors_mcp">Connexions aux applications et outils</string>
@@ -100,7 +100,7 @@
     <string name="settings_save">Enregistrer</string>
     <string name="settings_cancel">Annuler</string>
     <string name="settings_google_account">Compte Google</string>
-    <string name="settings_permission_mode">Mode d’autorisation du compte</string>
+    <string name="settings_permission_mode">Autorisations d’exécution</string>
     <string name="settings_permission_full_auto">Automatique</string>
     <string name="settings_permission_approval">Demander une autorisation</string>
     <string name="settings_permission_conservative_auto">Autonomie prudente</string>
@@ -135,13 +135,13 @@
     <string name="language_french_subtitle">Français</string>
     <string name="language_spanish_title">Español</string>
     <string name="language_spanish_subtitle">Espagnol</string>
-    <string name="theme_system">Par défaut</string>
+    <string name="theme_system">Suivre le système</string>
     <string name="theme_system_subtitle">Suit automatiquement l’apparence du système Android</string>
-    <string name="theme_dark">Mode sombre (Dark)</string>
+    <string name="theme_dark">Sombre</string>
     <string name="theme_dark_subtitle">Surface sombre obsidienne (#0A0A0C) pour rester concentré</string>
-    <string name="theme_light">Mode clair (Light)</string>
+    <string name="theme_light">Clair</string>
     <string name="theme_light_subtitle">Canvas clair et minimaliste (#FDFDFE)</string>
-    <string name="theme_oled">Noir profond (OLED)</string>
+    <string name="theme_oled">Noir pur</string>
     <string name="theme_oled_subtitle">Canvas noir #000000 pour un contraste élevé et une consommation réduite</string>
     <string name="theme_amber">Terminal ambré</string>
     <string name="theme_amber_subtitle">Palette phosphorescente rétro et chaleureuse (#0D0C0A)</string>
@@ -355,4 +355,6 @@
     <string name="project_list_delete_detail">Choisissez de conserver les conversations ou de les supprimer avec le projet.</string>
     <string name="project_list_delete_keep">Supprimer le projet, conserver les conversations</string>
     <string name="project_list_delete_all">Supprimer le projet et les conversations</string>
+    <string name="windows_broker_enrollment_title">Autoriser les approbations mobiles</string>
+    <string name="windows_broker_enrollment_subtitle">Approuver les opérations privilégiées de cet ordinateur avec ce téléphone.</string>
 </resources>

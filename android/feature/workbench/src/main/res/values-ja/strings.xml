@@ -45,10 +45,10 @@
     <string name="run_summary_idle_detail">メッセージを送信してタスクを開始します。</string>
     <string name="run_summary_changed_files">変更したファイル：%1$d</string>
     <string name="settings_group_access">アクセス</string>
-    <string name="settings_group_workspace">ワークスペース</string>
-    <string name="settings_workspace_tools">ワークスペースのツール</string>
-    <string name="settings_group_preferences">環境設定</string>
-    <string name="settings_group_about">アプリについて</string>
+    <string name="settings_group_workspace">パソコンと接続</string>
+    <string name="settings_workspace_tools">パソコンの設定</string>
+    <string name="settings_group_preferences">このスマートフォン</string>
+    <string name="settings_group_about">ヘルプと情報</string>
     <string name="welcome_value_summary">パソコンに作業を任せ、スマートフォンで進捗や結果を確認できます。</string>
     <string name="welcome_sign_in_hint">Google アカウントでログインすると、パソコンとの連携を維持できます。</string>
     <string name="welcome_pairing_hint">パソコンの Ragent でペアリングコードを取得してください。未ログイン時のアクセスは最長 10 分間です。</string>
@@ -56,7 +56,7 @@
     <string name="settings_back">設定に戻る</string>
     <string name="settings_appearance_display">外観と表示</string>
     <string name="settings_language">言語</string>
-    <string name="settings_theme">テーマ</string>
+    <string name="settings_theme">外観</string>
     <string name="settings_account_computers">アカウントとコンピューター</string>
     <string name="settings_sign_in">ログイン</string>
     <string name="settings_google_sign_in_title">Google で続行しますか？</string>
@@ -79,7 +79,7 @@
     <string name="settings_phone">スマートフォン</string>
     <string name="settings_app_security">アプリのセキュリティ</string>
     <string name="settings_protected">保護されています</string>
-    <string name="settings_version">バージョン</string>
+    <string name="settings_version">AgentoC について</string>
     <string name="settings_computer_label">コンピューター: %1$s</string>
     <string name="settings_model_providers">モデルプロバイダー</string>
     <string name="settings_connectors_mcp">アプリとツールの接続</string>
@@ -100,7 +100,7 @@
     <string name="settings_save">保存</string>
     <string name="settings_cancel">キャンセル</string>
     <string name="settings_google_account">Google アカウント</string>
-    <string name="settings_permission_mode">アカウントの権限モード</string>
+    <string name="settings_permission_mode">アカウントの実行権限</string>
     <string name="settings_permission_full_auto">完全自動</string>
     <string name="settings_permission_approval">承認を求める</string>
     <string name="settings_permission_conservative_auto">慎重な自動実行</string>
@@ -135,13 +135,13 @@
     <string name="language_french_subtitle">フランス語</string>
     <string name="language_spanish_title">Español</string>
     <string name="language_spanish_subtitle">スペイン語</string>
-    <string name="theme_system">システムのデフォルト</string>
+    <string name="theme_system">システムに従う</string>
     <string name="theme_system_subtitle">Android のシステム外観に自動的に合わせます</string>
-    <string name="theme_dark">ダークモード（Dark）</string>
+    <string name="theme_dark">ダーク</string>
     <string name="theme_dark_subtitle">集中のための黒曜石色のダークサーフェス（#0A0A0C）</string>
-    <string name="theme_light">ライトモード（Light）</string>
+    <string name="theme_light">ライト</string>
     <string name="theme_light_subtitle">ミニマルで明るいキャンバス（#FDFDFE）</string>
-    <string name="theme_oled">完全な黒（OLED）</string>
+    <string name="theme_oled">ブラック</string>
     <string name="theme_oled_subtitle">コントラストを高め、省電力にもなる #000000 のキャンバス</string>
     <string name="theme_amber">アンバーターミナル</string>
     <string name="theme_amber_subtitle">ターミナルの雰囲気に合う温かみのあるレトロな蛍光色（#0D0C0A）</string>
@@ -353,4 +353,6 @@
     <string name="project_list_delete_detail">会話を残すか、プロジェクトと一緒に削除するか選択してください。</string>
     <string name="project_list_delete_keep">プロジェクトを削除し会話を残す</string>
     <string name="project_list_delete_all">プロジェクトと会話を削除</string>
+    <string name="windows_broker_enrollment_title">スマートフォンの承認登録</string>
+    <string name="windows_broker_enrollment_subtitle">このスマートフォンでパソコンの特権操作を承認。</string>
 </resources>

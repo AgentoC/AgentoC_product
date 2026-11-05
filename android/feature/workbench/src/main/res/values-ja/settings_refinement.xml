@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_section_account">アカウント</string>
+    <string name="settings_section_ai">AI とツール</string>
+    <string name="settings_section_operations">ファイルと実行</string>
+    <string name="settings_value_unknown">未取得</string>
+    <string name="settings_choose_computer">設定するパソコンを選択</string>
+    <string name="settings_connect_to_configure">パソコンを接続して設定</string>
+    <string name="settings_computer_summary">%1$s · %2$s</string>
+    <string name="settings_computer_online">接続済み</string>
+    <string name="settings_computer_offline">未接続</string>
+    <string name="settings_computer_connecting">接続中…</string>
+    <string name="settings_computer_unavailable">このパソコンは利用できません。デバイス管理で選択してください。</string>
+    <string name="settings_config_offline">変更には接続が必要です。以前の情報は最新でない場合があります。</string>
+    <string name="settings_connect_computer">パソコンに接続</string>
+    <string name="settings_policy_scope">このアカウントの全パソコンの新規セッションに適用されます。既存のセッションは変更されません。</string>
+    <string name="settings_policy_auto_hint">自動実行します。特権操作には事前の承認が必要です。</string>
+    <string name="settings_policy_approval_hint">通常の操作は自動実行し、必要に応じて承認を求めます。</string>
+    <string name="settings_policy_guarded_hint">制限範囲内で実行し、判断できない要求は拒否します。</string>
+    <string name="settings_policy_save_error">権限モードを更新できませんでした。現在の値は変更されていません。再試行してください。</string>
+    <string name="settings_account_checking">アカウントを確認中…</string>
+    <string name="settings_account_unverified">アカウントの状態を確認できません。</string>
+    <string name="settings_theme_black_hint">純黒の背景を使用。</string>
+    <string name="settings_theme_amber_hint">暖かい琥珀色。</string>
+    <string name="settings_theme_dynamic_hint">壁紙に合わせた配色。</string>
+</resources>

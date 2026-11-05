@@ -112,14 +112,22 @@ class UserJourneyHomeSettingsUiTest {
             connection = AgentConnectionStatus.Disconnected, activeRemoteTargetId = "a",
             remoteTargets = listOf(RemoteTarget("a", "Office PC", ""), RemoteTarget("b", "Studio PC", ""))))
         val events = mutableListOf<WorkbenchEvent>()
-        compose.setContent { AgentocTheme { WorkbenchScreen(state.value, onEvent = events::add) } }
-        compose.onNodeWithText(context.getString(WorkbenchR.string.journey_settings_scope, "Office PC")).performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(text(WorkbenchR.string.settings_workspace_tools)).performClick()
+        compose.setContent { AgentocTheme { WorkbenchScreen(state.value, onEvent = { event ->
+            events.add(event)
+            when (event) {
+                is WorkbenchEvent.OpenSettingsPage -> state.value = state.value.copy(settingsPage = event.page)
+                WorkbenchEvent.CloseSettingsPage -> state.value = state.value.copy(settingsPage = SettingsPage.Overview)
+                else -> Unit
+            }
+        }) } }
+        compose.onNodeWithText(context.getString(WorkbenchR.string.settings_computer_summary, "Office PC", text(WorkbenchR.string.settings_computer_offline))).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("settings-computer-configuration").performClick()
         compose.onNodeWithTag("settings-offline-explanation").performScrollTo().assertIsDisplayed()
         capture("settings-offline")
         compose.runOnIdle { state.value = state.value.copy(activeRemoteTargetId = "b") }
-        compose.onNodeWithText(context.getString(WorkbenchR.string.journey_settings_scope, "Studio PC")).performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(context.getString(WorkbenchR.string.journey_settings_scope, "Office PC")).assertDoesNotExist()
+        compose.onNodeWithText(context.getString(WorkbenchR.string.settings_computer_summary, "Studio PC", text(WorkbenchR.string.settings_computer_offline))).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(WorkbenchR.string.settings_computer_summary, "Office PC", text(WorkbenchR.string.settings_computer_offline))).assertDoesNotExist()
+        compose.onNodeWithTag("settings-back").performClick()
         compose.onNodeWithTag("settings-connection-help").performScrollTo()
         // Scroll beyond minimal visibility so the floating navigation dock
         // cannot intercept the row's native click at the viewport bottom.

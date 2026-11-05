@@ -37,6 +37,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Checkbox
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -117,10 +119,12 @@ fun WebParitySurface(
     projectId: String? = null,
     backContentDescription: String? = null,
     backProgress: Float = 0f,
+    connectionAvailable: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     LaunchedEffect(page, targetId) { onEvent(WebParityEvent.OpenPage(page)) }
     val title = stringResource(page.titleRes())
+    CompositionLocalProvider(LocalRemoteSettingsWritable provides connectionAvailable) {
     AgentoSurface(modifier.fillMaxSize(), color = LocalAgentocColors.current.canvas) {
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             SettingsWebHeader(
@@ -132,6 +136,9 @@ fun WebParitySurface(
                 refreshDescription = stringResource(R.string.settings_refresh_page, title),
                 refreshing = state.refreshing,
             )
+            if (!connectionAvailable) Text(stringResource(R.string.settings_config_offline),
+                color = LocalAgentocColors.current.secondaryContent, style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.widthIn(max = AgentocSizes.ContentMaxWidth).fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp))
             WorkbenchBackStackTransition(
                 isOpen = state.selectedFile != null,
                 backProgress = backProgress,
@@ -171,6 +178,26 @@ fun WebParitySurface(
             state.error?.let { AgentoErrorText(localizedParityError(it), Modifier.fillMaxWidth().padding(AgentocSpacing.Gutter)) }
         }
     }
+}
+
+}
+
+private val LocalRemoteSettingsWritable = staticCompositionLocalOf { true }
+
+@Composable
+private fun RemoteSettingsAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
+    enabled: Boolean = true, secondary: Boolean = false, leadingIcon: (@Composable () -> Unit)? = null) {
+    AgentoButton(text, onClick, modifier, enabled = enabled && LocalRemoteSettingsWritable.current,
+        secondary = secondary, leadingIcon = leadingIcon)
+}
+
+@Composable
+private fun RemoteSettingsDialog(title: String, confirmLabel: String, onConfirm: () -> Unit, onDismiss: () -> Unit,
+    dismissLabel: String, confirmEnabled: Boolean = true, dismissEnabled: Boolean = true,
+    confirmModifier: Modifier = Modifier, destructive: Boolean = false, content: @Composable () -> Unit) {
+    AgentoDialog(title, confirmLabel, onConfirm, onDismiss, dismissLabel = dismissLabel,
+        confirmEnabled = confirmEnabled && LocalRemoteSettingsWritable.current,
+        dismissEnabled = dismissEnabled, confirmModifier = confirmModifier, destructive = destructive, content = content)
 }
 
 /** Translate app-owned fallback messages while preserving unrecognized server diagnostics. */
@@ -418,7 +445,7 @@ private fun ConnectorsPage(state: WebParityUiState, onEvent: (WebParityEvent) ->
     var command by remember { mutableStateOf("") }
     var deletingServer by remember { mutableStateOf<WebMcpServer?>(null) }
     LazyColumn(contentPadding = navigationContentPadding(), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
-        item { AgentoButton(stringResource(R.string.sp_add_mcp), { dialog = true }, leadingIcon = { AgentoWebIcon(AgentoWebGlyph.Plus, null) }) }
+        item { RemoteSettingsAction(stringResource(R.string.sp_add_mcp), { dialog = true }, leadingIcon = { AgentoWebIcon(AgentoWebGlyph.Plus, null) }) }
         item { Text(stringResource(R.string.sp_connected_services), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = AgentocSpacing.Compact)) }
         items(state.connectors, key = { it.id }) { connector ->
             val isGithub = connector.id.contains("github", ignoreCase = true)
@@ -435,9 +462,9 @@ private fun ConnectorsPage(state: WebParityUiState, onEvent: (WebParityEvent) ->
                 }
                 if (connector.description.isNotBlank()) Text(connector.description, style = MaterialTheme.typography.bodySmall, color = LocalAgentocColors.current.secondaryContent)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
-                    if (!connector.ready && (isGithub || isGoogle)) AgentoButton(stringResource(R.string.settings_connect), { onEvent(WebParityEvent.StartConnectorOAuth(connector.id)) }, secondary = true)
-                    if (connector.ready && isGithub) AgentoButton(stringResource(R.string.settings_disconnect), { onEvent(WebParityEvent.DisconnectConnector(connector.id)) }, secondary = true)
-                    if (connector.entryUrl.isNotBlank()) AgentoButton(stringResource(R.string.sp_open), { runCatching { uriHandler.openUri(connector.entryUrl) } }, secondary = true)
+                    if (!connector.ready && (isGithub || isGoogle)) RemoteSettingsAction(stringResource(R.string.settings_connect), { onEvent(WebParityEvent.StartConnectorOAuth(connector.id)) }, secondary = true)
+                    if (connector.ready && isGithub) RemoteSettingsAction(stringResource(R.string.settings_disconnect), { onEvent(WebParityEvent.DisconnectConnector(connector.id)) }, secondary = true)
+                    if (connector.entryUrl.isNotBlank()) RemoteSettingsAction(stringResource(R.string.sp_open), { runCatching { uriHandler.openUri(connector.entryUrl) } }, secondary = true)
                 }
               }
             }
@@ -446,12 +473,12 @@ private fun ConnectorsPage(state: WebParityUiState, onEvent: (WebParityEvent) ->
         if (state.mcpServers.isEmpty()) item { AgentoEmptyState(stringResource(R.string.sp_no_mcp), stringResource(R.string.sp_no_mcp_detail)) }
         items(state.mcpServers, key = { "${it.family}:${it.name}" }) { server ->
             SettingsContentCard(Modifier.fillMaxWidth()) {
-                AgentoListItem(title = server.name, supportingText = "${server.family} · ${server.detail}", leading = { AgentoWebIcon(AgentoWebGlyph.Terminal, null) }, trailing = { AgentoButton(stringResource(R.string.sp_delete), { deletingServer = server }, secondary = true) })
+                AgentoListItem(title = server.name, supportingText = "${server.family} · ${server.detail}", leading = { AgentoWebIcon(AgentoWebGlyph.Terminal, null) }, trailing = { RemoteSettingsAction(stringResource(R.string.sp_delete), { deletingServer = server }, secondary = true) })
             }
         }
     }
     deletingServer?.let { server ->
-        AgentoDialog(
+        RemoteSettingsDialog(
             title = stringResource(R.string.sp_delete_mcp_title),
             confirmLabel = stringResource(R.string.sp_delete),
             confirmModifier = Modifier.testTag("mcp-delete-confirm"),
@@ -461,7 +488,7 @@ private fun ConnectorsPage(state: WebParityUiState, onEvent: (WebParityEvent) ->
             onConfirm = { deletingServer = null; onEvent(WebParityEvent.DeleteMcpServer(server.family, server.name)) },
         ) { Text(stringResource(R.string.sp_delete_mcp_body, server.name)) }
     }
-    if (dialog) AgentoDialog(
+    if (dialog) RemoteSettingsDialog(
         title = stringResource(R.string.sp_add_mcp),
         confirmLabel = stringResource(R.string.sp_add),
         dismissLabel = stringResource(R.string.settings_cancel),
@@ -564,7 +591,7 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
     }
     LazyColumn(contentPadding = navigationContentPadding(), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
         if (!restrictedDemo) item {
-            AgentoButton(stringResource(R.string.sp_add_provider), {
+            RemoteSettingsAction(stringResource(R.string.sp_add_provider), {
                 editingProvider = null
                 agentType = availableHarnesses.firstOrNull()?.id.orEmpty()
                 authMode = if (agentType == "agy") "oauth" else "api-key"
@@ -575,7 +602,7 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
         }
         if (!restrictedDemo) item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = state.providerRotationEnabled, onCheckedChange = { onEvent(WebParityEvent.ToggleProviderRotation(it)) })
+                Checkbox(enabled = LocalRemoteSettingsWritable.current, checked = state.providerRotationEnabled, onCheckedChange = { onEvent(WebParityEvent.ToggleProviderRotation(it)) })
                 Text(stringResource(R.string.sp_rotate_provider), style = MaterialTheme.typography.bodyMedium)
             }
         }
@@ -609,18 +636,18 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                     verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact),
                 ) {
                         if (harnessInstalled && (provider.agentType.equals("agy", ignoreCase = true) || provider.id in state.providerRotationIds)) {
-                            Checkbox(
+                            Checkbox(enabled = LocalRemoteSettingsWritable.current,
                                 checked = provider.id in state.providerRotationIds,
                                 onCheckedChange = { selected -> onEvent(WebParityEvent.ToggleProviderRotationProvider(provider.id, selected)) },
                             )
                         }
-                        if (harnessInstalled) AgentoButton(stringResource(R.string.sp_refresh_quota), { onEvent(WebParityEvent.RefreshProviderQuota(provider.id)) }, secondary = true)
+                        if (harnessInstalled) RemoteSettingsAction(stringResource(R.string.sp_refresh_quota), { onEvent(WebParityEvent.RefreshProviderQuota(provider.id)) }, secondary = true)
                         if (harnessInstalled && !restrictedDemo && provider.authType == "oauth" && provider.agentType in setOf("codex", "agy")) {
-                            AgentoButton(stringResource(R.string.provider_oauth_reauthenticate), {
+                            RemoteSettingsAction(stringResource(R.string.provider_oauth_reauthenticate), {
                                 onEvent(WebParityEvent.StartProviderOAuth(provider.agentType, provider.name, provider.id))
                             }, secondary = true)
                         }
-                        if (harnessInstalled && !restrictedDemo) AgentoButton(stringResource(R.string.sp_edit), {
+                        if (harnessInstalled && !restrictedDemo) RemoteSettingsAction(stringResource(R.string.sp_edit), {
                             editingProvider = provider
                             name = provider.name
                             agentType = provider.agentType
@@ -636,14 +663,14 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                             apiKey = ""
                             dialog = true
                         }, secondary = true)
-                        if (!restrictedDemo) AgentoButton(stringResource(R.string.sp_delete), { deletingProvider = provider }, secondary = true)
+                        if (!restrictedDemo) RemoteSettingsAction(stringResource(R.string.sp_delete), { deletingProvider = provider }, secondary = true)
                 }
               }
             }
         }
     }
     deletingProvider?.let { provider ->
-        AgentoDialog(
+        RemoteSettingsDialog(
             title = stringResource(R.string.sp_delete_provider_title),
             confirmLabel = stringResource(R.string.sp_delete),
             dismissLabel = stringResource(R.string.settings_cancel),
@@ -653,7 +680,7 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
         ) { Text(stringResource(R.string.sp_delete_provider_body, provider.name)) }
     }
     if (dialog) {
-        AgentoDialog(
+        RemoteSettingsDialog(
             title = stringResource(if (editingProvider == null) R.string.sp_add_model_provider else R.string.sp_edit_model_provider),
             confirmLabel = stringResource(if (editingProvider == null && authMode == "oauth") R.string.sp_start_login else R.string.settings_save),
             dismissLabel = stringResource(R.string.settings_cancel),
@@ -682,7 +709,7 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                         Text(stringResource(if (state.providerHarnessesLoaded) R.string.sp_provider_installed_harness_hint else R.string.sp_provider_harness_status_unavailable), style = MaterialTheme.typography.bodySmall)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
                             availableHarnesses.forEach { choice ->
-                                AgentoButton(choice.label, {
+                                RemoteSettingsAction(choice.label, {
                                     agentType = choice.id
                                     authMode = if (choice.id == "agy") "oauth" else "api-key"
                                     protocol = choice.protocols.firstOrNull() ?: "chat"
@@ -694,8 +721,8 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                     }
                     if (agentType.isNotBlank()) {
                         Row(horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
-                            if (agentType != "agy") AgentoButton(stringResource(R.string.sp_api_key), { authMode = "api-key" }, modifier = Modifier.weight(1f), secondary = authMode != "api-key")
-                            if (agentType == "codex" || agentType == "agy") AgentoButton(stringResource(R.string.sp_official_oauth), { authMode = "oauth" }, modifier = Modifier.weight(1f), secondary = authMode != "oauth")
+                            if (agentType != "agy") RemoteSettingsAction(stringResource(R.string.sp_api_key), { authMode = "api-key" }, modifier = Modifier.weight(1f), secondary = authMode != "api-key")
+                            if (agentType == "codex" || agentType == "agy") RemoteSettingsAction(stringResource(R.string.sp_official_oauth), { authMode = "oauth" }, modifier = Modifier.weight(1f), secondary = authMode != "oauth")
                         }
                         AgentoTextField(name, { name = it }, stringResource(R.string.sp_display_name), Modifier.fillMaxWidth())
                         if (authMode == "api-key") {
@@ -707,7 +734,7 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
                                     protocols.forEach { option ->
                                         val label = when (option) { "responses" -> "Responses"; "chat" -> "Chat"; "anthropic" -> "Anthropic"; else -> "GitHub Copilot" }
-                                        AgentoButton(label, { protocol = option }, secondary = protocol != option)
+                                        RemoteSettingsAction(label, { protocol = option }, secondary = protocol != option)
                                     }
                                 }
                             }
@@ -718,7 +745,7 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                 }
         }
     }
-    if (!restrictedDemo) ProviderOAuthDialog(state, onEvent)
+    if (!restrictedDemo && LocalRemoteSettingsWritable.current) ProviderOAuthDialog(state, onEvent)
 }
 
 private fun WebParityPage.titleRes(): Int = when (this) {
@@ -827,7 +854,7 @@ private fun HarnessesPage(
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid)) {
                             if (!restrictedDemo && installedCount < targets.size) {
-                                AgentoButton(
+                                RemoteSettingsAction(
                                     stringResource(R.string.sp_install),
                                     { requestAction(harness, WebHarnessOperation.Install) },
                                     enabled = !state.actionInProgress && harness.supportedOnPlatform,
@@ -836,14 +863,14 @@ private fun HarnessesPage(
                                 )
                             }
                             if (!restrictedDemo && installedCount > 0) {
-                                AgentoButton(
+                                RemoteSettingsAction(
                                     stringResource(R.string.sp_upgrade),
                                     { requestAction(harness, WebHarnessOperation.Upgrade) },
                                     enabled = !state.actionInProgress && harness.supportedOnPlatform,
                                     secondary = true,
                                     modifier = Modifier.testTag("harness-upgrade-${harness.id}"),
                                 )
-                                AgentoButton(
+                                RemoteSettingsAction(
                                     stringResource(R.string.sp_uninstall),
                                     { requestAction(harness, WebHarnessOperation.Uninstall) },
                                     enabled = !state.actionInProgress,
@@ -870,7 +897,7 @@ private fun HarnessesPage(
             WebHarnessOperation.Upgrade,
             WebHarnessOperation.Uninstall -> targets.filter { harness.id in it.installedHarnessIds }
         }
-        AgentoDialog(
+        RemoteSettingsDialog(
             title = stringResource(R.string.sp_operation_title, operationLabel, harness.name),
             confirmLabel = stringResource(if (operation == WebHarnessOperation.Uninstall) R.string.sp_uninstall else R.string.sp_continue),
             confirmModifier = Modifier.testTag("harness-operation-confirm"),
@@ -901,7 +928,7 @@ private fun HarnessesPage(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Checkbox(
+                            Checkbox(enabled = LocalRemoteSettingsWritable.current,
                                 checked = target.instanceId in selectedTargetIds,
                                 onCheckedChange = { checked ->
                                     selectedTargetIds = if (checked) selectedTargetIds + target.instanceId else selectedTargetIds - target.instanceId
@@ -1239,10 +1266,10 @@ private fun TriggersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> U
                 val scheduledTitle = stringResource(R.string.sp_scheduled_fallback)
                 SettingsContentCard(Modifier.fillMaxWidth()) {
                   Column(Modifier.fillMaxWidth().padding(AgentocSpacing.Standard), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
-                AgentoListItem(title = trigger.title.ifBlank { scheduledTitle }, supportingText = detail, leading = { AgentoWebIcon(AgentoWebGlyph.Clock, null) }, trailing = { AgentoButton(stringResource(if (trigger.enabled) R.string.sp_pause else R.string.sp_resume), { onEvent(WebParityEvent.ToggleTrigger(trigger.id, !trigger.enabled)) }, enabled = trigger.status != "delivered", secondary = true) })
+                AgentoListItem(title = trigger.title.ifBlank { scheduledTitle }, supportingText = detail, leading = { AgentoWebIcon(AgentoWebGlyph.Clock, null) }, trailing = { RemoteSettingsAction(stringResource(if (trigger.enabled) R.string.sp_pause else R.string.sp_resume), { onEvent(WebParityEvent.ToggleTrigger(trigger.id, !trigger.enabled)) }, enabled = trigger.status != "delivered", secondary = true) })
                 if (trigger.lastError.isNotBlank()) Text(trigger.lastError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact), modifier = Modifier.fillMaxWidth()) {
-                    AgentoButton(stringResource(R.string.sp_edit), {
+                    RemoteSettingsAction(stringResource(R.string.sp_edit), {
                         editingTrigger = trigger
                         title = trigger.title
                         text = trigger.text
@@ -1250,18 +1277,18 @@ private fun TriggersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> U
                         dialog = true
                     }, secondary = true)
                     if (trigger.status == "failed") {
-                        AgentoButton(stringResource(R.string.sp_retry), { onEvent(WebParityEvent.RetryTrigger(trigger.id)) }, secondary = true)
+                        RemoteSettingsAction(stringResource(R.string.sp_retry), { onEvent(WebParityEvent.RetryTrigger(trigger.id)) }, secondary = true)
                     }
-                    AgentoButton(stringResource(R.string.sp_delete), { deletingTrigger = trigger }, secondary = true)
+                    RemoteSettingsAction(stringResource(R.string.sp_delete), { deletingTrigger = trigger }, secondary = true)
                 }
                   }
                 }
             }
         }
-        AgentoButton(stringResource(R.string.sp_schedule_followup), { dialog = true }, enabled = !state.openSessionId.isNullOrBlank(), modifier = Modifier.fillMaxWidth().padding(start = AgentocSpacing.Gutter, end = AgentocSpacing.Gutter).navigationBarsPadding(), leadingIcon = { AgentoWebIcon(AgentoWebGlyph.Plus, null) })
+        RemoteSettingsAction(stringResource(R.string.sp_schedule_followup), { dialog = true }, enabled = !state.openSessionId.isNullOrBlank(), modifier = Modifier.fillMaxWidth().padding(start = AgentocSpacing.Gutter, end = AgentocSpacing.Gutter).navigationBarsPadding(), leadingIcon = { AgentoWebIcon(AgentoWebGlyph.Plus, null) })
     }
     deletingTrigger?.let { trigger ->
-        AgentoDialog(
+        RemoteSettingsDialog(
             title = stringResource(R.string.sp_delete_scheduled_title),
             confirmLabel = stringResource(R.string.sp_delete),
             confirmModifier = Modifier.testTag("scheduled-delete-confirm"),
@@ -1271,7 +1298,7 @@ private fun TriggersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> U
             onConfirm = { deletingTrigger = null; onEvent(WebParityEvent.DeleteTrigger(trigger.id)) },
         ) { Text(stringResource(R.string.sp_delete_scheduled_body, trigger.title.ifBlank { stringResource(R.string.sp_scheduled_fallback) })) }
     }
-    if (dialog) AgentoDialog(
+    if (dialog) RemoteSettingsDialog(
         title = stringResource(if (editingTrigger == null) R.string.sp_schedule_followup else R.string.sp_edit_scheduled),
         confirmLabel = stringResource(R.string.sp_schedule),
         dismissLabel = stringResource(R.string.settings_cancel),

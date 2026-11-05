@@ -32,7 +32,7 @@ internal const val ACCOUNT_PRIVACY_URL = "https://support.agentoncloud.com/priva
 
 /** Public instructions only: no account identifier, credential or request is sent here. */
 @Composable
-internal fun AccountDataRequests() {
+internal fun AccountDataRequests(showTitle: Boolean = true) {
     val uriHandler = LocalUriHandler.current
     val colors = LocalAgentocColors.current
     var showRequestInstructions by rememberSaveable { mutableStateOf(false) }
@@ -49,14 +49,13 @@ internal fun AccountDataRequests() {
     }
 
     Column(Modifier.fillMaxWidth().testTag("account-data-requests"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(stringResource(R.string.account_data_title), style = MaterialTheme.typography.titleMedium, color = colors.primaryContent)
+        if (showTitle) Text(stringResource(R.string.account_data_title), style = MaterialTheme.typography.titleMedium, color = colors.primaryContent)
         TextButton(onClick = { open(ACCOUNT_PRIVACY_URL) }, modifier = Modifier.testTag("account-privacy-open"), colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) {
             Text(stringResource(R.string.account_privacy_open))
         }
         TextButton(onClick = { showRequestInstructions = true }, modifier = Modifier.testTag("account-deletion-request"), colors = ButtonDefaults.textButtonColors(contentColor = LocalAgentocColors.current.accentPrimary)) {
             Text(stringResource(R.string.account_deletion_request))
         }
-        Text(stringResource(R.string.account_deletion_request_summary), style = MaterialTheme.typography.bodySmall, color = colors.secondaryContent)
         failedUrl?.let { url ->
             Text(stringResource(R.string.account_data_browser_unavailable), color = colors.stateError, modifier = Modifier.testTag("account-data-browser-error"))
             SelectionContainer { Text(url, color = colors.secondaryContent, modifier = Modifier.testTag("account-data-failed-url")) }

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_section_account">账号</string>
+    <string name="settings_section_ai">AI 与工具</string>
+    <string name="settings_section_operations">文件与运行</string>
+    <string name="settings_value_unknown">尚未获取</string>
+    <string name="settings_choose_computer">选择要配置的电脑</string>
+    <string name="settings_connect_to_configure">连接电脑后可配置</string>
+    <string name="settings_computer_summary">%1$s · %2$s</string>
+    <string name="settings_computer_online">已连接</string>
+    <string name="settings_computer_offline">未连接</string>
+    <string name="settings_computer_connecting">正在连接…</string>
+    <string name="settings_computer_unavailable">这台电脑已不可用，请在设备管理中选择电脑。</string>
+    <string name="settings_config_offline">连接这台电脑后可修改。之前加载的信息可能不是最新状态。</string>
+    <string name="settings_connect_computer">连接电脑</string>
+    <string name="settings_policy_scope">对这个账号下所有电脑的新会话生效，不更改已有会话。</string>
+    <string name="settings_policy_auto_hint">自动处理操作；特权操作仅在预授权范围内执行。</string>
+    <string name="settings_policy_approval_hint">常规操作自动执行，需要确认时等待你的批准。</string>
+    <string name="settings_policy_guarded_hint">在受限范围内自动执行，无法确认时拒绝操作。</string>
+    <string name="settings_policy_save_error">未能更新权限模式，当前值未改变，请重试。</string>
+    <string name="settings_account_checking">正在确认账号…</string>
+    <string name="settings_account_unverified">暂时无法确认账号状态。</string>
+    <string name="settings_theme_black_hint">使用纯黑背景。</string>
+    <string name="settings_theme_amber_hint">使用温暖的琥珀色调。</string>
+    <string name="settings_theme_dynamic_hint">跟随手机壁纸配色。</string>
+</resources>

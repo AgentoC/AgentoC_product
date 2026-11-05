@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_section_account">帳號</string>
+    <string name="settings_section_ai">AI 與工具</string>
+    <string name="settings_section_operations">檔案與執行</string>
+    <string name="settings_value_unknown">尚未取得</string>
+    <string name="settings_choose_computer">選擇要設定的電腦</string>
+    <string name="settings_connect_to_configure">連接電腦後可設定</string>
+    <string name="settings_computer_summary">%1$s · %2$s</string>
+    <string name="settings_computer_online">已連接</string>
+    <string name="settings_computer_offline">未連接</string>
+    <string name="settings_computer_connecting">正在連接…</string>
+    <string name="settings_computer_unavailable">這台電腦已無法使用，請在裝置管理中選擇電腦。</string>
+    <string name="settings_config_offline">連接這台電腦後可修改。先前載入的資訊可能不是最新狀態。</string>
+    <string name="settings_connect_computer">連接電腦</string>
+    <string name="settings_policy_scope">對此帳號下所有電腦的新對話生效，不變更現有對話。</string>
+    <string name="settings_policy_auto_hint">自動處理操作；特權操作僅在預先授權範圍內執行。</string>
+    <string name="settings_policy_approval_hint">一般操作自動執行，需要確認時等待你的批准。</string>
+    <string name="settings_policy_guarded_hint">在受限範圍內自動執行，無法確認時拒絕操作。</string>
+    <string name="settings_policy_save_error">無法更新權限模式，目前值未變更，請重試。</string>
+    <string name="settings_account_checking">正在確認帳號…</string>
+    <string name="settings_account_unverified">暫時無法確認帳號狀態。</string>
+    <string name="settings_theme_black_hint">使用純黑背景。</string>
+    <string name="settings_theme_amber_hint">使用溫暖的琥珀色調。</string>
+    <string name="settings_theme_dynamic_hint">跟隨手機桌布配色。</string>
+</resources>

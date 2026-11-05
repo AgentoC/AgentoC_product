@@ -1,6 +1,6 @@
 <resources>
     <string name="api_routing_title">공유 및 어시스턴트</string>
-    <string name="api_routing_description">앱에서 다른 컴퓨터를 열어도 공유에는 이 기본 컴퓨터가 사용됩니다. 별칭은 요청에서 컴퓨터를 식별하는 데 도움이 됩니다.</string>
+    <string name="api_routing_description">다른 앱에서 공유하면 기본적으로 이 컴퓨터로 전송됩니다. 현재 열려 있는 컴퓨터와는 별도 설정입니다.</string>
     <string name="api_close">닫기</string>
     <string name="api_loading">불러오는 중…</string>
     <string name="api_saving">저장 중…</string>

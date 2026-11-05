@@ -1245,7 +1245,7 @@ fun AgentoSettingRow(
                     .fillMaxWidth()
                     .padding(
                         start = contentHorizontalPadding + if (hasLeadingVisual) 44.dp else 0.dp,
-                        end = 0.dp,
+                        end = contentHorizontalPadding,
                     )
                     .height(0.5.dp)
                     .background(dividerBg),

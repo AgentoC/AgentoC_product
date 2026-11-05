@@ -71,6 +71,7 @@ data class WorkbenchUiState(
     val stopRequest: StopRequestState = StopRequestState.None,
     val destination: AgentoDestination = AgentoDestination.Home,
     val settingsPage: SettingsPage = SettingsPage.Overview,
+    val settingsParentPage: SettingsPage = SettingsPage.Overview,
     val chatOpen: Boolean = false,
     val agentOpen: Boolean = false,
     val sessionSearchQuery: String = "",
@@ -177,6 +178,7 @@ enum class SettingsPage {
     PermissionMode,
     Language,
     Theme,
+    ComputerConfiguration,
     Connectors,
     ModelProviders,
     Harnesses,
@@ -302,6 +304,7 @@ data class AppShellUiState(
     // destination. First-run pairing can still intercept before this shell.
     val destination: AgentoDestination = AgentoDestination.Home,
     val settingsPage: SettingsPage = SettingsPage.Overview,
+    val settingsBackStack: List<SettingsPage> = emptyList(),
     val chatOpen: Boolean = false,
     val agentOpen: Boolean = false,
     val sessionSearchQuery: String = "",
@@ -351,6 +354,7 @@ class AppShellViewModel(private val repository: SessionRepository) : ViewModel()
                 copy(
                     destination = event.destination,
                     settingsPage = SettingsPage.Overview,
+                    settingsBackStack = emptyList(),
                     chatOpen = false,
                     agentOpen = false,
                     projectSessionsOpen = false,
@@ -362,6 +366,9 @@ class AppShellViewModel(private val repository: SessionRepository) : ViewModel()
                 copy(
                     destination = AgentoDestination.Settings,
                     settingsPage = event.page,
+                    settingsBackStack = if (event.page == settingsPage) settingsBackStack
+                        else if (event.page == SettingsPage.Overview) emptyList()
+                        else settingsBackStack + settingsPage,
                     chatOpen = false,
                     agentOpen = false,
                     projectSessionsOpen = false,
@@ -369,7 +376,10 @@ class AppShellViewModel(private val repository: SessionRepository) : ViewModel()
                     projectOrigin = null,
                 )
             }
-            AppShellEvent.CloseSettingsPage -> updateState { copy(settingsPage = SettingsPage.Overview) }
+            AppShellEvent.CloseSettingsPage -> updateState {
+                copy(settingsPage = settingsBackStack.lastOrNull() ?: SettingsPage.Overview,
+                    settingsBackStack = settingsBackStack.dropLast(1))
+            }
             is AppShellEvent.SelectTheme -> updateState { copy(appTheme = event.theme) }
             is AppShellEvent.SelectLanguage -> updateState { copy(appLanguage = event.language) }
             AppShellEvent.OpenChat -> updateState { copy(chatOpen = true) }

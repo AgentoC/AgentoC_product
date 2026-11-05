@@ -49,6 +49,10 @@ fun RoutingSettingsScreen(state: RoutingSettingsUiState, onEvent: (RoutingSettin
                 if (defaultId != null && state.directory.computers.none { it.instanceId == defaultId }) {
                     Text(stringResource(R.string.api_default_missing), color = colors.stateError)
                 }
+                Text(stringResource(R.string.settings_share_target_title), color = colors.primaryContent,
+                    style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.api_routing_description), color = colors.secondaryContent,
+                    style = MaterialTheme.typography.bodyMedium)
                 ApiSettingsCard {
                 AgentoSettingRow(title = stringResource(R.string.api_no_default), showChevron = false, enabled = !state.saving, contentHorizontalPadding = 0.dp,
                     trailing = { if (defaultId == null) AgentoWebIcon(AgentoWebGlyph.Check, null, tint = colors.accentPrimary) },
@@ -86,8 +90,6 @@ fun RoutingSettingsScreen(state: RoutingSettingsUiState, onEvent: (RoutingSettin
                 onOpenGrants?.let { AgentoSettingRow(title = stringResource(R.string.api_access_manage_title), onClick = it, enabled = !state.saving, contentHorizontalPadding = 0.dp) }
                 onOpenAssistantDelegation?.let { AgentoSettingRow(title = stringResource(R.string.api_assistant_title), onClick = it, enabled = !state.saving, showDivider = false, contentHorizontalPadding = 0.dp) }
             }
-            Text(stringResource(R.string.api_routing_description), color = colors.secondaryContent,
-                style = MaterialTheme.typography.bodySmall)
             if (state.saving) Text(stringResource(R.string.api_saving), color = colors.secondaryContent, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
     }

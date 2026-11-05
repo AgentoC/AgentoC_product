@@ -4696,7 +4696,9 @@ private fun SettingsSurface(
         backProgress = pageBackProgress,
         modifier = modifier.fillMaxSize(),
         parentContent = {
-            SettingsOverviewContent(
+            if (state.settingsParentPage == SettingsPage.ComputerConfiguration) {
+                ComputerConfigurationSurface(state, brokerEnrollmentController, onEvent, Modifier.fillMaxSize())
+            } else SettingsOverviewContent(
                 accountsViewModel = accountsViewModel,
                 brokerEnrollmentController = brokerEnrollmentController,
                 onRequestGoogleSignIn = onRequestGoogleSignIn,
@@ -4707,7 +4709,9 @@ private fun SettingsSurface(
         },
         childContent = {
             val page = state.settingsPage.takeUnless { it == SettingsPage.Overview } ?: outgoingPage ?: SettingsPage.Overview
-            settingsPageToWebParity(page)?.let { parityPage ->
+            if (page == SettingsPage.ComputerConfiguration) {
+                ComputerConfigurationSurface(state, brokerEnrollmentController, onEvent, Modifier.fillMaxSize())
+            } else settingsPageToWebParity(page)?.let { parityPage ->
                 WebParitySurface(
                     page = parityPage,
                     state = parityState,
@@ -4753,6 +4757,7 @@ private fun SettingsSurface(
                     targetId = state.activeRemoteTargetId,
                     targetLabel = state.remoteTargets.firstOrNull { it.instanceId == state.activeRemoteTargetId }?.label,
                     backProgress = backProgress,
+                    connectionAvailable = page == SettingsPage.ComputerManagement || state.connection == AgentConnectionStatus.Connected,
                     modifier = Modifier.fillMaxSize(),
                 )
             } ?: SettingsDetailSurface(
@@ -4776,227 +4781,196 @@ private fun SettingsOverviewContent(
     onEvent: (WorkbenchEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val accountState = accountsViewModel?.state?.collectAsState()?.value
+    val account = accountsViewModel?.state?.collectAsState()?.value
     val colors = LocalAgentocColors.current
-    var advancedSettingsExpanded by rememberDestinationFlag("settings-advanced-expanded")
-    val showAccountPolicy = accountState?.hasVerifiedAccountSession == true
-    val activeTarget = state.remoteTargets.firstOrNull { it.instanceId == state.activeRemoteTargetId }
-    val showComputerTools = activeTarget != null
-    val activeWindowsTarget = state.remoteTargets.firstOrNull {
-        it.instanceId == state.activeRemoteTargetId && it.platform.equals("windows", ignoreCase = true)
-    }
-    var brokerEnrollmentTargetId by remember { mutableStateOf<String?>(null) }
-    val isDark = colors.canvas.red < 0.5f
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
-                brush = if (isDark) AgentoFrostedTokens.AtmosphericCanvasDark else AgentoFrostedTokens.AtmosphericCanvasLight,
-            ),
+    val target = state.remoteTargets.firstOrNull { it.instanceId == state.activeRemoteTargetId }
+    val bottom = com.andysagent.agentoc.core.designsystem.remainingAppSystemBars().asPaddingValues().calculateBottomPadding()
+    LazyColumn(
+        state = rememberDestinationListState("settings-overview-scroll"),
+        modifier = modifier.fillMaxSize().background(colors.canvas),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            start = 20.dp, end = 20.dp,
+            top = com.andysagent.agentoc.core.designsystem.remainingAppSystemBars().asPaddingValues().calculateTopPadding() + 16.dp,
+            bottom = bottom + AgentocSizes.BottomNavigationBackdrop),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        val navBottom = com.andysagent.agentoc.core.designsystem.remainingAppSystemBars().asPaddingValues().calculateBottomPadding()
-        LazyColumn(
-            state = rememberDestinationListState("settings-overview-scroll"),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                // Keep Settings on the same horizontal rhythm as the floating
-                // dock. The dock is the only translucent layer; the page is a
-                // calm, solid backdrop for it rather than a second visual system.
-                start = 16.dp,
-                end = 16.dp,
-                top = com.andysagent.agentoc.core.designsystem.remainingAppSystemBars().asPaddingValues().calculateTopPadding() + 16.dp,
-                // The dock is an overlay, never layout chrome. Keep enough
-                // trailing scroll room for a final row to travel beneath it.
-                bottom = navBottom + AgentocSizes.BottomNavigationBackdrop,
-            ),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-                item(key = "settings-large-title") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .widthIn(max = AgentocSizes.ContentMaxWidth)
-                            .padding(horizontal = 12.dp, vertical = 2.dp),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings_title),
-                            style = MaterialTheme.typography.headlineLarge.copy(fontSize = 30.sp, fontWeight = FontWeight.SemiBold),
-                            color = colors.primaryContent,
-                        )
-                    }
+        item {
+            Text(stringResource(R.string.settings_title), color = colors.primaryContent,
+                style = MaterialTheme.typography.headlineLarge.copy(fontSize = 28.sp, fontWeight = FontWeight.SemiBold),
+                modifier = Modifier.widthIn(max = AgentocSizes.ContentMaxWidth).fillMaxWidth().padding(horizontal = 4.dp))
+        }
+        item(key = "account") {
+            SettingsGroup(title = stringResource(R.string.settings_section_account),
+                modifier = Modifier.widthIn(max = AgentocSizes.ContentMaxWidth)) {
+                SettingsAccountHeader(accountsViewModel,
+                    { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Account)) }, onRequestGoogleSignIn)
+                if (account?.hasVerifiedAccountSession == true) {
+                    HorizontalDivider(color = colors.primaryContent.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 16.dp))
+                    AgentoSettingRow(
+                        leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.ShieldSolid) },
+                        title = stringResource(R.string.settings_permission_mode),
+                        subtitle = stringResource(if (account.accountPermissionPolicySaving) R.string.journey_settings_saving
+                            else permissionModeLabel(account.accountPermissionPolicy?.permissionPolicy)),
+                        showDivider = false, modifier = Modifier.testTag("settings-permission-mode"),
+                        onClick = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.PermissionMode)) })
                 }
-                item(key = "account") {
-                    SettingsAccountHeader(
-                        accountsViewModel = accountsViewModel,
-                        onOpenAccountManagement = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Account)) },
-                        onRequestGoogleSignIn = onRequestGoogleSignIn,
-                    )
+                if (account?.hasVerifiedAccountSession != true) {
+                    AgentoSettingRow(title = stringResource(R.string.account_data_title), showDivider = false,
+                        modifier = Modifier.testTag("settings-account-data"),
+                        onClick = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Account)) })
                 }
-                // Settings deliberately uses a few broad, stable surfaces.
-                // This keeps the page related to the dock's quiet base layer
-                // without copying either iOS's rainbow icon grid or Material's
-                // one-card-per-preference pattern.
-                item(key = "settings-list") {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .widthIn(max = AgentocSizes.ContentMaxWidth)
-                            .testTag("settings-list"),
-                        verticalArrangement = Arrangement.spacedBy(18.dp),
-                    ) {
-                        if (showAccountPolicy) {
-                            val saving = accountState?.accountPermissionPolicySaving == true
-                            val policyEnabled = !saving && state.connection == AgentConnectionStatus.Connected
-                            SettingsGroup(title = stringResource(R.string.settings_group_access)) {
-                                AgentoSettingRow(
-                                    modifier = Modifier.testTag("settings-permission-mode").semantics {
-                                        if (!policyEnabled) disabled()
-                                    },
-                                    leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.ShieldSolid) },
-                                    title = stringResource(R.string.settings_permission_mode),
-                                    subtitle = if (!policyEnabled) stringResource(
-                                        if (saving) R.string.journey_settings_saving else R.string.journey_settings_offline) else null,
-                                    enabled = policyEnabled,
-                                    showDivider = false,
-                                    showChevron = true,
-                                    contentHorizontalPadding = 16.dp,
-                                    onClick = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.PermissionMode)) },
-                                )
-                            }
-                        }
-                        if (activeWindowsTarget != null && brokerEnrollmentController != null) {
-                            SettingsGroup(title = stringResource(R.string.settings_group_access)) {
-                                AgentoSettingRow(
-                                    leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.ShieldSolid) },
-                                    title = stringResource(R.string.windows_broker_enrollment_title),
-                                    subtitle = stringResource(R.string.windows_broker_enrollment_subtitle),
-                                    showDivider = false,
-                                    contentHorizontalPadding = 16.dp,
-                                    showChevron = true,
-                                    modifier = Modifier.testTag("windows-broker-enrollment"),
-                                    onClick = { brokerEnrollmentTargetId = activeWindowsTarget.instanceId },
-                                )
-                            }
-                        }
-                        SettingsGroup(title = stringResource(R.string.settings_group_workspace)) {
-                            AgentoSettingRow(
-                                leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Device) },
-                                title = stringResource(R.string.settings_manage_devices),
-                                showDivider = true,
-                                showChevron = true,
-                                modifier = Modifier.testTag("settings-manage-devices"),
-                                contentHorizontalPadding = 16.dp,
-                                onClick = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.ComputerManagement)) },
-                            )
-                            AgentoSettingRow(
-                                leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Share) },
-                                title = stringResource(R.string.settings_sharing_agents),
-                                showDivider = showComputerTools,
-                                modifier = Modifier.testTag("settings-sharing-agents"),
-                                contentHorizontalPadding = 16.dp,
-                                onClick = { onEvent(WorkbenchEvent.OpenAppApiSettings) },
-                            )
-                            if (showComputerTools) {
-                                // Keep technical configuration discoverable but
-                                // subordinate to the primary device task.
-                                AgentoSettingRow(
-                                    leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Settings) },
-                                    title = stringResource(R.string.settings_workspace_tools),
-                                    subtitle = stringResource(R.string.journey_settings_scope, activeTarget!!.label),
-                                    showDivider = advancedSettingsExpanded,
-                                    contentHorizontalPadding = 16.dp,
-                                    trailing = {
-                                        AgentoWebIcon(
-                                            glyph = if (advancedSettingsExpanded) {
-                                                AgentoWebGlyph.ChevronDown
-                                            } else {
-                                                AgentoWebGlyph.ChevronRight
-                                            },
-                                            contentDescription = null,
-                                            tint = colors.tertiaryContent,
-                                            modifier = Modifier.size(16.dp),
-                                        )
-                                    },
-                                    onClick = { advancedSettingsExpanded = !advancedSettingsExpanded },
-                                )
-                                AnimatedVisibility(
-                                    visible = advancedSettingsExpanded,
-                                    enter = fadeIn(tween(160)) + expandVertically(tween(180)),
-                                    exit = fadeOut(tween(120)) + shrinkVertically(tween(140)),
-                                ) {
-                                    Column {
-                                        if (state.connection != AgentConnectionStatus.Connected) {
-                                            Text(stringResource(R.string.journey_settings_offline),
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                                                    .testTag("settings-offline-explanation"))
-                                        }
-                                        SettingsParityEntry(stringResource(R.string.settings_model_providers), 60.dp) { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.ModelProviders)) }
-                                        SettingsParityEntry(stringResource(R.string.settings_harnesses), 60.dp) { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Harnesses)) }
-                                        SettingsParityEntry(stringResource(R.string.settings_connectors_mcp), 60.dp) { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Connectors)) }
-                                        SettingsParityEntry(stringResource(R.string.settings_workspace_files), 60.dp) { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Files)) }
-                                        SettingsParityEntry(stringResource(R.string.settings_scheduled_work), 60.dp) { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Triggers)) }
-                                        SettingsParityEntry(stringResource(R.string.settings_usage), 60.dp) { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Usage)) }
-                                    }
-                                }
-                            }
-                        }
-                        SettingsPreferenceCards(
-                            language = stringResource(appLanguageLabelRes(state.appLanguage)),
-                            theme = stringResource(appThemeLabelRes(state.appTheme))
-                                .substringBefore(" (").substringBefore("（"),
-                            onLanguage = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Language)) },
-                            onTheme = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Theme)) },
-                        )
-                        SettingsGroup(title = stringResource(R.string.settings_group_about)) {
-                            AgentoSettingRow(
-                                leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Device) },
-                                title = stringResource(R.string.journey_connection_help),
-                                showChevron = true,
-                                modifier = Modifier.testTag("settings-connection-help"),
-                                contentHorizontalPadding = 16.dp,
-                                onClick = { onEvent(WorkbenchEvent.OpenComputerSetup) },
-                            )
-                            AgentoSettingRow(
-                                leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.ShieldSolid) },
-                                title = stringResource(R.string.account_data_title),
-                                modifier = Modifier.testTag("settings-account-data"),
-                                contentHorizontalPadding = 16.dp,
-                                showChevron = true,
-                                onClick = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Account)) },
-                            )
-                            AgentoSettingRow(
-                                leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Report) },
-                                title = stringResource(R.string.content_report_settings),
-                                modifier = Modifier.testTag("settings-content-reports"),
-                                contentHorizontalPadding = 16.dp,
-                                showChevron = true,
-                                onClick = { onEvent(WorkbenchEvent.ReportAgentContent()) },
-                            )
-                            AgentoSettingRow(
-                                leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Info) },
-                                title = stringResource(R.string.settings_version),
-                                subtitle = state.appVersion,
-                                showDivider = false,
-                                modifier = Modifier.testTag("settings-version"),
-                                contentHorizontalPadding = 16.dp,
-                                showChevron = true,
-                                onClick = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Version)) },
-                            )
+            }
+        }
+        item(key = "computers") {
+            SettingsGroup(title = stringResource(R.string.settings_group_workspace),
+                modifier = Modifier.widthIn(max = AgentocSizes.ContentMaxWidth).testTag("settings-list")) {
+                AgentoSettingRow(leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Monitor) },
+                    title = stringResource(R.string.settings_manage_devices), modifier = Modifier.testTag("settings-manage-devices"),
+                    onClick = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.ComputerManagement)) })
+                AgentoSettingRow(leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Settings) },
+                    title = stringResource(R.string.settings_workspace_tools),
+                    subtitle = if (target != null) stringResource(R.string.settings_computer_summary, target.label,
+                        stringResource(settingsConnectionLabel(state.connection)))
+                        else stringResource(if (state.accountComputers.isNotEmpty() || state.remoteTargets.isNotEmpty())
+                            R.string.settings_choose_computer else R.string.settings_connect_to_configure),
+                    modifier = Modifier.testTag("settings-computer-configuration"),
+                    onClick = {
+                        if (target != null) onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.ComputerConfiguration))
+                        else if (state.accountComputers.isNotEmpty() || state.remoteTargets.isNotEmpty())
+                            onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.ComputerManagement))
+                        else onEvent(WorkbenchEvent.OpenComputerSetup)
+                    })
+                AgentoSettingRow(leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Info) },
+                    title = stringResource(R.string.journey_connection_help), showDivider = false,
+                    modifier = Modifier.testTag("settings-connection-help"), onClick = { onEvent(WorkbenchEvent.OpenComputerSetup) })
+            }
+        }
+        item(key = "preferences") {
+            SettingsGroup(title = stringResource(R.string.settings_group_preferences),
+                modifier = Modifier.widthIn(max = AgentocSizes.ContentMaxWidth)) {
+                SettingsValueRow(AgentoWebGlyph.Language, stringResource(R.string.settings_language),
+                    stringResource(appLanguageLabelRes(state.appLanguage)), "settings-language") {
+                    onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Language))
+                }
+                SettingsValueRow(AgentoWebGlyph.Palette, stringResource(R.string.settings_theme),
+                    stringResource(appThemeLabelRes(state.appTheme)), "settings-theme") {
+                    onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Theme))
+                }
+                AgentoSettingRow(leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Share) },
+                    title = stringResource(R.string.settings_sharing_agents), showDivider = false,
+                    modifier = Modifier.testTag("settings-sharing-agents"), onClick = { onEvent(WorkbenchEvent.OpenAppApiSettings) })
+            }
+        }
+        item(key = "support") {
+            SettingsGroup(title = stringResource(R.string.settings_group_about),
+                modifier = Modifier.widthIn(max = AgentocSizes.ContentMaxWidth)) {
+                AgentoSettingRow(leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Report) },
+                    title = stringResource(R.string.content_report_settings), modifier = Modifier.testTag("settings-content-reports"),
+                    onClick = { onEvent(WorkbenchEvent.ReportAgentContent()) })
+                AgentoSettingRow(leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.Info) },
+                    title = stringResource(R.string.settings_version), subtitle = state.appVersion,
+                    showDivider = false, modifier = Modifier.testTag("settings-version"),
+                    onClick = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Version)) })
+            }
+        }
+    }
+}
+
+private fun permissionModeLabel(value: String?): Int = when (value) {
+    "", "full-auto" -> R.string.settings_permission_full_auto
+    "approval" -> R.string.settings_permission_approval
+    "conservative-auto" -> R.string.settings_permission_conservative_auto
+    else -> R.string.settings_value_unknown
+}
+
+private fun settingsConnectionLabel(connection: AgentConnectionStatus): Int = when (connection) {
+    AgentConnectionStatus.Connected -> R.string.settings_computer_online
+    AgentConnectionStatus.Connecting, AgentConnectionStatus.Reconnecting -> R.string.settings_computer_connecting
+    else -> R.string.settings_computer_offline
+}
+
+@Composable
+private fun SettingsValueRow(glyph: AgentoWebGlyph, title: String, value: String, tag: String, onClick: () -> Unit) {
+    val colors = LocalAgentocColors.current
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val stacked = maxWidth < 320.dp || LocalDensity.current.fontScale > 1.3f || value.length > 18
+        AgentoSettingRow(leadingIcon = { SettingsOverviewIcon(glyph) }, title = title,
+            subtitle = value.takeIf { stacked }, modifier = Modifier.testTag(tag), onClick = onClick,
+            trailing = if (stacked) null else ({
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(value, color = colors.secondaryContent, style = MaterialTheme.typography.bodyMedium)
+                    AgentoWebIcon(AgentoWebGlyph.ChevronRight, null, tint = colors.tertiaryContent, modifier = Modifier.size(15.dp))
+                }
+            }))
+    }
+}
+
+@Composable
+private fun ComputerConfigurationSurface(
+    state: WorkbenchUiState,
+    brokerEnrollmentController: BrokerEnrollmentController?,
+    onEvent: (WorkbenchEvent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalAgentocColors.current
+    val target = state.remoteTargets.firstOrNull { it.instanceId == state.activeRemoteTargetId }
+    var enrollmentTargetId by remember { mutableStateOf<String?>(null) }
+    Column(modifier.fillMaxSize().background(colors.canvas)) {
+        SettingsWebHeader(title = stringResource(R.string.settings_workspace_tools),
+            onBack = { onEvent(WorkbenchEvent.CloseSettingsPage) },
+            subtitle = target?.let { stringResource(R.string.settings_computer_summary, it.label, stringResource(settingsConnectionLabel(state.connection))) })
+        LazyColumn(state = rememberDestinationListState("settings-computer-configuration-scroll"),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 120.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
+            if (target == null || target.accessState == RemoteTargetAccessState.Revoked) {
+                item {
+                    Text(stringResource(R.string.settings_computer_unavailable), color = colors.secondaryContent)
+                    AgentoButton(stringResource(R.string.settings_manage_devices),
+                        { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.ComputerManagement)) }, secondary = true)
+                }
+            } else {
+                if (state.connection != AgentConnectionStatus.Connected) item {
+                    Column(Modifier.widthIn(max = AgentocSizes.ContentMaxWidth).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(stringResource(R.string.settings_config_offline), color = colors.secondaryContent,
+                            style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("settings-offline-explanation"))
+                        if (state.connection != AgentConnectionStatus.Connecting && state.connection != AgentConnectionStatus.Reconnecting) {
+                            AgentoButton(stringResource(R.string.settings_connect_computer),
+                                { onEvent(WorkbenchEvent.ConnectRemoteTarget(target.instanceId)) }, secondary = true,
+                                modifier = Modifier.widthIn(min = 168.dp, max = 224.dp))
                         }
                     }
                 }
+                item {
+                    SettingsGroup(title = stringResource(R.string.settings_section_ai), modifier = Modifier.widthIn(max = AgentocSizes.ContentMaxWidth)) {
+                        SettingsParityEntry(stringResource(R.string.settings_model_providers)) { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.ModelProviders)) }
+                        SettingsParityEntry(stringResource(R.string.settings_harnesses)) { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Harnesses)) }
+                        AgentoSettingRow(title = stringResource(R.string.settings_connectors_mcp), showDivider = false,
+                            onClick = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Connectors)) })
+                    }
+                }
+                item {
+                    SettingsGroup(title = stringResource(R.string.settings_section_operations), modifier = Modifier.widthIn(max = AgentocSizes.ContentMaxWidth)) {
+                        SettingsParityEntry(stringResource(R.string.settings_workspace_files)) { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Files)) }
+                        SettingsParityEntry(stringResource(R.string.settings_scheduled_work)) { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Triggers)) }
+                        AgentoSettingRow(title = stringResource(R.string.settings_usage), showDivider = false,
+                            onClick = { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.Usage)) })
+                    }
+                }
+                if (target.platform.equals("windows", ignoreCase = true) && brokerEnrollmentController != null) item {
+                    SettingsGroup(modifier = Modifier.widthIn(max = AgentocSizes.ContentMaxWidth)) {
+                        AgentoSettingRow(leadingIcon = { SettingsOverviewIcon(AgentoWebGlyph.ShieldSolid) },
+                            title = stringResource(R.string.windows_broker_enrollment_title),
+                            subtitle = stringResource(R.string.windows_broker_enrollment_subtitle), showDivider = false,
+                            modifier = Modifier.testTag("windows-broker-enrollment"), onClick = { enrollmentTargetId = target.instanceId })
+                    }
+                }
+            }
         }
-        val enrollmentTargetId = brokerEnrollmentTargetId
-        if (enrollmentTargetId != null && brokerEnrollmentController != null) {
-            BrokerPhoneEnrollmentDialog(
-                targetInstanceId = enrollmentTargetId,
-                controller = brokerEnrollmentController,
-                onDismiss = { brokerEnrollmentTargetId = null },
-            )
-        }
+    }
+    enrollmentTargetId?.let { id ->
+        if (brokerEnrollmentController != null) BrokerPhoneEnrollmentDialog(id, brokerEnrollmentController) { enrollmentTargetId = null }
     }
 }
 
@@ -5192,6 +5166,18 @@ private fun AccountPermissionPolicySettings(
     Column(
         modifier = Modifier.fillMaxWidth().widthIn(max = AgentocSizes.ContentMaxWidth),
     ) {
+        Text(stringResource(R.string.settings_policy_scope), color = colors.secondaryContent,
+            style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 16.dp))
+        if (!connected || !loaded || saving) {
+            Text(stringResource(if (!connected) R.string.settings_config_offline
+                else if (saving) R.string.journey_settings_saving else R.string.settings_value_unknown),
+                color = colors.secondaryContent, style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(bottom = 12.dp))
+        }
+        accountState?.errorMessage?.let {
+            Text(stringResource(R.string.settings_policy_save_error), color = colors.stateError,
+                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 12.dp))
+        }
         SettingsGroup {
             options.forEachIndexed { index, (value, titleRes) ->
                 val selected = policy == value || (policy == "" && value == "full-auto")
@@ -5208,6 +5194,11 @@ private fun AccountPermissionPolicySettings(
                         )
                     },
                     title = stringResource(titleRes),
+                    subtitle = stringResource(when (value) {
+                        "approval" -> R.string.settings_policy_approval_hint
+                        "conservative-auto" -> R.string.settings_policy_guarded_hint
+                        else -> R.string.settings_policy_auto_hint
+                    }),
                     modifier = Modifier.testTag("account-permission-policy-${value.ifEmpty { "default" }}").semantics {
                         if (!policyEnabled) disabled()
                     },
@@ -5235,6 +5226,7 @@ private fun SettingsDetailSurface(
     onEvent: (WorkbenchEvent) -> Unit,
     modifier: Modifier,
 ) {
+    val accountState = accountsViewModel?.state?.collectAsState()?.value
     val title = when (page) {
         SettingsPage.Account -> stringResource(R.string.account_data_title)
         SettingsPage.PermissionMode -> stringResource(R.string.settings_permission_mode)
@@ -5249,9 +5241,7 @@ private fun SettingsDetailSurface(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                brush = if (isDark) AgentoFrostedTokens.AtmosphericCanvasDark else AgentoFrostedTokens.AtmosphericCanvasLight,
-            ),
+            .background(colors.canvas),
     ) {
         Column(Modifier.fillMaxSize()) {
             SettingsWebHeader(onBack = { onEvent(WorkbenchEvent.CloseSettingsPage) }, title = title)
@@ -5262,8 +5252,8 @@ private fun SettingsDetailSurface(
                     .fillMaxWidth()
                     .weight(1f),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
+                    start = 20.dp,
+                    end = 20.dp,
                     top = AgentocSpacing.Compact,
                     bottom = navBottom + 90.dp,
                 ),
@@ -5278,9 +5268,9 @@ private fun SettingsDetailSurface(
                                 onRequestGoogleSignIn = onRequestGoogleSignIn,
                             )
                         }
-                        item(key = "account-data-requests") {
+                        if (accountState?.hasVerifiedAccountSession != true) item(key = "account-data-requests") {
                             SettingsGroup(modifier = Modifier.widthIn(max = AgentocSizes.ContentMaxWidth)) {
-                                Box(Modifier.padding(16.dp)) { AccountDataRequests() }
+                                Box(Modifier.padding(16.dp)) { AccountDataRequests(showTitle = false) }
                             }
                         }
                     }
@@ -5312,6 +5302,14 @@ private fun SettingsDetailSurface(
                                         val isEnabled = theme != AppTheme.Monet || monetAvailable
                                         SettingsChoiceRow(
                                             title = stringResource(titleRes),
+                                            subtitle = if (!isEnabled) stringResource(R.string.theme_monet_unavailable)
+                                                else when (theme) {
+                                                    AppTheme.Oled -> stringResource(R.string.settings_theme_black_hint)
+                                                    AppTheme.Amber -> stringResource(R.string.settings_theme_amber_hint)
+                                                    AppTheme.Monet -> stringResource(R.string.settings_theme_dynamic_hint)
+                                                    else -> null
+                                                },
+                                            leading = { SettingsThemeSwatch(theme) },
                                             selected = state.appTheme == theme,
                                             enabled = isEnabled,
                                             modifier = Modifier.testTag("settings-theme-${theme.name.lowercase()}"),
@@ -5528,34 +5526,13 @@ private fun SettingsGroup(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalAgentocColors.current
-    val isDark = colors.canvas.red < 0.5f
-    // Use the same material family as the floating chat controls; without a
-    // captured backdrop the glass component supplies a readable static base.
-    val cardShape = RoundedCornerShape(24.dp)
     Column(modifier.fillMaxWidth()) {
         if (title != null) {
-            Text(
-                text = title,
-                style = TextStyle(
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 0.sp,
-                    color = colors.secondaryContent,
-                ),
-                modifier = Modifier.padding(start = 16.dp, bottom = 8.dp, top = 2.dp),
-            )
+            Text(title, style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.secondaryContent),
+                modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
         }
-        AgentoFrostedGlassBox(
-            modifier = Modifier.fillMaxWidth(),
-            shape = cardShape,
-            surface = AgentoGlassSurface.Neutral,
-            material = AgentoGlassMaterial.LiquidClear,
-            showTopHairline = true,
-            specularBrush = if (isDark) AgentoFrostedTokens.SpecularBorderDark else AgentoFrostedTokens.SpecularBorderLight,
-            shadowElevation = 5.dp,
-            shadowAlpha = 0.035f,
-            shadowSpotAlpha = 0.01f,
-        ) {
+        Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
+            color = colors.quietSurface, contentColor = colors.primaryContent) {
             Column(Modifier.fillMaxWidth(), content = content)
         }
         if (footer != null) {
@@ -5578,6 +5555,8 @@ private fun SettingsChoiceRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    subtitle: String? = null,
+    leading: (@Composable () -> Unit)? = null,
 ) {
     val colors = LocalAgentocColors.current
     val source = remember { MutableInteractionSource() }
@@ -5595,9 +5574,13 @@ private fun SettingsChoiceRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(title, modifier = Modifier.weight(1f), color = colors.primaryContent,
-            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp,
-                fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal))
+        leading?.invoke()
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(title, color = colors.primaryContent,
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp,
+                    fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal))
+            subtitle?.let { Text(it, color = colors.secondaryContent, style = MaterialTheme.typography.bodySmall) }
+        }
         Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
             if (selected) {
                 AgentoWebIcon(AgentoWebGlyph.Check, contentDescription = stringResource(R.string.settings_active),
@@ -5608,95 +5591,29 @@ private fun SettingsChoiceRow(
 }
 
 @Composable
-private fun SettingsPreferenceCards(
-    language: String,
-    theme: String,
-    onLanguage: () -> Unit,
-    onTheme: () -> Unit,
-) {
+private fun SettingsThemeSwatch(theme: AppTheme) {
     val colors = LocalAgentocColors.current
-    Column(Modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.settings_group_preferences),
-            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.secondaryContent),
-            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp, top = 2.dp),
-        )
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val stack = maxWidth < 280.dp || LocalDensity.current.fontScale > 1.4f
-            if (stack) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsPreferenceCard(AgentoWebGlyph.Language, stringResource(R.string.settings_language), language,
-                        onLanguage, Modifier.fillMaxWidth().testTag("settings-language"))
-                    SettingsPreferenceCard(AgentoWebGlyph.Palette, stringResource(R.string.settings_theme), theme,
-                        onTheme, Modifier.fillMaxWidth().testTag("settings-theme"))
-                }
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsPreferenceCard(AgentoWebGlyph.Language, stringResource(R.string.settings_language), language,
-                        onLanguage, Modifier.weight(1f).testTag("settings-language"))
-                    SettingsPreferenceCard(AgentoWebGlyph.Palette, stringResource(R.string.settings_theme), theme,
-                        onTheme, Modifier.weight(1f).testTag("settings-theme"))
-                }
-            }
-        }
+    val dark = theme == AppTheme.Dark || theme == AppTheme.Oled || theme == AppTheme.Amber
+    val background = when (theme) {
+        AppTheme.Oled -> Color.Black
+        AppTheme.Dark -> Color(0xFF17171B)
+        AppTheme.Amber -> Color(0xFF231D13)
+        AppTheme.System, AppTheme.Monet -> colors.canvas
+        else -> Color(0xFFF1F1F6)
     }
-}
-
-@Composable
-private fun SettingsPreferenceCard(
-    glyph: AgentoWebGlyph,
-    title: String,
-    value: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val colors = LocalAgentocColors.current
-    val isDark = colors.canvas.red < 0.5f
-    AgentoFrostedGlassBox(
-        modifier = modifier.agentoPressScale(pressedScale = 0.975f, onClick = onClick),
-        shape = RoundedCornerShape(24.dp),
-        surface = AgentoGlassSurface.Neutral,
-        material = AgentoGlassMaterial.LiquidClear,
-        showTopHairline = true,
-        specularBrush = if (isDark) AgentoFrostedTokens.SpecularBorderDark else AgentoFrostedTokens.SpecularBorderLight,
-        shadowElevation = 5.dp,
-        shadowAlpha = 0.035f,
-        shadowSpotAlpha = 0.01f,
-    ) {
-        Column(Modifier.fillMaxWidth().heightIn(min = 116.dp).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween) {
-                SettingsOverviewIcon(glyph)
-                AgentoWebIcon(AgentoWebGlyph.ChevronRight, contentDescription = null,
-                    tint = colors.tertiaryContent, modifier = Modifier.size(15.dp))
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(title, color = colors.primaryContent,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, fontWeight = FontWeight.Medium))
-                Text(value, color = colors.secondaryContent,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp))
-            }
-        }
+    val accent = if (theme == AppTheme.Amber) Color(0xFFE4B462) else colors.accentPrimary
+    Column(Modifier.size(width = 40.dp, height = 28.dp).clip(RoundedCornerShape(6.dp))
+        .background(background).padding(5.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Box(Modifier.width(20.dp).height(3.dp).background(if (background.red < 0.5f) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.45f), CircleShape))
+        Box(Modifier.width(13.dp).height(3.dp).background(accent, CircleShape))
+        Box(Modifier.width(24.dp).height(3.dp).background(accent.copy(alpha = 0.25f), CircleShape))
     }
 }
 
 @Composable
 private fun SettingsOverviewIcon(glyph: AgentoWebGlyph) {
-    val colors = LocalAgentocColors.current
-    Box(
-        modifier = Modifier.size(30.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(colors.actionPrimary.copy(alpha = if (colors.canvas.red < 0.5f) 0.16f else 0.09f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        AgentoWebIcon(
-            glyph = glyph,
-            contentDescription = null,
-            tint = colors.accentPrimary,
-            modifier = Modifier.size(18.dp),
-        )
-    }
+    AgentoWebIcon(glyph, contentDescription = null, tint = LocalAgentocColors.current.accentPrimary,
+        modifier = Modifier.size(21.dp))
 }
 
 @Composable
@@ -5727,7 +5644,7 @@ private fun SettingsAccountHeader(
                 modifier = Modifier
                     .fillMaxWidth()
                     .agentoPressScale(pressedScale = 0.985f, onClick = onOpenAccountManagement)
-                    .padding(horizontal = 4.dp, vertical = 6.dp),
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -5762,20 +5679,24 @@ private fun SettingsAccountHeader(
                 )
             }
         }
-        if (!signedIn && accountState.status == GoogleAccountStatus.VerificationUnavailable) {
-            AgentoButton(
-                text = stringResource(R.string.settings_retry_account_check),
-                onClick = { accountsViewModel?.onEvent(AccountsEvent.Refresh) },
-                modifier = Modifier.widthIn(min = 164.dp),
-                secondary = true,
-            )
-        } else if (!signedIn) {
-            SettingsSignInEntry(
-                title = stringResource(R.string.settings_google_account),
-                actionLabel = stringResource(R.string.settings_sign_in),
-                onClick = { onRequestGoogleSignIn(GoogleSignInRequest.Account) },
-                leadingIcon = { GoogleBrandIcon() },
-            )
+        if (!signedIn) {
+            if (accountState.status == GoogleAccountStatus.Checking && accountsViewModel != null) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AgentoProgress(modifier = Modifier.size(20.dp))
+                    Text(stringResource(R.string.settings_account_checking), color = colors.secondaryContent)
+                }
+            } else if (accountState.status == GoogleAccountStatus.VerificationUnavailable) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(stringResource(R.string.settings_account_unverified), color = colors.secondaryContent)
+                    AgentoButton(stringResource(R.string.settings_retry_account_check),
+                        { accountsViewModel?.onEvent(AccountsEvent.Refresh) }, secondary = true,
+                        modifier = Modifier.widthIn(min = 168.dp, max = 224.dp))
+                }
+            } else {
+                AgentoSettingRow(leadingIcon = { GoogleBrandIcon() }, title = stringResource(R.string.settings_google_account),
+                    subtitle = stringResource(R.string.settings_sign_in), showDivider = false,
+                    onClick = { onRequestGoogleSignIn(GoogleSignInRequest.Account) })
+            }
         }
         accountState.errorMessage?.let { AgentoErrorText(it) }
     }
@@ -5802,7 +5723,7 @@ private fun SettingsGoogleAccountManagement(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Standard),
             ) {
-                GoogleAccountAvatar(profile, size = 72.dp)
+                GoogleAccountAvatar(profile, size = 48.dp)
                 Column(Modifier.weight(1f)) {
                     Text(
                         profile?.displayName ?: stringResource(R.string.settings_google_account),
@@ -5812,12 +5733,15 @@ private fun SettingsGoogleAccountManagement(
                     profile?.email?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = colorsForSettings().secondaryContent) }
                 }
             }
-            Box(Modifier.fillMaxWidth().padding(AgentocSpacing.Standard)) {
+            Box(Modifier.padding(horizontal = 16.dp)) { AccountDataRequests(showTitle = false) }
+            Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                 AgentoButton(
                     text = stringResource(R.string.settings_sign_out_phone),
                     onClick = { confirmSignOut = true },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.widthIn(min = 200.dp, max = 280.dp),
                     secondary = true,
+                    secondaryContainerColor = LocalAgentocColors.current.canvas,
+                    labelMaxLines = 2,
                 )
             }
         } else if (accountsState.status == GoogleAccountStatus.Checking) {
@@ -5829,7 +5753,7 @@ private fun SettingsGoogleAccountManagement(
                 AgentoButton(
                     text = stringResource(R.string.settings_retry_account_check),
                     onClick = { accountsViewModel.onEvent(AccountsEvent.Refresh) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.widthIn(min = 200.dp, max = 280.dp),
                     secondary = true,
                 )
             }
@@ -5838,7 +5762,7 @@ private fun SettingsGoogleAccountManagement(
                 AgentoButton(
                     text = stringResource(R.string.settings_sign_in),
                     onClick = { onRequestGoogleSignIn(GoogleSignInRequest.Account) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.widthIn(min = 200.dp, max = 280.dp),
                     leadingIcon = { GoogleBrandIcon() },
                 )
             }
@@ -5849,6 +5773,7 @@ private fun SettingsGoogleAccountManagement(
         AgentoDialog(
             title = stringResource(R.string.settings_sign_out_phone_title),
             confirmLabel = stringResource(R.string.settings_sign_out),
+            destructive = true,
             dismissLabel = stringResource(R.string.settings_cancel),
             onConfirm = {
                 confirmSignOut = false

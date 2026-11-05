@@ -1,6 +1,6 @@
 <resources>
     <string name="api_routing_title">Compartir y asistentes</string>
-    <string name="api_routing_description">Los elementos compartidos usan este ordenador predeterminado aunque haya otro abierto en la aplicación. Los alias ayudan a identificar un ordenador en las solicitudes.</string>
+    <string name="api_routing_description">El contenido compartido desde otras apps se envía a este ordenador por defecto, independientemente del abierto en AgentoC.</string>
     <string name="api_close">Cerrar</string>
     <string name="api_loading">Cargando…</string>
     <string name="api_saving">Guardando…</string>
