@@ -182,11 +182,10 @@ fun TurnTimelineView(
                 }
                 AnimatedVisibility(expanded) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        processEntries.filterNot { it is TimelineItem.Notice }.forEach { renderEntry(it) }
+                        processEntries.forEach { renderEntry(it) }
                         activeAction?.invoke()
                     }
                 }
-                processEntries.filterIsInstance<TimelineItem.Notice>().forEach { renderEntry(it) }
             }
             outsideEntries.forEach { renderEntry(it) }
             return@Column

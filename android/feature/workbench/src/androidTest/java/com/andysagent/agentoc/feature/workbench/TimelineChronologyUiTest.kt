@@ -110,4 +110,34 @@ class TimelineChronologyUiTest {
         rule.onNodeWithContentDescription(rule.activity.getString(R.string.timeline_details_show)).performClick()
         rule.onNodeWithText("Private reasoning detail").assertIsDisplayed()
     }
+
+    @Test fun noticesStayInOrderInsideCompletedProcess() {
+        val items = listOf(
+            TimelineItem.Message("u-notice", 1, TimelineRole.User, "Question", true),
+            TimelineItem.Message("a-notice", 2, TimelineRole.Agent, "Before notice", true, messagePhase = "commentary"),
+            TimelineItem.Notice("notice", 3, "Process notice"),
+            TimelineItem.Message("b-notice", 4, TimelineRole.Agent, "After notice", true, messagePhase = "commentary"),
+            TimelineItem.Message("final-notice", 5, TimelineRole.Agent, "Final answer", true, messagePhase = "final_answer"),
+        )
+        val turn = TurnGroupProjector().project(items).single()
+        rule.setContent { AgentocTheme { Column { TurnTimelineView(turn, true, null, null, {}, { _, _ -> }, {}, {}) } } }
+        rule.onNodeWithText("Process notice").assertDoesNotExist()
+        rule.onNodeWithText("Final answer").assertIsDisplayed()
+        rule.onNodeWithTag("turn-process-toggle").performClick()
+        val before = rule.onNodeWithText("Before notice").getUnclippedBoundsInRoot().top
+        val notice = rule.onNodeWithText("Process notice").getUnclippedBoundsInRoot().top
+        val after = rule.onNodeWithText("After notice").getUnclippedBoundsInRoot().top
+        assertTrue(before < notice && notice < after)
+    }
+
+    @Test fun terminalNoticeRemainsVisibleWhenThereIsNoFinalAnswer() {
+        val items = listOf(
+            TimelineItem.Message("u-error", 1, TimelineRole.User, "Question", true),
+            TimelineItem.Operation("op-error", 2, TimelineOperationKind.Command, "Run", "", TimelineOperationStatus.Failed),
+            TimelineItem.Notice("error", 3, "Run failed"),
+        )
+        val turn = TurnGroupProjector().project(items).single()
+        rule.setContent { AgentocTheme { Column { TurnTimelineView(turn, true, null, null, {}, { _, _ -> }, {}, {}) } } }
+        rule.onNodeWithText("Run failed").assertIsDisplayed()
+    }
 }
