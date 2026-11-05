@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
@@ -15,6 +16,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -93,9 +96,11 @@ class ApprovalAttentionDeviceTest {
         val events = mutableListOf<AttentionEvent>()
         rule.setContent { AgentocTheme { AttentionSurface(state, events::add, onOpenSession = {}) } }
         rule.onNodeWithText("Feature A").performClick()
+        rule.onNodeWithContentDescription("以此选项回答：Feature A").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "已选择"))
         rule.onNodeWithText("Feature B").performClick()
+        rule.onNodeWithContentDescription("以此选项回答：Feature B").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "已选择"))
         rule.onNode(hasSetTextAction() and hasAnyAncestor(hasContentDescription("问题 1 的自定义回复")), useUnmergedTree = true).performTextInput("extra")
-        rule.onNodeWithText("发送").performClick()
+        rule.onNodeWithText("发送").assertIsEnabled().performClick()
         rule.runOnIdle {
             assertEquals("Events: $events", 1, events.filterIsInstance<AttentionEvent.ResolveMultiChoices>().size)
             val answer = events.filterIsInstance<AttentionEvent.ResolveMultiChoices>().single()
@@ -151,7 +156,11 @@ class ApprovalAttentionDeviceTest {
         rule.onNodeWithTag("decision-0-option-0").performClick()
         rule.onNodeWithTag("decision-0-option-1").performClick()
         rule.onNodeWithTag("decision-0-write-in").performTextInput("extra")
-        rule.onNodeWithTag("decision-submit").performClick()
+        rule.runOnIdle {
+            assertEquals(setOf(0, 1), state.multiSelectedByQuestion[0])
+            assertEquals("extra", state.customByQuestion[0])
+        }
+        rule.onNodeWithTag("decision-submit").assertIsEnabled().performClick()
         rule.runOnIdle {
             assertEquals(setOf(0, 1), submitted?.multiSelectedByQuestion?.get(0))
             assertEquals("extra", submitted?.customByQuestion?.get(0))
