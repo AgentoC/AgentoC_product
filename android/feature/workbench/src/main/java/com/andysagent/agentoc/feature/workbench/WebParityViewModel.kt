@@ -847,7 +847,9 @@ class WebParityViewModel(
     private val providerInstancesProvider: (suspend () -> List<ProviderInstance>)? = null,
     private val providerRepositoryFactory: ((String) -> WebParityRepository)? = null,
 ) : ViewModel() {
-    private val mutableState = MutableStateFlow(WebParityUiState())
+    private val mutableState = MutableStateFlow(WebParityUiState(
+        providerCrossInstance = providerInstancesProvider != null && providerRepositoryFactory != null,
+    ))
     val state: StateFlow<WebParityUiState> = mutableState.asStateFlow()
     private var providerOAuthRepository: WebParityRepository? = null
     private var providerOAuthMonitor: Job? = null

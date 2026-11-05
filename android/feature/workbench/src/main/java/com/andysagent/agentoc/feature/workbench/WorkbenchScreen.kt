@@ -4773,9 +4773,6 @@ private fun SettingsSurface(
                     },
                     targetId = state.activeRemoteTargetId,
                     targetLabel = state.remoteTargets.firstOrNull { it.instanceId == state.activeRemoteTargetId }?.label,
-                    onChooseComputer = if (page == SettingsPage.ModelProviders) {
-                        { onEvent(WorkbenchEvent.OpenSettingsPage(SettingsPage.ComputerManagement)) }
-                    } else null,
                     backProgress = backProgress,
                     connectionAvailable = page == SettingsPage.ComputerManagement || state.connection == AgentConnectionStatus.Connected,
                     modifier = Modifier.fillMaxSize(),

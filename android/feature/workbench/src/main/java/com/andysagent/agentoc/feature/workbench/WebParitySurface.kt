@@ -121,7 +121,6 @@ fun WebParitySurface(
     backContentDescription: String? = null,
     backProgress: Float = 0f,
     connectionAvailable: Boolean = true,
-    onChooseComputer: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     LaunchedEffect(page, targetId) { onEvent(WebParityEvent.OpenPage(page)) }
@@ -149,12 +148,8 @@ fun WebParitySurface(
                 refreshing = state.refreshing,
             )
             if (!writable && !crossProviders) Column(Modifier.widthIn(max = AgentocSizes.ContentMaxWidth).fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-                Text(stringResource(if (page == WebParityPage.ModelProviders) R.string.settings_provider_connection_needed else R.string.settings_config_offline),
+                Text(stringResource(R.string.settings_config_offline),
                     color = LocalAgentocColors.current.secondaryContent, style = MaterialTheme.typography.bodyMedium)
-                onChooseComputer?.let { choose ->
-                    OnboardingTextAction(stringResource(R.string.settings_provider_choose), choose,
-                        modifier = Modifier.testTag("provider-choose-computer"))
-                }
             }
             WorkbenchBackStackTransition(
                 isOpen = state.selectedFile != null,
@@ -172,14 +167,13 @@ fun WebParitySurface(
                                     ProviderInstanceSelector(state, onEvent)
                                     if (state.providerTargetId == null) AccountProvidersOverview(state, onEvent)
                                     else if (selectedProviderInstance?.available == true) key(state.providerTargetId) {
-                                        ProvidersPage(restrictDemoParityState(state, LocalRestrictedDemoEnvironment.current), onEvent, providerLabel, null)
+                                        ProvidersPage(restrictDemoParityState(state, LocalRestrictedDemoEnvironment.current), onEvent, providerLabel)
                                     } else Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                         Text(stringResource(if (selectedProviderInstance?.loading == true) R.string.pi_loading else R.string.pi_unavailable))
                                         OnboardingTextAction(stringResource(R.string.pi_retry), { state.providerTargetId?.let { onEvent(WebParityEvent.RetryProviderInstance(it)) } })
                                     }
                                 }
-                            } else ProvidersPage(restrictDemoParityState(state, LocalRestrictedDemoEnvironment.current), onEvent, targetLabel,
-                                onChooseComputer.takeIf { connectionAvailable })
+                            } else ProvidersPage(restrictDemoParityState(state, LocalRestrictedDemoEnvironment.current), onEvent, targetLabel)
                             WebParityPage.Harnesses -> HarnessesPage(restrictDemoParityState(state, LocalRestrictedDemoEnvironment.current), onEvent, targetId)
                             WebParityPage.Devices -> DevicesPage(
                                 state = state,
@@ -596,7 +590,7 @@ private fun ProviderQuotaSection(snapshot: JsonObject) {
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
-private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> Unit, targetLabel: String?, onChooseComputer: (() -> Unit)?) {
+private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> Unit, targetLabel: String?) {
     val uriHandler = LocalUriHandler.current
     var dialog by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
@@ -633,8 +627,6 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                 state.providerSavedTarget?.let { Text(stringResource(R.string.pi_saved, it), style = MaterialTheme.typography.bodySmall) }
                 Text(stringResource(R.string.settings_provider_scope_hint), style = MaterialTheme.typography.bodySmall,
                     color = LocalAgentocColors.current.secondaryContent)
-                onChooseComputer?.let { choose -> OnboardingTextAction(stringResource(R.string.settings_provider_choose), choose,
-                    modifier = Modifier.testTag("provider-choose-computer")) }
             }
         }
         if (!restrictedDemo) item {

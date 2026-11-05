@@ -77,6 +77,8 @@ class ProviderInstancesTest {
         try {
             val backend = Backend().apply { failB = true }
             val vm = backend.viewModel()
+            // The first rendered frame must already use instance management, even before loading.
+            assertTrue(vm.state.value.providerCrossInstance)
             vm.onEvent(WebParityEvent.OpenPage(WebParityPage.ModelProviders)); advanceUntilIdle()
             assertEquals(listOf(true, false), vm.state.value.providerInstances.map { it.available })
             assertEquals(1, accountProviderGroups(vm.state.value.providerInstances).size)

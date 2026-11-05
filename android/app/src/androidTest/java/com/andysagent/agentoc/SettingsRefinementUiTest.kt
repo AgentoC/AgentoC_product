@@ -212,23 +212,24 @@ class SettingsRefinementUiTest {
     }
 
     @Test fun providerScopeAndManagementComputerAreExplicit() {
-        var connected by mutableStateOf(true)
-        var chooseCalls = 0
+        val providers = listOf(WebProvider("shared", "团队 API", "Codex · API key", true),
+            WebProvider("local", "Codex 登录", "Codex · OAuth", true, authType = "oauth"))
+        val events = mutableListOf<WebParityEvent>()
         show { WebParitySurface(page = WebParityPage.ModelProviders,
             state = WebParityUiState(page = WebParityPage.ModelProviders, providerHarnessesLoaded = true,
                 harnesses = listOf(WebHarness("codex", "Codex", globallyInstalled = true)),
-                providers = listOf(WebProvider("shared", "团队 API", "Codex · API key", true),
-                    WebProvider("local", "Codex 登录", "Codex · OAuth", true, authType = "oauth"))),
-            onEvent = {}, onBack = {}, targetLabel = "工作室电脑", connectionAvailable = connected,
-            onChooseComputer = { chooseCalls++ }) }
-        rule.onNodeWithText("通过 工作室电脑 管理").assertIsDisplayed()
+                providers = providers, providerCrossInstance = true, providerTargetId = "studio",
+                providerInstances = listOf(ProviderInstanceSnapshot(ProviderInstance("studio", "工作室电脑"),
+                    loading = false, available = true))),
+            onEvent = events::add, onBack = {}, targetLabel = "主工作电脑", connectionAvailable = false) }
+        rule.onNodeWithTag("provider-instance-selector").assertIsDisplayed()
+        rule.onNodeWithTag("provider-choose-computer").assertDoesNotExist()
         reveal("provider-scope-shared").assertTextEquals("可在账号内同步")
         capture("provider-shared-scope")
         reveal("provider-scope-local").assertTextEquals("仅限 工作室电脑")
         capture("provider-local-scope")
-        rule.runOnIdle { connected = false }
-        rule.onNodeWithTag("provider-choose-computer").assertIsEnabled().performClick()
-        rule.runOnIdle { assertEquals(1, chooseCalls) }
-        capture("provider-choose-online-computer")
+        rule.onNodeWithTag("provider-instance-selector").performClick()
+        rule.onNodeWithTag("provider-instance-all").performClick()
+        rule.runOnIdle { assertEquals(WebParityEvent.SelectProviderInstance(null), events.last()) }
     }
 }
