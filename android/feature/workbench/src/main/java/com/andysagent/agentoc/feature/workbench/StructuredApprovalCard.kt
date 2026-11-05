@@ -279,7 +279,7 @@ private fun StructuredApprovalActionRow(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(text = action.description, style = AgentocTextStyles.agentBody, color = colors.primaryContent)
                 action.explanation?.let { explanation ->
-                    ApprovalExplanationContent(explanation.summary, explanation.reason, explanation.saferAlternative)
+                    ApprovalExplanationContent(explanation)
                 }
                 val detail = listOfNotNull(
                     action.summary?.takeIf { it.isNotBlank() },

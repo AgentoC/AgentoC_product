@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -69,6 +70,36 @@ class ApprovalAttentionDeviceTest {
         rule.onNodeWithText(rule.activity.getString(R.string.attention_command, "rm example")).assertExists()
         rule.onNodeWithText(rule.activity.getString(R.string.attention_approve)).assertIsDisplayed()
         rule.onNodeWithText(rule.activity.getString(R.string.attention_deny)).assertIsDisplayed()
+    }
+
+    @Test fun structuredExplanationIsLocalizedAndNotRepeated() {
+        val approval = Approval(id = "a", sessionId = "s", runId = "r", title = "Bash", command = "if true; then rm example; fi",
+            reason = "Read example", explanation = ApprovalExplanation(summary = "旧摘要", reason = "旧原因", operation = "delete",
+                targets = listOf("example"), conditional = true, partial = true, riskCode = "composite_unanalyzed", providerConflict = true))
+        val state = AttentionReducer.reduce(AttentionUiState(), AttentionReducer.project(listOf(Session("s", "Other session")), listOf(approval))).copy(expanded = true)
+        rule.setContent { AgentocTheme { AttentionSurface(state, onEvent = {}, onOpenSession = {}) } }
+        val action = rule.activity.getString(R.string.approval_operation_delete)
+        val summary = rule.activity.getString(R.string.approval_operation_may, if (rule.activity.resources.configuration.locales[0]?.language == "en") action.replaceFirstChar { it.lowercase() } else action) + ": example"
+        rule.onAllNodesWithText(summary).assertCountEquals(1)
+        assertTrue(rule.onAllNodesWithText(rule.activity.getString(R.string.approval_provider_conflict), substring = true).fetchSemanticsNodes().isNotEmpty())
+        rule.onNodeWithText(rule.activity.getString(R.string.approval_provider_description, "Read example")).assertExists()
+        rule.onNodeWithText(rule.activity.getString(R.string.attention_approve)).assertIsDisplayed()
+        rule.onNodeWithText(rule.activity.getString(R.string.attention_deny)).assertIsDisplayed()
+    }
+
+    @Test fun batchShowsEachActionsExplanation() {
+        val approval = Approval(id = "batch", sessionId = "s", runId = "r", batchId = "batch", title = "Batch", kind = "privileged_batch_request",
+            actions = listOf(
+                ApprovalAction("one", description = "First", category = "privileged_other", command = "rm example",
+                    explanation = ApprovalExplanation(operation = "delete", targets = listOf("example"), riskCode = "delete_unresolvable")),
+                ApprovalAction("two", description = "Second", category = "privileged_other", command = "rm other",
+                    explanation = ApprovalExplanation(operation = "delete", targets = listOf("other"), riskCode = "delete_unresolvable")),
+            ))
+        val state = AttentionReducer.reduce(AttentionUiState(), AttentionReducer.project(listOf(Session("s", "Other session")), listOf(approval))).copy(expanded = true)
+        rule.setContent { AgentocTheme { AttentionSurface(state, onEvent = {}, onOpenSession = {}) } }
+        val action = rule.activity.getString(R.string.approval_operation_delete)
+        rule.onNodeWithText("$action: example").assertExists()
+        rule.onNodeWithText("$action: other").assertExists()
     }
 
     @Test fun firstQuestionOptionExpandsBeforeItAnswers() {

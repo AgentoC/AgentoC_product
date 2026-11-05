@@ -219,10 +219,16 @@
   // ---- 人话解释区（summary/reason/saferAlternative） -----------------------
   // 共享渲染：批量 op（op.explanation）与普通审批（evt.explanation）同款。
   // 人话先行，技术细节（targetPaths/sudo/...）随后。
-  function appendExplanation(explanation, container) {
+  function displayApprovalExplanation(explanation) {
+    return typeof root.agentocApprovalExplanation === "function"
+      ? root.agentocApprovalExplanation(explanation, tr) : explanation;
+  }
+
+  function appendExplanation(explanation, container, skipSummary = false) {
     if (!explanation || typeof explanation !== "object") return;
+    explanation = displayApprovalExplanation(explanation);
     const fields = [
-      [tr("decisionSheet.explanation.summary"), explanation.summary],
+      [tr("decisionSheet.explanation.summary"), skipSummary ? "" : explanation.summary],
       [tr("decisionSheet.explanation.reason"), explanation.reason],
       [tr("decisionSheet.explanation.safer"), explanation.saferAlternative],
     ].filter(([, value]) => String(value || "").trim());
@@ -1034,6 +1040,7 @@
       ...(String(evt?.kind || "").toLowerCase() === "plan"
         ? [[tr("approval.detail.plan"), evt?.reason, "markdown"]]
         : []),
+      ...(String(evt?.kind || "").toLowerCase() !== "plan" && evt?.reason ? [[tr("decisionSheet.providerDescription"), evt.reason, false]] : []),
       [tr("approval.detail.command"), evt?.command, true],
       [tr("approval.detail.cwd"), evt?.cwd, false],
       [tr("approval.detail.files"),
@@ -1091,14 +1098,17 @@
     // 人话解释区：审批事件的 explanation 快照（LLM 缓存命中或模板兜底）。
     // 技术细节（command/cwd/files/...）之后渲染——用户先核对"要执行什么"，
     // 再读"为什么/有没有更安全的做法"。
-    appendExplanation(evt?.explanation, body);
+    const display = displayApprovalExplanation(evt?.explanation);
+    appendExplanation(evt?.explanation, body, Boolean(display?.summary && display.summary === compactApprovalText(evt)));
   }
 
   function compactApprovalText(evt) {
     const raw = String(
-      evt?.summary
+      (displayApprovalExplanation(evt?.explanation)?.operation && displayApprovalExplanation(evt.explanation)?.summary)
+      || evt?.summary
       || evt?.reason
       || evt?.description
+      || (evt?.explanation?.riskCode && displayApprovalExplanation(evt.explanation)?.summary)
       || tr("approval.status.pending")
     ).trim().replace(/\s+/g, " ");
     if (raw.length <= 116) return raw;
@@ -1712,9 +1722,9 @@
     renderedKind = "approval";
     renderedBatchSignature = "";
 
-    const titleText = typeof root.getApprovalTitle === "function"
-      ? root.getApprovalTitle(evt)
-      : compactApprovalText(evt);
+    const titleText = displayApprovalExplanation(evt?.explanation)?.operation
+      ? compactApprovalText(evt)
+      : (typeof root.getApprovalTitle === "function" ? root.getApprovalTitle(evt) : compactApprovalText(evt));
     const risk = resolveApprovalRisk(evt);
     currentDecisionInfo = {
       kind: String(evt?.kind || "approval").toLowerCase(),
@@ -1723,6 +1733,9 @@
       evt,
     };
     const header = createNotificationHeader(titleText || compactApprovalText(evt), risk);
+    if (!displayApprovalExplanation(evt?.explanation)?.operation && evt?.reason && !["question", "plan"].includes(String(evt?.kind || "").toLowerCase())) {
+      header.appendChild(el("div", "oneui-notification__detail-label", tr("decisionSheet.providerDescription")));
+    }
     const content = el("div", "oneui-notification__content");
     content.id = "decisionSheetContent";
     const details = el("div", "oneui-notification__details decision-sheet__details");

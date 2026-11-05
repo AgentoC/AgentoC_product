@@ -17,7 +17,7 @@ function eq(label, actual, expected) {
 
 const HOME = '/home/example';
 const PROJ = '/home/example/proj';
-const CTX = { cwd: PROJ, projectRoot: PROJ, home: HOME };
+const CTX = { cwd: PROJ, projectRoot: PROJ, home: HOME, riskContext: { schemaVersion: 1, platform: 'linux', workspaceRoot: PROJ, trustedWorkspaceRoot: PROJ, cwd: PROJ, protectedRoots: [], systemPathRoots: ['/etc', '/usr', '/var'] } };
 
 // === 模板优先：reasons 传入时按 code 出模板 ===
 const tpl = templateExplanation({
@@ -56,7 +56,7 @@ check('approval safer alternative is preserved', approval.saferAlternative.inclu
 // === 复合命令半结构化文案 ===
 const compositeTpl = templateExplanation({ command: 'ls | grep x', ...CTX });
 eq('composite semi code', compositeTpl.code, RISK_REASON_CODES.COMPOSITE_UNANALYZED);
-check('composite summary steps', compositeTpl.summary.includes('包含 2 步操作'));
+check('composite summary steps', compositeTpl.summary.includes('组合命令'));
 check('composite reason natural', compositeTpl.reason.includes('多个步骤'));
 
 // 管道隐藏的删除段：优先命中精确的删除模板，而非笼统的组合文案

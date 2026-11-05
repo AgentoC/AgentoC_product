@@ -436,6 +436,13 @@ export function approvalRequestEvent({
       ...(trimOptionalString(explanation.summary) ? { summary: trimOptionalString(explanation.summary) } : {}),
       ...(trimOptionalString(explanation.reason) ? { reason: trimOptionalString(explanation.reason) } : {}),
       ...(trimOptionalString(explanation.saferAlternative) ? { saferAlternative: trimOptionalString(explanation.saferAlternative) } : {}),
+      ...(trimOptionalString(explanation.operation) ? { operation: trimOptionalString(explanation.operation) } : {}),
+      ...(Array.isArray(explanation.targets) ? { targets: explanation.targets.map(trimOptionalString).filter(Boolean).slice(0, 20) } : {}),
+      ...(typeof explanation.conditional === 'boolean' ? { conditional: explanation.conditional } : {}),
+      ...(typeof explanation.partial === 'boolean' ? { partial: explanation.partial } : {}),
+      ...(trimOptionalString(explanation.riskCode) ? { riskCode: trimOptionalString(explanation.riskCode) } : {}),
+      ...(explanation.providerConflict === true ? { providerConflict: true } : {}),
+      ...(explanation.elevated === true ? { elevated: true } : {}),
     }
     : null;
   // Phase 5: optional risk tier on the event (string like 'danger', or an object

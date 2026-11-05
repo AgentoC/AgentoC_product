@@ -92,7 +92,7 @@ export function createClaudeBidiAdapter() {
           permissions: { suggestions: params.permission_suggestions || [] },
           status: 'pending',
           source: 'claude-bidi',
-          ...(params.tool_name === 'Bash' ? { explanation: explanationForApproval({ command: params.input?.command }) } : {}),
+          ...(params.tool_name === 'Bash' ? { explanation: explanationForApproval({ command: params.input?.command, providerDescription: params.description }) } : {}),
           ...(isQuestion ? { questions: Array.isArray(params.input?.questions) ? params.input.questions : [] } : {}),
         })].filter(Boolean);
       }

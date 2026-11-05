@@ -1400,8 +1400,11 @@ class RoomSessionRepository(
                 val waitingForApproval = (activity?.get("actionRequired") as? JsonPrimitive)?.booleanOrNull == true &&
                     (activity["kind"] as? JsonPrimitive)?.contentOrNull == "approval"
                 val now = android.os.SystemClock.elapsedRealtime()
-                if (waitingForApproval && dao.observePendingApprovals(sessionId).first().isEmpty() &&
-                    (approvalRecoveryAttempts[sessionId]?.let { now - it >= 5_000L } != false)) {
+                val pendingApprovals = if (waitingForApproval) dao.getPendingApprovals(sessionId) else emptyList()
+                val needsRecovery = pendingApprovals.isEmpty() || pendingApprovals.any { it.needsExplanationRecovery() }
+                val recoveryInterval = if (pendingApprovals.isEmpty()) 5_000L else 300_000L
+                if (waitingForApproval && needsRecovery &&
+                    (approvalRecoveryAttempts[sessionId]?.let { now - it >= recoveryInterval } != false)) {
                     approvalRecoveryAttempts[sessionId] = now
                     try {
                         recoverVisiblePendingApproval(sessionId, page)
@@ -1526,8 +1529,16 @@ class RoomSessionRepository(
             findRequest(durable.events) ?: return
         }
         database.withTransaction {
-            if (dao.getApproval(sessionId, request.approvalId!!) == null) {
+            val existing = dao.getApproval(sessionId, request.approvalId!!)
+            if (existing == null) {
                 RoomEventSink(database, dao).apply(sessionId, request)
+            } else if (existing.status == "pending" && existing.runId == request.runId &&
+                existing.needsExplanationRecovery() && request.explanation.toApprovalExplanation() != null) {
+                val original = runCatching { existing.detailsJson?.let { AgentocProtocol.json.parseToJsonElement(it) as? JsonObject } }.getOrNull()
+                if (original != null) {
+                    val restored = JsonObject(original + ("explanation" to request.explanation!!))
+                    dao.upsertApprovals(listOf(existing.copy(detailsJson = restored.toString())))
+                }
             }
         }
     }
@@ -2905,11 +2916,28 @@ private fun SessionEventDto.legacyStorageEventId(): String = dedupeKey()
 
 private fun SessionEventDto.fingerprint(): String = sessionEventFingerprint()
 
+private fun ApprovalEntity.needsExplanationRecovery(): Boolean {
+    if (status != "pending" || kind != "approval_request") return false
+    val details = runCatching { detailsJson?.let { AgentocProtocol.json.parseToJsonElement(it) as? JsonObject } }.getOrNull() ?: return false
+    return (details["command"] as? JsonPrimitive)?.contentOrNull?.isNotBlank() == true &&
+        details["explanation"].toApprovalExplanation() == null
+}
+
 private fun JsonElement?.toApprovalExplanation(): ApprovalExplanation? {
     val obj = this as? JsonObject ?: return null
     fun text(key: String) = (obj[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull?.trim()?.takeIf(String::isNotEmpty)
-    val explanation = ApprovalExplanation(text("summary"), text("reason"), text("saferAlternative"))
-    return explanation.takeIf { it.summary != null || it.reason != null || it.saferAlternative != null }
+    val explanation = ApprovalExplanation(
+        summary = text("summary")?.takeUnless { Regex("^包含\\s*\\d+\\s*步操作(?:，.*)?$").matches(it) },
+        reason = text("reason"), saferAlternative = text("saferAlternative"),
+        operation = text("operation"),
+        targets = (obj["targets"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.contentOrNull?.trim()?.takeIf(String::isNotEmpty) },
+        conditional = (obj["conditional"] as? JsonPrimitive)?.booleanOrNull == true,
+        partial = (obj["partial"] as? JsonPrimitive)?.booleanOrNull == true,
+        riskCode = text("riskCode"),
+        providerConflict = (obj["providerConflict"] as? JsonPrimitive)?.booleanOrNull == true,
+        elevated = (obj["elevated"] as? JsonPrimitive)?.booleanOrNull == true,
+    )
+    return explanation.takeIf { it.summary != null || it.reason != null || it.saferAlternative != null || it.operation != null }
 }
 
 private fun ApprovalEntity.toDomainApproval(): Approval {

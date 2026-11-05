@@ -445,7 +445,7 @@ function parseApprovalRequest(approval) {
     permissions: params.permissions || null,
     status: 'pending',
     source: 'codex-app-server',
-    explanation: explanationForApproval({ command, cwd: params.cwd || '' }),
+    explanation: explanationForApproval({ command, cwd: params.cwd || '', providerDescription: params.reason || params.request?.message || params.request?.prompt }),
   });
 }
 

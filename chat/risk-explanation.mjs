@@ -2,10 +2,11 @@
  * chat/risk-explanation.mjs — 人话解释层（模板优先，纯逻辑，无 I/O）。
  *
  * 本模块用确定性事实 + reason code 生成审批所需的中文说明
- * （summary / reason / saferAlternative），永远不能改变 risk tier。
+ * （summary / reason / saferAlternative，以及可选的操作事实），永远不能改变 risk tier。
  */
 
 import { parseCommandFacts } from './command-parser.mjs';
+import { extractApprovalOperation } from './approval-operation.mjs';
 import { classifyRisk } from './risk-classifier.mjs';
 import { codeForReason, RISK_REASON_CODES } from './risk-policy.mjs';
 
@@ -350,8 +351,8 @@ function codeFromFacts(facts, depth = 0) {
   return R.ORDINARY_COMMAND;
 }
 
-// 复合命令的半结构化摘要：利用段级解析给出步数与高风险步计数，
-// 替代纯技术化的"未完全解析"文案（reason-code 契约保持不变）。
+// Top-level fragments are not necessarily executable steps. Describe only
+// partial observations and keep the reason-code contract unchanged.
 function compositeSegmentSummary(segments) {
   const risky = segments.filter((segment) => (
     segment.dangerDelete
@@ -362,8 +363,8 @@ function compositeSegmentSummary(segments) {
     || segment.destructiveKeyword
     || segment.sudo
   ));
-  const parts = [`包含 ${segments.length} 步操作`];
-  if (risky.length > 0) parts.push(`其中 ${risky.length} 步涉及删除/提权等高风险行为`);
+  const parts = ['包含需要核对的组合命令'];
+  if (risky.length > 0) parts.push('部分片段可能涉及删除或提权');
   return parts.join('，');
 }
 
@@ -378,8 +379,8 @@ function compositeSegmentSummary(segments) {
  * @param {Array}  [input.reasons]  [{code,message}] 或字符串数组
  * @returns {{summary:string, reason:string, saferAlternative:string, source:string, code:string, tier:string, facts:object|null}}
  */
-export function templateExplanation({ command, cwd, projectRoot, home, tier, reasons } = {}) {
-  const facts = parseCommandFacts(command, { cwd, projectRoot, home });
+export function templateExplanation({ command, cwd, projectRoot, home, tier, reasons, riskContext } = {}) {
+  const facts = parseCommandFacts(command, { cwd, projectRoot, home, riskContext });
   const code = firstReasonCode(reasons) || codeFromFacts(facts);
   const template = TEMPLATES[code]
     || (tier === 'danger' || facts?.downloadAndExecute ? DANGER_FALLBACK : TEMPLATES[R.ORDINARY_COMMAND]);
@@ -402,21 +403,45 @@ export function templateExplanation({ command, cwd, projectRoot, home, tier, rea
  * projection must never call this helper, and this helper never changes the
  * classifier or approval decision.
  */
-export function explanationForApproval({ command, cwd, projectRoot, home } = {}) {
+export function explanationForApproval({ command, cwd, projectRoot, home, providerDescription, riskContext } = {}) {
   const text = String(command || '').trim();
   if (!text) return null;
-  const risk = classifyRisk({ command: text, cwd, projectRoot, home });
+  const risk = classifyRisk({ command: text, cwd, projectRoot, home, riskContext });
   const template = templateExplanation({
     command: text,
     cwd,
     projectRoot,
     home,
+    riskContext,
     tier: risk.tier || '',
     reasons: risk.reasons,
   });
+  const operation = extractApprovalOperation(text);
+  const labels = { delete: '删除', copy: '复制', move: '移动', write_file: '写入文件', append_file: '追加写入文件', package_install: '安装软件包',
+    package_remove: '卸载软件包', git_push: '推送 Git 更改', git_force_push: '强制推送 Git 更改',
+    git_reset: '重置 Git 状态', git_reset_hard: '强制重置 Git 工作区', git_commit: '创建 Git 提交', service_start: '启动服务',
+    service_stop: '停止服务', service_restart: '重启服务' };
+  const operationSummary = operation && labels[operation.operation]
+    ? [`${operation.conditional ? '可能' : ''}${labels[operation.operation]}`, ['copy', 'move'].includes(operation.operation) ? `${operation.targets.slice(0, -1).join('、')} → ${operation.targets.at(-1)}` : operation.targets.join('、')].filter(Boolean).join('：') : '';
+  const description = String(providerDescription || '').trim();
+  const descriptionActions = [
+    ['read', /^(?:(?:read|view|inspect)\b|查看|读取|阅读)/i],
+    ['delete', /^(?:(?:delete|remove|erase)\b|删除|移除)/i],
+    ['copy', /^(?:(?:copy)\b|复制)/i],
+    ['move', /^(?:(?:move)\b|移动)/i],
+    ['write', /^(?:(?:write|append|edit)\b|写入|追加|编辑)/i],
+    ['install', /^(?:(?:install)\b|安装)/i],
+  ];
+  const describedAction = !/\b(?:and|then|before|after)\b|然后|之后|之前|并且/i.test(description)
+    ? descriptionActions.find(([, pattern]) => pattern.test(description))?.[0] : null;
+  const operationFamily = ({ delete: 'delete', copy: 'copy', move: 'move', write_file: 'write', append_file: 'write', package_install: 'install' })[operation?.operation];
+  const providerConflict = Boolean(describedAction && operationFamily && describedAction !== operationFamily);
   return {
-    summary: template.summary,
+    summary: operationSummary || template.summary,
     reason: template.reason,
     saferAlternative: template.saferAlternative,
+    ...(operation ? { operation: operation.operation, targets: operation.targets, conditional: operation.conditional, partial: operation.partial, ...(operation.elevated ? { elevated: true } : {}) } : {}),
+    riskCode: template.code,
+    ...(providerConflict ? { providerConflict: true } : {}),
   };
 }

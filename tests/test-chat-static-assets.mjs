@@ -216,6 +216,11 @@ async function main() {
 
     const page = await request(port, 'GET', '/');
     assert.equal(page.status, 200, 'chat page should render for owner session');
+    assert.match(page.text, /chat\/approval-explanation\.js\?v=/, 'approval explanation helper should be loaded with an asset version');
+    const approvalExplanationAsset = await request(port, 'GET', '/chat/approval-explanation.js');
+    assert.equal(approvalExplanationAsset.status, 200, 'approval explanation helper should be served');
+    assert.match(approvalExplanationAsset.text, /agentocApprovalExplanation/);
+
     assert.match(page.text, /<meta name="color-scheme" content="light dark">/);
     assert.match(page.text, /<meta name="theme-color" content="#ffffff" media="\(prefers-color-scheme: light\)">/);
     assert.match(page.text, /<meta name="theme-color" content="#161618" media="\(prefers-color-scheme: dark\)">/);
@@ -468,7 +473,7 @@ async function main() {
     const sidebarBootstrap = await request(port, 'GET', '/chat/bootstrap.js');
     assert.equal(sidebarBootstrap.status, 200);
     assert.match(sidebarBootstrap.text, /sidebarElement\.prepend\(appBar,/, 'normalized sidebar places the app bar first');
-    assert.match(sidebarBootstrap.text, /brand\.className = "sidebar-brand";\s*brand\.textContent = "AgentoC"/);
+    assert.match(sidebarBootstrap.text, /brand\.className = "sidebar-brand";\s*brand\.textContent = "Ragent"/);
     assert.match(sidebarBootstrap.text, /closeButton\.className = "sidebar-icon-btn";[\s\S]*?closeButton\.setAttribute\("data-icon", "chevron-left"\)/);
     assert.match(sidebarBootstrap.text, /legacyTabs\?\.remove\?\.\(\)/, 'normalization removes legacy tabs');
     assert.doesNotMatch(page.text, /id="forkSessionBtn"/, 'fork should no longer occupy the top header');
@@ -834,7 +839,7 @@ async function main() {
     const loginPage = await request(port, 'GET', '/login', null, { Cookie: '' });
     assert.equal(loginPage.status, 200, 'login page should render without auth');
     assert.match(loginPage.text, /<meta name="color-scheme" content="light dark">/);
-    assert.match(loginPage.text, /<meta name="application-name" content="AgentoC">/);
+    assert.match(loginPage.text, /<meta name="application-name" content="Ragent">/);
     assert.match(loginPage.text, /<meta name="theme-color" content="#f8f8fa" media="\(prefers-color-scheme: light\)">/);
     assert.match(loginPage.text, /<meta name="theme-color" content="#161618" media="\(prefers-color-scheme: dark\)">/);
     assert.match(loginPage.text, /@media \(prefers-color-scheme: dark\)/);

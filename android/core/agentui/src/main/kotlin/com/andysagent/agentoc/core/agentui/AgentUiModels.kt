@@ -22,6 +22,13 @@ data class ApprovalExplanationUiState(
     val summary: String? = null,
     val reason: String? = null,
     val saferAlternative: String? = null,
+    val operation: String? = null,
+    val targets: List<String> = emptyList(),
+    val conditional: Boolean = false,
+    val partial: Boolean = false,
+    val riskCode: String? = null,
+    val providerConflict: Boolean = false,
+    val elevated: Boolean = false,
 )
 
 @Immutable

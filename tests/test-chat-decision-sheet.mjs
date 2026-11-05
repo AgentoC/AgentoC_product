@@ -360,7 +360,7 @@ assert.equal(
 // 3b. 人话解释区（explanation 快照，2026-08-07）——批量 op 与普通审批共用渲染
 assert.match(
   sheetSource,
-  /function appendExplanation\(explanation, container\)/,
+  /function appendExplanation\(explanation, container, skipSummary = false\)/,
   'appendExplanation must be a named, testable function',
 );
 assert.match(
@@ -391,7 +391,7 @@ assert.match(
 );
 assert.match(
   sheetSource,
-  /appendExplanation\(evt\?\.explanation, body\);/,
+  /appendExplanation\(evt\?\.explanation, body,/,
   'appendScope must render evt.explanation after the scope rows',
 );
 // 批量 op 的事件源必须携带 explanation 字段（privileged-ops 快照）

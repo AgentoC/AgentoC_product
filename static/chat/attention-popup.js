@@ -127,11 +127,16 @@
   function compactText(value, maxLength = 92) {
     const text = String(value || "")
       .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-      .replace(/[`*_~>#-]/g, "")
+      .replace(/[`*_~>#]/g, "")
       .trim()
       .replace(/\s+/g, " ");
     if (!text || text.length <= maxLength) return text;
     return `${text.slice(0, maxLength - 1).trimEnd()}…`;
+  }
+
+  function compactPlainText(value, maxLength = 92) {
+    const text = String(value || "").trim().replace(/\s+/g, " ");
+    return text.length > maxLength ? `${text.slice(0, maxLength - 1).trimEnd()}…` : text;
   }
 
   function meaningfulText(value) {
@@ -143,14 +148,20 @@
   function titleFor(event, kind, type) {
     if (type === "completion") return tr("attention.completion.title");
     if (type === "privileged_batch_request" || type === "approved_action_batch_request") {
-      const op = ["other", "delete"]
-        .flatMap((category) => Array.isArray(event?.[category]) ? event[category] : [])
-        .find((item) => meaningfulText(item?.description || item?.reason));
-      const action = Array.isArray(event?.actions)
-        ? event.actions.find((item) => meaningfulText(item?.description || item?.reason))
-        : null;
-      return compactText(op?.description || action?.description || action?.reason || event?.reason, 92) || tr("attention.danger.title");
+      const ops = ["other", "delete"]
+        .flatMap((category) => Array.isArray(event?.[category]) ? event[category] : []);
+      const actions = Array.isArray(event?.actions) ? event.actions : [];
+      const all = ops.length ? ops : actions;
+      if (all.length !== 1) return tr("attention.danger.title");
+      const op = all[0];
+      const explained = typeof root.agentocApprovalExplanation === "function"
+        ? root.agentocApprovalExplanation(op?.explanation, tr) : op?.explanation;
+      if (explained?.operation && explained?.summary) return compactPlainText(explained.summary, 92);
+      return compactText(op?.description || op?.summary || op?.reason || event?.reason, 92) || tr("attention.danger.title");
     }
+    const explained = typeof root.agentocApprovalExplanation === "function"
+      ? root.agentocApprovalExplanation(event?.explanation, tr) : event?.explanation;
+    if (kind !== "question" && explained?.operation && explained?.summary) return compactPlainText(explained.summary, 92);
     const question = Array.isArray(event?.questions) ? event.questions[0] : event;
     const human = kind === "question"
       ? meaningfulText(question?.question || question?.prompt || event?.question)
@@ -898,8 +909,13 @@
         check.dataset.category = category;
         check.addEventListener("change", () => syncBatchNotificationState(section));
         label.appendChild(check);
-        label.appendChild(el("code", "oneui-notification__code", operation?.description || operation?.command || ""));
+        const explained = typeof root.agentocApprovalExplanation === "function"
+          ? root.agentocApprovalExplanation(operation?.explanation, tr) : operation?.explanation;
+        label.appendChild(el("span", "oneui-notification__code", (explained?.operation && explained?.summary) || operation?.description || operation?.command || ""));
         section.appendChild(label);
+        if (operation?.description && operation.description !== explained?.summary) appendDetail(section, tr("decisionSheet.providerDescription"), operation.description);
+        if (explained?.reason) appendDetail(section, tr("decisionSheet.explanation.reason"), explained.reason);
+        if (operation?.command) appendDetail(section, tr("attention.detail.command"), operation.command, true);
       }
       // A danger batch carries separate decisions for each category. Keep the
       // pair with the operations it governs instead of flattening multiple
@@ -952,8 +968,13 @@
       check.value = String(action?.actionId || "");
       check.dataset.approvedActionId = check.value;
       check.addEventListener("change", () => syncApprovedActionNotificationState(check.closest(".oneui-notification")));
-      label.append(check, el("code", "oneui-notification__code", action?.description || action?.summary || action?.command || ""));
+      const explained = typeof root.agentocApprovalExplanation === "function"
+        ? root.agentocApprovalExplanation(action?.explanation, tr) : action?.explanation;
+      label.append(check, el("span", "oneui-notification__code", (explained?.operation && explained?.summary) || action?.description || action?.summary || action?.command || ""));
       section.appendChild(label);
+      if (action?.description && action.description !== explained?.summary) appendDetail(section, tr("decisionSheet.providerDescription"), action.description);
+      if (explained?.reason) appendDetail(section, tr("decisionSheet.explanation.reason"), explained.reason);
+      if (action?.command) appendDetail(section, tr("attention.detail.command"), action.command, true);
     }
     parent.appendChild(section);
   }
@@ -968,7 +989,15 @@
     const event = item.event || {};
     const details = el("div", "oneui-notification__details");
     const reason = String(event.reason || event.bodyMarkdown || event.description || "").trim();
+    const explained = typeof root.agentocApprovalExplanation === "function"
+      ? root.agentocApprovalExplanation(event.explanation, tr) : event.explanation;
     if (item.kind === "plan") appendDetail(details, tr("attention.detail.proposed"), reason);
+    else {
+      if (explained?.operation && explained.summary && explained.summary !== item.title) appendDetail(details, tr("decisionSheet.explanation.summary"), explained.summary);
+      if (explained?.reason) appendDetail(details, tr("decisionSheet.explanation.reason"), explained.reason);
+      if (explained?.saferAlternative) appendDetail(details, tr("decisionSheet.explanation.safer"), explained.saferAlternative);
+      if (reason && reason !== item.title) appendDetail(details, tr("decisionSheet.providerDescription"), reason);
+    }
     appendDetail(details, tr("attention.detail.command"), event.command, true);
     appendDetail(details, tr("attention.detail.cwd"), event.cwd || event.grantRoot);
     const permissions = typeof root.describeApprovalPermissions === "function" ? root.describeApprovalPermissions(event.permissions) : "";
@@ -1152,6 +1181,9 @@
     });
     summary.appendChild(close);
     header.appendChild(summary);
+    if (item.type === "approval_request" && item.kind !== "question" && !(typeof root.agentocApprovalExplanation === "function" && root.agentocApprovalExplanation(item.event?.explanation, tr)?.operation) && item.event?.reason && meaningfulText(item.event.reason)) {
+      header.appendChild(el("div", "oneui-notification__detail-label", tr("decisionSheet.providerDescription")));
+    }
     const sessionName = compactText(item.session?.name || item.session?.title, 72);
     if (sessionName) {
       const session = el("div", "oneui-notification__session");

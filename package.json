@@ -92,6 +92,7 @@
     "titles:backfill": "node scripts/backfill-session-titles.mjs",
     "lint:filesize": "node scripts/report-oversized-files.mjs",
     "test": "npm run test:smoke",
+    "test:approval-explanation": "node tests/test-approval-operation.mjs && node tests/test-risk-explanation.mjs && node tests/test-approval-event-risk-contract.mjs && node tests/test-approval-web-presentation.mjs && node tests/test-approval-web-surfaces.mjs && node tests/test-chat-decision-sheet.mjs && node tests/test-chat-static-assets.mjs && node tests/test-static-asset-routing.mjs",
     "test:continuity": "node tests/test-continuity-v2.mjs && node tests/test-tool-result-descriptor.mjs && node tests/test-tool-result-history-range.mjs && node tests/test-context-attention-assembler.mjs && node tests/test-runtime-context-compiler.mjs && node tests/test-context-continuity-benchmark.mjs",
     "test:harness-contract": "node tests/test-harness-contract.mjs",
     "test:target-runtime": "node tests/test-target-runtime-contract.mjs && node tests/test-target-runtime-state.mjs && node tests/test-target-runtime-browser.mjs && node tests/test-target-runtime-authorization.mjs && node tests/test-target-runtime-dual-instance.mjs",

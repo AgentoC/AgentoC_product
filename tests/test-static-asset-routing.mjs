@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import assert from 'assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } from 'fs';
 import { tmpdir } from 'os';
-import { dirname, join } from 'path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import http from 'http';
 import { spawn } from 'child_process';
+import { buildChildEnvironment } from '../scripts/launch-test-instance.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = dirname(__dirname);
@@ -58,7 +59,7 @@ function request(port, path, extraHeaders = {}) {
 
 function setupTempHome() {
   const home = mkdtempSync(join(tmpdir(), 'agentoc-static-route-'));
-  const configDir = join(home, '.config', 'agentoc');
+  const configDir = join(home, '.agentoc', 'config');
   mkdirSync(configDir, { recursive: true });
 
   writeFileSync(
@@ -81,32 +82,39 @@ async function startServer({ home, port }) {
   const child = spawn(process.execPath, ['chat-server.mjs'], {
     cwd: repoRoot,
     env: {
-      ...process.env,
-      AGENTOC_RUNNER_SUPERVISOR_SOCKET: "",
-      AGENTOC_RUNNER_SUPERVISOR_REQUIRED: "",
-      HOME: home,
-      CHAT_PORT: String(port),
-      SECURE_COOKIES: '0',
+      ...buildChildEnvironment({id:`static-route-${process.pid}`, instanceDir:join(home,'.agentoc'),
+        configDir:join(home,'.agentoc','config'), memoryDir:join(home,'.agentoc','memory'),
+        workRootDir:join(home,'.agentoc','workspace'), spoolDir:join(home,'.agentoc','data','chat-runs'),
+        providerHomesDir:join(home,'.agentoc','provider-homes'), port}, process.env),
+      AGENTOC_AUTH_SESSION_SECRET: 'test-secret-static-routing',
+      AGENTOC_WINDOWS_SERVICE_MODE: '0',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  await waitFor(async () => {
-    try {
-      const res = await request(port, '/login', { Cookie: '' });
-      return res.status === 200;
-    } catch {
-      return false;
-    }
-  }, 'server startup');
-
+  try {
+    await waitFor(async () => {
+      if (child.exitCode !== null || child.signalCode !== null) throw new Error('Server exited during startup');
+      try {
+        const res = await request(port, '/login', { Cookie: '' });
+        return res.status === 200;
+      } catch {
+        return false;
+      }
+    }, 'server startup');
+  } catch (error) {
+    await stopServer({ child });
+    throw error;
+  }
   return { child };
 }
 
 async function stopServer(server) {
-  if (!server?.child || server.child.exitCode !== null) return;
-  server.child.kill('SIGTERM');
-  await waitFor(() => server.child.exitCode !== null, 'server shutdown');
+  if (!server?.child || server.child.exitCode !== null || server.child.signalCode !== null) return;
+  if (process.platform === 'win32') {
+    await new Promise(resolve => spawn('taskkill', ['/pid', String(server.child.pid), '/t', '/f'], { stdio:'ignore', windowsHide:true }).once('close', resolve));
+  } else server.child.kill('SIGTERM');
+  await waitFor(() => server.child.exitCode !== null || server.child.signalCode !== null, 'server shutdown');
 }
 
 async function main() {
@@ -116,11 +124,12 @@ async function main() {
   const probePath = join(repoRoot, 'static', 'chat', probeName);
   writeFileSync(probePath, 'window.__AGENTOC_STATIC_PROBE__ = true;\n', 'utf8');
 
-  const server = await startServer({ home, port });
+  let server;
   try {
+    server = await startServer({ home, port });
     const page = await request(port, '/');
     assert.equal(page.status, 200, 'chat page should render');
-    assert.match(page.text, /<script src="\/chat\/icons\.js(?:\?v=[^"]+)?"/);
+    assert.match(page.text, /<script src="\/?chat\/icons\.js(?:\?v=[^"]+)?"/);
 
     const probe = await request(port, `/chat/${probeName}`);
     assert.equal(probe.status, 200, 'new static asset should load without router filename changes');
@@ -165,6 +174,12 @@ async function main() {
   } finally {
     await stopServer(server);
     rmSync(probePath, { force: true });
+    const resolvedHome = realpathSync(home);
+    const relativeHome = relative(resolve(tmpdir()), resolvedHome);
+    if (!relativeHome || relativeHome.startsWith('..') || isAbsolute(relativeHome) || !basename(resolvedHome).startsWith('agentoc-static-route-')) {
+      throw new Error('Refusing to remove a test directory outside its temporary root');
+    }
+    rmSync(resolvedHome, { force: true, recursive: true });
   }
 }
 

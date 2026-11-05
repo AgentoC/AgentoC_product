@@ -24,12 +24,13 @@ internal fun questionOptionDetail(label: String, description: String?): String? 
 internal fun approvalPresentation(item: AttentionItem): ApprovalPresentation {
     fun String?.value() = this?.trim()?.takeIf(String::isNotEmpty)
     val approval = item.approval
+    val singleAction = approval?.actions?.singleOrNull()
     val headline = sequenceOf(
-        approval?.explanation?.summary,
-        approval?.actions?.firstOrNull()?.explanation?.summary,
-        approval?.actions?.firstOrNull()?.summary,
-        approval?.actions?.firstOrNull()?.description,
-        item.summary, approval?.title, approval?.reason, item.title,
+        approval?.explanation?.summary?.takeIf { approval.explanation?.operation != null },
+        singleAction?.explanation?.summary?.takeIf { singleAction.explanation?.operation != null },
+        singleAction?.summary,
+        singleAction?.description,
+        approval?.reason, approval?.explanation?.summary, item.summary, approval?.title, item.title,
     ).mapNotNull { it.value() }.firstOrNull().orEmpty()
     val consequence = sequenceOf(approval?.explanation?.reason, approval?.reason, item.reason, item.summary)
         .mapNotNull { it.value() }.firstOrNull { it != headline }
@@ -81,7 +82,7 @@ internal fun approvalDetails(item: AttentionItem, skipActionList: Boolean): List
         // Complete values remain available when the two-line overview truncates.
         addValue(R.string.attention_operation, approval.title)
         addValue(R.string.attention_batch, approval.batchId)
-        addValue(null, approval.reason)
+        addValue(R.string.approval_provider_description, approval.reason)
         addValue(R.string.attention_command, approval.command)
         addValue(R.string.attention_directory, approval.cwd)
         approval.filePaths.forEach { addValue(null, it) }

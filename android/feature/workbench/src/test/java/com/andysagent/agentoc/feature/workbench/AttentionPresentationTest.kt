@@ -30,7 +30,7 @@ class AttentionPresentationTest {
 
     @Test fun `server explanation is the overview and original command remains available`() {
         val described = approval.copy(actions = emptyList(), command = "rm example", explanation = ApprovalExplanation(
-            summary = "Removes an example", reason = "Deletion may be permanent", saferAlternative = "Review it first"))
+            summary = "Removes an example", reason = "Deletion may be permanent", saferAlternative = "Review it first", operation = "delete"))
         val describedItem = item.copy(approval = described)
         assertEquals(ApprovalPresentation("Removes an example", "Deletion may be permanent"), approvalPresentation(describedItem))
         assertTrue(approvalDetails(describedItem, false).any { it.value == "rm example" })

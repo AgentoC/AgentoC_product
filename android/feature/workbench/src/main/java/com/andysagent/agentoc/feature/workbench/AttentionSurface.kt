@@ -319,8 +319,16 @@ private fun AttentionCard(
     }
     val accent = if (hasHighRiskAction) colors.stateError else kindAccent(colors, item.kind)
     // The decision itself is the headline; source and status are supporting information.
-    val presentation = approvalPresentation(item)
+    val localized = localizedExplanation(item.approval?.explanation?.toExplanationUiState())
+    val originalPresentation = approvalPresentation(item)
+    val presentation = if (localized?.riskCode != null) originalPresentation.copy(
+        headline = if (localized.operation != null) localized.summary ?: originalPresentation.headline
+            else item.approval?.reason?.takeIf(String::isNotBlank) ?: localized.summary ?: originalPresentation.headline,
+        consequence = localized.reason ?: originalPresentation.consequence,
+    ) else originalPresentation
     val headline = if (isAskUser) questionPrompt(item) else presentation.headline
+    var headlineOverflows by remember(item.id, headline) { mutableStateOf(false) }
+    var consequenceOverflows by remember(item.id, presentation.consequence) { mutableStateOf(false) }
     val supportingSummary = item.summary.trim().takeIf { summary ->
         summary.isNotBlank() && summary != headline
     }
@@ -476,11 +484,21 @@ private fun AttentionCard(
                     }
                     Text(headline, Modifier.testTag("attention-headline"), color = colors.primaryContent,
                         style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        onTextLayout = { headlineOverflows = it.hasVisualOverflow })
+                    if (localized?.operation == null && item.approval?.reason?.isNotBlank() == true && item.approval?.reason == headline) {
+                        Text(stringResource(R.string.approval_provider_heading), color = colors.secondaryContent,
+                            style = MaterialTheme.typography.labelSmall)
+                    }
                     presentation.consequence?.let { consequence ->
-                        Spacer(Modifier.size(6.dp))
-                        Text(consequence, Modifier.testTag("attention-consequence"), color = colors.secondaryContent,
-                            style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        // Expanded content owns the full value if the brief version
+                        // was truncated, so do not show the same risk twice.
+                        if (!(expanded && consequenceOverflows && localized?.reason == consequence)) {
+                            Spacer(Modifier.size(6.dp))
+                            Text(consequence, Modifier.testTag("attention-consequence"), color = colors.secondaryContent,
+                                style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                onTextLayout = { consequenceOverflows = it.hasVisualOverflow })
+                        }
                     }
                     if (queuedCount > 0) {
                         Spacer(Modifier.size(4.dp))
@@ -611,7 +629,7 @@ private fun AttentionCard(
                         verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact),
                     ) {
                         item.approval?.explanation?.let { explanation ->
-                            ApprovalExplanationContent(explanation.summary, explanation.reason, explanation.saferAlternative)
+                            ApprovalExplanationContent(explanation.toExplanationUiState(), skipSummary = localized?.summary == headline && !headlineOverflows, skipReason = localized?.reason != null && localized.reason == presentation.consequence && !consequenceOverflows)
                         }
                         if (isPrivilegedCategoryBatch) {
                             listOf("privileged_other" to R.string.approval_category_privileged,
@@ -1225,7 +1243,7 @@ private fun ActionBatchDetails(
                 Column(Modifier.weight(1f)) {
                     Text(action.description.ifBlank { action.summary.orEmpty() }, color = colors.primaryContent, style = MaterialTheme.typography.bodyMedium)
                     action.explanation?.let { explanation ->
-                        ApprovalExplanationContent(explanation.summary, explanation.reason, explanation.saferAlternative)
+                        ApprovalExplanationContent(explanation.toExplanationUiState())
                     }
                     action.command?.takeIf(String::isNotBlank)?.let {
                         Text(it, color = colors.secondaryContent, style = MaterialTheme.typography.bodySmall.copy(

@@ -1230,7 +1230,7 @@ private fun ApprovalPillContent(
  * Expanded action card content living inside the island surface.
  */
 @Composable
-private fun ApprovalCardContent(
+internal fun ApprovalCardContent(
     approval: PermissionRequestUiState,
     onApprove: () -> Unit,
     onDeny: () -> Unit,
@@ -1266,11 +1266,18 @@ private fun ApprovalCardContent(
         }
 
         // Description / Scope
-        val description = approval.title.ifBlank {
-            approval.reason.ifBlank { "Action requires user confirmation" }
+        val localized = localizedExplanation(approval.explanation)
+        val providerDescription = approval.reason.takeIf { it.isNotBlank() && it != "The agent is waiting for your decision before continuing." }
+        val description = localized?.summary?.takeIf { localized.operation != null && it.isNotBlank() }
+            ?: providerDescription ?: localized?.summary?.takeIf(String::isNotBlank)
+            ?: approval.title.ifBlank { "Action requires user confirmation" }
+        if (providerDescription != null && description == providerDescription) {
+            Text(stringResource(R.string.approval_provider_heading), style = MaterialTheme.typography.labelSmall, color = colors.secondaryContent)
         }
+        var descriptionOverflows by remember(approval.id, description) { mutableStateOf(false) }
         Text(
             text = description,
+            onTextLayout = { descriptionOverflows = it.hasVisualOverflow },
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
@@ -1281,6 +1288,8 @@ private fun ApprovalCardContent(
         )
 
         val scopeDetails = buildList {
+            approval.reason.takeIf { it.isNotBlank() && it != description && it != "The agent is waiting for your decision before continuing." }
+                ?.let { add(stringResource(R.string.approval_provider_description, it)) }
             approval.command?.takeIf(String::isNotBlank)?.let { add(stringResource(R.string.attention_command, it)) }
             approval.cwd?.takeIf(String::isNotBlank)?.let { add(stringResource(R.string.attention_directory, it)) }
             addAll(approval.filePaths.filter(String::isNotBlank))
@@ -1294,7 +1303,7 @@ private fun ApprovalCardContent(
             Column(Modifier.fillMaxWidth().heightIn(max = 160.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 approval.explanation?.let { explanation ->
-                    ApprovalExplanationContent(explanation.summary, explanation.reason, explanation.saferAlternative)
+                    ApprovalExplanationContent(explanation, skipSummary = localized?.summary == description && !descriptionOverflows)
                 }
                 scopeDetails.forEach { detail ->
                     Text(detail, style = MaterialTheme.typography.bodySmall, color = colors.secondaryContent)

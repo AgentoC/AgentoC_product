@@ -188,6 +188,46 @@ class RoomSessionRepositoryEventTest {
         repository.close()
     }
 
+    @Test fun restoresExplanationForExistingPendingApprovalWithoutReopeningResolved() = runBlocking {
+        database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 10, 0)))
+        database.dao().upsertCursor(SyncCursorEntity("session-1", 10, null, updatedAt = 0))
+        database.dao().upsertApprovals(listOf(ApprovalEntity(id = "a", sessionId = "session-1", title = "Bash", status = "pending", runId = "r", kind = "approval_request", detailsJson = """{"command":"rm example"}""", updatedAt = 1)))
+        val activity = """{"actionRequired":true,"kind":"approval","sourceSeq":10}"""
+        val request = """{"seq":10,"type":"approval_request","approvalId":"a","runId":"r","command":"rm example","explanation":{"summary":"Delete example","operation":"delete","targets":["example"],"riskCode":"delete_unresolvable","elevated":true}}"""
+        val transport = QueuedTransport(listOf(
+            """{"sessionId":"session-1","events":[],"latestSeq":10,"runActivity":$activity}""",
+            """{"sessionId":"session-1","events":[$request],"latestSeq":10}""",
+            """{"sessionId":"session-1","events":[],"latestSeq":10,"runActivity":$activity}""",
+        ))
+        val repository = RoomSessionRepository(database, transport)
+        repository.refreshEvents("session-1")
+        val restored = repository.observePendingApprovals("session-1").first().single()
+        assertEquals("delete", restored.explanation?.operation)
+        assertEquals(listOf("example"), restored.explanation?.targets)
+        assertEquals(true, restored.explanation?.elevated)
+        assertEquals("rm example", restored.command)
+        assertEquals("pending", restored.status)
+        repository.close()
+    }
+
+    @Test fun explanationRecoveryNeverReopensResolvedApproval() = runBlocking {
+        database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 10, 0)))
+        database.dao().upsertCursor(SyncCursorEntity("session-1", 10, null, updatedAt = 0))
+        database.dao().upsertApprovals(listOf(ApprovalEntity(id = "a", sessionId = "session-1", title = "Bash", status = "denied", runId = "r", kind = "approval_request", detailsJson = """{"command":"rm example"}""", updatedAt = 1)))
+        val activity = """{"actionRequired":true,"kind":"approval","sourceSeq":10}"""
+        val request = """{"seq":10,"type":"approval_request","approvalId":"a","runId":"r","command":"rm example","explanation":{"summary":"Delete example"}}"""
+        val transport = QueuedTransport(listOf(
+            """{"sessionId":"session-1","events":[],"latestSeq":10,"runActivity":$activity}""",
+            """{"sessionId":"session-1","events":[$request],"latestSeq":10}""",
+            """{"sessionId":"session-1","events":[],"latestSeq":10,"runActivity":$activity}""",
+        ))
+        val repository = RoomSessionRepository(database, transport)
+        repository.refreshEvents("session-1")
+        assertTrue(repository.observePendingApprovals("session-1").first().isEmpty())
+        assertEquals("denied", database.dao().getApproval("session-1", "a")?.status)
+        repository.close()
+    }
+
     @Test fun restoresPendingApprovalWhenCursorAlreadyPassedItsEvent() = runBlocking {
         database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 10, 0)))
         database.dao().upsertCursor(SyncCursorEntity("session-1", 10, null, updatedAt = 0))
