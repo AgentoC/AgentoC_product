@@ -129,6 +129,8 @@ const adversarialPowerShell = [
   'winget install Git.Git --uninstall-previous',
   'winget install Git.Git -path malicious',
   'msiexec /i C:\\tmp\\agentoc.msi extra-argument',
+  'msiexec /i C:\\tmp\\agentoc.msi -Path C:\\tmp\\other.msi',
+  'msiexec /i C:\\tmp\\agentoc.msi --id Other.Package',
   'Restart-Service agentoc -Name other-service',
   'Remove-Item -Path C:\\project\\a C:\\project\\b',
 ];
@@ -138,6 +140,13 @@ for (const command of adversarialPowerShell) {
     isRefusal(operation) || operation.primaryAction === 'unknown.host_effect'
   )));
 }
+for (const command of [
+  'msiexec /i C:\\tmp\\agentoc.msi -Path C:\\tmp\\other.msi',
+  'msiexec /i C:\\tmp\\agentoc.msi --id Other.Package',
+]) {
+  eq(`foreign MSI parameter remains an unknown host effect: ${command}`, compile(command).operations[0].primaryAction, 'unknown.host_effect');
+}
+eq('normal MSI install remains recognized', compile('msiexec /i C:\\tmp\\agentoc.msi /qn /norestart').operations[0].primaryAction, 'package.install');
 
 const fsFacts = {
   name: 'windows-fs-fixture',

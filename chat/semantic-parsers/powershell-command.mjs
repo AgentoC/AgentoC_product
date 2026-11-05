@@ -320,7 +320,11 @@ function wingetCandidate(program, params) {
 }
 
 function msiCandidate(program, params, base) {
-  if (params.positionals?.length > 0) {
+  // The MSI adapter reconstructs a fixed /i, /qn, /norestart invocation.
+  // Never silently discard parameters accepted for other command families.
+  if (params.positionals?.length > 0
+    || [...params.values.keys()].some((key) => key !== '/i')
+    || [...params.switches].some((key) => !['/qn', '/quiet', '/norestart'].includes(key))) {
     return unknownCandidate(['msiexec', 'extra-positional-arguments'], ['target:ambiguous-argv']);
   }
   const artifact = getParam(params, '/i');
