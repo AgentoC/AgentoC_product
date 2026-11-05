@@ -1,5 +1,6 @@
 package com.andysagent.agentoc.feature.workbench
 
+import com.andysagent.agentoc.core.agentui.AgentRunStatus
 import com.andysagent.agentoc.core.domain.RuntimeSelection
 import com.andysagent.agentoc.core.timeline.FileChangeItem
 import com.andysagent.agentoc.core.timeline.PlanStepItem
@@ -15,6 +16,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TurnTimelineWorkspaceTest {
+
+    @Test fun `run detail completion settles only its matching latest turn`() {
+        val prompt = TimelineItem.Message("user", 1, TimelineRole.User, "request", true, runId = "run-1")
+        val answer = TimelineItem.Message("answer", 2, TimelineRole.Agent, "done", false, runId = "run-1")
+        val items = listOf(prompt, answer)
+        val metrics = RunMetricsUiState(runId = "run-1", status = AgentRunStatus.Completed)
+        assertTrue(latestTurnHasTerminalRun(items, null, AgentRunStatus.Idle, metrics))
+        assertFalse(latestTurnHasTerminalRun(items, null, AgentRunStatus.Working, metrics.copy(runId = "run-older")))
+        assertFalse(latestTurnHasTerminalRun(items, null, AgentRunStatus.Working, metrics.copy(status = AgentRunStatus.Working)))
+        val pending = PendingTurnUiState("next", "next request", emptyList(), RuntimeSelection("claude"), null)
+        assertFalse(latestTurnHasTerminalRun(items, pending, AgentRunStatus.Completed, metrics))
+        assertFalse(latestTurnHasTerminalRun(items, pending.copy(state = PendingTurnState.Accepted), AgentRunStatus.Completed, metrics))
+        assertTrue((com.andysagent.agentoc.core.timeline.settleLatestTurnMessages(items,
+            latestTurnHasTerminalRun(items, null, AgentRunStatus.Idle, metrics)).last() as TimelineItem.Message).completed)
+    }
 
     @Test fun `active run stays attached to its own turn when another request is queued`() {
         val turns = listOf(TurnGroup("one", requestId = "req-one", runId = "run-one"),

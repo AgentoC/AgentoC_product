@@ -788,7 +788,10 @@ class ChatViewModel(
                             is TimelineItem.Plan -> item.runId
                             is TimelineItem.Notice -> null
                         } }
-                        lastRunId?.let(durationAttempts::remove)
+                        lastRunId?.let { runId ->
+                            durationAttempts.remove(runId)
+                            loadRunProjection(selected.id, runId, sessionGeneration)
+                        }
                         fetchHistoricalDurations(requireNotNull(fixed), selected.id, sessionGeneration, items)
                     }
                 } else if (currentId != null || fixed !== selectedRepository) {
@@ -2019,7 +2022,12 @@ class ChatViewModel(
                         )
                     }
                     fetchHistoricalDurations(fixed, sessionId, generation, items)
-                    items.asSequence().mapNotNull { (it as? TimelineItem.Operation)?.runId }
+                    items.asSequence().mapNotNull { item -> when (item) {
+                        is TimelineItem.Message -> item.runId
+                        is TimelineItem.Operation -> item.runId
+                        is TimelineItem.Plan -> item.runId
+                        is TimelineItem.Notice -> null
+                    } }
                         .lastOrNull()
                         ?.let { runId ->
                             val now = System.currentTimeMillis()
@@ -2264,6 +2272,7 @@ class ChatViewModel(
         "waiting_approval", "awaiting_decision" -> AgentRunStatus.WaitingApproval
         "completed", "finished", "success", "succeeded" -> AgentRunStatus.Completed
         "failed", "error" -> AgentRunStatus.Failed
+        "cancelled", "canceled", "interrupted" -> AgentRunStatus.Cancelled
         else -> AgentRunStatus.Idle
     }
 

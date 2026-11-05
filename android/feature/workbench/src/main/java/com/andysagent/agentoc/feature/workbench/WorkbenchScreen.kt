@@ -1471,9 +1471,8 @@ private fun ChatSurface(
     onSetPlanMode: (Boolean) -> Unit = {},
 ) {
     val turnGroupProjector = remember(state.sessionId) { TurnGroupProjector() }
-    val turnGroups = remember(state.timelineItems, state.pendingTurn, state.acceptedTurns, state.runStatus) {
-        val terminal = state.runStatus in setOf(AgentRunStatus.Completed, AgentRunStatus.Failed, AgentRunStatus.Cancelled) &&
-            state.pendingTurn?.state != PendingTurnState.Sending && state.pendingTurn?.state != PendingTurnState.Accepted
+    val turnGroups = remember(state.timelineItems, state.pendingTurn, state.acceptedTurns, state.runStatus, state.runMetrics) {
+        val terminal = latestTurnHasTerminalRun(state.timelineItems, state.pendingTurn, state.runStatus, state.runMetrics)
         val items = com.andysagent.agentoc.core.timeline.settleLatestTurnMessages(state.timelineItems, terminal)
         turnGroupProjector.project(items, state.pendingTurn, state.acceptedTurns)
     }

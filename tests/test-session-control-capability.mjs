@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  canIssueSessionControl,
   createRunSessionControlCapability,
   createSessionControlAuthenticator,
   sessionControlOperation,
@@ -10,6 +11,13 @@ import { createAgentoCHttpClient } from '../lib/agentoc-http-client.mjs';
 import { runSessionSpawnCommand } from '../lib/session-spawn-command.mjs';
 
 const secret = 'session-control-test-secret';
+const leadership = { sessionClass: 'ROOT_LEADERSHIP', sessionPlane: 'user' };
+assert.equal(canIssueSessionControl({ principalKind: 'trusted_device', session: leadership }), true);
+assert.equal(canIssueSessionControl({ principalKind: 'owner', session: leadership }), true);
+assert.equal(canIssueSessionControl({ principalKind: 'guest', session: leadership }), false);
+assert.equal(canIssueSessionControl({ principalKind: 'trusted_device', session: leadership, temporaryControlAuthority: {} }), false);
+assert.equal(canIssueSessionControl({ principalKind: 'trusted_device', session: { ...leadership, delegatedFromSessionId: 'parent' } }), false);
+assert.equal(canIssueSessionControl({ principalKind: 'trusted_device', session: leadership, internalOperation: 'internal' }), false);
 const root = { id: 'root-session' };
 const child = { id: 'child-session', delegatedFromSessionId: root.id };
 const runs = new Map([

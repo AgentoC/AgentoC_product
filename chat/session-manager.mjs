@@ -221,6 +221,7 @@ import {
   validateAgentCreatePayloadRegistries,
 } from './approved-agent-create.mjs';
 import {
+  canIssueSessionControl,
   createRunSessionControlCapability,
   createRunSessionControlRenewalCapability,
 } from './session-control-capability.mjs';
@@ -13339,11 +13340,12 @@ async function submitHttpMessageInternal(sessionId, text, images, options = {}) 
     turnId: requestId,
     attachments: sourceAttachmentRefs,
   });
-  const sessionControlCapability = authenticatedPrincipalKind === 'owner'
-    && trimString(session.sessionClass) === 'ROOT_LEADERSHIP'
-    && trimString(session.sessionPlane || 'user') === 'user'
-    && !trimString(session.delegatedFromSessionId)
-    && !options.internalOperation
+  const sessionControlCapability = canIssueSessionControl({
+    principalKind: authenticatedPrincipalKind,
+    session,
+    temporaryControlAuthority: options.temporaryControlAuthority,
+    internalOperation: options.internalOperation,
+  })
     ? createRunSessionControlCapability({
       runId: nextRunId,
       sessionId,

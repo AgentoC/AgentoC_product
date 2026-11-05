@@ -1,6 +1,7 @@
 package com.andysagent.agentoc.feature.workbench
 
 import androidx.compose.runtime.Immutable
+import com.andysagent.agentoc.core.agentui.AgentRunStatus
 import com.andysagent.agentoc.core.timeline.FileChangeItem
 import com.andysagent.agentoc.core.timeline.PlanStepItem
 import com.andysagent.agentoc.core.timeline.TimelineItem
@@ -66,6 +67,15 @@ data class TurnGroup(
     /** Chronological entries; grouping must never reorder messages around tools. */
     val entries: List<TimelineItem> = emptyList(),
 )
+
+internal fun latestTurnHasTerminalRun(items: List<TimelineItem>, pending: PendingTurnUiState?,
+    sessionStatus: AgentRunStatus, metrics: RunMetricsUiState): Boolean {
+    if (pending?.state == PendingTurnState.Sending || pending?.state == PendingTurnState.Accepted) return false
+    val terminal = setOf(AgentRunStatus.Completed, AgentRunStatus.Failed, AgentRunStatus.Cancelled)
+    val lastUser = items.lastOrNull { it is TimelineItem.Message && it.role == TimelineRole.User } as? TimelineItem.Message
+    val matchingRun = !lastUser?.runId.isNullOrBlank() && lastUser?.runId == metrics.runId && metrics.status in terminal
+    return sessionStatus in terminal || matchingRun
+}
 
 /** Preserve explicit phases; recover older completed transcripts only when their last entry is a finished reply. */
 internal fun splitTurnEntries(

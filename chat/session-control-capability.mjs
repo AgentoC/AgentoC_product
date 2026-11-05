@@ -57,6 +57,17 @@ function text(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+// Paired owner devices submit turns as trusted_device, rather than owner.
+// Temporary control and delegated/internal sessions must not inherit this grant.
+export function canIssueSessionControl({ principalKind, session, temporaryControlAuthority, internalOperation } = {}) {
+  return ['owner', 'trusted_device'].includes(text(principalKind))
+    && !temporaryControlAuthority
+    && text(session?.sessionClass) === 'ROOT_LEADERSHIP'
+    && text(session?.sessionPlane || 'user') === 'user'
+    && !text(session?.delegatedFromSessionId)
+    && !internalOperation;
+}
+
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
