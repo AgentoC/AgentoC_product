@@ -121,8 +121,9 @@ export function buildClaudeBidiApprovalResponseMessage(approval, decision, choic
   const allow = normalized === 'approve' || normalized === 'approve_for_session';
   const request = approval?.params || approval?.request?.request || {};
   const askUserInput = allow
-    ? buildAskUserQuestionUpdatedInput(approval, request, choices, options?.customAnswer, options?.customAnswers)
+    ? buildAskUserQuestionUpdatedInput(approval, request, choices, options?.customAnswer, options?.customAnswers, options?.multiChoices)
     : null;
+  if (allow && Array.isArray(options?.multiChoices) && !askUserInput) return null;
   const baseInput = request.input && typeof request.input === 'object' ? request.input : {};
   const overrideInput = options?.updatedInput && typeof options.updatedInput === 'object'
     ? options.updatedInput
@@ -172,7 +173,7 @@ function isAskUserQuestionApproval(approval, request) {
   return toolName === 'AskUserQuestion';
 }
 
-function buildAskUserQuestionUpdatedInput(approval, request, choices, customAnswer = '', customAnswers = []) {
+function buildAskUserQuestionUpdatedInput(approval, request, choices, customAnswer = '', customAnswers = [], multiChoices = null) {
   if (!isAskUserQuestionApproval(approval, request)) return null;
   const questions = Array.isArray(request?.input?.questions) ? request.input.questions : [];
   if (questions.length === 0) return null;
@@ -186,6 +187,20 @@ function buildAskUserQuestionUpdatedInput(approval, request, choices, customAnsw
       ? rawChoice
       : Number.parseInt(String(rawChoice ?? ''), 10);
     const options = Array.isArray(question?.options) ? question.options : [];
+    if (Array.isArray(multiChoices)) {
+      const selected = multiChoices[index];
+      if (!Array.isArray(selected) || new Set(selected).size !== selected.length || selected.some((i) => !Number.isInteger(i) || i < 0 || i >= options.length)
+          || (!question?.multiSelect && selected.length > 1)) return;
+      const labels = selected.map((i) => typeof options[i]?.label === 'string' ? options[i].label.trim() : '').filter(Boolean);
+      const text = typeof customAnswers?.[index] === 'string' ? customAnswers[index].trim().slice(0, 8000) : '';
+      const questionText = typeof question?.question === 'string' ? question.question.trim() : '';
+      if (text && !question?.multiSelect && labels.length) return;
+      if (text) labels.push(text);
+      if (!questionText || labels.length === 0) return;
+      answers[questionText] = labels.join(', ');
+      answered += 1;
+      return;
+    }
     const option = Number.isInteger(optionIndex) && optionIndex >= 0 && optionIndex < options.length
       ? options[optionIndex]
       : null;
@@ -202,7 +217,7 @@ function buildAskUserQuestionUpdatedInput(approval, request, choices, customAnsw
     answers[questionText] = label;
     answered += 1;
   });
-  if (answered === 0) return null;
+  if (answered === 0 || (Array.isArray(multiChoices) && (multiChoices.length !== questions.length || answered !== questions.length))) return null;
   return { questions, answers };
 }
 

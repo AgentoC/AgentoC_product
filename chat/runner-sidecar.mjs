@@ -3035,6 +3035,7 @@ async function flushClaudeBidiApprovalResponses(proc, state, run) {
       updatedInput: entry?.updatedInput,
       customAnswer: entry?.customAnswer,
       customAnswers: entry?.customAnswers,
+      multiChoices: entry?.multiChoices,
     });
     if (!message || !writeClaudeBidiMessage(proc, message)) continue;
     state.sentApprovalResponseIds.add(responseId);

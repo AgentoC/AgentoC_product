@@ -195,6 +195,20 @@ const multipleApproval = readClaudeBidiApprovalRequest({
     ] },
   },
 });
+const multiSelectApproval = readClaudeBidiApprovalRequest({
+  type: 'control_request', request_id: 'ask-select', request: {
+    subtype: 'can_use_tool', tool_name: 'AskUserQuestion', input: { questions: [
+      { question: 'Features?', multiSelect: true, options: [{ label: 'A' }, { label: 'B' }] },
+      { question: 'Name?', multiSelect: false, options: [{ label: 'C' }] },
+    ] },
+  },
+});
+assert.deepEqual(buildClaudeBidiApprovalResponseMessage(multiSelectApproval, 'approve', [], {
+  multiChoices: [[0, 1], []], customAnswers: ['Extra', 'Custom name'],
+}).response.response.updatedInput.answers, { 'Features?': 'A, B, Extra', 'Name?': 'Custom name' });
+assert.equal(buildClaudeBidiApprovalResponseMessage(multiSelectApproval, 'approve', [], {
+  multiChoices: [[0, 9], []], customAnswers: ['', 'Custom name'],
+}), null);
 assert.deepEqual(
   buildClaudeBidiApprovalResponseMessage(multipleApproval, 'approve', [-1, 0, -1], {
     customAnswers: ['first custom', '', 'third custom'],

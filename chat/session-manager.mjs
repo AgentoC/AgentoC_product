@@ -14780,6 +14780,38 @@ export async function submitRuntimeApproval(runId, approvalId, options = {}) {
     }); }, { beforeWrite: assertApproval, beforeCommit: assertApproval });
   }
 
+  let multiChoices;
+  if (Object.hasOwn(options, 'multiChoices')) {
+    const questions = pending?.params?.input?.questions;
+    const choices = options.multiChoices;
+    const answers = options.customAnswers;
+    const valid = run.runtimeFamily === 'claude-stream-json-bidi'
+      && pending?.params?.tool_name === 'AskUserQuestion'
+      && Array.isArray(questions) && questions.length > 0 && questions.length <= 6
+      && Array.isArray(choices) && choices.length === questions.length
+      && Array.isArray(answers) && answers.length === questions.length
+      && new Set(questions.map((q) => q?.question?.trim())).size === questions.length
+      && questions.every((question, index) => {
+        const selected = choices[index];
+        const text = answers[index];
+        const available = question?.options;
+        return typeof question?.question === 'string' && question.question.trim()
+          && Array.isArray(available) && Array.isArray(selected) && typeof text === 'string'
+          && new Set(selected).size === selected.length
+          && selected.every((i) => Number.isInteger(i) && i >= 0 && i < available.length
+            && typeof available[i]?.label === 'string' && available[i].label.trim())
+          && (question.multiSelect === true || selected.length <= 1)
+          && (question.multiSelect === true || !selected.length || !text.trim())
+          && (selected.length > 0 || text.trim());
+      });
+    if (!valid) {
+      const error = new Error('Invalid per-question choices or answers');
+      error.code = 'INVALID_APPROVAL_CHOICES';
+      throw error;
+    }
+    multiChoices = choices.map((selected) => [...selected]);
+  }
+
   const responseEntry = {
     id: generateId(),
     approvalId: normalizedApprovalId,
@@ -14789,6 +14821,7 @@ export async function submitRuntimeApproval(runId, approvalId, options = {}) {
     choices: normalizeRuntimeApprovalChoices(options.choices),
     customAnswer: normalizeRuntimeApprovalCustomAnswer(options.customAnswer),
     customAnswers: Array.isArray(options.customAnswers) ? options.customAnswers.slice(0, 6).map(normalizeRuntimeApprovalCustomAnswer) : [],
+    ...(multiChoices ? { multiChoices } : {}),
     state: 'pending',
     createdAt: nowIso(),
     ...(temporaryApproval ? { decisionSource: temporaryApproval.source,

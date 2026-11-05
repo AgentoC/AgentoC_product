@@ -83,6 +83,32 @@ test('runtime approval carries independent custom answers and rejects an empty a
   await runs.updateRun(run.id, { state: 'cancelled' });
 });
 
+test('Claude multi-select choices are validated and queued without losing selections', async () => {
+  const v = await seed();
+  const run = await makeRun(v, 'running', { runtimeFamily: 'claude-stream-json-bidi' });
+  await active(v, run);
+  const questions = [
+    { question: 'Features?', multiSelect: true, options: [{ label: 'A' }, { label: 'B' }] },
+    { question: 'Name?', multiSelect: false, options: [{ label: 'C' }] },
+  ];
+  await runs.updateRun(run.id, { appServerPendingApprovals: [{ approvalId: 'claude:select', state: 'pending', kind: 'question', params: { tool_name: 'AskUserQuestion', input: { questions } } }] });
+  const path = `/api/runs/${run.id}/approvals/${encodeURIComponent('claude:select')}`;
+  const invalid = await route(v, '', { path, method: 'POST', body: {
+    decision: 'approve_with_multi_choices', multiChoices: [[0, 9], []], customAnswers: ['', 'Name'],
+  } });
+  assert.equal(invalid.status, 400);
+  assert.equal(invalid.body.code, 'INVALID_APPROVAL_CHOICES');
+  const response = await route(v, '', { path, method: 'POST', body: {
+    decision: 'approve_with_multi_choices', requestId: 'select-reply', multiChoices: [[0, 1], []], customAnswers: ['Extra', 'Name'],
+  } });
+  assert.equal(response.status, 202);
+  const stored = await runs.getRun(run.id);
+  const entry = stored.appServerApprovalResponseQueue.find(item => item.approvalId === 'claude:select');
+  assert.deepEqual(entry.multiChoices, [[0, 1], []]);
+  assert.deepEqual(entry.customAnswers, ['Extra', 'Name']);
+  await runs.updateRun(run.id, { state: 'cancelled' });
+});
+
 test('discovery describes six actual operations, honest cancellation and readonly support', async () => {
   const v = await seed();
   const response = await route(v, '', { path: '/api/run-api-contract' });

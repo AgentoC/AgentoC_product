@@ -2069,15 +2069,20 @@ export async function handleSessionMainRoutes({
           writeJson(res, 400, { error: 'Per-question answers are required' });
           return true;
         }
+        if (payload?.decision === 'approve_with_multi_choices' && (!Array.isArray(payload.multiChoices) || !Array.isArray(payload.customAnswers))) {
+          writeJson(res, 400, { error: 'Per-question choices and answers are required' });
+          return true;
+        }
         const outcome = await submitRuntimeApproval(runId, approvalId, {
           // Older servers reject this decision instead of silently discarding
           // per-question answers. Only supported runtimes map it to approval.
-          decision: payload?.decision === 'approve_with_answers' ? 'approve'
+          decision: ['approve_with_answers', 'approve_with_multi_choices'].includes(payload?.decision) ? 'approve'
             : (typeof payload?.decision === 'string' ? payload.decision : payload?.action),
           requestId: typeof payload?.requestId === 'string' ? payload.requestId : '',
           choices: Array.isArray(payload?.choices) ? payload.choices : [],
           customAnswer: typeof payload?.customAnswer === 'string' ? payload.customAnswer : '',
           customAnswers: Array.isArray(payload?.customAnswers) ? payload.customAnswers : [],
+          ...(payload?.decision === 'approve_with_multi_choices' ? { multiChoices: payload.multiChoices } : {}),
           approvalActor: temporaryControlApprovalActor(authSession, 'approval.resolve'),
         });
         writeJson(res, outcome.duplicate ? 200 : 202, {
