@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pi_all">Todas las instancias</string>
+    <string name="pi_loading">Comprobando…</string>
+    <string name="pi_connected">Accesible</string>
+    <string name="pi_unavailable">No se puede acceder a esta instancia. Su configuración no está confirmada.</string>
+    <string name="pi_retry">Reintentar</string>
+    <string name="pi_overview_hint">Consulta las configuraciones compartidas y los accesos propios de cada instancia. Selecciona una instancia para gestionarla.</string>
+    <string name="pi_no_instances">Esta cuenta aún no tiene instancias en ordenadores.</string>
+    <string name="pi_unconfirmed">Sin confirmar: %1$s</string>
+    <string name="pi_empty">No hay proveedores en las instancias accesibles. Selecciona una instancia para añadir uno.</string>
+    <string name="pi_local">Acceso propio de esta instancia</string>
+    <string name="pi_shared">Configuración sincronizable</string>
+    <string name="pi_matching">Configuración idéntica en %1$d instancias</string>
+    <string name="pi_compare_pending">Encontrado en %1$d instancias; coherencia sin confirmar</string>
+    <string name="pi_credentials_saved">Credenciales guardadas</string>
+    <string name="pi_manage">Gestionar</string>
+    <string name="pi_not_observed">Configuración no encontrada en: %1$s</string>
+    <string name="pi_choose_hint">Para añadir un proveedor o gestionar accesos y rotación, selecciona una instancia arriba. La conexión de trabajo actual no cambiará.</string>
+    <string name="pi_local_change">Esta acción solo afecta a %1$s.</string>
+    <string name="pi_shared_change">Se guardará en %1$s. Los cambios se propagan mediante la sincronización de la cuenta; otras instancias pueden actualizarse más tarde.</string>
+    <string name="pi_shared_delete">Se eliminará de %1$s. La eliminación se propagará a otras instancias mediante la sincronización de la cuenta.</string>
+    <string name="pi_saved">Guardado en %1$s. Actualiza la vista general para comprobar las otras instancias.</string>
+    <string name="pi_different">La configuración difiere entre %1$d instancias</string>
+    <string name="pi_harness_missing">Esta instancia no tiene la herramienta correspondiente. Puedes editar o eliminar su configuración.</string>
+    <string name="pi_legacy">Esta instancia no informa de los identificadores de sincronización. Sus configuraciones se muestran por separado.</string>
+    <string name="pi_offline_short">Inaccesible</string>
+</resources>

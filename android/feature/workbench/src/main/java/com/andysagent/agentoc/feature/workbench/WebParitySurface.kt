@@ -39,6 +39,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Checkbox
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -126,7 +127,11 @@ fun WebParitySurface(
     LaunchedEffect(page, targetId) { onEvent(WebParityEvent.OpenPage(page)) }
     val title = stringResource(page.titleRes())
     // Harness actions route to explicit computers, independently of the active session.
-    val writable = page == WebParityPage.Harnesses || connectionAvailable
+    val crossProviders = page == WebParityPage.ModelProviders && state.providerCrossInstance
+    val selectedProviderInstance = state.providerInstances.firstOrNull { it.instance.id == state.providerTargetId }
+    val providerLabel = if (crossProviders) selectedProviderInstance?.instance?.label else targetLabel
+    val writable = if (crossProviders) selectedProviderInstance?.available == true && !state.actionInProgress
+        else page == WebParityPage.Harnesses || connectionAvailable
     CompositionLocalProvider(LocalRemoteSettingsWritable provides writable) {
     AgentoSurface(modifier.fillMaxSize(), color = LocalAgentocColors.current.canvas) {
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -134,7 +139,7 @@ fun WebParitySurface(
                 onBack = { if (state.selectedFile != null) onEvent(WebParityEvent.CloseFile) else onBack() },
                 title = title, subtitle = when (page) {
                     WebParityPage.Harnesses -> stringResource(R.string.settings_scope_account_computers)
-                    WebParityPage.ModelProviders -> targetLabel?.let { stringResource(R.string.settings_provider_via, it) }
+                    WebParityPage.ModelProviders -> if (crossProviders) null else providerLabel?.let { stringResource(R.string.settings_provider_via, it) }
                     else -> targetLabel
                 },
                 backDescription = if (state.selectedFile != null) stringResource(R.string.settings_back_files) else backContentDescription,
@@ -143,7 +148,7 @@ fun WebParitySurface(
                 refreshDescription = stringResource(R.string.settings_refresh_page, title),
                 refreshing = state.refreshing,
             )
-            if (!writable) Column(Modifier.widthIn(max = AgentocSizes.ContentMaxWidth).fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+            if (!writable && !crossProviders) Column(Modifier.widthIn(max = AgentocSizes.ContentMaxWidth).fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
                 Text(stringResource(if (page == WebParityPage.ModelProviders) R.string.settings_provider_connection_needed else R.string.settings_config_offline),
                     color = LocalAgentocColors.current.secondaryContent, style = MaterialTheme.typography.bodyMedium)
                 onChooseComputer?.let { choose ->
@@ -162,7 +167,18 @@ fun WebParitySurface(
                         when (page) {
                             WebParityPage.Agents -> AgentsAppsPage(state, onEvent, projectId)
                             WebParityPage.Connectors -> ConnectorsPage(state, onEvent)
-                            WebParityPage.ModelProviders -> ProvidersPage(restrictDemoParityState(state, LocalRestrictedDemoEnvironment.current), onEvent, targetLabel,
+                            WebParityPage.ModelProviders -> if (crossProviders) {
+                                Column(Modifier.fillMaxSize()) {
+                                    ProviderInstanceSelector(state, onEvent)
+                                    if (state.providerTargetId == null) AccountProvidersOverview(state, onEvent)
+                                    else if (selectedProviderInstance?.available == true) key(state.providerTargetId) {
+                                        ProvidersPage(restrictDemoParityState(state, LocalRestrictedDemoEnvironment.current), onEvent, providerLabel, null)
+                                    } else Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Text(stringResource(if (selectedProviderInstance?.loading == true) R.string.pi_loading else R.string.pi_unavailable))
+                                        OnboardingTextAction(stringResource(R.string.pi_retry), { state.providerTargetId?.let { onEvent(WebParityEvent.RetryProviderInstance(it)) } })
+                                    }
+                                }
+                            } else ProvidersPage(restrictDemoParityState(state, LocalRestrictedDemoEnvironment.current), onEvent, targetLabel,
                                 onChooseComputer.takeIf { connectionAvailable })
                             WebParityPage.Harnesses -> HarnessesPage(restrictDemoParityState(state, LocalRestrictedDemoEnvironment.current), onEvent, targetId)
                             WebParityPage.Devices -> DevicesPage(
@@ -188,6 +204,7 @@ fun WebParitySurface(
                     }
                 },
             )
+            if (crossProviders && !LocalRestrictedDemoEnvironment.current) ProviderOAuthDialog(state, onEvent)
             state.error?.let { AgentoErrorText(localizedParityError(it), Modifier.fillMaxWidth().padding(AgentocSpacing.Gutter)) }
         }
     }
@@ -240,7 +257,7 @@ private fun localizedParityError(message: String): String {
 }
 
 @Composable
-private fun SettingsContentCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+internal fun SettingsContentCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val colors = LocalAgentocColors.current
     val cardColor = if (colors.canvas.red < 0.5f) colors.surfaceHighest else colors.surfaceLow
     Box(modifier.clip(RoundedCornerShape(16.dp)).background(cardColor)) { content() }
@@ -582,6 +599,13 @@ private fun ProviderQuotaSection(snapshot: JsonObject) {
 private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> Unit, targetLabel: String?, onChooseComputer: (() -> Unit)?) {
     val uriHandler = LocalUriHandler.current
     var dialog by remember { mutableStateOf(false) }
+    var submitted by remember { mutableStateOf(false) }
+    LaunchedEffect(state.actionInProgress, state.error, state.providerSavedTarget) {
+        if (submitted && !state.actionInProgress) {
+            if (state.error == null || state.providerSavedTarget != null) dialog = false
+            submitted = false
+        }
+    }
     var agentType by remember { mutableStateOf("codex") }
     val restrictedDemo = LocalRestrictedDemoEnvironment.current
     var authMode by remember { mutableStateOf("api-key") }
@@ -606,6 +630,7 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
     LazyColumn(contentPadding = navigationContentPadding(), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
         item(key = "provider-scope") {
             Column(verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid)) {
+                state.providerSavedTarget?.let { Text(stringResource(R.string.pi_saved, it), style = MaterialTheme.typography.bodySmall) }
                 Text(stringResource(R.string.settings_provider_scope_hint), style = MaterialTheme.typography.bodySmall,
                     color = LocalAgentocColors.current.secondaryContent)
                 onChooseComputer?.let { choose -> OnboardingTextAction(stringResource(R.string.settings_provider_choose), choose,
@@ -622,7 +647,7 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                 dialog = true
             }, leadingIcon = { AgentoWebIcon(AgentoWebGlyph.Plus, null) })
         }
-        if (!restrictedDemo) item {
+        if (!restrictedDemo && (state.providers.any { it.agentType == "agy" } || state.providerRotationEnabled || state.providerRotationIds.isNotEmpty())) item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(enabled = LocalRemoteSettingsWritable.current, checked = state.providerRotationEnabled, onCheckedChange = { onEvent(WebParityEvent.ToggleProviderRotation(it)) })
                 Text(stringResource(R.string.sp_rotate_provider), style = MaterialTheme.typography.bodyMedium)
@@ -632,7 +657,7 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
             item { AgentoEmptyState(stringResource(R.string.sp_none_provider), stringResource(R.string.sp_none_provider_detail)) }
         }
         items(state.providers, key = { it.id }) { provider ->
-            val harnessInstalled = state.providerHarnessesLoaded && state.harnesses.any { it.id == provider.agentType && (it.installed || it.globallyInstalled) }
+            val harnessInstalled = state.providerHarnessesLoaded && state.harnesses.any { it.id == provider.agentType && it.installed }
             SettingsContentCard(Modifier.fillMaxWidth().testTag("provider-card-${provider.id}")) {
               Column(Modifier.fillMaxWidth().padding(AgentocSpacing.Standard), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
                 Row(modifier = Modifier.testTag("provider-info-${provider.id}"), horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact), verticalAlignment = Alignment.Top) {
@@ -654,7 +679,7 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                     }
                     AgentoStatus(stringResource(status), if (provider.ready && harnessInstalled) AgentoStatusTone.Success else AgentoStatusTone.Error)
                 }
-                if (!harnessInstalled) Text(stringResource(if (state.providerHarnessesLoaded) R.string.sp_provider_harness_missing_detail else R.string.sp_provider_harness_status_unavailable), style = MaterialTheme.typography.bodySmall)
+                if (!harnessInstalled) Text(stringResource(if (state.providerHarnessesLoaded) R.string.pi_harness_missing else R.string.sp_provider_harness_status_unavailable), style = MaterialTheme.typography.bodySmall)
                 if (provider.quotaSnapshot != null) ProviderQuotaSection(provider.quotaSnapshot)
                 else if (provider.quota.isNotBlank()) Text(stringResource(R.string.sp_quota, provider.quota), style = MaterialTheme.typography.labelSmall)
                 FlowRow(
@@ -669,12 +694,12 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                             )
                         }
                         if (harnessInstalled) RemoteSettingsAction(stringResource(R.string.sp_refresh_quota), { onEvent(WebParityEvent.RefreshProviderQuota(provider.id)) }, secondary = true)
-                        if (harnessInstalled && !restrictedDemo && provider.authType == "oauth" && provider.agentType in setOf("codex", "agy")) {
+                        if (state.harnesses.any { it.id == provider.agentType && it.installed } && !restrictedDemo && provider.authType == "oauth" && provider.agentType in setOf("codex", "agy")) {
                             RemoteSettingsAction(stringResource(R.string.provider_oauth_reauthenticate), {
                                 onEvent(WebParityEvent.StartProviderOAuth(provider.agentType, provider.name, provider.id))
                             }, secondary = true)
                         }
-                        if (harnessInstalled && !restrictedDemo) RemoteSettingsAction(stringResource(R.string.sp_edit), {
+                        if (!restrictedDemo) RemoteSettingsAction(stringResource(R.string.sp_edit), {
                             editingProvider = provider
                             name = provider.name
                             agentType = provider.agentType
@@ -689,8 +714,8 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                             }
                             apiKey = ""
                             dialog = true
-                        }, secondary = true)
-                        if (!restrictedDemo) RemoteSettingsAction(stringResource(R.string.sp_delete), { deletingProvider = provider }, secondary = true)
+                        }, modifier = Modifier.testTag("provider-edit-${provider.id}"), secondary = true)
+                        if (!restrictedDemo) RemoteSettingsAction(stringResource(R.string.sp_delete), { deletingProvider = provider }, modifier = Modifier.testTag("provider-delete-${provider.id}"), secondary = true)
                 }
               }
             }
@@ -704,7 +729,12 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
             onDismiss = { deletingProvider = null },
             onConfirm = { deletingProvider = null; onEvent(WebParityEvent.DeleteProvider(provider.id)) },
             destructive = true,
-        ) { Text(stringResource(R.string.sp_delete_provider_body, provider.name)) }
+            confirmModifier = Modifier.testTag("provider-delete-confirm"),
+        ) { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(stringResource(R.string.sp_delete_provider_body, provider.name))
+            Text(stringResource(if (provider.machineLocal) R.string.pi_local_change else R.string.pi_shared_delete,
+                targetLabel.orEmpty()), style = MaterialTheme.typography.bodySmall)
+        } }
     }
     if (dialog) {
         RemoteSettingsDialog(
@@ -717,9 +747,11 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                     editingProvider = null
                 }
             },
+            confirmModifier = Modifier.testTag("provider-save"),
             onConfirm = {
-                dialog = false
                 val current = editingProvider
+                submitted = current != null || authMode != "oauth"
+                if (!submitted) dialog = false
                 if (current != null) {
                     onEvent(WebParityEvent.UpdateProvider(current.id, name, baseUrl, apiKey, model, protocol, current.enabled))
                 } else if (authMode == "oauth") {
@@ -728,10 +760,12 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                     onEvent(WebParityEvent.CreateProviderApiKey(agentType, name, baseUrl, apiKey, model, protocol))
                 }
             },
-            confirmEnabled = !state.actionInProgress && (editingProvider != null || availableHarnesses.any { it.id == agentType }),
+            confirmEnabled = !state.actionInProgress && (editingProvider != null || availableHarnesses.any { it.id == agentType }) &&
+                (editingProvider != null || authMode != "oauth" || state.harnesses.any { it.id == agentType && it.installed }),
             dismissEnabled = !state.actionInProgress,
         ) {
                 Column(verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
+                    state.error?.let { AgentoErrorText(localizedParityError(it)) }
                     if (editingProvider == null) {
                         Text(stringResource(if (state.providerHarnessesLoaded) R.string.sp_provider_installed_harness_hint else R.string.sp_provider_harness_status_unavailable), style = MaterialTheme.typography.bodySmall)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
@@ -746,16 +780,18 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                     } else {
                         Text(editingProvider?.agentType.orEmpty(), style = MaterialTheme.typography.bodyMedium)
                     }
+                    Text(stringResource(if (authMode == "api-key") R.string.pi_shared_change else R.string.pi_local_change,
+                        targetLabel.orEmpty()), style = MaterialTheme.typography.bodySmall)
                     if (agentType.isNotBlank()) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
+                        if (editingProvider == null) Row(horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
                             if (agentType != "agy") RemoteSettingsAction(stringResource(R.string.sp_api_key), { authMode = "api-key" }, modifier = Modifier.weight(1f), secondary = authMode != "api-key")
-                            if (agentType == "codex" || agentType == "agy") RemoteSettingsAction(stringResource(R.string.sp_official_oauth), { authMode = "oauth" }, modifier = Modifier.weight(1f), secondary = authMode != "oauth")
+                            if ((agentType == "codex" || agentType == "agy") && state.harnesses.any { it.id == agentType && it.installed }) RemoteSettingsAction(stringResource(R.string.sp_official_oauth), { authMode = "oauth" }, modifier = Modifier.weight(1f), secondary = authMode != "oauth")
                         }
-                        AgentoTextField(name, { name = it }, stringResource(R.string.sp_display_name), Modifier.fillMaxWidth())
+                        AgentoTextField(name, { name = it }, stringResource(R.string.sp_display_name), Modifier.fillMaxWidth(), enabled = !state.actionInProgress, inputModifier = Modifier.testTag("provider-name"))
                         if (authMode == "api-key") {
-                            AgentoTextField(baseUrl, { baseUrl = it }, stringResource(R.string.sp_base_url), Modifier.fillMaxWidth())
-                            AgentoTextField(apiKey, { apiKey = it }, stringResource(R.string.sp_api_key), Modifier.fillMaxWidth())
-                            AgentoTextField(model, { model = it }, stringResource(R.string.sp_default_model), Modifier.fillMaxWidth())
+                            AgentoTextField(baseUrl, { baseUrl = it }, stringResource(R.string.sp_base_url), Modifier.fillMaxWidth(), enabled = !state.actionInProgress)
+                            AgentoTextField(apiKey, { apiKey = it }, stringResource(R.string.sp_api_key), Modifier.fillMaxWidth(), enabled = !state.actionInProgress)
+                            AgentoTextField(model, { model = it }, stringResource(R.string.sp_default_model), Modifier.fillMaxWidth(), enabled = !state.actionInProgress)
                             val protocols = availableHarnesses.firstOrNull { it.id == agentType }?.protocols.orEmpty()
                             if (protocols.size > 1) {
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
@@ -772,7 +808,7 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                 }
         }
     }
-    if (!restrictedDemo && LocalRemoteSettingsWritable.current) ProviderOAuthDialog(state, onEvent)
+    if (!restrictedDemo && !state.providerCrossInstance) ProviderOAuthDialog(state, onEvent)
 }
 
 private fun WebParityPage.titleRes(): Int = when (this) {

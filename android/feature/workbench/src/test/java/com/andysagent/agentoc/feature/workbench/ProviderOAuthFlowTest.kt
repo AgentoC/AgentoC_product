@@ -22,6 +22,8 @@ class ProviderOAuthFlowTest {
     @Test fun `waits for code then opens once and confirms actual saved state`() = runTest(dispatcher) {
         val transport = OAuthTransport()
         val vm = WebParityViewModel(WebParityRepository(transport))
+        vm.onEvent(WebParityEvent.OpenPage(WebParityPage.ModelProviders)); runCurrent()
+        transport.requests.clear()
         vm.onEvent(WebParityEvent.StartProviderOAuth("codex", "Phone account")); runCurrent()
         assertNull(vm.state.value.externalUrl)
         assertEquals("", vm.state.value.providerOAuthJob!!.code)

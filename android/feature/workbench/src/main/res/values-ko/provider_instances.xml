@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pi_all">모든 인스턴스</string>
+    <string name="pi_loading">확인 중…</string>
+    <string name="pi_connected">접근 가능</string>
+    <string name="pi_unavailable">이 인스턴스에 접근할 수 없습니다. 설정 상태가 확인되지 않았습니다.</string>
+    <string name="pi_retry">다시 시도</string>
+    <string name="pi_overview_hint">공유 설정과 인스턴스별 로그인을 확인하세요. 관리할 인스턴스를 선택하세요.</string>
+    <string name="pi_no_instances">이 계정에 컴퓨터 인스턴스가 없습니다.</string>
+    <string name="pi_unconfirmed">미확인: %1$s</string>
+    <string name="pi_empty">접근 가능한 인스턴스에 제공자가 없습니다. 추가할 인스턴스를 선택하세요.</string>
+    <string name="pi_local">인스턴스별 로그인</string>
+    <string name="pi_shared">동기화 가능한 설정</string>
+    <string name="pi_matching">인스턴스 %1$d개의 설정이 일치함</string>
+    <string name="pi_compare_pending">인스턴스 %1$d개에서 발견, 일치 여부 미확인</string>
+    <string name="pi_credentials_saved">자격 증명 저장됨</string>
+    <string name="pi_manage">관리</string>
+    <string name="pi_not_observed">설정을 찾을 수 없음: %1$s</string>
+    <string name="pi_choose_hint">제공자 추가, 로그인 및 순환 설정을 관리하려면 위에서 인스턴스를 선택하세요. 현재 작업 연결은 전환되지 않습니다.</string>
+    <string name="pi_local_change">이 작업은 %1$s에만 적용됩니다.</string>
+    <string name="pi_shared_change">%1$s에 저장합니다. 변경 사항은 계정 동기화로 전파되며 다른 인스턴스에는 나중에 반영될 수 있습니다.</string>
+    <string name="pi_shared_delete">%1$s에서 삭제합니다. 삭제는 계정 동기화를 통해 다른 인스턴스에도 전파됩니다.</string>
+    <string name="pi_saved">%1$s에 저장했습니다. 전체 보기를 새로고침하여 다른 인스턴스를 확인하세요.</string>
+    <string name="pi_different">인스턴스 %1$d개의 설정이 다릅니다</string>
+    <string name="pi_harness_missing">이 인스턴스에 해당 실행 도구가 없습니다. 설정은 편집하거나 삭제할 수 있습니다.</string>
+    <string name="pi_legacy">이 인스턴스가 동기화 식별자를 제공하지 않아 설정을 별도로 표시합니다.</string>
+    <string name="pi_offline_short">접근 불가</string>
+</resources>

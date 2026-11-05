@@ -233,6 +233,7 @@ assert.deepEqual(profiles.map((profile) => profile.displayName), [
 ]);
 assert.deepEqual(profiles.map((profile) => profile.modelCount), [3, 0, 0, 0, 0, 0, 0, 0, 0]);
 assert.ok(profiles.every((profile) => profile.credentialOk));
+assert.ok(profiles.every((profile) => profile.syncId && typeof profile.enabled === 'boolean'), 'management projection exposes stable sync identity and enabled state');
 assert.ok(profiles.every((profile) => !('apiKey' in profile)), 'list projection must not expose API keys');
 
 const updated = await updateNativeProvider({

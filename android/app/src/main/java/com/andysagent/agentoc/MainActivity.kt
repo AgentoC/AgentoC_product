@@ -574,6 +574,12 @@ class MainActivity : ComponentActivity() {
                             accounts.onEvent(AccountsEvent.Refresh)
                         },
                         accountDeviceRenamer = { deviceId, alias -> app.runtime.renameAccountDevice(deviceId, alias) },
+                        providerInstancesProvider = { app.runtime.listProviderInstances() },
+                        providerRepositoryFactory = { id ->
+                            com.andysagent.agentoc.feature.workbench.WebParityRepository { request ->
+                                app.runtime.executeProviderOnInstance(id, request)
+                            }
+                        },
                         harnessTargetsProvider = { app.runtime.loadHarnessTargetSnapshots() },
                         harnessMutation = { id, operation, targetIds ->
                             app.runtime.mutateHarnessOnTargets(id, operation, targetIds)

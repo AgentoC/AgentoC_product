@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pi_all">All instances</string>
+    <string name="pi_loading">Checking…</string>
+    <string name="pi_connected">Reachable</string>
+    <string name="pi_unavailable">Unable to reach this instance. Its configuration is unconfirmed.</string>
+    <string name="pi_retry">Retry</string>
+    <string name="pi_overview_hint">Manage shared configurations and instance-specific logins. Choose an instance to make changes.</string>
+    <string name="pi_no_instances">No computer instances in this account yet.</string>
+    <string name="pi_unconfirmed">Not yet confirmed: %1$s</string>
+    <string name="pi_empty">No providers found on reachable instances. Choose an instance to add one.</string>
+    <string name="pi_local">Instance-specific login</string>
+    <string name="pi_shared">Shareable configuration</string>
+    <string name="pi_matching">Configuration matches across %1$d instances</string>
+    <string name="pi_compare_pending">Found on %1$d instances; consistency not confirmed</string>
+    <string name="pi_credentials_saved">Credentials saved</string>
+    <string name="pi_manage">Manage</string>
+    <string name="pi_not_observed">Not found on: %1$s</string>
+    <string name="pi_choose_hint">To add a provider or manage logins and rotation, select an instance above. Your current workspace stays connected.</string>
+    <string name="pi_local_change">This change applies only to %1$s.</string>
+    <string name="pi_shared_change">Save on %1$s. Changes propagate through account synchronization; other instances may update later.</string>
+    <string name="pi_shared_delete">Delete on %1$s. This deletion will propagate to other instances through account synchronization.</string>
+    <string name="pi_saved">Saved on %1$s. Refresh the overview to check other instances.</string>
+    <string name="pi_different">Configuration differs across %1$d instances</string>
+    <string name="pi_harness_missing">This instance has no matching Harness installed. You can still edit or delete its configuration.</string>
+    <string name="pi_legacy">This instance does not report synchronization identities. Its configurations are shown separately.</string>
+    <string name="pi_offline_short">Unreachable</string>
+</resources>

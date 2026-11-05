@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pi_all">すべてのインスタンス</string>
+    <string name="pi_loading">確認中…</string>
+    <string name="pi_connected">アクセス可能</string>
+    <string name="pi_unavailable">このインスタンスにアクセスできません。設定は未確認です。</string>
+    <string name="pi_retry">再試行</string>
+    <string name="pi_overview_hint">共有設定とインスタンス固有のログインを確認できます。管理するインスタンスを選択してください。</string>
+    <string name="pi_no_instances">このアカウントにコンピューターのインスタンスはありません。</string>
+    <string name="pi_unconfirmed">未確認：%1$s</string>
+    <string name="pi_empty">アクセス可能なインスタンスにプロバイダーがありません。追加先を選択してください。</string>
+    <string name="pi_local">インスタンス固有のログイン</string>
+    <string name="pi_shared">同期可能な設定</string>
+    <string name="pi_matching">%1$d 個のインスタンスで設定の一致を確認</string>
+    <string name="pi_compare_pending">%1$d 個のインスタンスで検出。一致は未確認</string>
+    <string name="pi_credentials_saved">認証情報を保存済み</string>
+    <string name="pi_manage">管理</string>
+    <string name="pi_not_observed">設定が見つからないインスタンス：%1$s</string>
+    <string name="pi_choose_hint">追加、ログイン、ローテーションの管理は上でインスタンスを選択してください。現在の作業接続は切り替わりません。</string>
+    <string name="pi_local_change">この操作は %1$s のみに適用されます。</string>
+    <string name="pi_shared_change">%1$s に保存します。変更はアカウント同期で伝播し、他のインスタンスには後で反映される場合があります。</string>
+    <string name="pi_shared_delete">%1$s から削除します。この削除はアカウント同期で他のインスタンスにも伝播します。</string>
+    <string name="pi_saved">%1$s に保存しました。全体表示を更新して他のインスタンスを確認できます。</string>
+    <string name="pi_different">%1$d 個のインスタンスで設定が異なります</string>
+    <string name="pi_harness_missing">このインスタンスには対応する実行ツールがありません。設定の編集や削除は可能です。</string>
+    <string name="pi_legacy">このインスタンスは同期識別子を提供していないため、設定を個別に表示します。</string>
+    <string name="pi_offline_short">アクセス不可</string>
+</resources>

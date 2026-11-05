@@ -34,6 +34,7 @@ internal fun ProviderOAuthDialog(state: WebParityUiState, onEvent: (WebParityEve
     var credential by remember(job.id) { mutableStateOf("") }
     LaunchedEffect(job.requiresInput) { if (!job.requiresInput) credential = "" }
     AgentoDialog(
+        opaqueFallback = true, textureAlpha = 0f,
         title = stringResource(R.string.provider_oauth_title),
         confirmLabel = stringResource(if (job.terminal) R.string.provider_oauth_close else R.string.provider_oauth_check),
         onConfirm = { onEvent(if (job.terminal) WebParityEvent.CancelProviderOAuth else WebParityEvent.CheckProviderOAuth) },
@@ -45,6 +46,9 @@ internal fun ProviderOAuthDialog(state: WebParityUiState, onEvent: (WebParityEve
         actionLayout = if (job.terminal) AgentoDialogActionLayout.PrimaryOnly else AgentoDialogActionLayout.PrimaryWithTextDismiss,
     ) {
         Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
+            state.providerOAuthTargetLabel?.let {
+                Text(stringResource(R.string.pi_local_change, it), style = MaterialTheme.typography.bodyMedium)
+            }
             Text(stringResource(R.string.provider_oauth_remote_vault), style = MaterialTheme.typography.bodySmall)
             Text(stringResource(when (job.state) {
                 "completed" -> R.string.provider_oauth_saved

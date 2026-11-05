@@ -1415,6 +1415,31 @@ class AndroidRuntimeGraph internal constructor(
         }
     }
 
+    suspend fun listProviderInstances(): List<com.andysagent.agentoc.feature.workbench.ProviderInstance> {
+        initialized.await()
+        controlWorkbench?.let { return listOf(com.andysagent.agentoc.feature.workbench.ProviderInstance(it.instanceId, it.instanceId)) }
+        if (configStore.accountSession.first() != null) {
+            return listAccountDirectoryDevices().filter {
+                it.deviceKind.equals("computer", ignoreCase = true) && it.unboundAt.isNullOrBlank()
+            }.map { com.andysagent.agentoc.feature.workbench.ProviderInstance(it.instanceId, it.alias.ifBlank { it.instanceId }) }
+        }
+        return configStore.directory.first().computers.map {
+            com.andysagent.agentoc.feature.workbench.ProviderInstance(it.instanceId, it.label.ifBlank { it.instanceId })
+        }
+    }
+
+    suspend fun executeProviderOnInstance(instanceId: String, request: ApiRequest): ApiResponse {
+        controlWorkbench?.let { control ->
+            require(instanceId == control.instanceId) { "Provider target differs from temporary computer" }
+            return control.transport.execute(request)
+        }
+        if (configStore.directory.first().computers.none { it.instanceId == instanceId }) {
+            // Account authorization establishes a background binding, never selecting it for chat.
+            renewAccountRendezvous(instanceId, accountDeviceAlias, selectTarget = false)
+        }
+        return executeOnTarget(instanceId, request)
+    }
+
     suspend fun loadHarnessTargetSnapshots(): List<WebHarnessTargetSnapshot> = coroutineScope {
         controlWorkbench?.let { control ->
             val harnesses = parseWebHarnesses(control.transport.execute(ApiRequest("GET", "/api/harnesses")).body)

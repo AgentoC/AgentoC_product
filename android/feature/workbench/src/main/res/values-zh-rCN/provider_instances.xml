@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pi_all">全部实例</string>
+    <string name="pi_loading">正在查询…</string>
+    <string name="pi_connected">可访问</string>
+    <string name="pi_unavailable">暂时无法访问此实例，配置状态尚未确认。</string>
+    <string name="pi_retry">重试</string>
+    <string name="pi_overview_hint">统一查看共享配置与实例专属登录，选择实例后进行管理。</string>
+    <string name="pi_no_instances">账号下还没有电脑实例。</string>
+    <string name="pi_unconfirmed">尚未确认：%1$s</string>
+    <string name="pi_empty">可访问的实例中尚未发现 Provider，选择实例即可添加。</string>
+    <string name="pi_local">实例专属登录</string>
+    <string name="pi_shared">可同步配置</string>
+    <string name="pi_matching">已确认 %1$d 个实例的配置一致</string>
+    <string name="pi_compare_pending">已在 %1$d 个实例发现，配置一致性尚未确认</string>
+    <string name="pi_credentials_saved">凭据已保存</string>
+    <string name="pi_manage">管理</string>
+    <string name="pi_not_observed">尚未发现此配置：%1$s</string>
+    <string name="pi_choose_hint">添加 Provider、管理登录或轮换设置，请在上方选择实例。当前工作连接不会切换。</string>
+    <string name="pi_local_change">此操作仅影响 %1$s。</string>
+    <string name="pi_shared_change">保存到 %1$s，变更将通过账号同步传播；其他实例可能稍后更新。</string>
+    <string name="pi_shared_delete">从 %1$s 删除，此删除操作会通过账号同步传播到其他实例。</string>
+    <string name="pi_saved">已保存到 %1$s，可刷新总览确认其他实例的状态。</string>
+    <string name="pi_different">%1$d 个实例的配置不一致</string>
+    <string name="pi_harness_missing">此实例尚未安装对应运行工具，仍可编辑或删除配置。</string>
+    <string name="pi_legacy">此实例尚未提供同步标识，配置暂时单独展示。</string>
+    <string name="pi_offline_short">无法访问</string>
+</resources>

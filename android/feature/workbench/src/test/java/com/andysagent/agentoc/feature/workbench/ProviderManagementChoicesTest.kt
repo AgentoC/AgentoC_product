@@ -41,13 +41,13 @@ class ProviderManagementChoicesTest {
         rule.onNodeWithText("Save").assertIsNotEnabled()
     }
 
-    @Test fun savedProviderWithoutHarnessCanBeDeletedButNotEdited() {
+    @Test fun savedProviderWithoutHarnessCanStillBeEditedAndDeleted() {
         val state = WebParityUiState(page = WebParityPage.ModelProviders, providerHarnessesLoaded = true,
             providers = listOf(WebProvider("legacy", "Saved provider", "Claude", true, agentType = "claude")))
         rule.setContent { AgentocTheme { WebParitySurface(WebParityPage.ModelProviders, state, {}, {}) } }
         rule.onNodeWithText("Not installed").assertIsDisplayed()
-        rule.onNodeWithText("Install this provider’s Harness on the current computer before using or editing it. You can still delete the saved configuration.").assertIsDisplayed()
-        rule.onNodeWithText("Edit").assertDoesNotExist()
+        rule.onNodeWithText("This instance has no matching Harness installed. You can still edit or delete its configuration.").assertIsDisplayed()
+        rule.onNodeWithText("Edit").assertIsDisplayed()
         rule.onNodeWithText("Delete").assertIsDisplayed()
     }
 }

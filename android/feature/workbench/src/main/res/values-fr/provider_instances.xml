@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pi_all">Toutes les instances</string>
+    <string name="pi_loading">Vérification…</string>
+    <string name="pi_connected">Accessible</string>
+    <string name="pi_unavailable">Cette instance est inaccessible. Sa configuration reste à confirmer.</string>
+    <string name="pi_retry">Réessayer</string>
+    <string name="pi_overview_hint">Consultez les configurations partagées et les connexions propres à chaque instance. Sélectionnez une instance pour la gérer.</string>
+    <string name="pi_no_instances">Ce compte ne contient aucune instance sur ordinateur.</string>
+    <string name="pi_unconfirmed">Non confirmé : %1$s</string>
+    <string name="pi_empty">Aucun fournisseur sur les instances accessibles. Sélectionnez une instance pour en ajouter un.</string>
+    <string name="pi_local">Connexion propre à cette instance</string>
+    <string name="pi_shared">Configuration synchronisable</string>
+    <string name="pi_matching">Configuration identique sur %1$d instances</string>
+    <string name="pi_compare_pending">Présent sur %1$d instances ; cohérence non confirmée</string>
+    <string name="pi_credentials_saved">Identifiants enregistrés</string>
+    <string name="pi_manage">Gérer</string>
+    <string name="pi_not_observed">Configuration introuvable sur : %1$s</string>
+    <string name="pi_choose_hint">Pour ajouter un fournisseur ou gérer les connexions et la rotation, sélectionnez une instance ci-dessus. Votre connexion de travail reste inchangée.</string>
+    <string name="pi_local_change">Cette action concerne uniquement %1$s.</string>
+    <string name="pi_shared_change">Enregistrement sur %1$s. Les modifications se propagent par synchronisation du compte ; les autres instances peuvent être mises à jour plus tard.</string>
+    <string name="pi_shared_delete">Suppression sur %1$s. Elle se propagera aux autres instances par synchronisation du compte.</string>
+    <string name="pi_saved">Enregistré sur %1$s. Actualisez la vue globale pour vérifier les autres instances.</string>
+    <string name="pi_different">Configuration différente sur %1$d instances</string>
+    <string name="pi_harness_missing">Cet outil est absent de cette instance. Vous pouvez modifier ou supprimer sa configuration.</string>
+    <string name="pi_legacy">Cette instance ne fournit pas les identifiants de synchronisation. Ses configurations sont affichées séparément.</string>
+    <string name="pi_offline_short">Inaccessible</string>
+</resources>

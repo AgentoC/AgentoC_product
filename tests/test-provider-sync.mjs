@@ -18,7 +18,7 @@ import {
 import { createNativeProviderRegistry } from '../lib/provider-runtime/registry.mjs';
 import { createSecretStore } from '../lib/provider-runtime/secret-store.mjs';
 import { createProviderSyncLedger } from '../lib/provider-runtime/sync-ledger.mjs';
-import { applyProviderSyncRecords } from '../chat/native-provider-management.mjs';
+import { applyProviderSyncRecords, listNativeProviderProfiles } from '../chat/native-provider-management.mjs';
 import { buildProviderSyncEndpointUrl } from '../lib/provider-runtime/peer-sync.mjs';
 
 const root = await mkdtemp(join(tmpdir(), 'agentoc-provider-sync-'));
@@ -236,6 +236,9 @@ const applied = await applyProviderSyncRecords({
   incoming: snapshot.records,
 });
 assert.deepEqual(applied.accepted, ['provider-openai'], 'new remote provider should be applied');
+const managementRows = await listNativeProviderProfiles({ registry: targetRegistry, secretStore: targetSecretStore });
+assert.equal(managementRows[0].syncId, 'provider-openai', 'cross-instance UI must receive the original synchronization identity after applying a peer record');
+assert.ok(managementRows[0].credentialFingerprint, 'cross-instance comparison needs an opaque credential fingerprint, never the credential');
 assert.equal((await targetSecretStore.resolveSecret('secret-openai')).apiKey, 'sk-secret-test-value');
 const ledgerText = await readFile(join(targetDir, 'native-provider-runtime', 'provider-sync-ledger.json'), 'utf8');
 assert.equal(ledgerText.includes('sk-secret-test-value'), false, 'the local sync ledger must not duplicate credentials');

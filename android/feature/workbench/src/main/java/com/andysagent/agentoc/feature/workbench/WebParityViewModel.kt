@@ -17,6 +17,9 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -95,6 +98,10 @@ data class WebProvider(
     val quotaSnapshot: JsonObject? = null,
     val modelCount: Int = 0,
     val hasRefreshToken: Boolean = false,
+    val syncId: String = "",
+    val credentialFingerprint: String = "",
+    val modelPolicyIdentity: String = "",
+    val quotaPolicyIdentity: String = "",
 )
 
 data class WebHarness(
@@ -217,6 +224,10 @@ data class WebParityUiState(
     val providers: List<WebProvider> = emptyList(),
     val harnesses: List<WebHarness> = emptyList(),
     val providerHarnessesLoaded: Boolean = false,
+    val providerCrossInstance: Boolean = false,
+    val providerInstances: List<ProviderInstanceSnapshot> = emptyList(),
+    val providerTargetId: String? = null,
+    val providerSavedTarget: String? = null,
     val harnessTargets: List<WebHarnessTarget> = emptyList(),
     val devices: List<WebDevice> = emptyList(),
     val files: List<WebFile> = emptyList(),
@@ -237,12 +248,15 @@ data class WebParityUiState(
     val triggerThinking: Boolean = false,
     val externalUrl: String? = null,
     val providerOAuthJob: ProviderOAuthJob? = null,
+    val providerOAuthTargetLabel: String? = null,
     val providerOAuthPolling: Boolean = false,
     val providerRotationEnabled: Boolean = false,
     val providerRotationIds: List<String> = emptyList(),
 )
 
 sealed interface WebParityEvent {
+    data class SelectProviderInstance(val id: String?) : WebParityEvent
+    data class RetryProviderInstance(val id: String) : WebParityEvent
     data class OpenPage(val page: WebParityPage) : WebParityEvent
     data object Refresh : WebParityEvent
     data class RefreshAfterReconnect(val targetId: String) : WebParityEvent
@@ -342,7 +356,8 @@ sealed interface WebParityEvent {
  * session timeline data. It deliberately uses the existing transport and
  * keeps response parsing tolerant of newer server fields.
  */
-class WebParityRepository(private val transport: AgentoCTransport) {
+class WebParityRepository(private val execute: suspend (ApiRequest) -> ApiResponse) {
+    constructor(transport: AgentoCTransport) : this({ request -> transport.execute(request) })
     suspend fun load(page: WebParityPage): WebParitySnapshot = when (page) {
         WebParityPage.Agents -> WebParitySnapshot(agents = loadAgents(), availableTools = loadTools())
         WebParityPage.Connectors -> loadConnectors()
@@ -489,7 +504,7 @@ class WebParityRepository(private val transport: AgentoCTransport) {
 
     suspend fun loadFile(path: String, sessionId: String? = null): WebFilePayload {
         val scope = sessionId?.takeIf(String::isNotBlank)?.let { "sessionId=${path(it)}" } ?: "workspace=~"
-        val response = transport.execute(ApiRequest("GET", "/api/workspace-files/content?$scope&path=${path(path)}"))
+        val response = execute(ApiRequest("GET", "/api/workspace-files/content?$scope&path=${path(path)}"))
         if (!response.isSuccessful) error("File could not be opened")
         val bytes = response.bodyBytes ?: response.body.toByteArray(Charsets.UTF_8)
         val mimeType = response.headers.entries.firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }
@@ -696,7 +711,7 @@ class WebParityRepository(private val transport: AgentoCTransport) {
     private suspend fun loadProviders(): List<WebProvider> = request("GET", "/api/native-providers")["providers"]?.jsonArray.orEmpty().mapNotNull { value ->
         val item = value.jsonObject
         val id = item.string("id") ?: return@mapNotNull null
-        val quota = runCatching { request("GET", "/api/native-providers/${path(id)}/quota")["quota"] }.getOrNull()
+        val quota = item["quota"] ?: try { request("GET", "/api/native-providers/${path(id)}/quota")["quota"] } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
         WebProvider(
             id = id,
             name = item.string("displayName") ?: id,
@@ -712,6 +727,10 @@ class WebParityRepository(private val transport: AgentoCTransport) {
             quotaSnapshot = quota as? JsonObject,
             modelCount = item.int("modelCount") ?: 0,
             hasRefreshToken = item.boolean("hasRefreshToken"),
+            syncId = item.string("syncId").orEmpty(),
+            credentialFingerprint = item.string("credentialFingerprint").orEmpty(),
+            modelPolicyIdentity = item["modelPolicy"]?.toString().orEmpty(),
+            quotaPolicyIdentity = item["quotaPolicy"]?.toString().orEmpty(),
         )
     }
 
@@ -759,7 +778,7 @@ class WebParityRepository(private val transport: AgentoCTransport) {
     private suspend fun loadUsage(): JsonObject = request("GET", "/api/usage/summary?days=7&top=10")
 
     private suspend fun request(method: String, path: String, body: JsonObject? = null): JsonObject {
-        val response = transport.execute(ApiRequest(method, path, body?.toString()))
+        val response = execute(ApiRequest(method, path, body?.toString()))
         val root = runCatching { AgentocProtocol.json.parseToJsonElement(response.body).jsonObject }
             .getOrElse { error("Invalid response from $path") }
         if (!response.isSuccessful) error(root.string("error") ?: "Request failed (HTTP ${response.statusCode})")
@@ -767,7 +786,7 @@ class WebParityRepository(private val transport: AgentoCTransport) {
     }
 
     private suspend fun browseRequest(path: String): JsonObject {
-        val response = transport.execute(ApiRequest("GET", path))
+        val response = execute(ApiRequest("GET", path))
         val root = runCatching { AgentocProtocol.json.parseToJsonElement(response.body).jsonObject }
             .getOrElse { error("Invalid response from $path") }
         if (!response.isSuccessful) error(root.string("error") ?: "Folder browser request failed")
@@ -825,9 +844,12 @@ class WebParityViewModel(
     private val harnessMutation: (suspend (String, WebHarnessOperation, List<String>) -> List<WebHarnessMutationResult>)? = null,
     private val currentTargetIdProvider: (suspend () -> String?)? = null,
     private val onRuntimeCatalogChanged: (() -> Unit)? = null,
+    private val providerInstancesProvider: (suspend () -> List<ProviderInstance>)? = null,
+    private val providerRepositoryFactory: ((String) -> WebParityRepository)? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(WebParityUiState())
     val state: StateFlow<WebParityUiState> = mutableState.asStateFlow()
+    private var providerOAuthRepository: WebParityRepository? = null
     private var providerOAuthMonitor: Job? = null
     private var providerOAuthOpenedJobId: String? = null
     private var pageRefreshJob: Job? = null
@@ -846,7 +868,28 @@ class WebParityViewModel(
         repository.loadProjectFolderDirectory(path)
 
     fun onEvent(event: WebParityEvent) {
+        val providerRepository = if (providerRepositoryFactory == null) repository
+            else mutableState.value.providerTargetId?.let(providerRepositoryFactory)
+        val providerAction = event is WebParityEvent.CreateProviderApiKey || event is WebParityEvent.StartProviderOAuth ||
+            event is WebParityEvent.UpdateProvider || event is WebParityEvent.DeleteProvider ||
+            event is WebParityEvent.RefreshProviderQuota || event is WebParityEvent.ToggleProviderRotation ||
+            event is WebParityEvent.ToggleProviderRotationProvider
+        if (providerAction && (providerRepository == null || mutableState.value.actionInProgress ||
+                (providerRepositoryFactory != null && mutableState.value.providerInstances.none {
+                    it.instance.id == mutableState.value.providerTargetId && it.available
+                }))) return
         when (event) {
+            is WebParityEvent.RetryProviderInstance -> {
+                if (!mutableState.value.actionInProgress && mutableState.value.providerInstances.any { it.instance.id == event.id })
+                    refreshProviderInstances(event.id)
+            }
+            is WebParityEvent.SelectProviderInstance -> {
+                if (mutableState.value.actionInProgress || mutableState.value.providerOAuthJob?.terminal == false) return
+                if (event.id != null && mutableState.value.providerInstances.none { it.instance.id == event.id }) return
+                mutableState.update { it.copy(providerTargetId = event.id, providerSavedTarget = null,
+                    providerOAuthJob = null, externalUrl = null, error = null).withProviderSelection() }
+                refresh(WebParityPage.ModelProviders)
+            }
             is WebParityEvent.OpenPage -> {
                 if (mutableState.value.page != event.page) invalidateFileReads()
                 refresh(event.page)
@@ -856,15 +899,21 @@ class WebParityViewModel(
                 refresh(it, preserveTargetId = event.targetId)
             }
             is WebParityEvent.TargetChanged -> {
+                if (mutableState.value.page == WebParityPage.ModelProviders && providerRepositoryFactory != null) return
                 if (pageTargetId != null && pageTargetId != event.targetId) {
                     ++pageRefreshGeneration
                     pageRefreshJob?.cancel()
-                    providerOAuthMonitor?.cancel()
+                    if (providerRepositoryFactory == null) providerOAuthMonitor?.cancel()
                     invalidateFileReads()
                     loadedPageTargetId = null
                     hasLoadedPage = false
                     pageTargetId = null
-                    mutableState.value = WebParityUiState(page = mutableState.value.page)
+                    val old = mutableState.value
+                    mutableState.value = if (providerRepositoryFactory == null) WebParityUiState(page = old.page)
+                        else WebParityUiState(page = old.page, providerCrossInstance = true,
+                            providerInstances = old.providerInstances, providerTargetId = old.providerTargetId,
+                            providerOAuthJob = old.providerOAuthJob, providerOAuthPolling = old.providerOAuthPolling,
+                            providerOAuthTargetLabel = old.providerOAuthTargetLabel, actionInProgress = old.actionInProgress)
                 }
             }
             is WebParityEvent.CreateAgent -> mutate { repository.createAgent(event.name, event.systemPrompt, event.tool, event.welcomeMessage, event.skills, event.perMessageSystemPrompt, event.templateContext, event.collaborationPolicy) }
@@ -968,15 +1017,17 @@ class WebParityViewModel(
             }
             is WebParityEvent.RetryTrigger -> mutate { repository.updateTrigger(event.id, enabled = true) }
             is WebParityEvent.DeleteTrigger -> mutate { repository.deleteTrigger(event.id) }
-            is WebParityEvent.CreateProviderApiKey -> mutate {
-                repository.createProviderApiKey(event.agentType, event.displayName, event.baseUrl, event.apiKey, event.defaultModel, event.protocol)
+            is WebParityEvent.CreateProviderApiKey -> mutateProvider {
+                providerRepository!!.createProviderApiKey(event.agentType, event.displayName, event.baseUrl, event.apiKey, event.defaultModel, event.protocol)
             }
             is WebParityEvent.StartProviderOAuth -> {
                 if (mutableState.value.actionInProgress || mutableState.value.providerOAuthJob?.terminal == false) return
+                mutableState.update { it.copy(actionInProgress = true, error = null, externalUrl = null,
+                    providerOAuthTargetLabel = it.providerInstances.firstOrNull { target -> target.instance.id == it.providerTargetId }?.instance?.label) }
                 viewModelScope.launch {
-                    mutableState.update { it.copy(actionInProgress = true, error = null, externalUrl = null) }
                     try {
-                        val job = repository.startProviderOAuth(event.agentType, event.displayName, event.providerId)
+                        providerOAuthRepository = providerRepository
+                        val job = providerRepository!!.startProviderOAuth(event.agentType, event.displayName, event.providerId)
                         mutableState.update { it.copy(actionInProgress = false, providerOAuthJob = job, statusMessage = "Waiting for official login") }
                         monitorProviderOAuth(job.id)
                     } catch (cancelled: CancellationException) { throw cancelled }
@@ -993,7 +1044,7 @@ class WebParityViewModel(
                 if (!job.requiresInput || job.terminal || mutableState.value.actionInProgress) return@launch
                 mutableState.update { it.copy(actionInProgress = true, error = null) }
                 try {
-                    repository.submitProviderOAuthCredential(job.id, event.credential)
+                    (providerOAuthRepository ?: repository).submitProviderOAuthCredential(job.id, event.credential)
                     mutableState.update { it.copy(actionInProgress = false, providerOAuthJob = job.copy(requiresInput = false), statusMessage = "Credential submitted; checking saved provider") }
                     monitorProviderOAuth(job.id)
                 } catch (cancelled: CancellationException) { throw cancelled }
@@ -1008,34 +1059,27 @@ class WebParityViewModel(
                 providerOAuthMonitor?.cancel()
                 mutableState.update { it.copy(providerOAuthPolling = false) }
                 try {
-                    repository.cancelProviderOAuth(job.id)
+                    (providerOAuthRepository ?: repository).cancelProviderOAuth(job.id)
                     // DELETE may race a completed save: read back rather than falsely claiming cancellation.
                     monitorProviderOAuth(job.id)
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (error: Exception) { mutableState.update { it.copy(error = "Cancellation is unconfirmed. Check login status before starting another login.") } }
             }
-            is WebParityEvent.ToggleProviderRotation -> viewModelScope.launch {
-                mutableState.update { it.copy(actionInProgress = true, error = null) }
-                runCatching { repository.updateProviderRotation(event.enabled, mutableState.value.providerRotationIds) }
-                    .onSuccess { mutableState.update { it.copy(actionInProgress = false, providerRotationEnabled = event.enabled, statusMessage = "Provider rotation updated") } }
-                    .onFailure { error -> mutableState.update { it.copy(actionInProgress = false, error = error.message ?: "Provider rotation update failed") } }
+            is WebParityEvent.ToggleProviderRotation -> mutateProvider {
+                providerRepository!!.updateProviderRotation(event.enabled, mutableState.value.providerRotationIds)
             }
             is WebParityEvent.ToggleProviderRotationProvider -> {
                 val ids = mutableState.value.providerRotationIds.toMutableSet().apply {
                     if (event.selected) add(event.id) else remove(event.id)
                 }.toList()
-                viewModelScope.launch {
-                    mutableState.update { it.copy(actionInProgress = true, error = null) }
-                    runCatching { repository.updateProviderRotation(mutableState.value.providerRotationEnabled, ids) }
-                        .onSuccess { mutableState.update { it.copy(actionInProgress = false, providerRotationIds = ids, statusMessage = "Provider rotation providers updated") } }
-                        .onFailure { error -> mutableState.update { it.copy(actionInProgress = false, error = error.message ?: "Provider selection update failed") } }
-                }
+                val enabled = mutableState.value.providerRotationEnabled
+                mutateProvider { providerRepository!!.updateProviderRotation(enabled, ids) }
             }
-            is WebParityEvent.DeleteProvider -> mutate { repository.deleteProvider(event.id) }
-            is WebParityEvent.UpdateProvider -> mutate {
-                repository.updateProvider(event.id, event.displayName, event.baseUrl, event.apiKey, event.defaultModel, event.protocol, event.enabled)
+            is WebParityEvent.DeleteProvider -> mutateProvider { providerRepository!!.deleteProvider(event.id) }
+            is WebParityEvent.UpdateProvider -> mutateProvider {
+                providerRepository!!.updateProvider(event.id, event.displayName, event.baseUrl, event.apiKey, event.defaultModel, event.protocol, event.enabled)
             }
-            is WebParityEvent.RefreshProviderQuota -> mutate { repository.refreshProviderQuota(event.id) }
+            is WebParityEvent.RefreshProviderQuota -> mutateProvider { providerRepository!!.refreshProviderQuota(event.id) }
             is WebParityEvent.InstallHarness -> mutateHarness(event.id, WebHarnessOperation.Install, event.targetInstanceIds)
             is WebParityEvent.UpgradeHarness -> mutateHarness(event.id, WebHarnessOperation.Upgrade, event.targetInstanceIds)
             is WebParityEvent.UninstallHarness -> mutateHarness(event.id, WebHarnessOperation.Uninstall, event.targetInstanceIds)
@@ -1098,7 +1142,7 @@ class WebParityViewModel(
             mutableState.update { it.copy(providerOAuthPolling = true, error = null) }
             try {
                 repeat(600) {
-                    val job = repository.loadProviderOAuthJob(id)
+                    val job = (providerOAuthRepository ?: repository).loadProviderOAuthJob(id)
                     if (mutableState.value.providerOAuthJob?.id != id) return@launch
                     val open = job.canOpenBrowser && !opened
                     if (open) { opened = true; providerOAuthOpenedJobId = id }
@@ -1114,7 +1158,7 @@ class WebParityViewModel(
                     if (job.terminal) {
                         mutableState.update { it.copy(externalUrl = null) }
                         if (job.state == "completed") {
-                            refresh(WebParityPage.ModelProviders)
+                            if (mutableState.value.page == WebParityPage.ModelProviders) refresh(WebParityPage.ModelProviders)
                             onRuntimeCatalogChanged?.invoke()
                         }
                         return@launch
@@ -1129,6 +1173,10 @@ class WebParityViewModel(
     }
 
     private fun refresh(page: WebParityPage, preserveTargetId: String? = null) {
+        if (page == WebParityPage.ModelProviders && providerInstancesProvider != null && providerRepositoryFactory != null) {
+            refreshProviderInstances()
+            return
+        }
         val generation = ++pageRefreshGeneration
         pageRefreshJob?.cancel()
         pageRefreshJob = viewModelScope.launch {
@@ -1231,6 +1279,72 @@ class WebParityViewModel(
         lastSeenAt = device.lastSeenAt.orEmpty(),
     )
 
+    private fun WebParityUiState.withProviderSelection(): WebParityUiState {
+        val selected = providerInstances.firstOrNull { it.instance.id == providerTargetId }
+        return copy(providers = selected?.snapshot?.providers.orEmpty(),
+            harnesses = selected?.snapshot?.harnesses.orEmpty(),
+            providerHarnessesLoaded = selected?.snapshot?.providerHarnessesLoaded == true,
+            providerRotationEnabled = selected?.rotation?.first == true,
+            providerRotationIds = selected?.rotation?.second.orEmpty())
+    }
+
+    private fun refreshProviderInstances(onlyInstanceId: String? = null) {
+        val generation = ++pageRefreshGeneration
+        pageRefreshJob?.cancel()
+        pageRefreshJob = viewModelScope.launch {
+            mutableState.update { it.copy(page = WebParityPage.ModelProviders, providerCrossInstance = true,
+                loading = false, refreshing = true, error = null, providerInstances = it.providerInstances.map { target ->
+                    target.copy(loading = onlyInstanceId == null || onlyInstanceId == target.instance.id)
+                }) }
+            try {
+                val targets = providerInstancesProvider!!.invoke().distinctBy { it.id }
+                if (generation != pageRefreshGeneration) return@launch
+                mutableState.update { old -> old.copy(providerInstances = targets.map { target ->
+                    // Retain last-known rows while refreshing, but never call them freshly confirmed.
+                    old.providerInstances.firstOrNull { it.instance.id == target.id }?.copy(instance = target,
+                        loading = onlyInstanceId == null || onlyInstanceId == target.id)
+                        ?: ProviderInstanceSnapshot(target, loading = onlyInstanceId == null || onlyInstanceId == target.id)
+                }, providerTargetId = old.providerTargetId?.takeIf { id -> targets.any { it.id == id } }) }
+                coroutineScope {
+                    targets.filter { onlyInstanceId == null || it.id == onlyInstanceId }.map { target -> async {
+                        val result = try {
+                            val bound = providerRepositoryFactory!!.invoke(target.id)
+                            val snapshot = bound.load(WebParityPage.ModelProviders)
+                            val rotation = try { bound.loadProviderRotation() } catch (cancelled: CancellationException) { throw cancelled }
+                                catch (_: Exception) { null }
+                            ProviderInstanceSnapshot(target, loading = false, available = true, snapshot = snapshot, rotation = rotation)
+                        } catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { ProviderInstanceSnapshot(target, loading = false) }
+                        if (generation == pageRefreshGeneration && mutableState.value.page == WebParityPage.ModelProviders) {
+                            mutableState.update { old -> old.copy(providerInstances = old.providerInstances.map {
+                                if (it.instance.id == target.id) result else it
+                            }).withProviderSelection() }
+                        }
+                    } }.awaitAll()
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { mutableState.update { old -> old.copy(error = error.message ?: "Unable to load instances",
+                providerInstances = old.providerInstances.map { target ->
+                    if (onlyInstanceId == null || onlyInstanceId == target.instance.id) target.copy(available = false, loading = false) else target
+                }).withProviderSelection() } }
+            finally { if (generation == pageRefreshGeneration) mutableState.update { it.copy(refreshing = false) } }
+        }
+    }
+
+    private fun mutateProvider(action: suspend () -> Unit) {
+        val target = mutableState.value.providerInstances.firstOrNull { it.instance.id == mutableState.value.providerTargetId }?.instance
+        mutableState.update { it.copy(actionInProgress = true, error = null, providerSavedTarget = null) }
+        viewModelScope.launch {
+            try {
+                action()
+                mutableState.update { it.copy(actionInProgress = false, providerSavedTarget = target?.label) }
+                onRuntimeCatalogChanged?.invoke()
+                refresh(WebParityPage.ModelProviders)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { mutableState.update { it.copy(actionInProgress = false, error = error.message ?: "Action failed") } }
+        }
+    }
+
     private fun mutate(action: suspend () -> Unit) {
         viewModelScope.launch {
             mutableState.update { it.copy(actionInProgress = true, error = null, statusMessage = null) }
@@ -1296,6 +1410,8 @@ class WebParityViewModelFactory(
     private val harnessMutation: (suspend (String, WebHarnessOperation, List<String>) -> List<WebHarnessMutationResult>)? = null,
     private val currentTargetIdProvider: (suspend () -> String?)? = null,
     private val onRuntimeCatalogChanged: (() -> Unit)? = null,
+    private val providerInstancesProvider: (suspend () -> List<ProviderInstance>)? = null,
+    private val providerRepositoryFactory: ((String) -> WebParityRepository)? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T = WebParityViewModel(
@@ -1307,6 +1423,8 @@ class WebParityViewModelFactory(
         harnessMutation,
         currentTargetIdProvider,
         onRuntimeCatalogChanged,
+        providerInstancesProvider,
+        providerRepositoryFactory,
     ) as T
 }
 

@@ -610,6 +610,8 @@ export async function listNativeProviderProfiles({ registry, secretStore, quotaS
     const claudeOAuthRemoved = profile.agentType === 'claude' && authProfile.authType === 'oauth';
     return {
       id: profile.id,
+      syncId: profile.syncId || profile.id,
+      enabled: profile.enabled !== false,
       agentType: profile.agentType,
       displayName: profile.displayName || profile.id,
       protocol: profile.protocol,
