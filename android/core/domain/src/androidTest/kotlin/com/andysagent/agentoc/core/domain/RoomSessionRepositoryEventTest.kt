@@ -50,6 +50,11 @@ class RoomSessionRepositoryEventTest {
         assertEquals(SessionStatus.WaitingApproval, repository.observeSession("session-1").first()?.status)
         transport.responseBody = """{"session":{"id":"session-1","title":"Task","status":"running"}}"""
         assertEquals(SessionStatus.WaitingApproval, repository.refreshSessionDetail("session-1")?.status)
+        transport.responseBody = """{"session":{"id":"session-1","title":"Task","activity":{"run":{"state":"running","runId":"other-run"}}}}"""
+        assertEquals(SessionStatus.Working, repository.refreshSessionDetail("session-1")?.status)
+        transport.responseBody = """{"sessions":[{"id":"session-1","title":"Task","activity":{"run":{"state":"running","id":"r"}}}]}"""
+        repository.refreshSessions()
+        assertEquals(SessionStatus.WaitingApproval, repository.observeSession("session-1").first()?.status)
         transport.responseBody = """{"session":{"id":"session-1","title":"Task","status":"completed"}}"""
         assertEquals(SessionStatus.Completed, repository.refreshSessionDetail("session-1")?.status)
         repository.close()
