@@ -76,7 +76,7 @@ object AttentionReducer {
      * Ordinary running progress never becomes a global interruption.
      */
     fun project(sessions: List<Session>, approvals: List<Approval>): List<AttentionItem> {
-        val pendingBySession = approvals
+        val pendingBySession = withoutBatchApprovalShadows(approvals)
             .filter { it.status == "pending" }
             .groupBy { it.sessionId }
         val items = ArrayList<AttentionItem>(sessions.size)
@@ -259,4 +259,20 @@ object AttentionReducer {
 
     /** Completed sessions older than this stay in the session list, not the overlay. */
     const val COMPLETION_FRESHNESS_MS = 10L * 60L * 1000L
+}
+
+/** A provider approval represented by a structured batch must not offer a second, ungated decision. */
+fun withoutBatchApprovalShadows(approvals: List<Approval>): List<Approval> {
+    val batches = approvals.filter { it.status == "pending" && it.kind in setOf("privileged_batch_request", "approved_action_batch_request") }
+    return approvals.filterNot { approval ->
+        if (approval.status != "pending" || approval.kind != "approval_request") return@filterNot false
+        val ids = approval.identityAliases + approval.id
+        batches.any { batch ->
+            if (batch.sessionId != approval.sessionId ||
+                (batch.runId != null && approval.runId != null && batch.runId != approval.runId)) return@any false
+            val batchIds = batch.identityAliases + batch.id + batch.batchId.orEmpty() +
+                batch.actions.flatMap { listOf(it.id) + it.identityAliases }
+            ids.any { it.isNotBlank() && it in batchIds }
+        }
+    }
 }

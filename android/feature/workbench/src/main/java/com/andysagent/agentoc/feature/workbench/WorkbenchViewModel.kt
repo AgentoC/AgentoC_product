@@ -2032,8 +2032,9 @@ class ChatViewModel(
                 }
             }
             launch {
-                fixed.observePendingApprovals(sessionId).collectLatest { approvals ->
+                fixed.observePendingApprovals(sessionId).collectLatest { receivedApprovals ->
                     if (!isCurrentSession(sessionId, generation)) return@collectLatest
+                    val approvals = com.andysagent.agentoc.core.model.withoutBatchApprovalShadows(receivedApprovals)
                     val decisionApproval = approvals.firstOrNull { it.toDecisionQuestionUiState() != null }
                     val approval = approvals.firstOrNull { it.id != decisionApproval?.id }?.toUiState()
                     val decision = decisionApproval?.toDecisionQuestionUiState()

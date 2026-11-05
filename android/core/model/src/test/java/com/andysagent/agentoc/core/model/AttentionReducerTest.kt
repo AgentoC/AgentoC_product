@@ -184,6 +184,21 @@ class AttentionReducerTest {
     }
 
     @Test
+    fun `matching batch hides only the represented provider approval`() {
+        val shadow = approval("provider", "s1", kind = "approval_request", passkeyRequired = false)
+            .copy(runId = "run", identityAliases = setOf("provider-request"))
+        val unrelated = approval("unrelated", "s1", kind = "approval_request", passkeyRequired = false).copy(runId = "run")
+        val otherRun = shadow.copy(id = "other-run", runId = "another-run")
+        val batch = Approval(id = "batch", sessionId = "s1", title = "Batch", kind = "privileged_batch_request", runId = "run", batchId = "batch",
+            actions = listOf(ApprovalAction(id = "op", category = "privileged_other", identityAliases = setOf("provider-request"))))
+        val pending = listOf(shadow, unrelated, otherRun, batch)
+        assertEquals(setOf("unrelated", "other-run", "batch"), withoutBatchApprovalShadows(pending).map { it.id }.toSet())
+        assertEquals(setOf("unrelated", "other-run", "batch"), AttentionReducer.project(listOf(session("s1")), pending).mapNotNull { it.approval?.id }.toSet())
+        val resolved = pending.map { if (it.id == "batch") it.copy(status = "resolved") else it }
+        assertEquals(resolved, withoutBatchApprovalShadows(resolved))
+    }
+
+    @Test
     fun `legacy privileged categories with complete identity can be handled inline`() {
         val legacy = Approval(id = "b", sessionId = "s1", title = "Privileged", kind = "privileged_batch_request",
             runId = "r", batchId = "b", passkeyRequired = false,

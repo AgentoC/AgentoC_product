@@ -659,6 +659,12 @@ data class ApprovalAuthorizationDto(
 @Serializable
 data class ApprovedActionDto(
     val actionId: String? = null,
+    val id: String? = null,
+    val opId: String? = null,
+    val approvalId: String? = null,
+    val requestId: String? = null,
+    val providerRequestId: String? = null,
+    val providerItemId: String? = null,
     val description: String? = null,
     val summary: String? = null,
     val reason: String? = null,
@@ -709,6 +715,7 @@ data class SessionEventDto(
     val providerContentBlockIndex: Int? = null,
     val messageBlockIndex: Int? = null,
     val providerItemId: String? = null,
+    val providerRequestId: String? = null,
     val providerToolUseId: String? = null,
     val type: String? = null,
     val channel: String? = null,

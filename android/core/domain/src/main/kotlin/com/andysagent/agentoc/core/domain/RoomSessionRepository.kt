@@ -2910,6 +2910,8 @@ private fun ApprovalEntity.toDomainApproval(): Approval {
                 expiresAt = action["expiresAt"]?.jsonPrimitive?.contentOrNull,
                 authorization = authorization,
                 updatedAt = action["updatedAt"]?.jsonPrimitive?.contentOrNull,
+                identityAliases = listOf("id", "opId", "approvalId", "providerRequestId", "providerItemId")
+                    .mapNotNull { key -> (action[key] as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf(String::isNotEmpty) }.toSet(),
             )
         }.getOrNull()
     }
@@ -2993,6 +2995,8 @@ private fun ApprovalEntity.toDomainApproval(): Approval {
             selected("other", "privileged_other")?.let { put("privileged_other", it) }
             selected("delete", "destructive_delete")?.let { put("destructive_delete", it) }
         },
+        identityAliases = listOf("id", "approvalId", "batchId", "providerRequestId", "providerItemId")
+            .mapNotNull { key -> (details?.get(key) as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf(String::isNotEmpty) }.toSet(),
     )
 }
 
@@ -3000,13 +3004,18 @@ private fun buildApprovalDetails(event: SessionEventDto): String? {
     fun normalizedPrivilegedAction(source: JsonObject, category: String): JsonObject {
         val action = source.toMutableMap()
         val actionId = source.string("actionId") ?: source.string("opId")
-        action.remove("opId")
         actionId?.let { action["actionId"] = JsonPrimitive(it) }
         action["category"] = JsonPrimitive(category)
         return JsonObject(action)
     }
 
     val details = buildJsonObject {
+        event.id?.let { put("id", JsonPrimitive(it)) }
+        event.approvalId?.let { put("approvalId", JsonPrimitive(it)) }
+        event.batchId?.let { put("batchId", JsonPrimitive(it)) }
+        event.requestId?.let { put("requestId", JsonPrimitive(it)) }
+        event.providerRequestId?.let { put("providerRequestId", JsonPrimitive(it)) }
+        event.providerItemId?.let { put("providerItemId", JsonPrimitive(it)) }
         event.kind?.let { put("requestKind", JsonPrimitive(it)) }
         event.command?.let { put("command", JsonPrimitive(it)) }
         event.cwd?.let { put("cwd", JsonPrimitive(it)) }

@@ -39,6 +39,17 @@ import org.junit.Assert.assertTrue
 
 @RunWith(AndroidJUnit4::class)
 class RoomSessionRepositoryEventTest {
+    @Test fun preservesProviderIdentityForMatchingBatchOperations() = runBlocking {
+        val repository = RoomSessionRepository(database, QueuedTransport(listOf(
+            """{"sessionId":"session-1","events":[{"seq":1,"type":"approval_request","approvalId":"a","runId":"r","providerRequestId":"provider-1","requestId":"turn"},{"seq":2,"type":"privileged_batch_request","batchId":"b","runId":"r","requestId":"turn","other":[{"opId":"o","providerRequestId":"provider-1"}]},{"seq":3,"type":"approval_request","approvalId":"independent","runId":"r","requestId":"turn"}],"latestSeq":3}""",
+        )))
+        repository.refreshEvents("session-1")
+        val approvals = repository.observePendingApprovals("session-1").first()
+        assertEquals(setOf("provider-1"), approvals.single { it.id == "a" }.identityAliases.intersect(setOf("provider-1")))
+        assertEquals(setOf("provider-1"), approvals.single { it.id == "b" }.actions.single().identityAliases.intersect(setOf("provider-1")))
+        assertEquals(setOf("b", "independent"), com.andysagent.agentoc.core.model.withoutBatchApprovalShadows(approvals).map { it.id }.toSet())
+        repository.close()
+    }
     @Test fun preservesEachQuestionsMultiSelectFlag() = runBlocking {
         val repository = RoomSessionRepository(database, QueuedTransport(listOf(
             """{"sessionId":"session-1","events":[{"seq":1,"type":"approval_request","approvalId":"q","runId":"r","kind":"question","questions":[{"question":"Choose several","multiSelect":true,"options":[{"label":"One"},{"label":"Two"}]},{"question":"Choose one","multiSelect":false,"options":[{"label":"Three"}]}]}],"latestSeq":1}""",
