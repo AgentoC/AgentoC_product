@@ -39,6 +39,23 @@ import org.junit.Assert.assertTrue
 
 @RunWith(AndroidJUnit4::class)
 class RoomSessionRepositoryEventTest {
+    @Test fun backgroundSyncRecoversPendingApprovalAfterCursorPassedIt() = runBlocking {
+        database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 10, 0)))
+        database.dao().upsertCursor(SyncCursorEntity("session-1", 10, null, updatedAt = 0))
+        val activity = """{"actionRequired":true,"kind":"approval","sourceSeq":10}"""
+        val transport = QueuedTransport(listOf(
+            """{"sessionId":"session-1","events":[],"latestSeq":10,"runActivity":$activity}""",
+            """{"sessionId":"session-1","events":[{"seq":10,"type":"approval_request","approvalId":"claude:1","runId":"run-1","title":"Write","status":"pending"}],"latestSeq":10}""",
+            """{"sessionId":"session-1","events":[],"latestSeq":10,"runActivity":$activity}""",
+        ))
+        val repository = RoomSessionRepository(database, transport)
+        repository.refreshEvents("session-1")
+        val pending = repository.observePendingApprovals("session-1").first().single()
+        assertEquals("claude:1", pending.id)
+        assertEquals(false, pending.passkeyRequired)
+        repository.close()
+    }
+
     @Test fun restoresPendingApprovalWhenCursorAlreadyPassedItsEvent() = runBlocking {
         database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 10, 0)))
         database.dao().upsertCursor(SyncCursorEntity("session-1", 10, null, updatedAt = 0))

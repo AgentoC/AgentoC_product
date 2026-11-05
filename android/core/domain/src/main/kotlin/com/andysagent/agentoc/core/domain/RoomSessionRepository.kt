@@ -213,6 +213,7 @@ class RoomSessionRepository(
     private val liveFeedCursors = java.util.concurrent.ConcurrentHashMap<String, Pair<String, Long>>()
     private val liveFeedMuted = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val liveFeedCapable = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val approvalRecoveryAttempts = mutableMapOf<String, Long>()
     private val liveTimelineState = MutableStateFlow<Map<String, List<com.andysagent.agentoc.core.timeline.TimelineEvent>>>(emptyMap())
     private val runActivityState = MutableStateFlow<Map<String, JsonObject>>(emptyMap())
     override fun observeRunActivity(sessionId: String): Flow<JsonObject?> =
@@ -1373,6 +1374,25 @@ class RoomSessionRepository(
                     } catch (_: Exception) {
                         // The durable cursor is already committed. A transient
                         // history failure must not prevent subsequent syncing.
+                    }
+                }
+                // Background sessions need the same recovery as an opened
+                // conversation when an old cursor skipped its pending event.
+                // A missing row is not evidence that an approval was granted.
+                val activity = page.runActivity as? JsonObject
+                val waitingForApproval = (activity?.get("actionRequired") as? JsonPrimitive)?.booleanOrNull == true &&
+                    (activity["kind"] as? JsonPrimitive)?.contentOrNull == "approval"
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (waitingForApproval && dao.observePendingApprovals(sessionId).first().isEmpty() &&
+                    (approvalRecoveryAttempts[sessionId]?.let { now - it >= 5_000L } != false)) {
+                    approvalRecoveryAttempts[sessionId] = now
+                    try {
+                        recoverVisiblePendingApproval(sessionId, page)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        // A transient failure must not stop durable syncing;
+                        // another poll retries recovery after the cooldown.
                     }
                 }
                 RefreshResult.Applied(result.count, result.cursor.lastAppliedSeq)
