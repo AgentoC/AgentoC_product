@@ -216,6 +216,12 @@ private fun RemoteSettingsAction(text: String, onClick: () -> Unit, modifier: Mo
 }
 
 @Composable
+private fun RemoteManagementAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
+    enabled: Boolean = true, secondary: Boolean = true, destructive: Boolean = false) {
+    ManagementAction(text, onClick, modifier, enabled && LocalRemoteSettingsWritable.current, secondary, destructive)
+}
+
+@Composable
 private fun RemoteSettingsDialog(title: String, confirmLabel: String, onConfirm: () -> Unit, onDismiss: () -> Unit,
     dismissLabel: String, confirmEnabled: Boolean = true, dismissEnabled: Boolean = true,
     confirmModifier: Modifier = Modifier, destructive: Boolean = false, content: @Composable () -> Unit) {
@@ -650,30 +656,41 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
         }
         items(state.providers, key = { it.id }) { provider ->
             val harnessInstalled = state.providerHarnessesLoaded && state.harnesses.any { it.id == provider.agentType && it.installed }
-            SettingsContentCard(Modifier.fillMaxWidth().testTag("provider-card-${provider.id}")) {
-              Column(Modifier.fillMaxWidth().padding(AgentocSpacing.Standard), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
+            ManagementCard(Modifier.fillMaxWidth().testTag("provider-card-${provider.id}")) {
                 Row(modifier = Modifier.testTag("provider-info-${provider.id}"), horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact), verticalAlignment = Alignment.Top) {
-                    AgentoWebIcon(AgentoWebGlyph.Terminal, null)
+                    ManagementIdentity(if (provider.machineLocal) AgentoWebGlyph.Shield else AgentoWebGlyph.Agent)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid)) {
-                        Text(provider.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(provider.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         val machineLocal = provider.agentType in setOf("codex", "claude", "agy") && provider.authType in setOf("oauth", "oauth-token")
                         Text(if (machineLocal) stringResource(R.string.settings_provider_scope_local, targetLabel ?: stringResource(R.string.sp_this_computer))
                             else stringResource(R.string.settings_provider_scope_sync),
                             style = MaterialTheme.typography.labelMedium, color = LocalAgentocColors.current.secondaryContent,
                             modifier = Modifier.testTag("provider-scope-${provider.id}"))
-                        Text(provider.detail, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     }
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     val status = when {
                         !state.providerHarnessesLoaded -> R.string.sp_provider_harness_unknown
                         !harnessInstalled -> R.string.sp_provider_harness_missing
                         provider.ready -> R.string.sp_ready
                         else -> R.string.sp_credentials_missing
                     }
-                    AgentoStatus(stringResource(status), if (provider.ready && harnessInstalled) AgentoStatusTone.Success else AgentoStatusTone.Error)
+                    val authLabel = when (provider.authType) {
+                        "api-key" -> stringResource(R.string.sp_api_key)
+                        "oauth", "oauth-token" -> stringResource(R.string.sp_official_oauth)
+                        else -> provider.authType
+                    }
+                    Text("${providerRuntimeLabel(provider.agentType)} · $authLabel", style = MaterialTheme.typography.bodySmall, maxLines = 2,
+                        color = LocalAgentocColors.current.secondaryContent, overflow = TextOverflow.Ellipsis)
+                    Text(stringResource(status), style = MaterialTheme.typography.labelSmall,
+                        color = if (provider.ready && harnessInstalled) LocalAgentocColors.current.success else LocalAgentocColors.current.secondaryContent)
                 }
+                if (provider.baseUrl.isNotBlank()) Text(provider.baseUrl, style = MaterialTheme.typography.bodySmall,
+                    color = LocalAgentocColors.current.tertiaryContent, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (!harnessInstalled) Text(stringResource(if (state.providerHarnessesLoaded) R.string.pi_harness_missing else R.string.sp_provider_harness_status_unavailable), style = MaterialTheme.typography.bodySmall)
                 if (provider.quotaSnapshot != null) ProviderQuotaSection(provider.quotaSnapshot)
                 else if (provider.quota.isNotBlank()) Text(stringResource(R.string.sp_quota, provider.quota), style = MaterialTheme.typography.labelSmall)
+                HorizontalDivider(color = LocalAgentocColors.current.primaryContent.copy(alpha = 0.07f))
                 FlowRow(
                     modifier = Modifier.fillMaxWidth().testTag("provider-actions-${provider.id}"),
                     horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact),
@@ -685,13 +702,13 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                                 onCheckedChange = { selected -> onEvent(WebParityEvent.ToggleProviderRotationProvider(provider.id, selected)) },
                             )
                         }
-                        if (harnessInstalled) RemoteSettingsAction(stringResource(R.string.sp_refresh_quota), { onEvent(WebParityEvent.RefreshProviderQuota(provider.id)) }, secondary = true)
+                        if (harnessInstalled) RemoteManagementAction(stringResource(R.string.sp_refresh_quota), { onEvent(WebParityEvent.RefreshProviderQuota(provider.id)) })
                         if (state.harnesses.any { it.id == provider.agentType && it.installed } && !restrictedDemo && provider.authType == "oauth" && provider.agentType in setOf("codex", "agy")) {
-                            RemoteSettingsAction(stringResource(R.string.provider_oauth_reauthenticate), {
+                            RemoteManagementAction(stringResource(R.string.provider_oauth_reauthenticate), {
                                 onEvent(WebParityEvent.StartProviderOAuth(provider.agentType, provider.name, provider.id))
                             }, secondary = true)
                         }
-                        if (!restrictedDemo) RemoteSettingsAction(stringResource(R.string.sp_edit), {
+                        if (!restrictedDemo) RemoteManagementAction(stringResource(R.string.sp_edit), {
                             editingProvider = provider
                             name = provider.name
                             agentType = provider.agentType
@@ -706,10 +723,9 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                             }
                             apiKey = ""
                             dialog = true
-                        }, modifier = Modifier.testTag("provider-edit-${provider.id}"), secondary = true)
-                        if (!restrictedDemo) RemoteSettingsAction(stringResource(R.string.sp_delete), { deletingProvider = provider }, modifier = Modifier.testTag("provider-delete-${provider.id}"), secondary = true)
+                        }, modifier = Modifier.testTag("provider-edit-${provider.id}"), secondary = false)
+                        if (!restrictedDemo) RemoteManagementAction(stringResource(R.string.sp_delete), { deletingProvider = provider }, modifier = Modifier.testTag("provider-delete-${provider.id}"), destructive = true)
                 }
-              }
             }
         }
     }
@@ -770,20 +786,21 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                             }
                         }
                     } else {
-                        Text(editingProvider?.agentType.orEmpty(), style = MaterialTheme.typography.bodyMedium)
+                        Text(providerRuntimeLabel(editingProvider?.agentType.orEmpty()), style = MaterialTheme.typography.labelMedium,
+                            color = LocalAgentocColors.current.accentPrimary)
                     }
-                    Text(stringResource(if (authMode == "api-key") R.string.pi_shared_change else R.string.pi_local_change,
-                        targetLabel.orEmpty()), style = MaterialTheme.typography.bodySmall)
+                    ManagementHint(stringResource(if (authMode == "api-key") R.string.pi_shared_change else R.string.pi_local_change,
+                        targetLabel.orEmpty()), AgentoWebGlyph.Monitor)
                     if (agentType.isNotBlank()) {
                         if (editingProvider == null) Row(horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
                             if (agentType != "agy") RemoteSettingsAction(stringResource(R.string.sp_api_key), { authMode = "api-key" }, modifier = Modifier.weight(1f), secondary = authMode != "api-key")
                             if ((agentType == "codex" || agentType == "agy") && state.harnesses.any { it.id == agentType && it.installed }) RemoteSettingsAction(stringResource(R.string.sp_official_oauth), { authMode = "oauth" }, modifier = Modifier.weight(1f), secondary = authMode != "oauth")
                         }
-                        AgentoTextField(name, { name = it }, stringResource(R.string.sp_display_name), Modifier.fillMaxWidth(), enabled = !state.actionInProgress, inputModifier = Modifier.testTag("provider-name"))
+                        ManagementField(name, { name = it }, stringResource(R.string.sp_display_name), enabled = !state.actionInProgress, inputModifier = Modifier.testTag("provider-name"))
                         if (authMode == "api-key") {
-                            AgentoTextField(baseUrl, { baseUrl = it }, stringResource(R.string.sp_base_url), Modifier.fillMaxWidth(), enabled = !state.actionInProgress)
-                            AgentoTextField(apiKey, { apiKey = it }, stringResource(R.string.sp_api_key), Modifier.fillMaxWidth(), enabled = !state.actionInProgress)
-                            AgentoTextField(model, { model = it }, stringResource(R.string.sp_default_model), Modifier.fillMaxWidth(), enabled = !state.actionInProgress)
+                            ManagementField(baseUrl, { baseUrl = it }, stringResource(R.string.sp_base_url), enabled = !state.actionInProgress)
+                            ManagementField(apiKey, { apiKey = it }, stringResource(R.string.sp_api_key), enabled = !state.actionInProgress)
+                            ManagementField(model, { model = it }, stringResource(R.string.sp_default_model), enabled = !state.actionInProgress)
                             val protocols = availableHarnesses.firstOrNull { it.id == agentType }?.protocols.orEmpty()
                             if (protocols.size > 1) {
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
@@ -865,10 +882,7 @@ private fun HarnessesPage(
 
     LazyColumn(modifier = Modifier.testTag("harness-catalog"), contentPadding = navigationContentPadding(), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
         item {
-            Text(
-                stringResource(R.string.sp_harness_info),
-                style = MaterialTheme.typography.bodySmall,
-            )
+            ManagementHint(stringResource(R.string.sp_harness_info))
         }
         state.statusMessage?.takeIf(String::isNotBlank)?.let { message ->
             item { AgentoStatus(message, AgentoStatusTone.Success) }
@@ -901,15 +915,15 @@ private fun HarnessesPage(
                 harness.version.takeIf { it.isNotBlank() && !multipleTargets }?.let { stringResource(R.string.sp_version_value, it) },
                 harness.installationSource.takeIf { it.isNotBlank() && !multipleTargets }?.let { stringResource(R.string.sp_source_value, it) },
             ).joinToString(" · ")
-            SettingsContentCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.fillMaxWidth().padding(AgentocSpacing.Standard), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
+            ManagementCard(Modifier.fillMaxWidth()) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
-                        AgentoWebIcon(AgentoWebGlyph.Terminal, null, modifier = Modifier.size(20.dp))
+                        ManagementIdentity(AgentoWebGlyph.Terminal)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid)) {
-                            Text(harness.name, style = MaterialTheme.typography.titleSmall)
+                            Text(harness.name, style = MaterialTheme.typography.titleMedium)
                             Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
+                    HorizontalDivider(color = LocalAgentocColors.current.primaryContent.copy(alpha = 0.07f))
                     targets.forEach { target ->
                         val status = when {
                             !target.available -> R.string.settings_harness_unknown
@@ -917,38 +931,46 @@ private fun HarnessesPage(
                             !supports(target, harness) -> R.string.sp_unsupported
                             else -> R.string.sp_not_installed
                         }
-                        Text("${target.label} · ${stringResource(status)}", style = MaterialTheme.typography.bodySmall,
-                            color = LocalAgentocColors.current.secondaryContent,
-                            modifier = Modifier.testTag("harness-target-${harness.id}-${target.instanceId}"))
+                        Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            AgentoWebIcon(AgentoWebGlyph.Monitor, null, Modifier.size(18.dp), tint = LocalAgentocColors.current.tertiaryContent)
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(target.label, style = MaterialTheme.typography.bodyMedium)
+                                Text(stringResource(status), style = MaterialTheme.typography.labelSmall,
+                                    color = if (status == R.string.sp_installed) LocalAgentocColors.current.success else LocalAgentocColors.current.secondaryContent,
+                                    modifier = Modifier.testTag("harness-target-${harness.id}-${target.instanceId}"))
+                            }
+                            if (status == R.string.sp_installed) AgentoWebIcon(AgentoWebGlyph.Check, null, Modifier.size(16.dp), tint = LocalAgentocColors.current.success)
+                        }
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid)) {
                             if (!restrictedDemo && candidates(harness, WebHarnessOperation.Install).isNotEmpty()) {
-                                RemoteSettingsAction(
+                                RemoteManagementAction(
                                     stringResource(R.string.sp_install),
                                     { requestAction(harness, WebHarnessOperation.Install) },
                                     enabled = !state.actionInProgress && candidates(harness, WebHarnessOperation.Install).any { eligible(it, harness, WebHarnessOperation.Install) },
-                                    secondary = true,
+                                    secondary = false,
                                     modifier = Modifier.testTag("harness-install-${harness.id}"),
                                 )
                             }
                             if (!restrictedDemo && candidates(harness, WebHarnessOperation.Upgrade).isNotEmpty()) {
-                                RemoteSettingsAction(
+                                RemoteManagementAction(
                                     stringResource(R.string.sp_upgrade),
                                     { requestAction(harness, WebHarnessOperation.Upgrade) },
                                     enabled = !state.actionInProgress && candidates(harness, WebHarnessOperation.Upgrade).any { eligible(it, harness, WebHarnessOperation.Upgrade) },
                                     secondary = true,
                                     modifier = Modifier.testTag("harness-upgrade-${harness.id}"),
                                 )
-                                RemoteSettingsAction(
+                                RemoteManagementAction(
                                     stringResource(R.string.sp_uninstall),
                                     { requestAction(harness, WebHarnessOperation.Uninstall) },
                                     enabled = !state.actionInProgress && candidates(harness, WebHarnessOperation.Uninstall).any { eligible(it, harness, WebHarnessOperation.Uninstall) },
                                     secondary = true,
+                                    destructive = true,
                                     modifier = Modifier.testTag("harness-uninstall-${harness.id}"),
                                 )
                             }
                     }
-                }
             }
         }
     }
@@ -991,9 +1013,21 @@ private fun HarnessesPage(
                     )
                     candidates.forEach { target ->
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                                .background(if (target.instanceId in eligibleSelectedIds) LocalAgentocColors.current.accentPrimary.copy(alpha = 0.08f) else Color.Transparent)
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            AgentoWebIcon(AgentoWebGlyph.Monitor, null, Modifier.size(20.dp),
+                                tint = if (target.instanceId in eligibleSelectedIds) LocalAgentocColors.current.accentPrimary else LocalAgentocColors.current.tertiaryContent)
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(target.label, style = MaterialTheme.typography.bodyMedium)
+                                if (!target.available) Text(stringResource(R.string.settings_harness_unknown), style = MaterialTheme.typography.labelSmall,
+                                    color = LocalAgentocColors.current.secondaryContent)
+                                else if (!supports(target, harness)) Text(stringResource(R.string.sp_unsupported), style = MaterialTheme.typography.labelSmall,
+                                    color = LocalAgentocColors.current.secondaryContent)
+                            }
                             Checkbox(enabled = eligible(target, harness, operation) && !state.actionInProgress,
                                 modifier = Modifier.testTag("harness-select-${target.instanceId}"),
                                 checked = target.instanceId in eligibleSelectedIds,
@@ -1001,11 +1035,6 @@ private fun HarnessesPage(
                                     selectedTargetIds = if (checked) selectedTargetIds + target.instanceId else selectedTargetIds - target.instanceId
                                 },
                             )
-                            Column(Modifier.weight(1f)) {
-                                Text(target.label, style = MaterialTheme.typography.bodyMedium)
-                                if (!target.available) Text(stringResource(R.string.settings_harness_unknown), style = MaterialTheme.typography.labelSmall)
-                                else if (!supports(target, harness)) Text(stringResource(R.string.sp_unsupported), style = MaterialTheme.typography.labelSmall)
-                            }
                         }
                     }
                 }

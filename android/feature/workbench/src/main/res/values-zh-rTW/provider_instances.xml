@@ -5,7 +5,7 @@
     <string name="pi_connected">可存取</string>
     <string name="pi_unavailable">暫時無法存取此執行個體，設定狀態尚未確認。</string>
     <string name="pi_retry">重試</string>
-    <string name="pi_overview_hint">統一查看共享設定與執行個體專屬登入，選擇執行個體後進行管理。</string>
+    <string name="pi_overview_hint">統一管理各執行個體的模型與登入。</string>
     <string name="pi_no_instances">帳號下還沒有電腦執行個體。</string>
     <string name="pi_unconfirmed">尚未確認：%1$s</string>
     <string name="pi_empty">可存取的執行個體中尚未發現 Provider，選擇執行個體即可新增。</string>

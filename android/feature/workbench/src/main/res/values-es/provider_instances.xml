@@ -5,7 +5,7 @@
     <string name="pi_connected">Accesible</string>
     <string name="pi_unavailable">No se puede acceder a esta instancia. Su configuración no está confirmada.</string>
     <string name="pi_retry">Reintentar</string>
-    <string name="pi_overview_hint">Consulta las configuraciones compartidas y los accesos propios de cada instancia. Selecciona una instancia para gestionarla.</string>
+    <string name="pi_overview_hint">Modelos y accesos de tus instancias.</string>
     <string name="pi_no_instances">Esta cuenta aún no tiene instancias en ordenadores.</string>
     <string name="pi_unconfirmed">Sin confirmar: %1$s</string>
     <string name="pi_empty">No hay proveedores en las instancias accesibles. Selecciona una instancia para añadir uno.</string>

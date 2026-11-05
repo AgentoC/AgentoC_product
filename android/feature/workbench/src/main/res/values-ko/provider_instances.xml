@@ -5,7 +5,7 @@
     <string name="pi_connected">접근 가능</string>
     <string name="pi_unavailable">이 인스턴스에 접근할 수 없습니다. 설정 상태가 확인되지 않았습니다.</string>
     <string name="pi_retry">다시 시도</string>
-    <string name="pi_overview_hint">공유 설정과 인스턴스별 로그인을 확인하세요. 관리할 인스턴스를 선택하세요.</string>
+    <string name="pi_overview_hint">인스턴스별 모델과 로그인을 관리하세요.</string>
     <string name="pi_no_instances">이 계정에 컴퓨터 인스턴스가 없습니다.</string>
     <string name="pi_unconfirmed">미확인: %1$s</string>
     <string name="pi_empty">접근 가능한 인스턴스에 제공자가 없습니다. 추가할 인스턴스를 선택하세요.</string>

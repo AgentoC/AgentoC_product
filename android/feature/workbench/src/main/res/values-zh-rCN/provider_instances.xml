@@ -5,7 +5,7 @@
     <string name="pi_connected">可访问</string>
     <string name="pi_unavailable">暂时无法访问此实例，配置状态尚未确认。</string>
     <string name="pi_retry">重试</string>
-    <string name="pi_overview_hint">统一查看共享配置与实例专属登录，选择实例后进行管理。</string>
+    <string name="pi_overview_hint">统一管理各实例的模型与登录。</string>
     <string name="pi_no_instances">账号下还没有电脑实例。</string>
     <string name="pi_unconfirmed">尚未确认：%1$s</string>
     <string name="pi_empty">可访问的实例中尚未发现 Provider，选择实例即可添加。</string>

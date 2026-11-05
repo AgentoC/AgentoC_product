@@ -5,7 +5,7 @@
     <string name="pi_connected">Accessible</string>
     <string name="pi_unavailable">Cette instance est inaccessible. Sa configuration reste à confirmer.</string>
     <string name="pi_retry">Réessayer</string>
-    <string name="pi_overview_hint">Consultez les configurations partagées et les connexions propres à chaque instance. Sélectionnez une instance pour la gérer.</string>
+    <string name="pi_overview_hint">Modèles et connexions de vos instances.</string>
     <string name="pi_no_instances">Ce compte ne contient aucune instance sur ordinateur.</string>
     <string name="pi_unconfirmed">Non confirmé : %1$s</string>
     <string name="pi_empty">Aucun fournisseur sur les instances accessibles. Sélectionnez une instance pour en ajouter un.</string>

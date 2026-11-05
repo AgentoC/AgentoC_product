@@ -5,7 +5,7 @@
     <string name="pi_connected">Reachable</string>
     <string name="pi_unavailable">Unable to reach this instance. Its configuration is unconfirmed.</string>
     <string name="pi_retry">Retry</string>
-    <string name="pi_overview_hint">Manage shared configurations and instance-specific logins. Choose an instance to make changes.</string>
+    <string name="pi_overview_hint">Models and logins across your instances.</string>
     <string name="pi_no_instances">No computer instances in this account yet.</string>
     <string name="pi_unconfirmed">Not yet confirmed: %1$s</string>
     <string name="pi_empty">No providers found on reachable instances. Choose an instance to add one.</string>

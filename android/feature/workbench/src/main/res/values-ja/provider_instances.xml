@@ -5,7 +5,7 @@
     <string name="pi_connected">アクセス可能</string>
     <string name="pi_unavailable">このインスタンスにアクセスできません。設定は未確認です。</string>
     <string name="pi_retry">再試行</string>
-    <string name="pi_overview_hint">共有設定とインスタンス固有のログインを確認できます。管理するインスタンスを選択してください。</string>
+    <string name="pi_overview_hint">各インスタンスのモデルとログインを管理します。</string>
     <string name="pi_no_instances">このアカウントにコンピューターのインスタンスはありません。</string>
     <string name="pi_unconfirmed">未確認：%1$s</string>
     <string name="pi_empty">アクセス可能なインスタンスにプロバイダーがありません。追加先を選択してください。</string>
