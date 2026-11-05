@@ -401,16 +401,43 @@ async function resolveAcl(target, caller, options, provider) {
   };
 }
 
-export function createDefaultWindowsFactsProvider() {
-  return createWindowsRuntimeFactsProvider({
+export function createDefaultWindowsFactsProvider({
+  platform = process.platform,
+  serviceMode = process.env.AGENTOC_WINDOWS_SERVICE_MODE === '1',
+  createProvider = createWindowsRuntimeFactsProvider,
+  broker = createWindowsPrivilegedBrokerClient(),
+} = {}) {
+  const provider = createProvider({
     // The provider itself fails closed on non-Windows hosts. Keeping this
     // default server-owned object available preserves the resolver contract
     // while allowing Linux tests and deployments to resolve Windows targets
     // only through an explicit fixture/provider.
-    platform: process.platform,
+    platform,
     timeoutMs: 5_000,
-    serviceInspector: createWindowsPrivilegedBrokerClient().inspectService,
+    serviceInspector: broker.inspectService,
   });
+  if (platform !== 'win32' || !serviceMode) return provider;
+  const originalPackageFacts = provider.packageFacts.bind(provider);
+  provider.packageFacts = async (input) => {
+    const direct = await originalPackageFacts(input);
+    if (direct) return direct;
+    const id = input?.packages?.[0];
+    const version = input?.requestedVersion;
+    if (input?.manager !== 'winget' || input?.operation !== 'install'
+      || input?.packages?.length !== 1 || typeof id !== 'string' || typeof version !== 'string' || !version) return null;
+    // The native broker pins the WinGet module and validates the trusted
+    // source, exact package/version and selected installer before returning
+    // these facts. This read-only request grants no installation authority.
+    let selected;
+    try { selected = await broker.inspectAutoInstall({ packageId: id, packageVersion: version }); }
+    catch { return null; }
+    const verified = validateWindowsSelectedInstallerFacts(selected, { packageId: id, packageVersion: version });
+    if (!verified || verified.source !== 'winget' || verified.scope !== 'System') return null;
+    return { manager: 'winget', source: 'winget', sourceTrust: 'configured',
+      packages: [{ name: id, requestedVersion: version, availableVersion: version }],
+      repositories: [{ id: 'winget', trust: 'configured' }], selectedInstaller: verified };
+  };
+  return provider;
 }
 
 export async function resolveWindowsSemanticContext({ operation, target, caller = {}, options = {} } = {}) {
