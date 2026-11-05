@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -167,6 +168,37 @@ class NavigationDockDragUiTest {
         shell().performTouchInput { cancel() }
         rule.waitForIdle()
         assertCentered(AgentoDestination.Home)
+    }
+
+    @Test fun enteringDragDoesNotJumpAtTheTouchSlopBoundary() {
+        show(policy = MotionPreference.None)
+        val lens = rule.onNodeWithTag("bottom-navigation-selection")
+        val bounds = shell().fetchSemanticsNode().boundsInRoot
+        val start = Offset(bounds.width * .5f, bounds.height * .5f)
+        val initial = lens.fetchSemanticsNode().boundsInRoot.center.x
+        val slop = ViewConfiguration.get(rule.activity).scaledTouchSlop
+        shell().performTouchInput { down(start) }
+        var previous = initial
+        var largestStep = 0f
+        for (distance in 1..(slop + 8)) {
+            shell().performTouchInput { moveTo(start + Offset(distance.toFloat(), 0f), 16) }
+            val current = lens.fetchSemanticsNode().boundsInRoot.center.x
+            largestStep = maxOf(largestStep, kotlin.math.abs(current - previous))
+            previous = current
+        }
+        assertTrue("The selection jumped $largestStep px when dragging began (slop $slop px)", largestStep <= 3f)
+        for (distance in (slop + 7) downTo -(slop + 8)) {
+            shell().performTouchInput { moveTo(start + Offset(distance.toFloat(), 0f), 16) }
+            val current = lens.fetchSemanticsNode().boundsInRoot.center.x
+            largestStep = maxOf(largestStep, kotlin.math.abs(current - previous))
+            previous = current
+        }
+        assertTrue("Reversing through the original touch point must stay smooth: $largestStep px", largestStep <= 3f)
+        shell().performTouchInput { moveTo(start + Offset(bounds.width * .2f, 0f), 100) }
+        val dragged = lens.fetchSemanticsNode().boundsInRoot.center.x
+        assertEquals("The selection must catch up and track the finger after the transition",
+            initial + bounds.width * .2f, dragged, 2f)
+        shell().performTouchInput { cancel() }
     }
 
     @Test fun contactRespondsAcrossNinePositionsAndSmallVerticalMovement() {

@@ -647,9 +647,20 @@ fun AgentoBottomNavigation(
                     } } finally { contactDown = false }
                 }
                 .pointerInput(layoutDirection) {
+                    var dragOriginX = 0f
+                    var smoothDragStart = false
                     fun updatePointer(position: Offset) {
                         val x = if (layoutDirection == LayoutDirection.Rtl) size.width - position.x else position.x
-                        dragSlot = (x / (size.width / 3f) - .5f - dragGrip).coerceIn(0f, 2f)
+                        // The recognizer withholds the first touch-slop distance.
+                        // Ease that distance back in after recognition, so a slow
+                        // press-to-drag transition does not jump by the full slop.
+                        val movement = x - dragOriginX
+                        val slop = viewConfiguration.touchSlop
+                        val catchUp = ((kotlin.math.abs(movement) - slop) / 12.dp.toPx()).coerceIn(0f, 1f)
+                        val correction = if (smoothDragStart) {
+                            (if (movement >= 0f) 1f else -1f) * minOf(slop, kotlin.math.abs(movement)) * (1f - catchUp)
+                        } else 0f
+                        dragSlot = ((x - correction) / (size.width / 3f) - .5f - dragGrip).coerceIn(0f, 2f)
                         dragInside = position.y in -24.dp.toPx()..(size.height + 24.dp.toPx()) &&
                             position.x in -24.dp.toPx()..(size.width + 24.dp.toPx())
                     }
@@ -658,7 +669,9 @@ fun AgentoBottomNavigation(
                             val frame = currentFrame()
                             val originX = if (layoutDirection == LayoutDirection.Rtl) 1f - contactOrigin.x else contactOrigin.x
                             val originSlot = originX * 3f - .5f
-                            dragGrip = if (kotlin.math.abs(originSlot - frame.lensSlot) <= .5f)
+                            dragOriginX = originX * size.width
+                            smoothDragStart = kotlin.math.abs(originSlot - frame.lensSlot) <= .5f
+                            dragGrip = if (smoothDragStart)
                                 originSlot - frame.lensSlot else 0f
                             dragFrame = frame
                             updatePointer(position)
