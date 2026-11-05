@@ -30,3 +30,11 @@ The account and relay code is available for inspection, but an independently
 deployed service and a full cross-device connection have not yet been validated
 from the public source. Windows currently uses the project's hosted endpoints
 outside the isolated test configuration.
+
+Windows update checks compare the installed public version with the GitHub release
+tag. Publish each update with a new, higher public version and a matching release
+tag and setup filename; replacing an asset under the same version does not notify
+installed users. The MSI product version is a separate Windows Installer upgrade
+number and must also exceed the latest published MSI version. The source update
+checker is included only in subsequently built installers; it does not retrofit
+an already installed package.

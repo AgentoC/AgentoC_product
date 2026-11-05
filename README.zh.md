@@ -8,9 +8,9 @@ Ragent 是一个 AI 工作台，将计算机上运行的智能体工具与 Web �
 Windows x64 抢先体验安装包可在 [GitHub Releases](https://github.com/ragent-app/Ragent_product/releases/latest) 获取。
 安装包尚未签名，Windows 可能显示警告；安装前请查看发布说明中的准确源码提交、验证范围和升级限制。
 
-![Windows Electron 桌面管理器中的 Harness 管理界面](docs/media/windows-desktop-manager-v2.png)
+![桌面管理器中的 Harness 管理界面](docs/media/windows-desktop-manager-v2.png)
 
-*Windows 桌面管理器连接隔离的临时实例，画面不含个人数据。*
+*浏览器中的桌面管理器连接隔离的临时实例，画面不含个人数据。*
 
 <img src="docs/media/android-session.png" alt="Android 应用中已完成的示例会话" width="300">
 
