@@ -9,7 +9,7 @@ static const InstallerTranslation kInstallerTranslations[] = {
 {L"Setup cancelled",{L"安裝已取消",L"セットアップをキャンセルしました",L"설치가 취소되었습니다",L"Installation annulée",L"Instalación cancelada"}},
 {L"If changes had started, Windows Installer attempted to roll them back.",{L"如果變更已開始，Windows Installer 已嘗試復原。",L"変更が開始されていた場合、Windows Installer はロールバックを試みました。",L"변경이 시작된 경우 Windows Installer가 롤백을 시도했습니다.",L"Si des modifications avaient commencé, Windows Installer a tenté de les annuler.",L"Si se habían iniciado cambios, Windows Installer intentó revertirlos."}},
 {L"Update Ragent",{L"更新 Ragent",L"Ragent を更新",L"Ragent 업데이트",L"Mettre à jour Ragent",L"Actualizar Ragent"}},
-{L"Update the existing installation in its current folder.",{L"在目前的資料夾中更新已安裝的 AgentoC。",L"現在のフォルダーにインストールされている AgentoC を更新します。",L"현재 폴더에 설치된 AgentoC를 업데이트합니다.",L"Mettez à jour AgentoC dans son dossier actuel.",L"Actualiza AgentoC en su carpeta actual."}},
+{L"Update the existing installation in its current folder.",{L"在目前的資料夾中更新已安裝的 Ragent。",L"現在のフォルダーにインストールされている Ragent を更新します。",L"현재 폴더에 설치된 Ragent를 업데이트합니다.",L"Mettez à jour Ragent dans son dossier actuel.",L"Actualiza Ragent en su carpeta actual."}},
 {L"Your account, settings, and existing data will be kept.",{L"你的帳號、設定及現有資料將予以保留。",L"アカウント、設定、既存のデータは保持されます。",L"계정, 설정 및 기존 데이터가 유지됩니다.",L"Votre compte, vos paramètres et vos données seront conservés.",L"Se conservarán tu cuenta, configuración y datos."}},
 {L"Update",{L"更新",L"更新",L"업데이트",L"Mettre à jour",L"Actualizar"}},
 {L"Starting update…",{L"正在開始更新…",L"更新を開始しています…",L"업데이트를 시작하는 중…",L"Démarrage de la mise à jour…",L"Iniciando la actualización…"}},
