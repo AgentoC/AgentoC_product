@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
@@ -77,5 +78,25 @@ class ApprovalAttentionDeviceTest {
             assertEquals(listOf(-1, -1), answer.choices)
             assertEquals(listOf("alpha", "beta"), answer.customAnswers)
         }
+    }
+
+    @Test fun closingNoticeDoesNotMakeAnApprovalDecision() {
+        val approval = Approval(id = "a", sessionId = "s", runId = "r", title = "Run command")
+        val state = AttentionReducer.reduce(AttentionUiState(), AttentionReducer.project(listOf(Session("s", "Other session")), listOf(approval)))
+        val events = mutableListOf<AttentionEvent>()
+        rule.setContent { AgentocTheme { AttentionSurface(state, events::add, onOpenSession = {}) } }
+        rule.onNodeWithContentDescription(rule.activity.getString(R.string.approval_notice_close)).performClick()
+        rule.runOnIdle { assertEquals(listOf(AttentionEvent.Dismiss(requireNotNull(state.activeItemId))), events) }
+    }
+
+    @Test fun untouchedNoticeAutomaticallyDismisses() {
+        val approval = Approval(id = "a", sessionId = "s", runId = "r", title = "Run command")
+        val state = AttentionReducer.reduce(AttentionUiState(), AttentionReducer.project(listOf(Session("s", "Other session")), listOf(approval)))
+        val events = mutableListOf<AttentionEvent>()
+        rule.mainClock.autoAdvance = false
+        rule.setContent { AgentocTheme { AttentionSurface(state, events::add, onOpenSession = {}) } }
+        rule.mainClock.advanceTimeBy(12_500)
+        rule.runOnIdle { assertEquals(listOf(AttentionEvent.Dismiss(requireNotNull(state.activeItemId))), events) }
+        rule.mainClock.autoAdvance = true
     }
 }

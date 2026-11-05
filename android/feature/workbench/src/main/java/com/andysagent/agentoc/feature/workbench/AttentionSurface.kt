@@ -58,6 +58,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.CheckCircleOutline
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -71,6 +72,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -85,6 +87,7 @@ import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -107,6 +110,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import com.andysagent.agentoc.core.designsystem.AgentoButton
 import com.andysagent.agentoc.core.designsystem.AgentoBackdropTone
 import com.andysagent.agentoc.core.designsystem.AgentoDiffuseShadowBox
@@ -158,6 +162,14 @@ fun AttentionSurface(
     onRetainedPresenceChanged: (Boolean) -> Unit = {},
 ) {
     val item = state.activeItem
+    var interacted by remember(item?.id) { mutableStateOf(false) }
+    LaunchedEffect(item?.id, interacted, state.expanded, state.resolvingItemId) {
+        val current = item ?: return@LaunchedEffect
+        if (!interacted && !state.expanded && state.resolvingItemId != current.id) {
+            delay(12_000)
+            onEvent(AttentionEvent.Dismiss(current.id))
+        }
+    }
     BackHandler(enabled = item != null) {
         item?.let { onEvent(AttentionEvent.Dismiss(it.id)) }
     }
@@ -215,7 +227,14 @@ fun AttentionSurface(
                 // card while the original card is still travelling out.
                 var retainedState by remember(visibleItem.id) { mutableStateOf(state) }
                 if (currentItem) retainedState = state
-                Box(Modifier.testTag("attention-retained-surface").then(if (currentItem) Modifier else Modifier
+                Box(Modifier.testTag("attention-retained-surface").pointerInput(visibleItem.id, currentItem) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            if (currentItem && event.changes.any { it.pressed && !it.previousPressed }) interacted = true
+                        }
+                    }
+                }.then(if (currentItem) Modifier else Modifier
                     .clearAndSetSemantics { }
                     .pointerInput(Unit) {
                         awaitPointerEventScope {
@@ -441,6 +460,10 @@ private fun AttentionCard(
                                 contentDescription = stringResource(if (expanded) R.string.attention_collapse else R.string.attention_expand),
                                 modifier = Modifier.rotate(180f * disclosureProgress), tint = colors.secondaryContent)
                         }
+                        IconButton(onClick = { onEvent(AttentionEvent.Dismiss(item.id)) }, enabled = !resolving,
+                            modifier = Modifier.size(AgentocSpacing.MinTouchTarget)) {
+                            Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.approval_notice_close), tint = colors.secondaryContent)
+                        }
                     }
                     Text(headline, Modifier.testTag("attention-headline"), color = colors.primaryContent,
                         style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold,
@@ -531,6 +554,10 @@ private fun AttentionCard(
                                     tint = colors.secondaryContent,
                                 )
                             }
+                        }
+                        IconButton(onClick = { onEvent(AttentionEvent.Dismiss(item.id)) }, enabled = !resolving,
+                            modifier = Modifier.size(AgentocSpacing.MinTouchTarget)) {
+                            Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.approval_notice_close), tint = colors.secondaryContent)
                         }
                         if (queuedCount > 0) {
                             Text(
@@ -1000,7 +1027,7 @@ private fun QuestionAnswerRail(
                     }
                 },
             ),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).onFocusChanged { if (it.isFocused) onEvent(AttentionEvent.SetExpanded(item.id, true)) },
         )
         AgentoButton(
             text = approvalLabel(item.approval?.denyLabel, "拒绝"),

@@ -4,4 +4,5 @@
     <string name="approval_scope_write">写入：%1$s</string>
     <string name="approval_scope_entry">文件访问：%1$s</string>
     <string name="approval_scope_other">其他权限：%1$s</string>
+    <string name="approval_notice_close">关闭通知</string>
 </resources>
