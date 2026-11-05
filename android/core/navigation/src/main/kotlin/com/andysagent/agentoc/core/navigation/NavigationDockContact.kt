@@ -58,5 +58,5 @@ internal fun navigationContactPose(contact: Offset, strength: Float): Navigation
     val x = (contact.x.coerceIn(0f, 1f) - .5f) * 2f
     val y = (contact.y.coerceIn(0f, 1f) - .5f) * 2f
     return NavigationContactPose(rotationX = -y * 12f * load, rotationY = x * 15f * load,
-        scale = 1f + .065f * load)
+        scale = 1f + .15f * load)
 }
