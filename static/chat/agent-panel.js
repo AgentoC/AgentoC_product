@@ -44,7 +44,7 @@
     return typeof t === "function"
       ? t(key)
       : option.value === ""
-        ? "Use AgentoC's default conversation behavior"
+        ? "Use Ragent's default conversation behavior"
         : "Reusable workflow for the next message";
   }
 

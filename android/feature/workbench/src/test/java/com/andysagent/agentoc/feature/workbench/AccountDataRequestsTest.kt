@@ -74,7 +74,7 @@ class AccountDataRequestsTest {
         assertEquals(emptyList(), opened)
         rule.onNodeWithTag("account-deletion-request").performClick()
         rule.onNodeWithTag("account-deletion-instructions").assertIsDisplayed()
-        rule.onNodeWithText("This opens the AgentoC support website.", substring = true).assertExists()
+        rule.onNodeWithText("This opens the Ragent support website.", substring = true).assertExists()
         rule.onNodeWithText("Opening the page does not submit a request or delete anything.", substring = true).assertExists()
         assertEquals(emptyList(), opened)
         rule.onNodeWithTag("account-deletion-open-web").performClick()

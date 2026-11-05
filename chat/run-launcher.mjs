@@ -95,13 +95,13 @@ function providerPreparationGuidance(app, causeCode) {
   const label = ({ codex: 'Codex', claude: 'Claude', agy: 'AgY' })[trimString(app)] || 'Agent';
   switch (safePreparationCode(causeCode).toLowerCase()) {
     case 'native-provider-not-selected':
-      return `No ${label} provider is configured on this computer. Open AgentoC Settings > Providers, add or select a ${label} provider, then retry.`;
+      return `No ${label} provider is configured on this computer. Open Ragent Settings > Providers, add or select a ${label} provider, then retry.`;
     case 'credential-missing':
-      return `The selected ${label} provider has no usable credential on this computer. Reconnect or replace its credential in AgentoC Settings > Providers, then retry.`;
+      return `The selected ${label} provider has no usable credential on this computer. Reconnect or replace its credential in Ragent Settings > Providers, then retry.`;
     case 'provider-disabled':
-      return `The selected ${label} provider is disabled on this computer. Enable it in AgentoC Settings > Providers, then retry.`;
+      return `The selected ${label} provider is disabled on this computer. Enable it in Ragent Settings > Providers, then retry.`;
     case 'provider-not-ready':
-      return `The selected ${label} provider is not ready on this computer. Complete its setup in AgentoC Settings > Providers, then retry.`;
+      return `The selected ${label} provider is not ready on this computer. Complete its setup in Ragent Settings > Providers, then retry.`;
     default:
       return '';
   }
@@ -253,7 +253,7 @@ export async function prepareDetachedRunnerProvider(runId, {
     await ensureHarnessCompatible(selection.app);
   } catch (error) {
     const preparedError = createProviderPreparationError(
-      `${selection.app} harness is incompatible with the AgentoC adapter`,
+      `${selection.app} harness is incompatible with the Ragent adapter`,
       {
         app: selection.app,
         providerId: selection.providerId,

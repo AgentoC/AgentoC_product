@@ -142,6 +142,14 @@ class ProtocolCodecTest {
     }
 
     @Test
+    fun renamedPairingSchemesMatchLegacy() {
+        val old = "agentoc://pair?v=3&i=i3&e=https%3A%2F%2Fexample.test&t=rpi_fixture&x=2099-01-01T00%3A00%3A00Z"
+        listOf("riollant", "ragent").forEach { scheme ->
+            assertEquals(parsePairingUri(old), parsePairingUri(old.replace("agentoc://", "$scheme://")))
+        }
+    }
+
+    @Test
     fun rejectsUnsupportedPairingVersion() {
         assertFailsWith<IllegalArgumentException> {
             parsePairingUri("agentoc://pair?v=99&instance=i&endpoint=http%3A%2F%2F127.0.0.1%3A7690&token=t&expires=2026-08-12T00%3A00%3A00Z")

@@ -69,7 +69,7 @@ async function resolveCodexToolInvocation(toolId = 'codex', { codexHomeDir = '' 
   const tool = await getToolDefinitionAsync(toolId);
   const command = trimString(tool?.command) || 'codex';
   const resolvedCommand = await resolveToolCommandPathAsync(command);
-  if (!resolvedCommand) throw Object.assign(new Error('Internal Codex is not installed. Install it in AgentoC Harness management.'), { code: 'HARNESS_RUNTIME_UNAVAILABLE' });
+  if (!resolvedCommand) throw Object.assign(new Error('Internal Codex is not installed. Install it in Ragent Harness management.'), { code: 'HARNESS_RUNTIME_UNAVAILABLE' });
   const envOverrides = buildToolProcessEnvOverrides(tool || { id: toolId });
   const env = await applyManagedRuntimeEnv(
     toolId,

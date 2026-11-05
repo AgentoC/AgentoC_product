@@ -7,6 +7,13 @@ class SessionNavigationTest {
         val request = SessionNavigationRequest("s-1", "inst_pc-b")
         assertEquals(request, parseSessionNavigationUri(sessionNavigationUri(request)))
     }
+    @Test fun renamedSchemesPreserveNavigationValidation() {
+        val expected = SessionNavigationRequest("s-1", "inst_pc-b")
+        listOf("agentoc", "riollant", "ragent").forEach { scheme ->
+            assertEquals(expected, parseSessionNavigationUri("$scheme://session/s-1?instanceId=inst_pc-b"))
+            assertFailsWith<AppApiException> { parseSessionNavigationUri("$scheme://session/s-1?instanceId=inst_pc-b&approve=true") }
+        }
+    }
     @Test fun legacyTargetMustBeChosenBeforeLinkCanBeProduced() {
         val request = SessionNavigationRequest("s1").validated()
         assertEquals(ApiErrorCode.AMBIGUOUS_TARGET, assertFailsWith<AppApiException> { sessionNavigationUri(request) }.error.code)

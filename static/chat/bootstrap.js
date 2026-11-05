@@ -579,7 +579,7 @@ function normalizeSidebarShellMarkup() {
   appBar.id = "sidebarAppBar";
   const brand = document.createElement("div");
   brand.className = "sidebar-brand";
-  brand.textContent = "AgentoC";
+  brand.textContent = "Ragent";
   const appBarActions = document.createElement("div");
   appBarActions.className = "sidebar-app-bar-actions";
   const searchButton = createIconButton({
@@ -1234,7 +1234,7 @@ const SOURCE_FILTER_BOT_VALUE = "bot";
 const SOURCE_FILTER_AUTOMATION_VALUE = "automation";
 const DEFAULT_APP_ID = "chat";
 const DEFAULT_APP_NAME = "Chat";
-const DEFAULT_WEB_SOURCE_NAME = "AgentoC";
+const DEFAULT_WEB_SOURCE_NAME = "Ragent";
 const PREFERRED_AGENT_TEMPLATE_STORAGE_KEY = "preferredAgentTemplateId";
 const PREFERRED_AGENT_TEMPLATE_NAME_STORAGE_KEY = "preferredAgentTemplateName";
 const UI_THEMES = {

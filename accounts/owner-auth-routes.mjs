@@ -195,7 +195,7 @@ function renderGoogleIdentityPage({ nonce, phoneState, googleWebClientId, creden
     cspNonce,
     body: `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#faf8ff" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#121318" media="(prefers-color-scheme: dark)"><title>继续 Google 登录</title><style>${styles.pageStyles}\n${styles.qrStyles}</style></head>
-<body class="qr-login-page"><main class="qr-login-shell card"><header class="qr-login-header"><h1>继续 Google 登录</h1><p>此操作仅确认 AgentoC owner 身份，不会请求 Calendar、Drive 或 Gmail 权限。</p></header><section class="qr-login-body"><div id="google-button"></div>${demoEnabled ? '<form id="demo-login"><h2>Test account sign-in</h2><label>Username <input id="demo-username" name="username" autocomplete="username" required maxlength="80"></label><label>Password <input id="demo-password" name="password" type="password" autocomplete="current-password" required maxlength="256"></label><button type="submit">Sign in to this AgentoC instance</button></form>' : ''}<p id="error" class="qr-login-status" role="status" aria-live="polite"></p></section></main>
+<body class="qr-login-page"><main class="qr-login-shell card"><header class="qr-login-header"><h1>继续 Google 登录</h1><p>此操作仅确认 Ragent owner 身份，不会请求 Calendar、Drive 或 Gmail 权限。</p></header><section class="qr-login-body"><div id="google-button"></div>${demoEnabled ? '<form id="demo-login"><h2>Test account sign-in</h2><label>Username <input id="demo-username" name="username" autocomplete="username" required maxlength="80"></label><label>Password <input id="demo-password" name="password" type="password" autocomplete="current-password" required maxlength="256"></label><button type="submit">Sign in to this Ragent instance</button></form>' : ''}<p id="error" class="qr-login-status" role="status" aria-live="polite"></p></section></main>
 <script id="google-gsi-client" src="https://accounts.google.com/gsi/client" async></script>
 <script nonce="${cspNonce}">
 (function () {
@@ -274,7 +274,7 @@ function renderNativeIdentityPage({ transactionId, nonce, nativeState, googleWeb
     cspNonce,
     body: `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#faf8ff" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#121318" media="(prefers-color-scheme: dark)"><title>继续 Google 登录</title><style>${styles.pageStyles}\n${styles.qrStyles}</style></head>
-<body class="qr-login-page"><main class="qr-login-shell card"><header class="qr-login-header"><h1>继续 Google 登录</h1><p>此操作仅确认 AgentoC 账号身份。完成后请回到 AgentoC 应用继续。</p></header><section class="qr-login-body"><div id="google-button"></div><p id="error" class="qr-login-status" role="status" aria-live="polite"></p></section></main>
+<body class="qr-login-page"><main class="qr-login-shell card"><header class="qr-login-header"><h1>继续 Google 登录</h1><p>此操作仅确认 Ragent 账号身份。完成后请回到 Ragent 应用继续。</p></header><section class="qr-login-body"><div id="google-button"></div><p id="error" class="qr-login-status" role="status" aria-live="polite"></p></section></main>
 <script id="google-gsi-client" src="https://accounts.google.com/gsi/client" async></script>
 <script nonce="${cspNonce}">
 (function () {
@@ -290,7 +290,7 @@ function renderNativeIdentityPage({ transactionId, nonce, nativeState, googleWeb
       owner_auth_csrf_invalid: '授权页面已过期，请重新打开安全链接。',
       owner_auth_account_session_browser_ticket_invalid: '登录链接已失效，请在应用中重新发起登录。',
       owner_auth_account_session_expired: '登录会话已过期，请在应用中重新发起登录。',
-      owner_auth_account_session_consumed: '这次登录已经完成，请直接返回 AgentoC 应用。',
+      owner_auth_account_session_consumed: '这次登录已经完成，请直接返回 Ragent 应用。',
     };
     if (code && messages[code]) return messages[code] + ' [' + code + ']';
     if (code) return '认证未完成，请重试。 [' + code + ']';
@@ -302,7 +302,7 @@ function renderNativeIdentityPage({ transactionId, nonce, nativeState, googleWeb
       const data = await result.json();
       if (!result.ok || !data.ok) throw new Error(credentialErrorMessage(data));
       if (buttonHost) buttonHost.textContent = '';
-      error.textContent = '登录完成，请返回 AgentoC 应用继续。';
+      error.textContent = '登录完成，请返回 Ragent 应用继续。';
     } catch (err) { error.textContent = err.message || '认证未完成，请重试。'; }
   }
   let initialized = false;
@@ -368,7 +368,7 @@ function renderDesktopQrPage({ transactionId, phoneUrl, statusEndpoint, delivery
     try {
       const response = await fetch(statusEndpoint, { credentials: 'same-origin', cache: 'no-store' });
       const data = await response.json();
-      if (!response.ok) throw new Error(data && data.error ? data.error : '登录链接已失效，请返回 AgentoC 后重试。');
+      if (!response.ok) throw new Error(data && data.error ? data.error : '登录链接已失效，请返回 Ragent 后重试。');
       if (data.status === 'completed' && data.returnUrl) {
         const target = new URL(data.returnUrl);
         target.searchParams.set('grant', deliveryGrant);
@@ -428,7 +428,7 @@ function renderDesktopPollPage({ transactionId, phoneUrl, statusEndpoint, styles
     try {
       const response = await fetch(statusEndpoint, { credentials: 'same-origin', cache: 'no-store' });
       const data = await response.json();
-      if (!response.ok) throw new Error(data && data.error ? data.error : '登录链接已失效，请返回 AgentoC 后重试。');
+      if (!response.ok) throw new Error(data && data.error ? data.error : '登录链接已失效，请返回 Ragent 后重试。');
       if (data.status === 'completed') {
         if (status) status.textContent = '电脑正在自动完成登录，请稍候…';
         window.setTimeout(poll, 5000);

@@ -32,8 +32,8 @@ class AgentoCFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
-        val title = message.notification?.title ?: data["title"] ?: "AgentoC"
-        val body = message.notification?.body ?: data["body"] ?: "AgentoC needs your attention"
+        val title = message.notification?.title ?: data["title"] ?: "Ragent"
+        val body = message.notification?.body ?: data["body"] ?: "Ragent needs your attention"
         Publisher(this).publish(data, title, body)
     }
 

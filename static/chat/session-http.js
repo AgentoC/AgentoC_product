@@ -91,7 +91,7 @@ function notifyCompletion(session) {
   if (document.visibilityState === "visible") return;
   const folder = (session?.folder || "").split("/").pop() || "Session";
   const name = session?.name || folder;
-  const n = new Notification("AgentoC", {
+  const n = new Notification("Ragent", {
     body: `${name} — task completed`,
     tag: "agentoc-done",
   });

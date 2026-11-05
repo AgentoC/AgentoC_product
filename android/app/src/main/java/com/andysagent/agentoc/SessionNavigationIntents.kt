@@ -5,7 +5,7 @@ import com.andysagent.agentoc.core.appapi.*
 
 /** Public input is navigation only. In particular, extras cannot answer or approve anything. */
 internal fun readSessionNavigation(intent: Intent): SessionNavigationRequest? {
-    if (intent.data?.scheme == "agentoc" && intent.data?.host == "session") {
+    if (intent.data?.scheme in setOf("agentoc", "riollant", "ragent") && intent.data?.host == "session") {
         if (intent.action != Intent.ACTION_VIEW) throw AppApiException(ApiError(ApiErrorCode.INVALID_ARGUMENT, "Invalid link action"))
         return parseSessionNavigationUri(intent.data.toString())
     }

@@ -51,7 +51,7 @@
     <string name="settings_group_about">アプリについて</string>
     <string name="welcome_value_summary">パソコンに作業を任せ、スマートフォンで進捗や結果を確認できます。</string>
     <string name="welcome_sign_in_hint">Google アカウントでログインすると、パソコンとの連携を維持できます。</string>
-    <string name="welcome_pairing_hint">パソコンの AgentoC でペアリングコードを取得してください。未ログイン時のアクセスは最長 10 分間です。</string>
+    <string name="welcome_pairing_hint">パソコンの Ragent でペアリングコードを取得してください。未ログイン時のアクセスは最長 10 分間です。</string>
     <string name="settings_title">設定</string>
     <string name="settings_back">設定に戻る</string>
     <string name="settings_appearance_display">外観と表示</string>
@@ -237,11 +237,11 @@
     <string name="sign_in_guide_google_account">Google\nアカウント</string>
     <string name="sign_in_guide_connection_path_description">Google アカウントで、このスマートフォンと仕事用パソコンを接続します。</string>
     <string name="welcome_connection_methods_title">コンピュータで\nリンクを設定します。</string>
-    <string name="welcome_connection_methods_detail">両方の端末で同じ Google アカウントにログインし、「直接接続を試す」をタップしてください。ログインせずに接続するには、パソコンの AgentoC が発行した一時コードをスキャンします。</string>
+    <string name="welcome_connection_methods_detail">両方の端末で同じ Google アカウントにログインし、「直接接続を試す」をタップしてください。ログインせずに接続するには、パソコンの Ragent が発行した一時コードをスキャンします。</string>
     <string name="welcome_try_direct_connection">直接接続を試す</string>
     <string name="pairing_dialog_title">コンピュータに接続</string>
     <string name="pairing_link_computer">コンピュータをリンク</string>
-    <string name="pairing_account_claim_guidance">コンピュータのワンタイムコードをスキャンして接続します。次の画面で AgentoC のインストール方法とコードの場所を説明します。</string>
+    <string name="pairing_account_claim_guidance">コンピュータのワンタイムコードをスキャンして接続します。次の画面で Ragent のインストール方法とコードの場所を説明します。</string>
     <string name="pairing_connect_selected">選択したデバイスに接続</string>
     <string name="pairing_connecting">接続中…</string>
     <string name="pairing_continue">続ける</string>

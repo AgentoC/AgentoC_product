@@ -67,7 +67,7 @@
     <string name="settings_group_about">About</string>
     <string name="welcome_value_summary">Give your computer a task. Review progress and results from your phone.</string>
     <string name="welcome_sign_in_hint">Sign in with Google to keep your computers connected.</string>
-    <string name="welcome_pairing_hint">Open AgentoC on your computer to get a pairing code. Without signing in, access lasts up to 10 minutes.</string>
+    <string name="welcome_pairing_hint">Open Ragent on your computer to get a pairing code. Without signing in, access lasts up to 10 minutes.</string>
     <string name="settings_title">Settings</string>
     <string name="settings_back">Back to settings</string>
     <string name="settings_appearance_display">Appearance &amp; display</string>
@@ -280,7 +280,7 @@
     <string name="temporary_pairing_phone_quota">This computer has reached its active phone connection limit. Disconnect another phone or wait for an existing temporary connection to expire, then retry.</string>
     <string name="temporary_pairing_rate_limited">This computer is handling too many requests. Wait a moment, then retry the same pairing code.</string>
     <string name="temporary_pairing_host_slow">This computer is responding slowly. Your pairing request can be retried with the same code.</string>
-    <string name="temporary_pairing_host_unavailable">The computer\'s temporary pairing service is unavailable. Check that AgentoC is running, then retry.</string>
+    <string name="temporary_pairing_host_unavailable">The computer\'s temporary pairing service is unavailable. Check that Ragent is running, then retry.</string>
     <string name="temporary_pairing_retry_hint">The pairing request is safe to retry with the same code.</string>
     <string name="sign_in_guide_title">Use the same account\nto find your work computer</string>
     <string name="sign_in_guide_continue_with_google">Continue with Google</string>
@@ -289,11 +289,11 @@
     <string name="sign_in_guide_google_account">Google\naccount</string>
     <string name="sign_in_guide_connection_path_description">Connect this phone and your work computer through your Google account.</string>
     <string name="welcome_connection_methods_title">Set up a link\non your computer.</string>
-    <string name="welcome_connection_methods_detail">Sign in to the same Google account on both devices, then tap Try direct connection. To connect without signing in, scan a temporary code from AgentoC on your computer.</string>
+    <string name="welcome_connection_methods_detail">Sign in to the same Google account on both devices, then tap Try direct connection. To connect without signing in, scan a temporary code from Ragent on your computer.</string>
     <string name="welcome_try_direct_connection">Try direct connection</string>
     <string name="pairing_dialog_title">Connect your computer</string>
     <string name="pairing_link_computer">Link a computer</string>
-    <string name="pairing_account_claim_guidance">Connect a computer by scanning its one-time code. The next screen explains how to install AgentoC and find the code.</string>
+    <string name="pairing_account_claim_guidance">Connect a computer by scanning its one-time code. The next screen explains how to install Ragent and find the code.</string>
     <string name="pairing_connect_selected">Connect selected</string>
     <string name="pairing_connecting">Connecting…</string>
     <string name="pairing_continue">Continue</string>
@@ -322,7 +322,7 @@
     <string name="pairing_new_code_hint">This code cannot be reused. Start again with a new code from the computer.</string>
     <string name="pairing_error_empty_scan">No account-link code was found in that scan.</string>
     <string name="pairing_error_invalid_control_code">That temporary control code is invalid or has expired.</string>
-    <string name="pairing_error_invalid_account_code">That QR code is not a valid AgentoC account-link code.</string>
+    <string name="pairing_error_invalid_account_code">That QR code is not a valid Ragent account-link code.</string>
     <string name="pairing_error_temporary_unavailable">Temporary pairing is unavailable in this build.</string>
     <string name="pairing_error_control_unavailable">Temporary full control is unavailable in this build.</string>
     <string name="pairing_error_use_account_code">This phone is signed in. Scan the computer\'s ordinary account pairing code.</string>
@@ -455,8 +455,8 @@
     <string name="account_data_title">Account and privacy</string>
     <string name="account_privacy_open">Privacy notice</string>
     <string name="account_deletion_request">Request account and data deletion</string>
-    <string name="account_deletion_request_summary">Submit a request to AgentoC support. Signing out or unlinking a computer does not delete your account.</string>
-    <string name="account_deletion_request_detail">This opens the AgentoC support website. Follow its email instructions to request account and associated data deletion, or deletion of specific records. Support verifies ownership and confirms the scope and outcome. Opening the page does not submit a request or delete anything. Do not send passwords, API keys or authentication tokens. Files and backups on your own computers, including offline computers, are separate copies.</string>
+    <string name="account_deletion_request_summary">Submit a request to Ragent support. Signing out or unlinking a computer does not delete your account.</string>
+    <string name="account_deletion_request_detail">This opens the Ragent support website. Follow its email instructions to request account and associated data deletion, or deletion of specific records. Support verifies ownership and confirms the scope and outcome. Opening the page does not submit a request or delete anything. Do not send passwords, API keys or authentication tokens. Files and backups on your own computers, including offline computers, are separate copies.</string>
     <string name="account_deletion_open_web">Open request instructions</string>
     <string name="account_data_browser_unavailable">Could not open a browser. Copy the link below and open it in a browser. No deletion request was submitted.</string>
     <string name="demo_environment_full_title">Test account · isolated workspace</string>

@@ -135,7 +135,7 @@ internal class OwnerCaptureWorkflow(private val graph: AndroidRuntimeGraph, priv
     override suspend fun scheduleBackgroundDelivery(operationId: String): String {
         val appContext = context ?: throw AppApiException(ApiError(ApiErrorCode.CAPABILITY_UNSUPPORTED, "Background delivery is unavailable"))
         if (!BackgroundDeliveryJobs.notificationsAvailable(appContext))
-            throw AppApiException(ApiError(ApiErrorCode.PERMISSION_DENIED, "Enable AgentoC notifications before scheduling background delivery"))
+            throw AppApiException(ApiError(ApiErrorCode.PERMISSION_DENIED, "Enable Ragent notifications before scheduling background delivery"))
         val draft = withContext(kotlinx.coroutines.Dispatchers.IO) {
             graph.captureDrafts.getByOperationId(operationId, caller)
         } ?: throw AppApiException(ApiError(ApiErrorCode.RESOURCE_NOT_FOUND, "The original task draft is unavailable"))

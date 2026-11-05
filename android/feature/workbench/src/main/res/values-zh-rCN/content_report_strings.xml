@@ -1,7 +1,7 @@
 <resources>
     <string name="content_report_title">举报 AI 内容</string>
     <string name="content_report_settings">内容举报与回执</string>
-    <string name="content_report_disclosure">举报将发送给 AgentoC 开发者，包含举报原因、可选说明、应用版本和举报编号。只有勾选后才会发送下方回复片段，不附带工作台或登录凭据。本机会保留私有副本，直到你主动清除。</string>
+    <string name="content_report_disclosure">举报将发送给 Ragent 开发者，包含举报原因、可选说明、应用版本和举报编号。只有勾选后才会发送下方回复片段，不附带工作台或登录凭据。本机会保留私有副本，直到你主动清除。</string>
     <string name="content_report_reason">选择举报原因</string>
     <string name="content_report_reason_unsafe">危险或不安全内容</string>
     <string name="content_report_reason_harassment">仇恨或骚扰</string>

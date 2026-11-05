@@ -1,7 +1,7 @@
 <resources>
     <string name="content_report_title">檢舉 AI 內容</string>
     <string name="content_report_settings">內容檢舉與收據</string>
-    <string name="content_report_disclosure">檢舉將傳送給 AgentoC 開發者，包含原因、選填說明、應用程式版本及檢舉編號。只有勾選後才會傳送下方回覆片段，不附帶工作台或登入憑證。本機會保留私有副本，直到你主動清除。</string>
+    <string name="content_report_disclosure">檢舉將傳送給 Ragent 開發者，包含原因、選填說明、應用程式版本及檢舉編號。只有勾選後才會傳送下方回覆片段，不附帶工作台或登入憑證。本機會保留私有副本，直到你主動清除。</string>
     <string name="content_report_reason">選擇檢舉原因</string>
     <string name="content_report_reason_unsafe">危險或不安全內容</string>
     <string name="content_report_reason_harassment">仇恨或騷擾</string>

@@ -200,7 +200,7 @@
     <string name="share_intake_check_unavailable">このコンピューターのプロジェクトルーティング対応を確認できませんでした。下書きは保存されています。</string>
     <string name="share_intake_checking">このコンピューターのプロジェクトルーティング対応を確認しています…</string>
     <string name="share_intake_retry_check">コンピューターを再確認</string>
-    <string name="share_intake_upgrade_pc">このコンピューターは必要なプロジェクトルーティングプロトコルに対応していません。AgentoC サービスを更新または確認してください。下書きは保存されています。</string>
+    <string name="share_intake_upgrade_pc">このコンピューターは必要なプロジェクトルーティングプロトコルに対応していません。Ragent サービスを更新または確認してください。下書きは保存されています。</string>
     <string name="share_material_help">これは参考資料です。タスクの指示に実行してほしい内容を追加してください。</string>
     <string name="share_no_text">共有テキストはありません。ファイルはタスクに添付されたままです。</string>
     <string name="share_resolve_files">続行するにはインポートを完了するか未完了のファイルを削除してください。</string>

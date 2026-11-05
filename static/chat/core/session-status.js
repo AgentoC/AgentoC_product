@@ -418,7 +418,7 @@
         "checking",
         slow ? "taskFlow.checkingSlow" : "taskFlow.checking",
         slow
-          ? "Still confirming the route; AgentoC will continue here if routing times out."
+          ? "Still confirming the route; Ragent will continue here if routing times out."
           : "Sent, confirming route...",
       );
     }

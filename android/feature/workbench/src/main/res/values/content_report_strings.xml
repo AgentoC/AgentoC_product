@@ -1,7 +1,7 @@
 <resources>
     <string name="content_report_title">Report AI content</string>
     <string name="content_report_settings">Content report and receipt</string>
-    <string name="content_report_disclosure">Send a report to the AgentoC developer. We send the reason, optional note, app version and report ID. The reply excerpt is sent only if you select it below. No workbench or sign-in credentials are attached. This phone keeps a private copy until you clear it.</string>
+    <string name="content_report_disclosure">Send a report to the Ragent developer. We send the reason, optional note, app version and report ID. The reply excerpt is sent only if you select it below. No workbench or sign-in credentials are attached. This phone keeps a private copy until you clear it.</string>
     <string name="content_report_reason">Choose a reason</string>
     <string name="content_report_reason_unsafe">Dangerous or unsafe content</string>
     <string name="content_report_reason_harassment">Hate or harassment</string>

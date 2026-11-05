@@ -370,34 +370,34 @@ async function getOwnerBootstrapSessionDefinitions() {
   pushDefinition({
       tool: defaultToolId,
       externalTriggerId: OWNER_BOOTSTRAP_SHORTCUTS_GUIDE_EXTERNAL_TRIGGER_ID,
-      name: '[引导] 安装快捷指令，用 Siri 或一键启动 AgentoC',
+      name: '[引导] 安装快捷指令，用 Siri 或一键启动 Ragent',
       entryMode: SESSION_ENTRY_MODE_READ,
       pinned: true,
       messages: [
         {
           role: 'assistant',
           content: [
-            '三个快捷指令帮你从 iPhone/Mac 快速启动 AgentoC。点击下方附件下载安装。',
-            '**AgentoC 语音**\n语音说出问题，自动提交并跳转到 AgentoC 查看 AI 流式回复。最适合绑定 Siri。',
-            '**AgentoC 文字**\n文字输入问题，提交后跳转。适合添加到主屏幕 Widget。',
-            '**打开 AgentoC**\n一键直接打开，最快的启动方式。',
+            '三个快捷指令帮你从 iPhone/Mac 快速启动 Ragent。点击下方附件下载安装。',
+            '**Ragent 语音**\n语音说出问题，自动提交并跳转到 Ragent 查看 AI 流式回复。最适合绑定 Siri。',
+            '**Ragent 文字**\n文字输入问题，提交后跳转。适合添加到主屏幕 Widget。',
+            '**打开 Ragent**\n一键直接打开，最快的启动方式。',
           ].join('\n\n'),
           attachments: [
             {
               localPath: SHORTCUT_VOICE_ASSET_PATH,
-              originalName: 'AgentoC 语音.shortcut',
+              originalName: 'Ragent 语音.shortcut',
               mimeType: 'application/octet-stream',
               renderAs: 'file',
             },
             {
               localPath: SHORTCUT_TEXT_ASSET_PATH,
-              originalName: 'AgentoC 文字.shortcut',
+              originalName: 'Ragent 文字.shortcut',
               mimeType: 'application/octet-stream',
               renderAs: 'file',
             },
             {
               localPath: SHORTCUT_OPEN_ASSET_PATH,
-              originalName: '打开 AgentoC.shortcut',
+              originalName: '打开 Ragent.shortcut',
               mimeType: 'application/octet-stream',
               renderAs: 'file',
             },

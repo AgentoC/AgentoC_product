@@ -28,7 +28,7 @@
     "taskFlow.uploading": "Uploading attachment...",
     "taskFlow.sending": "Sending...",
     "taskFlow.checking": "Sent, confirming route...",
-    "taskFlow.checkingSlow": "Still confirming the route; AgentoC will continue here if routing times out.",
+    "taskFlow.checkingSlow": "Still confirming the route; Ragent will continue here if routing times out.",
     "taskFlow.processing": "Received, waiting for activity...",
     "taskFlow.running": "Working...",
     "taskFlow.providerSlotWait": "Waiting for this AgY account to finish its previous task...",

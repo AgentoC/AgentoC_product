@@ -437,7 +437,7 @@ async function openInstallFlow({ source = "manual", replace = false } = {}) {
   const state = getInstallFlowState();
 
   if (state.standalone) {
-    showSystemToast("AgentoC is already running as an installed app.");
+    showSystemToast("Ragent is already running as an installed app.");
     return false;
   }
 

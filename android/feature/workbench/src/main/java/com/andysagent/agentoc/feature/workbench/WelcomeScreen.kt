@@ -178,7 +178,7 @@ fun WelcomeLaunchScreen(modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = "AgentoC",
+            text = "Ragent",
             style = AgentocTextStyles.brandDisplay,
             color = colors.primaryContent,
         )

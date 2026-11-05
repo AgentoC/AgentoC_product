@@ -229,7 +229,7 @@ export async function sendCompletionPush(session) {
   const folder = (session?.folder || '').split('/').pop() || 'Session';
   const name = session?.name || folder;
   const payload = JSON.stringify({
-    title: 'AgentoC',
+    title: 'Ragent',
     body: `${name} — task completed`,
     sessionId: session?.id || null,
     tab: 'sessions',
@@ -237,7 +237,7 @@ export async function sendCompletionPush(session) {
     kind: 'completion',
   });
   const web = dispatchPush(payload);
-  const fcm = sendFcm({ title: 'AgentoC', body: `${name} — task completed`, sessionId: session?.id || null, tab: 'sessions', kind: 'completion' }).catch(() => false);
+  const fcm = sendFcm({ title: 'Ragent', body: `${name} — task completed`, sessionId: session?.id || null, tab: 'sessions', kind: 'completion' }).catch(() => false);
   const [webResult, fcmResult] = await Promise.all([web, fcm]);
   return webResult || fcmResult;
 }
@@ -251,7 +251,7 @@ export async function sendUserAttentionPush(session, detail = {}) {
   const label = String(detail?.label || 'needs your attention').trim();
   const body = `${name} — ${label}`;
   const payload = JSON.stringify({
-    title: 'AgentoC',
+    title: 'Ragent',
     body,
     sessionId: session?.id || null,
     tab: 'sessions',
@@ -260,7 +260,7 @@ export async function sendUserAttentionPush(session, detail = {}) {
     awaitingKey: detail?.key || label,
   });
   const web = dispatchPush(payload);
-  const fcm = sendFcm({ title: 'AgentoC', body, sessionId: session?.id || null, tab: 'sessions', kind: detail?.kind || 'attention', awaitingKey: detail?.key || label }).catch(() => false);
+  const fcm = sendFcm({ title: 'Ragent', body, sessionId: session?.id || null, tab: 'sessions', kind: detail?.kind || 'attention', awaitingKey: detail?.key || label }).catch(() => false);
   const [webResult, fcmResult] = await Promise.all([web, fcm]);
   return webResult || fcmResult;
 }

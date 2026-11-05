@@ -45,7 +45,7 @@ fun sessionNavigationUri(request: SessionNavigationRequest): String {
 fun parseSessionNavigationUri(value: String): SessionNavigationRequest {
     if (value.length > 1024) apiFailure(ApiErrorCode.INVALID_ARGUMENT, "Navigation link exceeds limit")
     val uri = try { URI(value) } catch (_: Exception) { apiFailure(ApiErrorCode.INVALID_ARGUMENT, "Invalid navigation link") }
-    if (uri.scheme != "agentoc" || uri.rawAuthority != "session" || uri.rawFragment != null ||
+    if (uri.scheme !in setOf("agentoc", "riollant", "ragent") || uri.rawAuthority != "session" || uri.rawFragment != null ||
         !uri.rawPath.orEmpty().startsWith("/") || uri.rawQuery?.startsWith("instanceId=") != true) {
         apiFailure(ApiErrorCode.INVALID_ARGUMENT, "Invalid session link")
     }

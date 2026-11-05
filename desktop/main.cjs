@@ -141,7 +141,7 @@ function createMainWindow() {
   const appRoot = app.getAppPath();
   const icon = nativeImage.createFromPath(path.join(appRoot, "assets", "agentoc-android-logo.png"));
   mainWindow = new BrowserWindow({
-    title: "AgentoC",
+    title: "Ragent",
     width: 1180,
     height: 800,
     minWidth: 900,

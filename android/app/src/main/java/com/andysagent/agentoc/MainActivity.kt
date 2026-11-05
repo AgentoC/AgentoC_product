@@ -322,7 +322,7 @@ class MainActivity : ComponentActivity() {
     /** Single intake path for cold start and hot start: pairing deep links and notification taps. */
     private fun consumeIncomingIntent(intent: Intent?) {
         intent ?: return
-        if (intent.action == Intent.ACTION_VIEW && intent.data?.scheme == "agentoc" && intent.data?.host == "pair") {
+        if (intent.action == Intent.ACTION_VIEW && intent.data?.scheme in setOf("agentoc", "riollant", "ragent") && intent.data?.host == "pair") {
             pendingPairingUri = intent.data.toString()
         }
         try {
@@ -1894,7 +1894,7 @@ private fun BrowserSignInWaitingOverlay(
         text = {
             Column {
                 Text(
-                    "Complete Google sign-in in the browser that just opened, then come back to AgentoC. " +
+                    "Complete Google sign-in in the browser that just opened, then come back to Ragent. " +
                         "This phone finishes the connection automatically.",
                     color = colors.secondaryContent,
                 )

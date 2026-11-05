@@ -37,7 +37,7 @@
 namespace {
 
 constexpr wchar_t kWindowClass[] = L"AgentoC.EmbeddedMsiInstaller";
-constexpr wchar_t kWindowTitle[] = L"AgentoC Setup";
+constexpr wchar_t kWindowTitle[] = L"Ragent Setup";
 constexpr UINT kInstallMessage = WM_APP + 20;
 constexpr UINT kRestoreInstallerWindow = WM_APP + 21;
 constexpr UINT kButtonWelcome = 4101;
@@ -300,7 +300,7 @@ void BrowseForFolder() {
     if (SUCCEEDED(dialog->GetOptions(&options))) {
         dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
     }
-    dialog->SetTitle(Text(L"Choose the AgentoC installation folder", L"选择 AgentoC 安装文件夹").c_str());
+    dialog->SetTitle(Text(L"Choose the Ragent installation folder", L"选择 Ragent 安装文件夹").c_str());
     result = dialog->Show(g.window);
     if (SUCCEEDED(result)) {
         IShellItem* item = nullptr;
@@ -429,7 +429,7 @@ void DrawBrandPanel(Gdiplus::Graphics& graphics, const RECT& client, float width
     if (g.logo && g.logo->GetLastStatus() == Gdiplus::Ok) {
         graphics.DrawImage(g.logo, Gdiplus::RectF(Px(51), Px(63), Px(86), Px(86)));
     }
-    DrawText(graphics, L"AgentoC", Px(42), Px(190), width - Px(72), Px(29), Color(28, 32, 42), true);
+    DrawText(graphics, L"Ragent", Px(42), Px(190), width - Px(72), Px(29), Color(28, 32, 42), true);
     DrawText(graphics, Text(L"Your local AI workbench", L"你的本地 AI 工作台"), Px(43), Px(234), width - Px(76), Px(15), Color(96, 104, 121));
 
     Gdiplus::SolidBrush divider(AlphaColor(30, 64, 74, 96));
@@ -455,14 +455,14 @@ void DrawMainContent(Gdiplus::Graphics& graphics, const RECT& client, float left
     switch (g.page) {
     case Page::Welcome: {
         if (g.updating) {
-            DrawText(graphics, Text(L"Update AgentoC", L"更新 AgentoC"), x, y + Px(44), width, Px(31), ink, true);
-            DrawText(graphics, Text(L"Update the existing installation in its current folder.", L"在当前文件夹中更新已安装的 AgentoC。"),
+            DrawText(graphics, Text(L"Update Ragent", L"更新 Ragent"), x, y + Px(44), width, Px(31), ink, true);
+            DrawText(graphics, Text(L"Update the existing installation in its current folder.", L"在当前文件夹中更新已安装的 Ragent。"),
                 x, y + Px(105), width, Px(15), muted);
             DrawText(graphics, Text(L"Your account, settings, and existing data will be kept.", L"你的账号、设置和现有数据将被保留。"),
                 x, y + Px(160), width, Px(14), muted);
             break;
         }
-        DrawText(graphics, Text(L"Welcome to AgentoC", L"欢迎使用 AgentoC"), x, y + Px(44), width, Px(31), ink, true);
+        DrawText(graphics, Text(L"Welcome to Ragent", L"欢迎使用 Ragent"), x, y + Px(44), width, Px(31), ink, true);
         DrawText(graphics, Text(L"A calm, secure place to manage your local AI workbench.", L"在这里轻松、安全地管理本地 AI 工作台。"),
             x, y + Px(98), width, Px(15), muted);
 
@@ -482,7 +482,7 @@ void DrawMainContent(Gdiplus::Graphics& graphics, const RECT& client, float left
     }
     case Page::Location: {
         DrawText(graphics, Text(L"Choose an install folder", L"选择安装文件夹"), x, y + Px(44), width, Px(29), ink, true);
-        DrawText(graphics, Text(L"Select a folder for the AgentoC application files.", L"请选择 AgentoC 应用程序文件的安装位置。"),
+        DrawText(graphics, Text(L"Select a folder for the Ragent application files.", L"请选择 Ragent 应用程序文件的安装位置。"),
             x, y + Px(96), width, Px(14), muted);
         DrawText(graphics, Text(L"You can choose an existing folder or create a new one.", L"可以选择已有文件夹，也可以新建文件夹。"),
             x, y + Px(122), width, Px(13), muted);
@@ -498,7 +498,7 @@ void DrawMainContent(Gdiplus::Graphics& graphics, const RECT& client, float left
         break;
     }
     case Page::Installing: {
-        DrawText(graphics, Text(L"Installing AgentoC", L"正在安装 AgentoC"), x, y + Px(44), width, Px(29), ink, true);
+        DrawText(graphics, Text(L"Installing Ragent", L"正在安装 Ragent"), x, y + Px(44), width, Px(29), ink, true);
         DrawText(graphics, Text(L"This may take a few minutes. Keep this window open.", L"这可能需要几分钟，请保持此窗口打开。"),
             x, y + Px(96), width, Px(14), muted);
 
@@ -520,7 +520,7 @@ void DrawMainContent(Gdiplus::Graphics& graphics, const RECT& client, float left
         Gdiplus::SolidBrush successFill(Color(229, 247, 239));
         FillRounded(graphics, Gdiplus::RectF(x, y + Px(44), Px(52), Px(52)), Px(16), successFill);
         DrawText(graphics, L"✓", x, y + Px(54), Px(52), Px(25), Color(27, 143, 91), true, Gdiplus::StringAlignmentCenter);
-        DrawText(graphics, Text(L"AgentoC is ready", L"AgentoC 已准备就绪"), x, y + Px(124), width, Px(29), ink, true);
+        DrawText(graphics, Text(L"Ragent is ready", L"Ragent 已准备就绪"), x, y + Px(124), width, Px(29), ink, true);
         DrawText(graphics, Text(L"Installation completed successfully. You can open the desktop manager from the Start menu.",
             L"安装已成功完成。你可以从开始菜单打开桌面管理器。"), x, y + Px(176), width, Px(14), muted);
         break;
@@ -547,10 +547,10 @@ void DrawMainContent(Gdiplus::Graphics& graphics, const RECT& client, float left
 
 void UpdateWindowTitle() {
     if (!g.window) return;
-    if (g.page == Page::Installing) SetWindowTextW(g.window, Text(L"Installing AgentoC", L"正在安装 AgentoC").c_str());
-    else if (g.page == Page::Complete) SetWindowTextW(g.window, Text(L"AgentoC setup complete", L"AgentoC 安装完成").c_str());
-    else if (g.page == Page::Failed) SetWindowTextW(g.window, Text(L"AgentoC setup", L"AgentoC 安装程序").c_str());
-    else SetWindowTextW(g.window, Text(L"AgentoC setup", L"AgentoC 安装程序").c_str());
+    if (g.page == Page::Installing) SetWindowTextW(g.window, Text(L"Installing Ragent", L"正在安装 Ragent").c_str());
+    else if (g.page == Page::Complete) SetWindowTextW(g.window, Text(L"Ragent setup complete", L"Ragent 安装完成").c_str());
+    else if (g.page == Page::Failed) SetWindowTextW(g.window, Text(L"Ragent setup", L"Ragent 安装程序").c_str());
+    else SetWindowTextW(g.window, Text(L"Ragent setup", L"Ragent 安装程序").c_str());
 }
 
 void UpdateLocalizedControls() {
@@ -561,7 +561,7 @@ void UpdateLocalizedControls() {
         {g.installButton, Text(L"Install", L"安装")},
         {g.cancelButton, Text(L"Cancel", L"取消")},
         {g.finishButton, Text(L"Finish", L"完成")},
-        {g.launchOption, Text(L"Open AgentoC when setup finishes", L"安装完成后打开 AgentoC")}}) {
+        {g.launchOption, Text(L"Open Ragent when setup finishes", L"安装完成后打开 Ragent")}}) {
         if (item.first) SetWindowTextW(item.first, item.second.c_str());
     }
     if (g.pathEdit) SendMessageW(g.pathEdit, EM_SETCUEBANNER, TRUE,
@@ -698,7 +698,7 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         g.installButton = MakeButton(window, kButtonInstall, Text(L"Install", L"安装"));
         g.cancelButton = MakeButton(window, kButtonCancel, Text(L"Cancel", L"取消"));
         g.finishButton = MakeButton(window, kButtonFinish, Text(L"Finish", L"完成"));
-        g.launchOption = CreateWindowExW(0, L"BUTTON", Text(L"Open AgentoC when setup finishes", L"安装完成后打开 AgentoC").c_str(),
+        g.launchOption = CreateWindowExW(0, L"BUTTON", Text(L"Open Ragent when setup finishes", L"安装完成后打开 Ragent").c_str(),
             WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX, 0, 0, 1, 1, window,
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(kButtonLaunchOption)), gModule, nullptr);
         if (g.launchOption) SendMessageW(g.launchOption, BM_SETCHECK, BST_CHECKED, 0);
@@ -1126,7 +1126,7 @@ extern "C" __declspec(dllexport) INT __stdcall EmbeddedUIHandler(UINT messageTyp
     if (message == INSTALLMESSAGE_FILESINUSE || message == INSTALLMESSAGE_RMFILESINUSE) return IDIGNORE;
     if (message == INSTALLMESSAGE_INSTALLSTART) {
         if (HWND window = gUiWindow.load()) PostMessageW(window, kRestoreInstallerWindow, 0, 0);
-        PostUiText(1, Text(L"Preparing AgentoC services and application files…", L"正在准备 AgentoC 服务和应用程序文件…"));
+        PostUiText(1, Text(L"Preparing Ragent services and application files…", L"正在准备 Ragent 服务和应用程序文件…"));
         return IDOK;
     }
     if (message == INSTALLMESSAGE_ACTIONSTART) return IDOK;

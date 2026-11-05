@@ -51,7 +51,7 @@
     <string name="settings_group_about">Acerca de</string>
     <string name="welcome_value_summary">Encarga una tarea a tu ordenador. Revisa el progreso y los resultados desde el móvil.</string>
     <string name="welcome_sign_in_hint">Inicia sesión con Google para mantener vinculados tus ordenadores.</string>
-    <string name="welcome_pairing_hint">Obtén un código de vinculación en AgentoC en tu ordenador. Sin iniciar sesión, el acceso dura hasta 10 minutos.</string>
+    <string name="welcome_pairing_hint">Obtén un código de vinculación en Ragent en tu ordenador. Sin iniciar sesión, el acceso dura hasta 10 minutos.</string>
     <string name="settings_title">Ajustes</string>
     <string name="settings_back">Volver a los ajustes</string>
     <string name="settings_appearance_display">Apariencia y pantalla</string>
@@ -239,11 +239,11 @@
     <string name="sign_in_guide_google_account">Cuenta de\nGoogle</string>
     <string name="sign_in_guide_connection_path_description">Conecta este teléfono y tu equipo con tu cuenta de Google.</string>
     <string name="welcome_connection_methods_title">Configura un enlace\nen tu equipo.</string>
-    <string name="welcome_connection_methods_detail">Inicia sesión con la misma cuenta de Google en ambos dispositivos y toca «Probar conexión directa». Para conectarte sin iniciar sesión, escanea un código temporal de AgentoC en tu equipo.</string>
+    <string name="welcome_connection_methods_detail">Inicia sesión con la misma cuenta de Google en ambos dispositivos y toca «Probar conexión directa». Para conectarte sin iniciar sesión, escanea un código temporal de Ragent en tu equipo.</string>
     <string name="welcome_try_direct_connection">Probar conexión directa</string>
     <string name="pairing_dialog_title">Conectar tu equipo</string>
     <string name="pairing_link_computer">Vincular un equipo</string>
-    <string name="pairing_account_claim_guidance">Escanea el código de un solo uso del equipo para conectarlo. En la siguiente pantalla verás cómo instalar AgentoC y encontrar el código.</string>
+    <string name="pairing_account_claim_guidance">Escanea el código de un solo uso del equipo para conectarlo. En la siguiente pantalla verás cómo instalar Ragent y encontrar el código.</string>
     <string name="pairing_connect_selected">Conectar selección</string>
     <string name="pairing_connecting">Conectando…</string>
     <string name="pairing_continue">Continuar</string>

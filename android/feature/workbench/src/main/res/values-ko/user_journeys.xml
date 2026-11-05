@@ -10,7 +10,7 @@
     <string name="journey_code_ready">코드가 보여요</string>
     <string name="journey_previous">이전</string>
     <string name="journey_step_count">%1$d / %2$d단계</string>
-    <string name="journey_handoff_hint">링크를 컴퓨터로 보내 Windows용 AgentoC를 설치하고 여세요.</string>
+    <string name="journey_handoff_hint">링크를 컴퓨터로 보내 Windows용 Ragent를 설치하고 여세요.</string>
     <string name="journey_share_link">다운로드 링크 공유</string>
     <string name="journey_link_copied">링크 복사됨</string>
     <string name="journey_link_failed">다른 앱을 열 수 없습니다. 주소를 복사해 컴퓨터에서 여세요.</string>
@@ -44,7 +44,7 @@
     <string name="journey_devices_retry">다시 시도</string>
     <string name="journey_on_computer">컴퓨터에서 진행</string>
     <string name="journey_on_phone">휴대전화에서 진행</string>
-    <string name="journey_login_title">AgentoC 로그인</string>
+    <string name="journey_login_title">Ragent 로그인</string>
     <string name="journey_desktop_tab">휴대전화 페어링</string>
     <string name="journey_desktop_start">페어링 시작</string>
     <string name="journey_desktop_trusted">정식 페어링</string>

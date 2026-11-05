@@ -10,7 +10,7 @@
     <string name="journey_code_ready">已看到配對碼</string>
     <string name="journey_previous">上一步</string>
     <string name="journey_step_count">第 %1$d 步，共 %2$d 步</string>
-    <string name="journey_handoff_hint">將下載網址傳到電腦，安裝並開啟 Windows 版 AgentoC。</string>
+    <string name="journey_handoff_hint">將下載網址傳到電腦，安裝並開啟 Windows 版 Ragent。</string>
     <string name="journey_share_link">分享下載網址</string>
     <string name="journey_link_copied">網址已複製</string>
     <string name="journey_link_failed">無法開啟其他應用程式。請複製網址，在電腦上開啟。</string>
@@ -44,7 +44,7 @@
     <string name="journey_devices_retry">重新查詢</string>
     <string name="journey_on_computer">在電腦上操作</string>
     <string name="journey_on_phone">在手機上操作</string>
-    <string name="journey_login_title">登入 AgentoC</string>
+    <string name="journey_login_title">登入 Ragent</string>
     <string name="journey_desktop_tab">手機配對</string>
     <string name="journey_desktop_start">開始手機配對</string>
     <string name="journey_desktop_trusted">正式配對</string>

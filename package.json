@@ -5,13 +5,13 @@
   "type": "module",
   "license": "Apache-2.0",
   "author": "Superandyfre",
-  "homepage": "https://github.com/AgentoC/AgentoC_product#readme",
+  "homepage": "https://github.com/ragent-app/Ragent_product#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AgentoC/AgentoC_product.git"
+    "url": "git+https://github.com/ragent-app/Ragent_product.git"
   },
   "bugs": {
-    "url": "https://github.com/AgentoC/AgentoC_product/issues"
+    "url": "https://github.com/ragent-app/Ragent_product/issues"
   },
   "keywords": [
     "claude",

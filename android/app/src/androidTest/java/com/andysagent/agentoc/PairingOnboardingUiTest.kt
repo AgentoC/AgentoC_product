@@ -364,7 +364,7 @@ class PairingOnboardingUiTest {
         }
 
         composeRule.onNodeWithText("Upgrade to Pro").assertIsDisplayed()
-        composeRule.onNodeWithText("Connect more phones and computers to the same AgentoC account. Pro is coming soon.")
+        composeRule.onNodeWithText("Connect more phones and computers to the same Ragent account. Pro is coming soon.")
             .assertIsDisplayed()
         composeRule.onNodeWithText("Subscription and payment are not available yet.").assertIsDisplayed()
         composeRule.onNodeWithText("Back to connection").performClick()

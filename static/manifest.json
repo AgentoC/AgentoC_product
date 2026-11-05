@@ -1,6 +1,6 @@
 {
-  "name": "AgentoC",
-  "short_name": "AgentoC",
+  "name": "Ragent",
+  "short_name": "Ragent",
   "id": "./",
   "description": "Remote terminal access to AI coding tools",
   "start_url": "./",

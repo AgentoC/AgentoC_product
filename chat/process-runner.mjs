@@ -188,7 +188,7 @@ export async function resolveCommand(cmd) {
     return resolved;
   }
   if (internalHarnessId(cmd)) {
-    const error = new Error(`Internal Harness is not installed: ${cmd}. Install it in AgentoC Harness management.`);
+    const error = new Error(`Internal Harness is not installed: ${cmd}. Install it in Ragent Harness management.`);
     error.code = 'HARNESS_RUNTIME_UNAVAILABLE';
     throw error;
   }
@@ -218,7 +218,7 @@ export function buildRuntimeInvocation(runtimeFamily, prompt, options = {}, tool
   const riskMode = typeof options.riskMode === 'string' ? options.riskMode.trim() : '';
   if ((riskMode === 'safe' || riskMode === 'recommended')
       && !getGatedPermissionModeId(normalizedRuntimeFamily)) {
-    const error = new Error(`The ${normalizedRuntimeFamily} Harness cannot return permission decisions to AgentoC`);
+    const error = new Error(`The ${normalizedRuntimeFamily} Harness cannot return permission decisions to Ragent`);
     error.code = 'PRIVILEGED_GATE_UNSUPPORTED_RUNTIME';
     error.statusCode = 409;
     throw error;
