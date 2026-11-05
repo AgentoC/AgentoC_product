@@ -92,6 +92,38 @@ class RoomSessionRepositoryEventTest {
         repository.close()
     }
 
+    @Test fun anotherPendingApprovalKeepsSessionWaitingAcrossResponsesAndDeltas() = runBlocking {
+        database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 0, 0)))
+        val repository = RoomSessionRepository(database, QueuedTransport(listOf(
+            """{"sessionId":"session-1","events":[{"seq":1,"type":"approval_request","approvalId":"a","runId":"r"},{"seq":2,"type":"approval_request","approvalId":"b","runId":"r"}],"latestSeq":2}""",
+            """{"sessionId":"session-1","events":[{"seq":3,"type":"approval_response","approvalId":"a","runId":"r"},{"seq":4,"type":"message_delta","runId":"r","content":"continuing"}],"latestSeq":4}""",
+            """{"sessionId":"session-1","events":[{"seq":5,"type":"approval_response","approvalId":"b","runId":"r"}],"latestSeq":5}""",
+        )))
+        repository.refreshEvents("session-1")
+        repository.refreshEvents("session-1")
+        assertEquals(listOf("b"), repository.observePendingApprovals("session-1").first().map { it.id })
+        assertEquals(SessionStatus.WaitingApproval, repository.observeSession("session-1").first()?.status)
+        repository.refreshEvents("session-1")
+        assertTrue(repository.observePendingApprovals("session-1").first().isEmpty())
+        assertEquals(SessionStatus.Working, repository.observeSession("session-1").first()?.status)
+        repository.close()
+    }
+
+    @Test fun pendingApprovalDoesNotOverrideAnotherRunOrTerminalStatus() = runBlocking {
+        database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 0, 0)))
+        val repository = RoomSessionRepository(database, QueuedTransport(listOf(
+            """{"sessionId":"session-1","events":[{"seq":1,"type":"approval_request","approvalId":"a","runId":"old"}],"latestSeq":1}""",
+            """{"sessionId":"session-1","events":[{"seq":2,"type":"run_started","runId":"new"}],"latestSeq":2}""",
+            """{"sessionId":"session-1","events":[{"seq":3,"type":"run_completed","runId":"old"}],"latestSeq":3}""",
+        )))
+        repository.refreshEvents("session-1")
+        repository.refreshEvents("session-1")
+        assertEquals(SessionStatus.Working, repository.observeSession("session-1").first()?.status)
+        repository.refreshEvents("session-1")
+        assertEquals(SessionStatus.Completed, repository.observeSession("session-1").first()?.status)
+        repository.close()
+    }
+
     @Test fun backgroundSyncRecoversPendingApprovalAfterCursorPassedIt() = runBlocking {
         database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 10, 0)))
         database.dao().upsertCursor(SyncCursorEntity("session-1", 10, null, updatedAt = 0))

@@ -2804,6 +2804,22 @@ private class RoomEventSink(
         } else if (isApprovalResponse && type != "approved_action_batch_response") {
             dao.updateApprovalStatus(event.approvalId ?: event.batchId ?: requestId, "resolved", System.currentTimeMillis())
         }
+        // A response can resolve just one of several concurrent provider requests.
+        // Subsequent streaming events can also arrive while another request is
+        // still waiting. Preserve the waiting state for the matching run until
+        // its ordinary or privileged approval has actually been resolved.
+        if (session != null && event.terminalRunState() == null &&
+            (type == "approval_response" || type == "confirmation_response" || type == "decision" ||
+                type == "privileged_batch_response" || type.contains("delta") ||
+                type.contains("started") || type.contains("running"))) {
+            val waiting = dao.getPendingApprovals(scope).any { approval ->
+                approval.kind in setOf("approval_request", "confirmation_request", "privileged_batch_request") &&
+                    (event.runId.isNullOrBlank() || approval.runId.isNullOrBlank() || approval.runId == event.runId)
+            }
+            if (waiting) dao.getSession(scope)?.let {
+                if (it.status == "working") dao.upsertSessions(listOf(it.copy(status = "waiting_approval", updatedAt = System.currentTimeMillis())))
+            }
+        }
     }
 }
 

@@ -113,6 +113,9 @@ interface AgentoCDao {
     @Query("SELECT * FROM approvals WHERE sessionId = :sessionId AND status = 'pending' ORDER BY updatedAt ASC")
     fun observePendingApprovals(sessionId: String): Flow<List<ApprovalEntity>>
 
+    @Query("SELECT * FROM approvals WHERE sessionId = :sessionId AND status = 'pending' ORDER BY updatedAt ASC")
+    suspend fun getPendingApprovals(sessionId: String): List<ApprovalEntity>
+
     /** Global pending approvals across every cached session of one computer. */
     @Query("SELECT * FROM approvals WHERE status = 'pending' ORDER BY updatedAt ASC")
     fun observeAllPendingApprovals(): Flow<List<ApprovalEntity>>
