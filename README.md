@@ -11,12 +11,15 @@ across devices while the execution host remains under the user's control.
 
 Windows x64 early-access packages are available from [GitHub Releases](https://github.com/ragent-app/Ragent_product/releases/latest).
 The installer is unsigned and Windows may display a warning. Review the release
-notes for the package's exact source commit, validation results, and upgrade limitations before installing.
+notes for the package's exact source commit, validation results, and upgrade
+limitations before installing. Replacing an installer at the same public version
+does not trigger the version-based update notification.
 
 ## At a glance
 
 - Run a work session on a computer and follow it from the web workbench or
-  Android client, with streamed responses and session history.
+  Android client, with streamed responses and session history. The Android app
+  is in closed testing.
 - Integrate agent runtimes, including Codex and Claude, through Harness and
   provider adapters; supported features and installed versions vary.
 - Manage projects, files, runtime settings and approval requests on the host.

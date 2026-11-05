@@ -1,8 +1,9 @@
 # Independent AppFunctions caller-admission probe
 
 ```text
-Read android/docs/app-api-appfunctions.md and the implementation ledger. Build this
-standalone QA project using the parent Android wrapper and the configured SDK.
+Review the public source in `android/integration/appfunctions/` and the Android
+App API core README. Build this standalone QA project using the parent Android
+wrapper and the configured SDK.
 Install the tested Ragent APK and this APK on an explicitly selected owned API 36+
 device, verify their installed hashes and launch ProbeActivity. Capture its actual
 UI tree and platform logs. Require different caller/target UIDs, bind=DENIED and

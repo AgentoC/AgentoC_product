@@ -33,6 +33,6 @@ flowchart LR
   `infrastructure/turn-broker/` contain generic service implementations.
 - `tests/` and Android module test directories contain automated checks.
 
-Consult the release's tested-platform matrix before relying on a feature. A
-successful build does not by itself verify a deployed account service, model
-provider, remote network path, or a particular platform installer.
+Consult the release notes for tested platforms and limitations before relying on
+a feature. A successful build does not by itself verify a deployed account
+service, model provider, remote network path, or a particular platform installer.

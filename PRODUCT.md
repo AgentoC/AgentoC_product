@@ -1,19 +1,15 @@
-# Ragent Product Context Adapter
+# Ragent product context
 
-This file exists so design tooling can find a stable product-context entry point.
-It is not a second product specification.
+Ragent is an AI workbench for running agent tools on a computer controlled by the
+owner and following that work from the web or Android client. It brings together
+persistent sessions, workspaces and files, harness and provider configuration,
+paired devices, and requests for user decisions.
 
-Read these sources in order:
+Feature availability and approval behavior depend on the installed runtime,
+provider, platform, permission mode, and deployment. Review the actual release
+notes before assuming that a particular combination has been verified.
 
-1. `docs/product-positioning.md` for the macro product positioning, audience, promise, and decision boundary.
-2. `AGENTS.md` for repo-local product context, architecture, and engineering constraints.
-3. `notes/current/product-mainline.md` for the current product-development direction.
-4. `notes/current/user-feedback-log.md` for sanitized product evidence.
-5. `DESIGN.md` for the visual and interaction contract.
-
-For frontend work, treat Ragent as an operational AI workbench for owner-operators
-delegating real digital work from phone and desktop. It is not a marketing site,
-terminal emulator, editor-first IDE, or decorative chatbot. The positioning document
-is the source of truth for the user promise and non-goals.
-
-Do not duplicate product claims in this file. Update the canonical sources instead.
+Use [README.md](README.md) for the product and availability overview,
+[docs/architecture.md](docs/architecture.md) for code navigation,
+[docs/source-and-release.md](docs/source-and-release.md) for release boundaries,
+and [DESIGN.md](DESIGN.md) for the interaction and visual contract.
