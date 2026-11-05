@@ -85,9 +85,13 @@ func verifyPinnedSystemCatalog(pins *serviceImagePins, path string) error {
 		StateAction: windows.WTD_STATEACTION_VERIFY, ProvFlags: windows.WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT,
 		FileOrCatalogOrBlobOrSgnrOrCert: unsafe.Pointer(&ci)}
 	verifyErr := windows.WinVerifyTrustEx(windows.InvalidHWND, &windows.WINTRUST_ACTION_GENERIC_VERIFY_V2, &data)
+	trustedFingerprint := ""
+	if verifyErr == nil {
+		trustedFingerprint = verifiedTrustSignerFingerprint(&data)
+	}
 	data.StateAction = windows.WTD_STATEACTION_CLOSE
 	closeErr := windows.WinVerifyTrustEx(windows.InvalidHWND, &windows.WINTRUST_ACTION_GENERIC_VERIFY_V2, &data)
-	if verifyErr != nil || closeErr != nil {
+	if verifyErr != nil || closeErr != nil || trustedFingerprint == "" {
 		return errors.New("system catalog trust verification failed")
 	}
 	var cert *windows.CertContext
@@ -98,6 +102,10 @@ func verifyPinnedSystemCatalog(pins *serviceImagePins, path string) error {
 	defer windows.CertFreeCertificateContext(cert)
 	if cert.EncodedCert == nil || cert.Length == 0 || cert.Length > 1024*1024 {
 		return errors.New("system catalog signer invalid")
+	}
+	fingerprint, err := certificateFingerprint(cert)
+	if err != nil || fingerprint != trustedFingerprint {
+		return errors.New("system catalog verified signer mismatch")
 	}
 	parsed, err := x509.ParseCertificate(unsafe.Slice(cert.EncodedCert, int(cert.Length)))
 	if err != nil || !isMicrosoftWindowsCatalogSigner(parsed) {

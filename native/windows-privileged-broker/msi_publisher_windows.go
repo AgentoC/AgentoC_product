@@ -44,6 +44,30 @@ func verifyPinnedMSIPublisher(pins *msiArtifactPins, expected string) error {
 	return nil
 }
 
+func verifiedTrustSignerFingerprint(data *windows.WinTrustData) string {
+	if data == nil || data.StateData == 0 {
+		return ""
+	}
+	provider, _, _ := trustProviderState.Call(uintptr(data.StateData))
+	if provider == 0 {
+		return ""
+	}
+	signer, _, _ := trustProviderSigner.Call(provider, 0, 0, 0)
+	if signer == 0 {
+		return ""
+	}
+	certPointer, _, _ := trustProviderCertificate.Call(signer, 0)
+	if certPointer == 0 {
+		return ""
+	}
+	certificate := (*trustProviderCertHead)(unsafe.Pointer(certPointer))
+	if certificate.Size < uint32(unsafe.Sizeof(trustProviderCertHead{})) {
+		return ""
+	}
+	fingerprint, _ := certificateFingerprint(certificate.Cert)
+	return fingerprint
+}
+
 func inspectPinnedMSIPublisher(pins *msiArtifactPins) (string, error) {
 	if pins == nil || len(pins.handles) == 0 || pins.path == "" {
 		return "", errors.New("MSI publisher binding invalid")
@@ -58,21 +82,9 @@ func inspectPinnedMSIPublisher(pins *msiArtifactPins) (string, error) {
 		StateAction: windows.WTD_STATEACTION_VERIFY, ProvFlags: windows.WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT,
 		FileOrCatalogOrBlobOrSgnrOrCert: unsafe.Pointer(&file)}
 	verifyErr := windows.WinVerifyTrustEx(windows.InvalidHWND, &windows.WINTRUST_ACTION_GENERIC_VERIFY_V2, &data)
-	var trustedFingerprint string
-	if verifyErr == nil && data.StateData != 0 {
-		provider, _, _ := trustProviderState.Call(uintptr(data.StateData))
-		if provider != 0 {
-			signer, _, _ := trustProviderSigner.Call(provider, 0, 0, 0)
-			if signer != 0 {
-				certPointer, _, _ := trustProviderCertificate.Call(signer, 0)
-				if certPointer != 0 {
-					certificate := (*trustProviderCertHead)(unsafe.Pointer(certPointer))
-					if certificate.Size >= uint32(unsafe.Sizeof(trustProviderCertHead{})) {
-						trustedFingerprint, _ = certificateFingerprint(certificate.Cert)
-					}
-				}
-			}
-		}
+	trustedFingerprint := ""
+	if verifyErr == nil {
+		trustedFingerprint = verifiedTrustSignerFingerprint(&data)
 	}
 	data.StateAction = windows.WTD_STATEACTION_CLOSE
 	closeErr := windows.WinVerifyTrustEx(windows.InvalidHWND, &windows.WINTRUST_ACTION_GENERIC_VERIFY_V2, &data)
