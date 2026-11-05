@@ -45,7 +45,7 @@ class RoomSessionRepositoryEventTest {
         val activity = """{"actionRequired":true,"kind":"approval","sourceSeq":10}"""
         val transport = QueuedTransport(listOf(
             """{"sessionId":"session-1","events":[],"latestSeq":10,"runActivity":$activity}""",
-            """{"sessionId":"session-1","events":[{"seq":10,"type":"approval_request","approvalId":"claude:1","runId":"run-1","title":"Write","status":"pending"}],"latestSeq":10}""",
+            """{"sessionId":"session-1","events":[{"seq":10,"type":"approval_request","kind":"command","approvalId":"claude:1","runId":"run-1","title":"Write","command":"echo test","cwd":"/workspace","filePaths":["/workspace/file"],"grantRoot":"/workspace","permissions":{"network":{"enabled":true}},"risk":"high","status":"pending"}],"latestSeq":10}""",
             """{"sessionId":"session-1","events":[],"latestSeq":10,"runActivity":$activity}""",
         ))
         val repository = RoomSessionRepository(database, transport)
@@ -53,6 +53,13 @@ class RoomSessionRepositoryEventTest {
         val pending = repository.observePendingApprovals("session-1").first().single()
         assertEquals("claude:1", pending.id)
         assertEquals(false, pending.passkeyRequired)
+        assertEquals("command", pending.requestKind)
+        assertEquals("echo test", pending.command)
+        assertEquals("/workspace", pending.cwd)
+        assertEquals(listOf("/workspace/file"), pending.filePaths)
+        assertEquals("/workspace", pending.grantRoot)
+        assertTrue(pending.permissionsJson!!.contains("network"))
+        assertEquals("high", pending.riskLevel)
         repository.close()
     }
 

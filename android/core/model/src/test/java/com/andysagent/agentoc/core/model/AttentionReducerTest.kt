@@ -172,6 +172,12 @@ class AttentionReducerTest {
     }
 
     @Test
+    fun `provider plan kind survives the approval event envelope`() {
+        val approval = Approval(id = "plan-1", sessionId = "s1", title = "Plan", requestKind = "plan")
+        assertEquals(AttentionKind.Plan, AttentionReducer.project(listOf(session("s1")), listOf(approval)).single().kind)
+    }
+
+    @Test
     fun `structured question approval is inline even when legacy passkey default is present`() {
         val items = AttentionReducer.project(
             sessions = listOf(session("s1")),

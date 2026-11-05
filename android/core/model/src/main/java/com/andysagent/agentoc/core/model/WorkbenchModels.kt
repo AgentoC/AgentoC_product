@@ -325,6 +325,12 @@ data class Approval(
     val brokerChallengeDigest: String? = null,
     /** A decision was submitted without a confirmed terminal result; do not offer another POST. */
     val brokerDecisionUncertain: Boolean = false,
+    val requestKind: String? = null,
+    val command: String? = null,
+    val cwd: String? = null,
+    val filePaths: List<String> = emptyList(),
+    val grantRoot: String? = null,
+    val permissionsJson: String? = null,
 )
 
 data class RunActivity(

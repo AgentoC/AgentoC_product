@@ -2922,6 +2922,12 @@ private fun ApprovalEntity.toDomainApproval(): Approval {
         expiresAt = expiresAt,
         schemaVersion = schemaVersion,
         channel = channel,
+        requestKind = details?.get("requestKind")?.jsonPrimitive?.contentOrNull,
+        command = details?.get("command")?.jsonPrimitive?.contentOrNull,
+        cwd = details?.get("cwd")?.jsonPrimitive?.contentOrNull,
+        filePaths = details?.get("filePaths")?.jsonArray.orEmpty().mapNotNull { it.jsonPrimitive.contentOrNull },
+        grantRoot = details?.get("grantRoot")?.jsonPrimitive?.contentOrNull,
+        permissionsJson = details?.get("permissions")?.toString(),
     )
 }
 
@@ -2936,13 +2942,20 @@ private fun buildApprovalDetails(event: SessionEventDto): String? {
     }
 
     val details = buildJsonObject {
+        event.kind?.let { put("requestKind", JsonPrimitive(it)) }
+        event.command?.let { put("command", JsonPrimitive(it)) }
+        event.cwd?.let { put("cwd", JsonPrimitive(it)) }
+        if (event.filePaths.isNotEmpty()) put("filePaths", buildJsonArray { event.filePaths.forEach { add(JsonPrimitive(it)) } })
+        event.grantRoot?.let { put("grantRoot", JsonPrimitive(it)) }
+        event.permissions?.let { put("permissions", it) }
         if (event.other.isNotEmpty()) put("other", buildJsonArray { event.other.forEach(::add) })
         if (event.delete.isNotEmpty()) put("delete", buildJsonArray { event.delete.forEach(::add) })
         if (event.installAuto.isNotEmpty()) put("installAuto", buildJsonArray { event.installAuto.forEach(::add) })
         val options = event.options.ifEmpty { event.choices }
         if (options.isNotEmpty()) put("options", buildJsonArray { options.forEach { add(JsonPrimitive(it)) } })
         event.isMultiSelect?.let { put("isMultiSelect", JsonPrimitive(it)) }
-        event.riskLevel?.let { put("riskLevel", JsonPrimitive(it)) }
+        (event.riskLevel ?: (event.risk as? JsonPrimitive)?.contentOrNull
+            ?: (event.risk as? JsonObject)?.get("tier")?.jsonPrimitive?.contentOrNull)?.let { put("riskLevel", JsonPrimitive(it)) }
         event.passkeyRequired?.let { put("passkeyRequired", JsonPrimitive(it)) }
         event.question?.takeIf { it.isNotBlank() }?.let { put("question", JsonPrimitive(it)) }
         event.schemaVersion?.let { put("schemaVersion", JsonPrimitive(it)) }

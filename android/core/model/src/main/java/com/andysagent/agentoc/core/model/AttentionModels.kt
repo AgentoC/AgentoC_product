@@ -119,7 +119,7 @@ object AttentionReducer {
         val dangerous = approval.isDangerous()
         val kind = when {
             approval.kind.equals("question", ignoreCase = true) || approval.questions.isNotEmpty() -> AttentionKind.Question
-            approval.kind == "plan" || approval.kind == "plan_approval" -> AttentionKind.Plan
+            approval.kind == "plan" || approval.kind == "plan_approval" || approval.requestKind == "plan" -> AttentionKind.Plan
             else -> AttentionKind.Approval
         }
         val summary = if (approval.kind == WINDOWS_BROKER_APPROVAL_KIND) {
