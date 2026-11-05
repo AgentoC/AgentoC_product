@@ -35,10 +35,6 @@ internal fun AccountConnectionIllustration(compact: Boolean, modifier: Modifier 
     Canvas(modifier.width(width).height(width * (184f / 256f))
         .semantics { contentDescription = description }) {
         scale(size.width / 256f, size.height / 184f, pivot = Offset.Zero) {
-            // The open orbit joins the composition without enclosing it in another card.
-            drawArc(Brush.linearGradient(listOf(blue.copy(alpha = 0.16f), violet.copy(alpha = 0.26f))),
-                startAngle = 200f, sweepAngle = 205f, useCenter = false,
-                topLeft = Offset(49f, 7f), size = Size(184f, 150f), style = Stroke(1.2f))
             drawOval(blue.copy(alpha = if (dark) 0.08f else 0.045f), Offset(16f, 164f), Size(218f, 14f))
 
             // Computer: a fine rim, a softly tinted screen, and a restrained stand.
