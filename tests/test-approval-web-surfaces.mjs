@@ -87,6 +87,26 @@ try {
   assert.equal(localized.en.summary, 'May delete: /tmp/example_file.txt');
   assert.doesNotMatch(localized.en.reason, /[\u4e00-\u9fff]/);
   await localePage.close();
+  if (process.env.AGENTOC_APPROVAL_REPLAY_FILE) {
+    const encoded = await readFile(process.env.AGENTOC_APPROVAL_REPLAY_FILE, 'utf8');
+    const captured = JSON.parse(Buffer.from(encoded.trim(), 'base64').toString('utf8')).events[0];
+    const replay = await browser.newPage();
+    await replay.setContent('<!doctype html><div id="inputArea"><div id="liveBar"></div></div>');
+    await replay.addScriptTag({content: await read('static/chat/i18n.js')});
+    await replay.evaluate(() => window.agentocSetUiLanguagePreference('en'));
+    await replay.addScriptTag({content: scripts[0]});
+    await replay.addScriptTag({content: scripts[2]});
+    await replay.addScriptTag({content: scripts[3]});
+    await replay.evaluate(e => window.AgentoCDecisions.noteRequest(e), captured);
+    const title = await replay.locator('#decisionSheet .oneui-notification__title').textContent();
+    assert.match(title, /May delete: .*explanation-fixture-4\.txt/);
+    await replay.locator('#decisionSheet .oneui-notification__summary').click();
+    const replayText = await replay.locator('#decisionSheet').innerText();
+    assert.match(replayText, /rm -f/);
+    assert.match(replayText, /conditional or compound shell syntax/);
+    assert.doesNotMatch(replayText, /包含 3 步操作/);
+    await replay.close();
+  }
   await page.close();
 } finally { await browser.close(); }
 console.log('approval web surfaces: passed');

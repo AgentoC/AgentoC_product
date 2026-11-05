@@ -55,6 +55,8 @@ dependencies {
     testImplementation(libs.compose.ui.test.junit4)
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(project(":core:database"))
+    androidTestImplementation(libs.androidx.room.ktx)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.junit)
     debugImplementation(libs.compose.ui.test.manifest)
