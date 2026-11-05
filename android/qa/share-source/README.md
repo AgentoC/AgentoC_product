@@ -2,7 +2,7 @@
 
 ```text
 Build this standalone QA application with the repository's Android Gradle wrapper
-and the configured Android SDK. Install it together with the current AgentoC app
+and the configured Android SDK. Install it together with the current Ragent app
 and instrumentation APK on the explicitly selected test serial. Run
 com.andysagent.agentoc.CaptureFileShareActivityTest, then the existing share/graph
 regressions. Use only the fixture's synthetic material; intake must not create a
@@ -24,10 +24,10 @@ extras. A sender UID extra is inspected only by the test, never trusted by app l
 For an actual native Sharesheet run, start `ShareSourceFixtureActivity` with
 `chooser=true`, optionally `names=first.csv,second.png` and `material=<text>`.
 Both launch modes create an implicit share Intent from the fixture app's separate
-UID and open Android's chooser; neither starts AgentoC's private receive Activity
+UID and open Android's chooser; neither starts Ragent's private receive Activity
 directly. The chooser mode accepts comma-separated `names`, while instrumentation
 can pass Base64 names/text to preserve punctuation and whitespace. Select
-`AgentoC · Share`, then choose a workflow in its Router. The fixture never submits
+`Ragent · Share`, then choose a workflow in its Router. The fixture never submits
 a task. Instrumentation may override `mimeType` and add Base64 `htmlBase64` for
 browser-like payloads; Android 8.0 requires plain `EXTRA_TEXT` whenever HTML is
 also supplied.
@@ -124,7 +124,7 @@ opening failure preserves its private source. The `failDocument` variant refuses
 opening. These are synthetic URI grants, not a real ACTION_CREATE_DOCUMENT user
 selection, DocumentsUI picker, Activity Result, or crash recovery test.
 
-The receiver also appears in the native Sharesheet as **AgentoC Result Receiver QA**.
+The receiver also appears in the native Sharesheet as **Ragent Result Receiver QA**.
 For native selections with no QA extras, it uses the UUID in the production ticket
 URI as the observation ID; all read/hash/metadata/negative probes still run under
 the fixture's distinct UID. `ResultOutputsNativeTest` drives the production owner

@@ -4,7 +4,7 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
     versionCatalogs { create("libs") { from(files("../../gradle/libs.versions.toml")) } }
 }
-rootProject.name = "AgentoC Share Source QA"
+rootProject.name = "Ragent Share Source QA"
 include(":core:appapi-contract", ":sdk:android")
 project(":core").projectDir = file("../../core")
 project(":sdk").projectDir = file("../../sdk")

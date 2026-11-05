@@ -1,5 +1,5 @@
 [Unit]
-Description=AgentoC Feishu connector
+Description=Ragent Feishu connector
 After=network-online.target agentoc.service
 Wants=network-online.target
 

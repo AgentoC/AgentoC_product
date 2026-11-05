@@ -1,7 +1,7 @@
-# AgentoC Reverse Tunnel
+# Ragent Reverse Tunnel
 
 Self-contained, zero-dependency Node tunnel that exposes a NAT'd remote
-AgentoC instance through a public host, using a single outbound TCP 443 TLS
+Ragent instance through a public host, using a single outbound TCP 443 TLS
 connection from the remote side. The example domain below must be replaced with a domain you control.
 
 ## Architecture
@@ -16,9 +16,9 @@ browser ── HTTPS 443 ──► Caddy (public host)
                             │ (frame-multiplexed, token-authenticated)
                             ▼
                     tunnel-client.mjs  (runs on the remote host, outbound only)
-                            │ fixed target 127.0.0.1:7690 (AgentoC)
+                            │ fixed target 127.0.0.1:7690 (Ragent)
                             ▼
-                    remote AgentoC
+                    remote Ragent
 ```
 
 - The tunnel is plain TCP multiplexing, so HTTP, WebSocket (`/ws`) and large
@@ -70,7 +70,7 @@ bytes are lost.
 
 ## Usage
 
-**Security:** The tunnel token authenticates the tunnel peer, not visitors to the forwarded service. Do not expose an unauthenticated local AgentoC interface to the public internet. Provide and verify access control at your reverse proxy before using this example.
+**Security:** The tunnel token authenticates the tunnel peer, not visitors to the forwarded service. Do not expose an unauthenticated local Ragent interface to the public internet. Provide and verify access control at your reverse proxy before using this example.
 
 ```sh
 # public host

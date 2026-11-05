@@ -2,14 +2,14 @@
     <queries>
         <intent><action android:name="android.intent.action.PROCESS_TEXT" /><data android:mimeType="text/plain" /></intent>
     </queries>
-    <application android:allowBackup="false" android:label="AgentoC Share Source QA" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+    <application android:allowBackup="false" android:label="Ragent Share Source QA" android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <provider android:name=".ShareSourceFixtureProvider"
             android:authorities="${applicationId}.share-fixture" android:exported="false" android:grantUriPermissions="true" />
         <activity android:name=".ShareSourceFixtureActivity" android:exported="true" />
         <activity android:name=".ProcessTextSourceActivity" android:exported="true" />
         <activity android:name=".CallerConsentSourceActivity" android:exported="true" />
         <activity android:name=".AppApiClientSourceActivity" android:exported="true" />
-        <activity android:name=".ResultReceiverFixtureActivity" android:exported="true" android:launchMode="singleTop" android:label="AgentoC Result Receiver QA">
+        <activity android:name=".ResultReceiverFixtureActivity" android:exported="true" android:launchMode="singleTop" android:label="Ragent Result Receiver QA">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />

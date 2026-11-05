@@ -11,7 +11,7 @@
 # /home/agentoc/.agentoc-tunnel-token (mode 0600, owner agentoc).
 
 [Unit]
-Description=AgentoC reverse tunnel client (remote peer)
+Description=Ragent reverse tunnel client (remote peer)
 Wants=network-online.target
 After=network-online.target
 

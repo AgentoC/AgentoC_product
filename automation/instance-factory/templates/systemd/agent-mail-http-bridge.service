@@ -1,5 +1,5 @@
 [Unit]
-Description=AgentoC agent mail HTTP bridge
+Description=Ragent agent mail HTTP bridge
 After=network-online.target agentoc.service
 Wants=network-online.target
 

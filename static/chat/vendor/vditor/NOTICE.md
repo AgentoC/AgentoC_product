@@ -1,6 +1,6 @@
 # Vditor vendor notice
 
-AgentoC vendors the runtime files from Vditor `3.11.3`:
+Ragent vendors the runtime files from Vditor `3.11.3`:
 
 - Source: https://github.com/Vanessa219/vditor
 - License: MIT

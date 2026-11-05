@@ -1,12 +1,12 @@
 # Source and release boundaries
 
-This repository is prepared from the AgentoC product source. The execution
+This repository is prepared from the Ragent product source. The execution
 host, Android client, web workbench, account service source, TURN credential
 broker source, and selected tests are included in the public tree. Deployment
 credentials, production data, private operational records, and historical design
 archives are excluded.
 
-The public risk benchmark contains the AgentoC-maintained boundary fixture only.
+The public risk benchmark contains the Ragent-maintained boundary fixture only.
 External datasets used in private evaluation are not distributed here, so its
 results are not comparable to the full private benchmark.
 
@@ -30,3 +30,12 @@ The account and relay code is available for inspection, but an independently
 deployed service and a full cross-device connection have not yet been validated
 from the public source. Windows currently uses the project's hosted endpoints
 outside the isolated test configuration.
+
+Windows update checks compare the installed public version with the GitHub release
+tag. The current public version remains 0.0.1. Replacing an asset under the same
+version does not notify installed users through the version checker; they need
+the replacement package through another channel. The MSI product version is a
+separate Windows Installer upgrade number and must exceed the latest published
+MSI version, which is recorded in the release notes. The source update
+checker is included only in subsequently built installers; it does not retrofit
+an already installed package.

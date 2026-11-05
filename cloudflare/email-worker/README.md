@@ -1,4 +1,4 @@
-# AgentoC Cloudflare Email Worker
+# Ragent Cloudflare Email Worker
 
 Minimal Cloudflare edge for a mailbox such as `agent@example.com`.
 
@@ -10,7 +10,7 @@ use production credentials for a local source-code check.
 
 Flow:
 
-`Internet -> Cloudflare Email Routing -> Email Worker(email) -> local mailbox bridge -> local agent-mail-worker -> AgentoC -> completion target -> Email Worker(fetch) -> Cloudflare send_email`
+`Internet -> Cloudflare Email Routing -> Email Worker(email) -> local mailbox bridge -> local agent-mail-worker -> Ragent -> completion target -> Email Worker(fetch) -> Cloudflare send_email`
 
 ## Design goal
 
@@ -22,7 +22,7 @@ Flow:
 
 1. receive inbound mail from Cloudflare Email Routing
 2. forward the raw message to the local mailbox bridge webhook
-3. accept authenticated `POST /api/send-email` requests from AgentoC completion targets
+3. accept authenticated `POST /api/send-email` requests from Ragent completion targets
 4. send replies through Cloudflare `send_email`
 5. allow the primary mailbox sender and same-domain instance aliases such as `trial1@example.com`
 
@@ -36,7 +36,7 @@ Configured in `wrangler.example.jsonc` and then copied locally to `wrangler.json
 
 Do not set `destination_address` or `allowed_destination_addresses` unless you intentionally want to restrict outbound recipients further. An unrestricted binding allows sending to any Email Routing destination address verified on this Cloudflare account; it does not bypass Cloudflare's verified-destination requirement.
 
-If AgentoC also needs to reach arbitrary external recipients, configure a local outbound provider in `~/.config/agentoc/agent-mailbox/outbound.json` such as `resend_api` for a custom-domain sender or `apple_mail` for local fallback testing; Cloudflare's platform-level verified-destination rule itself cannot be disabled.
+If Ragent also needs to reach arbitrary external recipients, configure a local outbound provider in `~/.config/agentoc/agent-mailbox/outbound.json` such as `resend_api` for a custom-domain sender or `apple_mail` for local fallback testing; Cloudflare's platform-level verified-destination rule itself cannot be disabled.
 
 See [Cloudflare's send binding documentation](https://developers.cloudflare.com/email-service/configuration/send-bindings/) for current restrictions and prerequisites.
 
@@ -58,4 +58,4 @@ The deploy script reads the local mailbox config, uploads the needed secrets, an
 ## Endpoints
 
 - `GET /healthz` — lightweight health check
-- `POST /api/send-email` — authenticated outbound sender used by AgentoC completion targets
+- `POST /api/send-email` — authenticated outbound sender used by Ragent completion targets

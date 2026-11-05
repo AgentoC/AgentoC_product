@@ -9,7 +9,7 @@ export function acpRequest(id, method, params = {}) {
   return `${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`;
 }
 
-export function buildAcpStartInput({ clientName = 'AgentoC', clientVersion = '1.0' } = {}) {
+export function buildAcpStartInput({ clientName = 'Ragent', clientVersion = '1.0' } = {}) {
   return acpRequest('agentoc-initialize', 'initialize', {
     protocolVersion: 1,
     clientInfo: { name: clientName, version: clientVersion },

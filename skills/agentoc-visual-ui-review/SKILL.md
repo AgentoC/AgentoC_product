@@ -1,15 +1,15 @@
 ---
 name: agentoc-visual-ui-review
-description: Review and improve AgentoC frontend surfaces through synthetic Playwright screenshots, project-specific visual rules, focused browser checks, and bounded fix-and-confirm passes. Use for changes to static/chat CSS or JavaScript, mobile layout, composer, messages, sidebar, Run Sheet, Workbench, readers, menus, sheets, icons, glass surfaces, responsive behavior, or any request to polish, critique, audit, harden, or visually verify AgentoC UI.
+description: Review and improve Ragent frontend surfaces through synthetic Playwright screenshots, project-specific visual rules, focused browser checks, and bounded fix-and-confirm passes. Use for changes to static/chat CSS or JavaScript, mobile layout, composer, messages, sidebar, Run Sheet, Workbench, readers, menus, sheets, icons, glass surfaces, responsive behavior, or any request to polish, critique, audit, harden, or visually verify Ragent UI.
 ---
 
-# AgentoC Visual UI Review
+# Ragent Visual UI Review
 
 Use this workflow to turn frontend review into evidence and implementation, not a prose-only critique.
 
 ## Establish Context
 
-1. Keep the working directory at `/srv/agentoc-promoted`.
+1. Use the current repository root as the working directory.
 2. Read `AGENTS.md`, `PRODUCT.md`, `DESIGN.md`, and the current note relevant to the target.
 3. Read [references/review-checklist.md](references/review-checklist.md).
 4. Inspect the target implementation and its nearest browser or static tests.
@@ -30,7 +30,7 @@ Use this workflow to turn frontend review into evidence and implementation, not 
 Run the bundled fixture command before judging a material UI change:
 
 ```bash
-node skills/agentoc-visual-ui-review/scripts/capture-fixtures.mjs --target all
+node skills/agentoc-visual-ui-review/scripts/capture-fixtures.mjs --target all --output <task-output-directory>
 ```
 
 Use a narrower target when the change is isolated:
@@ -41,8 +41,7 @@ node skills/agentoc-visual-ui-review/scripts/capture-fixtures.mjs --target activ
 node skills/agentoc-visual-ui-review/scripts/capture-fixtures.mjs --target mobile
 ```
 
-The command writes screenshots and `manifest.json` under
-`/var/lib/agentoc/workspace/visual-ui-reviews/` unless `--output` is supplied.
+Choose an output directory in the permitted task workspace. On the original Linux deployment, omitting `--output` defaults to `/var/lib/agentoc/workspace/visual-ui-reviews/`; that path is not portable.
 
 Use synthetic fixtures by default. Do not capture real session content, credentials,
 private files, provider authentication, or user messages. Use the live application only
@@ -53,16 +52,7 @@ when the target cannot be represented by fixtures and the user has authorized th
 For the first visual pass, inspect the screenshots without reopening the implementation.
 Use image inspection on every generated PNG relevant to the target.
 
-If the executing model cannot view images directly, run the `gemini-read-image` skill for
-each PNG:
-
-```bash
-node /var/lib/agentoc/workspace/gemini-vision-proxy/scripts/gemini-read-image.mjs <png> \
-  -p "<review prompt with dimensions/priorities/constraints>" -s '<expected JSON schema>'
-```
-
-Structured findings arrive on stdout with no user relay. Only fall back to the user-relay
-flow (handing the user the images, prompt, and schema) when that API channel is unavailable.
+If the executing model cannot view images directly, use an available image inspection tool or ask for help inspecting the generated evidence.
 
 Rank no more than five findings by user impact. Prefer findings about:
 

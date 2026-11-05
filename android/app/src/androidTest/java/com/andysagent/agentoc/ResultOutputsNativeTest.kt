@@ -132,7 +132,7 @@ class ResultOutputsNativeTest {
         launch().use {
             click("Share file", "分享文件")
             screenshot("sharesheet")
-            click("AgentoC Result Receiver QA")
+            click("Ragent Result Receiver QA")
             val ticket = withTimeout(10_000) {
                 while (true) {
                     graph.resultDeliveries.list(opId, graph.appApiOwner).singleOrNull()?.let { return@withTimeout it }

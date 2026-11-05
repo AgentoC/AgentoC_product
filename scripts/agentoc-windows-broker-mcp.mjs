@@ -48,7 +48,7 @@ async function handle(message) {
   if (method === 'initialize') return result(id, { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'agentoc-windows-broker', version: '1.0.0' } });
   if (method === 'ping') return result(id, {});
   if (method === 'tools/list') return result(id, { tools: [
-    { name: 'agentoc_restart_qa_service', description: 'Request a signed phone approval to restart the one administrator-configured AgentoC QA test service. Returns a request ID; it never runs a shell command.', inputSchema: { type: 'object', additionalProperties: false, properties: { requestKey: { type: 'string', description: 'Stable retry key, 1-128 letters, digits, dots, underscores, colons, or dashes.' } }, required: ['requestKey'] } },
+    { name: 'agentoc_restart_qa_service', description: 'Request a signed phone approval to restart the one administrator-configured Ragent QA test service. Returns a request ID; it never runs a shell command.', inputSchema: { type: 'object', additionalProperties: false, properties: { requestKey: { type: 'string', description: 'Stable retry key, 1-128 letters, digits, dots, underscores, colons, or dashes.' } }, required: ['requestKey'] } },
     { name: 'agentoc_restart_qa_service_status', description: 'Read the result of an earlier QA service restart request using its requestKey.', inputSchema: { type: 'object', additionalProperties: false, properties: { requestKey: { type: 'string' } }, required: ['requestKey'] } },
   ] });
   if (method === 'tools/call') {

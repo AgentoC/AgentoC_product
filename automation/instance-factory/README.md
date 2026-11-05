@@ -1,4 +1,4 @@
-# AgentoC Instance Factory v1
+# Ragent Instance Factory v1
 
 This directory is the repo-native home for whole-host automation.
 
@@ -7,7 +7,7 @@ It intentionally does **not** replace `agentoc guest-instance`, which remains th
 ## Scope split
 
 - `provision-host`: provider-side host creation contract
-- `bootstrap-host`: converge a Linux machine into a AgentoC-capable host baseline
+- `bootstrap-host`: converge a Linux machine into a Ragent-capable host baseline
 - `install-profile`: read `install.env`, resolve the feature map, render runtime plan, and decide what should start
 - `validate-profile`: check the host and enabled modules, then report `ready`, `degraded`, or `blocked`
 

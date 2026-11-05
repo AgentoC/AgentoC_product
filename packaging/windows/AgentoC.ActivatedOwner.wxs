@@ -14,7 +14,7 @@
   <?ifndef ExperimentalMajorUpgrade?><?define ExperimentalMajorUpgrade = "0"?><?endif?>
   <?ifndef EarlyServiceQuiescence?><?define EarlyServiceQuiescence = "0"?><?endif?>
   <!-- WiX 5+ otherwise supplies a default major upgrade, including RemoveExistingProducts. -->
-  <Package Name="Ragent" Manufacturer="AgentoC" Version="$(var.MsiProductVersion)" ProductCode="$(var.ProductCode)" UpgradeCode="2D1D9C6B-5BA7-4C70-9A7A-7E7A55E3A001" UpgradeStrategy="$(var.MsiUpgradeStrategy)" Scope="perMachine">
+  <Package Name="Ragent" Manufacturer="Ragent" Version="$(var.MsiProductVersion)" ProductCode="$(var.ProductCode)" UpgradeCode="2D1D9C6B-5BA7-4C70-9A7A-7E7A55E3A001" UpgradeStrategy="$(var.MsiUpgradeStrategy)" Scope="perMachine">
     <?if $(var.MsiUpgradeLane) = "major" ?>
       <?if $(var.ExperimentalMajorUpgrade) = "1" ?>
       <MajorUpgrade DowngradeErrorMessage="A newer Ragent version is already installed." AllowSameVersionUpgrades="yes" Schedule="afterInstallExecute" />
@@ -262,7 +262,7 @@
         <Directory Id="BROKERINSTALLFOLDER" Name="Broker" />
       </Directory>
     </StandardDirectory>
-    <StandardDirectory Id="ProgramMenuFolder"><Directory Id="ApplicationProgramsFolder" Name="AgentoC" /></StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder"><Directory Id="ApplicationProgramsFolder" Name="Ragent" /></StandardDirectory>
 
     <Component Id="ManagedStartMenuShortcut" Directory="ApplicationProgramsFolder" Guid="*">
       <Shortcut Id="AgentoCStartMenuShortcut" Name="Ragent" Target="[INSTALLFOLDER]payload\Desktop\AgentoC.exe" WorkingDirectory="INSTALLFOLDER" Icon="AgentoCIcon" IconIndex="0" Advertise="no" />
@@ -283,12 +283,12 @@
 
     <Component Id="ManagedServiceHost" Directory="INSTALLFOLDER" Guid="*">
       <File Id="ManagedHost" Source="!(bindpath.ServiceHost)\AgentoC.ServiceHost.exe" KeyPath="yes" />
-      <ServiceInstall Id="ManagedControl" Name="AgentoC-ControlPlane" DisplayName="AgentoC Control Plane" Type="ownProcess" Start="disabled" Account="NT SERVICE\AgentoC-ControlPlane" ErrorControl="normal" Arguments="--role control --config-dir &quot;[CommonAppDataFolder]AgentoC\instances\owner\config&quot; --instance-root &quot;[CommonAppDataFolder]AgentoC\instances\owner&quot;">
+      <ServiceInstall Id="ManagedControl" Name="AgentoC-ControlPlane" DisplayName="Ragent Control Plane" Type="ownProcess" Start="disabled" Account="NT SERVICE\AgentoC-ControlPlane" ErrorControl="normal" Arguments="--role control --config-dir &quot;[CommonAppDataFolder]AgentoC\instances\owner\config&quot; --instance-root &quot;[CommonAppDataFolder]AgentoC\instances\owner&quot;">
         <ServiceDependency Id="AgentoC-RunnerSupervisor" />
         <PermissionEx Sddl="O:SYG:SYD:(A;;GA;;;SY)(A;;GA;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)" />
       </ServiceInstall>
       <ServiceControl Id="ManagedControlControl" Name="AgentoC-ControlPlane" Stop="install" Remove="uninstall" />
-      <ServiceInstall Id="ManagedExecutor" Name="AgentoC-RunnerSupervisor" DisplayName="AgentoC Runner Supervisor" Type="ownProcess" Start="disabled" Account="NT SERVICE\AgentoC-RunnerSupervisor" ErrorControl="normal" Arguments="--role supervisor --config-dir &quot;[CommonAppDataFolder]AgentoC\instances\owner\executor\config&quot; --instance-root &quot;[CommonAppDataFolder]AgentoC\instances\owner&quot;">
+      <ServiceInstall Id="ManagedExecutor" Name="AgentoC-RunnerSupervisor" DisplayName="Ragent Runner Supervisor" Type="ownProcess" Start="disabled" Account="NT SERVICE\AgentoC-RunnerSupervisor" ErrorControl="normal" Arguments="--role supervisor --config-dir &quot;[CommonAppDataFolder]AgentoC\instances\owner\executor\config&quot; --instance-root &quot;[CommonAppDataFolder]AgentoC\instances\owner&quot;">
         <PermissionEx Sddl="O:SYG:SYD:(A;;GA;;;SY)(A;;GA;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)" />
       </ServiceInstall>
       <ServiceControl Id="ManagedExecutorControl" Name="AgentoC-RunnerSupervisor" Stop="install" Remove="uninstall" />
@@ -299,7 +299,7 @@
     <Component Id="PrivilegedBrokerService" Directory="BROKERINSTALLFOLDER" Guid="{6EE17079-43E5-4B73-80CA-9E5B946E8B21}">
       <File Id="PrivilegedBrokerBinary" Source="!(bindpath.PrivilegedBroker)\AgentoC.PrivilegedBroker.exe" KeyPath="yes" />
       <File Id="PrivilegedBrokerManifest" Source="!(bindpath.PrivilegedBroker)\AgentoC.PrivilegedBroker.manifest.json" />
-      <ServiceInstall Id="PrivilegedBrokerInstall" Name="AgentoC-PrivilegedBroker" DisplayName="AgentoC Privileged Broker" Type="ownProcess" Start="auto" Account="LocalSystem" ErrorControl="normal">
+      <ServiceInstall Id="PrivilegedBrokerInstall" Name="AgentoC-PrivilegedBroker" DisplayName="Ragent Privileged Broker" Type="ownProcess" Start="auto" Account="LocalSystem" ErrorControl="normal">
       </ServiceInstall>
       <ServiceControl Id="PrivilegedBrokerControl" Name="AgentoC-PrivilegedBroker" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
     </Component>

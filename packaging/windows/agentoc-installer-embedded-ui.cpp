@@ -324,8 +324,8 @@ bool ChooseRecoverySource(std::wstring& chosen) {
     FILEOPENDIALOGOPTIONS options{};
     if (SUCCEEDED(dialog->GetOptions(&options)))
         dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
-    dialog->SetTitle(Text(L"Choose the previous AgentoC installation folder",
-        L"选择之前的 AgentoC 安装文件夹").c_str());
+    dialog->SetTitle(Text(L"Choose the previous Ragent or AgentoC installation folder",
+        L"选择之前的 Ragent 或 AgentoC 安装文件夹").c_str());
     result = dialog->Show(g.window);
     if (SUCCEEDED(result)) {
         IShellItem* item = nullptr;
@@ -377,7 +377,7 @@ bool NormalizeInstallPath(std::wstring value, std::wstring& normalized, std::wst
     }
     const std::filesystem::path supplied(value);
     if (!supplied.is_absolute()) {
-        error = Text(L"Enter a full path, such as G:\\AgentoCapp.", L"请输入完整路径，例如 G:\\AgentoCapp。");
+        error = Text(L"Enter a full path, such as G:\\RagentApp.", L"请输入完整路径，例如 G:\\RagentApp。");
         return false;
     }
 

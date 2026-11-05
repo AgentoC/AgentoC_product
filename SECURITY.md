@@ -10,5 +10,5 @@ accounts and workspaces when testing. The local web interface and remote or
 paired access have different intended trust boundaries; consult the verified
 deployment instructions for the version you use.
 
-This document is a draft until the first public release and its supported
-versions and reporting process have been confirmed.
+The project is in early access. Supported versions and deployment guidance are
+still being established; consult the release notes for verified scope.

@@ -117,7 +117,7 @@ async function getOrchestration(args = {}) {
 const TOOLS = [
   {
     name: 'agentoc_list_sessions',
-    description: 'List AgentoC chat sessions (metadata only: id, name, group, description, tool, timestamps). Sorted by most recently updated.',
+    description: 'List Ragent chat sessions (metadata only: id, name, group, description, tool, timestamps). Sorted by most recently updated.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -127,7 +127,7 @@ const TOOLS = [
   },
   {
     name: 'agentoc_get_session',
-    description: 'Get a single AgentoC session metadata by session id or exact name. Conversation bodies are never exposed.',
+    description: 'Get a single Ragent session metadata by session id or exact name. Conversation bodies are never exposed.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -138,7 +138,7 @@ const TOOLS = [
   },
   {
     name: 'agentoc_list_orchestrations',
-    description: 'List durable AgentoC orchestration executions and their provider-neutral state (read-only).',
+    description: 'List durable Ragent orchestration executions and their provider-neutral state (read-only).',
     inputSchema: {
       type: 'object',
       properties: {

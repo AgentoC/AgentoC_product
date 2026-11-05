@@ -1,12 +1,17 @@
 # Tests
 
-Scenario-style validation scripts now live in this directory instead of the repo root.
+Scenario-style validation scripts are in this directory.
 
-- Run the current smoke suite with `npm test`.
-- Pull requests run the same smoke suite automatically via GitHub Actions in `.github/workflows/ci.yml`.
+- `npm test` runs the smoke suite defined in `package.json`; complete cross-platform
+  coverage is not established.
+- `.github/workflows/public-boundary.yml` runs a selected set of boundary, focused
+  and disposable-instance checks; it does not run the entire `npm test` suite.
 - Run a specific script with `node tests/<name>.mjs`.
-- Run the live agenda-agent smoke with `npm run test:live:agenda-agent`.
-- `tests/chat` and `tests/lib` are symlinked import roots so existing relative test imports stay stable after the move.
+- `node tests/test-windows-packaging.mjs` checks public Windows packaging source
+  contracts. Private live-harness source checks are explicitly reported as skipped
+  when those files are absent; it does not install or upgrade Windows packages.
+- Run the live agenda-agent smoke only with `npm run test:live:agenda-agent` when
+  an appropriate isolated runtime and explicit live-test authorization exist.
 
 Live agent smoke tests are intentionally opt-in because they spend real model/runtime budget and hit the running owner instance.
 

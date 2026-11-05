@@ -1,4 +1,4 @@
-# AgentoC Android UI Rules
+# Ragent Android UI Rules
 
 > **Implementation reference**: See [the Android module overview](docs/README.md).
 

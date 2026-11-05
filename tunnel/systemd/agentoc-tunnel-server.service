@@ -11,7 +11,7 @@
 # /home/agentoc/.agentoc-tunnel-token (mode 0600, owner agentoc).
 
 [Unit]
-Description=AgentoC reverse tunnel server (public entry)
+Description=Ragent reverse tunnel server (public entry)
 Wants=network-online.target
 After=network-online.target
 

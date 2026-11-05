@@ -70,7 +70,7 @@ function actionTool() {
 function agentCreateTool() {
   return {
     name: 'agentoc_create_agent',
-    description: 'Propose one fully specified AgentoC Agent for owner review. This tool never creates the Agent directly and never receives owner credentials.',
+    description: 'Propose one fully specified Ragent Agent for owner review. This tool never creates the Agent directly and never receives owner credentials.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,

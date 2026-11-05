@@ -1,9 +1,10 @@
 # Android App API core
 
-Internal Kotlin library for the Android App API plan. This module is built and
-tested independently and connected to the application's runtime graph.
-Native sharing, selected text and computer shortcuts use the internal owner
-coordinator. Third-party Binder SDK and consent grants remain unconnected.
+Kotlin core for the Android App API. It is connected to the application runtime
+graph and used by native sharing, selected text and computer shortcuts. The
+application also declares an exported Binder service and caller-consent activity;
+the Android SDK client lives under `android/sdk/android/`. Actual third-party
+availability and device coverage depend on the build and release validation.
 
 The contracts, capability registry, routing and grant policy share one engine.
 `TaskCoordinator.prepare()` freezes caller-owned collections and chooses a
@@ -44,8 +45,10 @@ late connected notification cannot revive a closed bound carrier.
 `VerifiedCaller` is trusted adapter context, never deserialized from an external
 request. `GrantAuthorizer` supports capability/target/resource intersections,
 expiry and revocation. The installed application's owner binding comes from
-its trusted graph. UID/certificate verification, consent UI and durable grant
-storage remain to be connected before third-party access can be exported.
+its trusted graph. The app supplies installed-caller identity verification,
+caller consent UI and a Room-backed grant store. Exported Binder calls capture
+and recheck the caller identity; consult tests and release notes for verified
+coverage rather than treating source presence as proof of deployment readiness.
 
 The graph reads a versioned `AppApiRoutingPreferences` snapshot from the existing
 DataStore. Its sharing default and up to eight aliases per computer are separate
@@ -53,8 +56,9 @@ from UI selection. Removing a default preserves its missing identity rather than
 silently choosing another computer. Aliases of an unpaired target are removed;
 duplicate aliases across computers require disambiguation. Malformed/future
 routing settings block headless routing while the UI directory stays available
-for an explicit owner reset. Configuration UI and external settings capabilities
-are still pending; these persistence hooks are not a published SDK.
+for an explicit owner reset. The app includes a routing settings activity and
+Compose screen. The SDK client and external capabilities should be evaluated
+against the specific build and release notes.
 
 The phone-wide `AppApiDatabase` is separate from per-target Room caches, uses
 optimistic revisions and a unique preparation index, and opens under
@@ -114,7 +118,8 @@ The application's separate read-only provider and owner Android adapter map this
 cache to temporary URI grants and selected-document streams. The owner workflow
 and Compose page now expose explicit query/download/resume/delete/share/save and
 ticket revocation. Actual device coverage is recorded in the implementation
-ledger; automatic cleanup, blocking-provider handoff and SDK/IPC remain unfinished.
+ledger. Review the applicable tests and release notes for automatic cleanup,
+blocking-provider handoff and SDK/IPC validation.
 
 `PersistentResultOutputs.listForOperation` reads only this operation's caller-bound
 rows and requires operation-read and output authorization; unrelated revoked
@@ -123,9 +128,9 @@ invalidates only the caller's exact source copies, without deleting the private
 source. Listing deliveries skips deleted sources but still reauthorizes them
 before filtering, so grant revocation is not hidden as an empty successful list.
 
-Validation: the core suite has 79 JVM tests, including 24 result-export tests.
-Focused API 35 graph/journal tests verify result transfer and Room reopen;
-the implementation ledger records each build's actual device coverage.
+Validation: the core suite includes JVM coverage for result export and other
+contracts. Focused graph/journal tests exercise result transfer and Room reopen;
+consult the tests and release notes for a specific build's device coverage.
 The suite covers fixed routing, caller isolation, revocation during connection, immutable inputs,
 concurrent commit, response loss, restart, cancellation, expiry, database cold
 reopen, stale revisions and preparation identity uniqueness.
@@ -141,13 +146,10 @@ Three additional emulator tests exercise the real bound controller and Android
 network monitor with a substituted bootstrap server: authorization failures,
 missing device credentials, explicit refresh and cancellation/restart.
 
-Current Lint evidence and warning counts are in the implementation ledger;
-the latest core/app runs have no errors. Checks use the AGP 8.7.3 toolchain with
-`-Dlint.use.fir.uast=false -Pandroid.lint.useK2Uast=false --no-daemon
---max-workers=1`. Default K2 lint crashes on an existing domain test with a
-disposed constructor symbol, including a fresh single-worker retry. No check
-or source file was excluded. Revalidate the default parser during the planned
-AppFunctions/toolchain upgrade.
+The current Android Gradle Plugin version is defined in
+`android/gradle/libs.versions.toml`. Run the relevant lint and test tasks with the
+current toolchain and record results for the exact build; earlier lint results
+do not establish the status of this release.
 
 `DocumentSaveJournal` adds private atomic versioned save-attempt records keyed by
 delivery ticket. WAITING_SELECTION precedes the picker effect, COPYING precedes

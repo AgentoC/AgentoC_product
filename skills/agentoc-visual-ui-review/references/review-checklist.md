@@ -1,4 +1,4 @@
-# AgentoC Visual Review Checklist
+# Ragent Visual Review Checklist
 
 Use this checklist after reading `DESIGN.md`. Apply only the sections relevant to the changed surface.
 

@@ -76,7 +76,7 @@ export function buildCodexAppServerInitializeMessage() {
     params: {
       clientInfo: {
         name: 'agentoc',
-        title: 'AgentoC',
+        title: 'Ragent',
         version: '0.3.2',
       },
       capabilities: {

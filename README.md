@@ -10,14 +10,16 @@ across devices while the execution host remains under the user's control.
 > supported deployment configurations are still being verified.
 
 Windows x64 early-access packages are available from [GitHub Releases](https://github.com/ragent-app/Ragent_product/releases/latest).
-The current v0.0.1 package predates the rename and still displays AgentoC.
 The installer is unsigned and Windows may display a warning. Review the release
-notes for the package's exact source commit, validation results, and upgrade limitations before installing.
+notes for the package's exact source commit, validation results, and upgrade
+limitations before installing. Replacing an installer at the same public version
+does not trigger the version-based update notification.
 
 ## At a glance
 
 - Run a work session on a computer and follow it from the web workbench or
-  Android client, with streamed responses and session history.
+  Android client, with streamed responses and session history. The Android app
+  is in closed testing.
 - Integrate agent runtimes, including Codex and Claude, through Harness and
   provider adapters; supported features and installed versions vary.
 - Manage projects, files, runtime settings and approval requests on the host.
@@ -38,9 +40,9 @@ support, and actual model availability depend on the selected deployment and
 installed runtimes. See the release notes for the features verified in a given
 version.
 
-![Windows Electron desktop manager showing Harness management](docs/media/windows-desktop-manager-v2.png)
+![Desktop manager showing Harness management](docs/media/windows-desktop-manager-v2.png)
 
-*Windows desktop manager connected to a disposable local instance; no personal data is shown.*
+*Desktop manager shown in a browser connected to a disposable local instance; no personal data is shown.*
 
 <img src="docs/media/android-session.png" alt="Android app showing a completed example session" width="300">
 
@@ -113,7 +115,7 @@ commit it or share it. For example, with `keytool`:
 ```sh
 keytool -genkeypair -keystore /path/to/contributor-debug.keystore \
   -storetype JKS -storepass android -keypass android -alias androiddebugkey \
-  -dname 'CN=AgentoC contributor debug' -keyalg RSA -keysize 2048 -validity 3650
+  -dname 'CN=Ragent contributor debug' -keyalg RSA -keysize 2048 -validity 3650
 ```
 
 Then, from `android/`, run the Gradle wrapper (on Windows use `gradlew.bat`):
