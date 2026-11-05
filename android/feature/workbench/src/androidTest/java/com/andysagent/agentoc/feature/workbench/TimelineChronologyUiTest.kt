@@ -18,6 +18,24 @@ import org.junit.Test
 class TimelineChronologyUiTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun terminalRunProjectionFinishesTheVisibleReply() {
+        val items = listOf(
+            TimelineItem.Message("user", 1, TimelineRole.User, "Question", true, runId = "run-1"),
+            TimelineItem.Message("answer", 2, TimelineRole.Agent, "Completed answer", false,
+                runId = "run-1", messagePhase = "final_answer"),
+        )
+        var metrics by mutableStateOf(RunMetricsUiState(runId = "run-1", status = com.andysagent.agentoc.core.agentui.AgentRunStatus.Working))
+        rule.setContent { AgentocTheme {
+            val done = latestTurnHasTerminalRun(items, null, com.andysagent.agentoc.core.agentui.AgentRunStatus.Idle, metrics)
+            val turn = TurnGroupProjector().project(settleLatestTurnMessages(items, done)).single()
+            TurnTimelineView(turn, true, null, null, {}, { _, _ -> }, {}, {}, onReport = {})
+        } }
+        rule.onNodeWithTag("report-ai-content").assertDoesNotExist()
+        rule.runOnIdle { metrics = metrics.copy(status = com.andysagent.agentoc.core.agentui.AgentRunStatus.Completed) }
+        rule.onNodeWithText("Completed answer").assertIsDisplayed()
+        rule.onNodeWithTag("report-ai-content").assertExists()
+    }
+
     @Test fun claudeFileActivityDisplaysItsFilename() {
         val op = TimelineItem.Operation("write", 2, TimelineOperationKind.Tool, "Write", "", TimelineOperationStatus.InProgress,
             toolName = "Write", inputJson = """{"file_path":"/work/internet-and-web.md"}""")
