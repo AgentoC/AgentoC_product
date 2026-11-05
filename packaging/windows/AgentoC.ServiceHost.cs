@@ -112,14 +112,15 @@ namespace AgentoC.ServiceHost
         [DllImport("advapi32.dll", SetLastError=true)]
         static extern bool CloseServiceHandle(IntPtr handle);
 
-        internal static void Verify(SafePipeHandle pipe) {
+        internal static void Verify(SafePipeHandle pipe) { VerifyService(pipe, "AgentoC-PrivilegedBroker"); }
+        internal static void VerifyService(SafePipeHandle pipe, string serviceName) {
             uint serverPid;
             if (pipe == null || pipe.IsInvalid || !GetNamedPipeServerProcessId(pipe, out serverPid) || serverPid == 0)
                 throw new InvalidOperationException("BROKER_PIPE_SERVER_IDENTITY_REFUSED");
             IntPtr manager = OpenSCManager(null, null, ScManagerConnect);
             if (manager == IntPtr.Zero) throw new InvalidOperationException("BROKER_PIPE_SERVER_IDENTITY_REFUSED");
             try {
-                IntPtr service = OpenService(manager, "AgentoC-PrivilegedBroker", ServiceQueryStatus);
+                IntPtr service = OpenService(manager, serviceName, ServiceQueryStatus);
                 if (service == IntPtr.Zero) throw new InvalidOperationException("BROKER_PIPE_SERVER_IDENTITY_REFUSED");
                 try {
                     ServiceStatusProcess status; uint needed;
@@ -128,6 +129,147 @@ namespace AgentoC.ServiceHost
                         throw new InvalidOperationException("BROKER_PIPE_SERVER_IDENTITY_REFUSED");
                 } finally { CloseServiceHandle(service); }
             } finally { CloseServiceHandle(manager); }
+        }
+    }
+
+    // The supervisor's public endpoint is owned by the SCM service process,
+    // with a protected DACL for exactly the two service identities. Node uses
+    // a randomly named private backend; its PID is checked before forwarding.
+    internal sealed class RunnerSupervisorPipe : IDisposable
+    {
+        const string PublicName = "agentoc-runner-supervisor-owner";
+        const int Limit = 16384;
+        [StructLayout(LayoutKind.Sequential)] struct SecurityAttributes { public int length; public IntPtr descriptor; public int inherit; }
+        [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+        static extern SafePipeHandle CreateNamedPipe(string name, uint openMode, uint pipeMode, uint maxInstances, uint outSize, uint inSize, uint timeout, ref SecurityAttributes security);
+        [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+        static extern SafePipeHandle CreateFile(string name, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
+        [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+        static extern bool WaitNamedPipe(string name, uint timeout);
+        [DllImport("kernel32.dll", SetLastError=true)]
+        static extern bool GetNamedPipeServerProcessId(SafePipeHandle pipe, out uint pid);
+        readonly string backendName;
+        readonly string publicName;
+        readonly string supervisorSid;
+        readonly string controlSid;
+        readonly Func<int> expectedBackendPid;
+        readonly Action onFailure;
+        readonly object gate = new object();
+        readonly ManualResetEvent stopped = new ManualResetEvent(false);
+        readonly Semaphore slots = new Semaphore(8, 8);
+        readonly List<IDisposable> active = new List<IDisposable>();
+        NamedPipeServerStream pending;
+        Thread thread;
+        bool disposed;
+
+        internal RunnerSupervisorPipe(string backendName, Func<int> expectedBackendPid, Action onFailure)
+            : this(PublicName, backendName, expectedBackendPid, onFailure,
+                new NTAccount("NT SERVICE", "AgentoC-RunnerSupervisor").Translate(typeof(SecurityIdentifier)).Value,
+                new NTAccount("NT SERVICE", "AgentoC-ControlPlane").Translate(typeof(SecurityIdentifier)).Value) { }
+        // The parameterized form is internal for isolated native tests; the
+        // installed service always uses the fixed identities above.
+        internal RunnerSupervisorPipe(string publicName, string backendName, Func<int> expectedBackendPid, Action onFailure, string supervisorSid, string controlSid) {
+            if ((publicName != PublicName && !Regex.IsMatch(publicName ?? "", @"\Aagentoc-supervisor-qa-[a-f0-9]{32}\z")) || String.IsNullOrEmpty(backendName) || !Regex.IsMatch(backendName, @"\Aagentoc-supervisor-backend-[a-f0-9]{32}\z") || expectedBackendPid == null || onFailure == null)
+                throw new InvalidOperationException("SHT_SUPERVISOR_PIPE_CONFIGURATION_REFUSED");
+            this.publicName = publicName; this.backendName = backendName; this.expectedBackendPid = expectedBackendPid; this.onFailure = onFailure;
+            this.supervisorSid = new SecurityIdentifier(supervisorSid).Value; this.controlSid = new SecurityIdentifier(controlSid).Value;
+            pending = CreateListener(true);
+        }
+        NamedPipeServerStream CreateListener(bool first) {
+            string sddl = "D:P(D;;GA;;;NU)(A;;GA;;;SY)(A;;GA;;;" + supervisorSid + ")(A;;0x0012019b;;;" + controlSid + ")";
+            var descriptor = new RawSecurityDescriptor(sddl); var bytes = new byte[descriptor.BinaryLength]; descriptor.GetBinaryForm(bytes, 0);
+            IntPtr memory = Marshal.AllocHGlobal(bytes.Length);
+            try {
+                Marshal.Copy(bytes, 0, memory, bytes.Length);
+                var attributes = new SecurityAttributes { length = Marshal.SizeOf(typeof(SecurityAttributes)), descriptor = memory, inherit = 0 };
+                var handle = CreateNamedPipe(@"\\.\pipe\" + publicName, first ? 0x40080003u : 0x40000003u, 8, 9, Limit, Limit, 0, ref attributes);
+                if (handle.IsInvalid) { int code = Marshal.GetLastWin32Error(); handle.Dispose(); throw new Win32Exception(code); }
+                try { return new NamedPipeServerStream(PipeDirection.InOut, true, false, handle); } catch { handle.Dispose(); throw; }
+            } finally { Marshal.FreeHGlobal(memory); }
+        }
+        internal void Start() {
+            thread = new Thread(Listen) { IsBackground = true, Name = "AgentoC supervisor pipe" }; thread.Start();
+        }
+        void Listen() {
+            try {
+                while (!stopped.WaitOne(0)) {
+                    NamedPipeServerStream listener; lock (gate) { listener = pending; }
+                    var connection = listener.BeginWaitForConnection(null, null);
+                    if (WaitHandle.WaitAny(new WaitHandle[] { stopped, connection.AsyncWaitHandle }) == 0) return;
+                    listener.EndWaitForConnection(connection);
+                    if (WaitHandle.WaitAny(new WaitHandle[] { stopped, slots }) == 0) { listener.Dispose(); return; }
+                    NamedPipeServerStream next = CreateListener(false);
+                    lock (gate) {
+                        if (disposed) { next.Dispose(); listener.Dispose(); slots.Release(); return; }
+                        pending = next; active.Add(listener);
+                    }
+                    if (!ThreadPool.QueueUserWorkItem(_ => Forward(listener))) {
+                        lock (gate) { active.Remove(listener); }
+                        listener.Dispose(); slots.Release(); throw new InvalidOperationException("SHT_SUPERVISOR_PIPE_DISPATCH_FAILED");
+                    }
+                }
+            } catch { if (!stopped.WaitOne(0)) { stopped.Set(); ThreadPool.QueueUserWorkItem(_ => onFailure()); } }
+        }
+        static byte[] ReadLine(Stream input) {
+            using (var data = new MemoryStream()) {
+                for (;;) { int value = input.ReadByte(); if (value < 0 || value == 13 || data.Length >= Limit) throw new InvalidDataException();
+                    data.WriteByte((byte)value); if (value == 10) return data.ToArray(); }
+            }
+        }
+        void Forward(NamedPipeServerStream peer) {
+            NamedPipeClientStream backend = null;
+            using (var timer = new Timer(_ => { try { peer.Dispose(); } catch {} try { if (backend != null) backend.Dispose(); } catch {} }, null, 45000, Timeout.Infinite)) {
+                try {
+                    byte[] request = ReadLine(peer);
+                    backend = new NamedPipeClientStream(".", backendName, PipeDirection.InOut, PipeOptions.None, TokenImpersonationLevel.Impersonation);
+                    backend.Connect(30000);
+                    uint actual; int expected = expectedBackendPid();
+                    if (expected <= 0 || !GetNamedPipeServerProcessId(backend.SafePipeHandle, out actual) || actual != (uint)expected)
+                        throw new InvalidOperationException("SHT_SUPERVISOR_BACKEND_IDENTITY_REFUSED");
+                    backend.Write(request, 0, request.Length); backend.Flush();
+                    byte[] response = ReadLine(backend); peer.Write(response, 0, response.Length); peer.Flush();
+                } catch { }
+                finally { if (backend != null) backend.Dispose(); peer.Dispose(); lock (gate) { active.Remove(peer); } slots.Release(); }
+            }
+        }
+        internal static int Client(string[] args) {
+            if (args.Length != 1) return 2;
+            return ClientCore(PublicName, Console.OpenStandardInput(), Console.OpenStandardOutput(),
+                pipe => BrokerPipeServerIdentity.VerifyService(pipe, "AgentoC-RunnerSupervisor"));
+        }
+        internal static int ClientCore(string name, Stream input, Stream output, Action<SafePipeHandle> verify) {
+            try {
+                byte[] request = ReadLine(input);
+                string path = @"\\.\pipe\" + name;
+                var deadline = Stopwatch.StartNew(); SafePipeHandle connected = null;
+                while (deadline.ElapsedMilliseconds < 30000) {
+                    uint remaining = (uint)Math.Max(1, 30000 - deadline.ElapsedMilliseconds);
+                    if (!WaitNamedPipe(path, remaining)) {
+                        int code = Marshal.GetLastWin32Error(); if (code != 2 && code != 231) return 1;
+                        Thread.Sleep(25); continue;
+                    }
+                    var candidate = CreateFile(path, 0x0012019b, 0, IntPtr.Zero, 3, 0x00120000, IntPtr.Zero);
+                    if (!candidate.IsInvalid) { connected = candidate; break; }
+                    int failure = Marshal.GetLastWin32Error(); candidate.Dispose();
+                    if (failure != 2 && failure != 231) return 1;
+                    Thread.Sleep(25);
+                }
+                if (connected == null) return 1;
+                using (var handle = connected) {
+                    using (var pipe = new NamedPipeClientStream(PipeDirection.InOut, false, true, handle)) {
+                        verify(pipe.SafePipeHandle);
+                        pipe.Write(request, 0, request.Length); pipe.Flush();
+                        byte[] response = ReadLine(pipe); output.Write(response, 0, response.Length);
+                    }
+                }
+                return 0;
+            } catch { return 1; }
+        }
+        public void Dispose() {
+            lock (gate) { if (disposed) return; disposed = true; stopped.Set(); foreach (var item in active.ToArray()) try { item.Dispose(); } catch {} }
+            bool joined = thread == null || thread.Join(5000);
+            lock (gate) { if (pending != null) pending.Dispose(); }
+            if (!joined) throw new InvalidOperationException("SHT_SUPERVISOR_PIPE_STOP_TIMEOUT");
         }
     }
 
@@ -438,6 +580,8 @@ namespace AgentoC.ServiceHost
         private readonly string stopFilePath;
         private string childLogPath;
         private Process child;
+        private readonly string supervisorBackendName = "agentoc-supervisor-backend-" + Guid.NewGuid().ToString("N");
+        private RunnerSupervisorPipe supervisorPipe;
         private volatile bool stopping;
         private readonly object childGate=new object();
         private readonly ManualResetEvent recoveryStop=new ManualResetEvent(false);
@@ -491,9 +635,15 @@ namespace AgentoC.ServiceHost
                 if(!(policy["version"] is int)||(int)policy["version"]!=1||!(policy["port"] is int)||(int)policy["port"]!=7690||policy["controlSid"] as string!=WindowsIdentity.GetCurrent().User.Value||!(policy["instanceId"] is string)||!Regex.IsMatch((string)policy["instanceId"],@"\Ainst_[a-f0-9]{32}\z"))throw new InvalidOperationException("SHT_OWNERSHIP_POLICY_INVALID");
                 recoveryInstance=(string)policy["instanceId"];
             }
+            if(role=="supervisor") supervisorPipe=new RunnerSupervisorPipe(supervisorBackendName, () => {
+                try { var current=child; return current!=null && !current.HasExited ? current.Id : 0; } catch { return 0; }
+            }, () => { ExitCode=1; try { Stop(); } catch {} });
             lock(childGate){StartChild();}
+            if(supervisorPipe!=null)supervisorPipe.Start();
             WriteEvent(1000, EventLogEntryType.Information, "AgentoC " + role + " service started.");
             } catch(Exception error) {
+                if(supervisorPipe!=null){supervisorPipe.Dispose();supervisorPipe=null;}
+                if(child!=null){try{StopChild();}catch{}}
                 ExitCode=1064; // ERROR_EXCEPTION_IN_SERVICE; never report a clean stop on failed startup.
                 var code=error is InvalidOperationException && error.Message.StartsWith("SHT_",StringComparison.Ordinal)?error.Message:"SHT_STARTUP_FAILED";
                 WriteEvent(1004,EventLogEntryType.Error,"AgentoC "+role+" startup refused: "+code);
@@ -593,7 +743,7 @@ namespace AgentoC.ServiceHost
             {
                 info.EnvironmentVariables["AGENTOC_NPM_COMMAND"] = bundledNpm;
             }
-            info.EnvironmentVariables["AGENTOC_RUNNER_SUPERVISOR_SOCKET"] = "\\\\.\\pipe\\agentoc-runner-supervisor-owner";
+            info.EnvironmentVariables["AGENTOC_RUNNER_SUPERVISOR_SOCKET"] = "\\\\.\\pipe\\" + (role=="supervisor" ? supervisorBackendName : "agentoc-runner-supervisor-owner");
             info.EnvironmentVariables["AGENTOC_RUNNER_SUPERVISOR_REQUIRED"] = "1";
             info.EnvironmentVariables["AGENTOC_WINDOWS_SERVICE_STOP_FILE"] = stopFilePath;
             return info;
@@ -769,13 +919,13 @@ namespace AgentoC.ServiceHost
         {
             // Serialize the stop decision with the final start check. A
             // backoff wake-up cannot launch after this stop linearizes.
-            lock(childGate){stopping=true;recoveryStop.Set();if(childOwnership!=null){childOwnership.Dispose();childOwnership=null;}StopChild();}
+            lock(childGate){stopping=true;recoveryStop.Set();if(supervisorPipe!=null){supervisorPipe.Dispose();supervisorPipe=null;}if(childOwnership!=null){childOwnership.Dispose();childOwnership=null;}StopChild();}
             WriteEvent(1001, EventLogEntryType.Information, "AgentoC " + role + " service stopped.");
         }
 
         protected override void OnShutdown()
         {
-            lock(childGate){stopping=true;recoveryStop.Set();if(childOwnership!=null){childOwnership.Dispose();childOwnership=null;}StopChild();}
+            lock(childGate){stopping=true;recoveryStop.Set();if(supervisorPipe!=null){supervisorPipe.Dispose();supervisorPipe=null;}if(childOwnership!=null){childOwnership.Dispose();childOwnership=null;}StopChild();}
             base.OnShutdown();
         }
 
@@ -942,6 +1092,11 @@ namespace AgentoC.ServiceHost
             if (args.Length > 0 && args[0] == "--broker-pipe")
             {
                 Environment.ExitCode = BrokerPipeClient.Run(args);
+                return;
+            }
+            if (args.Length > 0 && args[0] == "--runner-supervisor-pipe")
+            {
+                Environment.ExitCode = RunnerSupervisorPipe.Client(args);
                 return;
             }
             var role = Value(args, "--role") ?? "control";

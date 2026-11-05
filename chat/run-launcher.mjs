@@ -610,6 +610,40 @@ export async function launchDetachedRunnerViaLifecycleBroker(runId, {
   });
 }
 
+// On managed Windows installations the supervisor's public pipe is owned by
+// the SCM service host. Its native client verifies the actual pipe server PID
+// against SCM before transmitting the run-bound request or OAuth lock token.
+export function exchangeWindowsSupervisorRequest(request, { timeoutMs = 30000, spawnImpl = spawnProcess,
+  executable = join(dirname(process.execPath), '..', 'AgentoC.ServiceHost.exe') } = {}) {
+  const encoded = `${JSON.stringify(request)}\n`;
+  if (Buffer.byteLength(encoded, 'utf8') > 16384) return Promise.reject(new Error('Runner supervisor request is too large'));
+  return new Promise((resolve, reject) => {
+    let child, settled = false, output = '';
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true; clearTimeout(timer);
+      if (error) { child?.kill(); reject(error); } else resolve(value);
+    };
+    const timer = setTimeout(() => finish(new Error(`Runner supervisor timed out after ${timeoutMs}ms`)), timeoutMs);
+    timer.unref?.();
+    try { child = spawnImpl(executable, ['--runner-supervisor-pipe'], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] }); }
+    catch { finish(new Error('Runner supervisor native client is unavailable')); return; }
+    child.once('error', () => finish(new Error('Runner supervisor native client is unavailable')));
+    child.stdin.once('error', () => finish(new Error('Runner supervisor native client is unavailable')));
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', chunk => { output += chunk; if (Buffer.byteLength(output, 'utf8') > 16384) finish(new Error('Runner supervisor response is too large')); });
+    child.once('close', code => {
+      if (code !== 0) { finish(new Error('Runner supervisor native client rejected the connection')); return; }
+      try {
+        const response = JSON.parse(output.trim());
+        if (!response?.ok) { const error = new Error(response?.error || 'Runner supervisor rejected launch request'); if (typeof response?.code === 'string') error.code = response.code; throw error; }
+        finish(null, response);
+      } catch (error) { finish(error); }
+    });
+    child.stdin.end(encoded);
+  });
+}
+
 export async function launchDetachedRunnerViaSupervisor(runId, {
   socketPath = process.env.AGENTOC_RUNNER_SUPERVISOR_SOCKET,
   connectImpl = connectSocket,
@@ -636,7 +670,20 @@ export async function launchDetachedRunnerViaSupervisor(runId, {
 
   let oauthLockHandedOff = false;
   try {
-    const result = await new Promise((resolve, reject) => {
+    const request = {
+      type: 'launch', runId,
+      ...(providerHomesDir ? { providerHomesDir } : {}),
+      ...(prepared?.oauthLock?.path && prepared?.oauthLock?.token ? { oauthLockPath: prepared.oauthLock.path, oauthLockToken: prepared.oauthLock.token } : {}),
+    };
+    const managedWindows = process.platform === 'win32' && process.env.AGENTOC_WINDOWS_SERVICE_MODE === '1'
+      && process.env.AGENTOC_WINDOWS_SERVICE_ROLE === 'control' && connectImpl === connectSocket;
+    let result;
+    if (managedWindows) {
+      if (normalizedSocketPath.toLowerCase() !== '\\\\.\\pipe\\agentoc-runner-supervisor-owner') throw new Error('Runner supervisor pipe is not the installed endpoint');
+      const response = await exchangeWindowsSupervisorRequest(request, { timeoutMs });
+      result = { pid: Number.isInteger(response.pid) && response.pid > 0 ? response.pid : null,
+        unitName: null, unitScope: null, supervisorSocket: normalizedSocketPath, launchMode: DETACHED_RUNNER_SUPERVISOR_LAUNCH_MODE };
+    } else result = await new Promise((resolve, reject) => {
     let settled = false;
     let buffer = '';
     const socket = connectImpl(normalizedSocketPath);
@@ -655,17 +702,7 @@ export async function launchDetachedRunnerViaSupervisor(runId, {
 
     socket.setEncoding('utf8');
     socket.once('connect', () => {
-      socket.write(`${JSON.stringify({
-        type: 'launch',
-        runId,
-        ...(providerHomesDir ? { providerHomesDir } : {}),
-        ...(prepared?.oauthLock?.path && prepared?.oauthLock?.token
-          ? {
-            oauthLockPath: prepared.oauthLock.path,
-            oauthLockToken: prepared.oauthLock.token,
-          }
-          : {}),
-      })}\n`);
+      socket.write(`${JSON.stringify(request)}\n`);
     });
     socket.on('data', (chunk) => {
       buffer += chunk;
