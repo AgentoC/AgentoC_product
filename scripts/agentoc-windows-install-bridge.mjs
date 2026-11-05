@@ -47,7 +47,7 @@ export async function runWindowsInstallBridge({ argv = process.argv, env = proce
     let result;
     try { result = JSON.parse(raw); } catch { throw new Error('Invalid installation control response'); }
     if (!response.ok) {
-      if (!statusOnly && result?.code === 'AUTO_INSTALL_OUTCOME_UNKNOWN') {
+      if (!statusOnly && ['AUTO_INSTALL_OUTCOME_UNKNOWN', 'MSI_INSTALL_OUTCOME_UNKNOWN'].includes(result?.code)) {
         statusOnly = true;
         await delay(2000);
         continue;
