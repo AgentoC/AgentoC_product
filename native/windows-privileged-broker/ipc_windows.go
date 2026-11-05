@@ -33,6 +33,7 @@ type brokerIPCServer struct {
 	store         *brokerStore
 	target        brokerTargetController
 	autoInstaller autoInstaller
+	msiInspector  func(msiInspectRequest) (*msiInspectFacts, error)
 	msiInstaller  interface {
 		Install(context.Context, msiInstallGrant) (requestStatus, string)
 	}
@@ -98,6 +99,7 @@ func newBrokerIPCServerForPipeNamesAndAdmin(store *brokerStore, controlPlaneSID 
 		serviceController: runWindowsServiceControl,
 		autoInstaller:     windowsAutoInstaller{},
 		msiInstaller:      windowsMSIInstaller{},
+		msiInspector:      inspectWindowsMSI,
 		ownerInstaller:    runInstalledOwnerInstall,
 		ownerPolicy:       readInstalledOwnerPolicy,
 		ownerAvailable:    func(sid string) bool { _, err := discoverOwnerSession(sid); return err == nil },
@@ -632,6 +634,7 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 		}
 		response.InstallationID = state.InstallationID
 		response.PolicyGeneration = state.PolicyGeneration
+		response.MSIInstallReady = state.AutoInstallSigner != nil && s.msiInstaller != nil && s.msiInspector != nil
 		response.ServiceControlReady = state.AutoInstallSigner != nil && state.OwnerID != "" && len(state.Devices) > 0 && s.serviceController != nil && s.serviceInspector != nil
 		backendReady := state.AutoInstallSigner != nil && s.autoInstaller != nil
 		if availability, ok := s.autoInstaller.(interface{ Available() bool }); backendReady && ok {
@@ -641,7 +644,7 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 			response.AutoInstallReady = true
 			response.AutoInstallKeyID = state.AutoInstallSigner.KeyID
 		}
-		if response.ServiceControlReady {
+		if response.ServiceControlReady || response.MSIInstallReady {
 			response.AutoInstallKeyID = state.AutoInstallSigner.KeyID
 		}
 		return response
@@ -889,6 +892,18 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 		}
 		response := newResponse("auto_install_inspection")
 		response.SelectedInstaller = facts
+		return response
+	}
+	if request.Type == "msi_install.inspect" {
+		if s.msiInspector == nil {
+			return newErrorResponse("MSI_INSTALL_INSPECTION_UNAVAILABLE")
+		}
+		facts, err := s.msiInspector(*request.MSIInspect)
+		if err != nil || facts == nil || facts.ArtifactPath != request.MSIInspect.ArtifactPath || facts.ArtifactSHA256 != request.MSIInspect.ArtifactSHA256 || !msiDigestPattern.MatchString(facts.PublisherSHA256) {
+			return newErrorResponse("MSI_INSTALL_INSPECTION_FAILED")
+		}
+		response := newResponse("msi_install_inspection")
+		response.MSIFacts = facts
 		return response
 	}
 	if request.Type == "msi_install.execute" {

@@ -40,12 +40,23 @@ type brokerRequest struct {
 	Choice           string                     `json:"choice,omitempty"`
 	Signature        string                     `json:"signature,omitempty"`
 	DeviceSignature  string                     `json:"deviceSignature,omitempty"`
+	MSIInspect       *msiInspectRequest         `json:"msiInspect,omitempty"`
 	MSIInstall       *msiInstallGrant           `json:"msiInstall,omitempty"`
 	AutoInstall      *autoInstallGrant          `json:"autoInstall,omitempty"`
 	OwnerInstall     *ownerInstallGrant         `json:"ownerInstall,omitempty"`
 	AutoInspect      *autoInstallInspectRequest `json:"autoInspect,omitempty"`
 	ServiceInspect   *serviceInspectRequest     `json:"serviceInspect,omitempty"`
 	ServiceControl   *serviceControlGrant       `json:"serviceControl,omitempty"`
+}
+
+type msiInspectRequest struct {
+	ArtifactPath   string `json:"artifactPath"`
+	ArtifactSHA256 string `json:"artifactSha256"`
+}
+type msiInspectFacts struct {
+	ArtifactPath    string `json:"artifactPath"`
+	ArtifactSHA256  string `json:"artifactSha256"`
+	PublisherSHA256 string `json:"publisherSha256"`
 }
 
 type serviceInspectRequest struct {
@@ -81,6 +92,8 @@ type brokerResponse struct {
 	AutoInstallReady    bool                       `json:"autoInstallReady"`
 	ServiceControlReady bool                       `json:"serviceControlReady"`
 	AutoInstallKeyID    string                     `json:"autoInstallKeyId,omitempty"`
+	MSIInstallReady     bool                       `json:"msiInstallReady"`
+	MSIFacts            *msiInspectFacts           `json:"msiFacts,omitempty"`
 	MSIDigest           string                     `json:"msiDigest,omitempty"`
 	AutoInstall         *autoInstallGrant          `json:"autoInstall,omitempty"`
 	OwnerInstall        *ownerInstallGrant         `json:"ownerInstall,omitempty"`
@@ -178,6 +191,9 @@ func decodeBrokerRequest(payload []byte) (brokerRequest, error) {
 }
 
 func validateRequest(request brokerRequest) error {
+	if request.Type != "msi_install.inspect" && request.MSIInspect != nil {
+		return errInvalidRequest
+	}
 	if request.Type != "msi_install.execute" && request.MSIInstall != nil {
 		return errInvalidRequest
 	}
@@ -266,6 +282,10 @@ func validateRequest(request brokerRequest) error {
 			return errInvalidRequest
 		}
 		if _, err := parseAutoInstallPublicKey(request.PublicKey); err != nil {
+			return errInvalidRequest
+		}
+	case "msi_install.inspect":
+		if request.MSIInspect == nil || !validMSIArtifactPath(request.MSIInspect.ArtifactPath) || !msiDigestPattern.MatchString(request.MSIInspect.ArtifactSHA256) || hasNonHealthFields(request) {
 			return errInvalidRequest
 		}
 	case "msi_install.execute":
