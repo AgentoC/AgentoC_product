@@ -39,6 +39,37 @@ import org.junit.Assert.assertTrue
 
 @RunWith(AndroidJUnit4::class)
 class RoomSessionRepositoryEventTest {
+    @Test fun categoryResponseWithoutDecisionDoesNotInventARejection() = runBlocking {
+        val repository = RoomSessionRepository(database, QueuedTransport(listOf(
+            """{"sessionId":"session-1","events":[{"seq":1,"type":"privileged_batch_request","batchId":"b","runId":"r","other":[{"opId":"o","description":"Restart"}],"delete":[{"opId":"d","description":"Remove"}]}],"latestSeq":1}""",
+            """{"sessionId":"session-1","events":[{"seq":2,"type":"privileged_batch_response","batchId":"b","category":"other"}],"latestSeq":2}""",
+        )))
+        repository.refreshEvents("session-1")
+        repository.refreshEvents("session-1")
+        val pending = repository.observePendingApprovals("session-1").first().single()
+        assertEquals("resolved", pending.actions.single { it.id == "o" }.state)
+        assertEquals("waiting_user", pending.actions.single { it.id == "d" }.state)
+        repository.close()
+    }
+
+    @Test fun privilegedCategoriesRemainPendingUntilEachIsResolved() = runBlocking {
+        database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 0, 0)))
+        val repository = RoomSessionRepository(database, QueuedTransport(listOf(
+            """{"sessionId":"session-1","events":[{"seq":1,"type":"privileged_batch_request","batchId":"b","runId":"r","other":[{"opId":"o","description":"Restart"}],"delete":[{"opId":"d","description":"Remove"}]}],"latestSeq":1}""",
+            """{"sessionId":"session-1","events":[{"seq":2,"type":"privileged_batch_response","batchId":"b","category":"privileged_other","decisions":{"o":"approved"}}],"latestSeq":2}""",
+            """{"sessionId":"session-1","events":[{"seq":3,"type":"privileged_batch_response","batchId":"b","category":"destructive_delete","decisions":{"d":"denied"}}],"latestSeq":3}""",
+        )))
+        repository.refreshEvents("session-1")
+        repository.refreshEvents("session-1")
+        val pending = repository.observePendingApprovals("session-1").first().single()
+        assertEquals("approved", pending.actions.single { it.id == "o" }.state)
+        assertEquals("waiting_user", pending.actions.single { it.id == "d" }.state)
+        assertEquals(SessionStatus.WaitingApproval, repository.observeSession("session-1").first()?.status)
+        repository.refreshEvents("session-1")
+        assertTrue(repository.observePendingApprovals("session-1").first().isEmpty())
+        repository.close()
+    }
+
     @Test fun backgroundSyncRecoversPendingApprovalAfterCursorPassedIt() = runBlocking {
         database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 10, 0)))
         database.dao().upsertCursor(SyncCursorEntity("session-1", 10, null, updatedAt = 0))

@@ -714,6 +714,7 @@ data class SessionEventDto(
     val approvalId: String? = null,
     val batchId: String? = null,
     val category: String? = null,
+    val decisions: JsonObject? = null,
     val id: String? = null,
     val operationId: String? = null,
     val deliveryKey: String? = null,

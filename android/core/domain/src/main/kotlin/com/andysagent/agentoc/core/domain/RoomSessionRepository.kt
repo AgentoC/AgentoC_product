@@ -2778,6 +2778,14 @@ private class RoomEventSink(
                 denyLabel = event.denyLabel ?: "Deny",
                 updatedAt = System.currentTimeMillis(),
             )))
+        } else if (type == "privileged_batch_response") {
+            val batchId = event.batchId ?: return
+            val existing = dao.getApproval(scope, event.approvalId ?: batchId) ?: dao.getApprovalByBatchId(scope, batchId) ?: return
+            val updated = existing.withPrivilegedCategoryResponse(event)
+            dao.upsertApprovals(listOf(updated))
+            if (updated.status == "pending") {
+                dao.getSession(scope)?.let { dao.upsertSessions(listOf(it.copy(status = "waiting_approval", updatedAt = System.currentTimeMillis()))) }
+            }
         } else if (type == "approved_action_state") {
             val batchId = event.batchId ?: event.approvalId ?: requestId
             val existing = dao.getApproval(scope, batchId)
@@ -2791,6 +2799,30 @@ private class RoomEventSink(
 }
 
 private val terminalApprovedActionStates = setOf("denied", "cancelled", "expired", "completed", "failed")
+
+private fun ApprovalEntity.withPrivilegedCategoryResponse(event: SessionEventDto): ApprovalEntity {
+    val category = when (event.category) {
+        "other", "privileged_other" -> "privileged_other"
+        "delete", "destructive_delete" -> "destructive_delete"
+        else -> return this
+    }
+    val details = runCatching { detailsJson?.let { AgentocProtocol.json.parseToJsonElement(it).jsonObject } }.getOrNull() ?: return this
+    val actions = details["actions"]?.jsonArray.orEmpty().map { element ->
+        val action = element.jsonObject
+        if (action["category"]?.jsonPrimitive?.contentOrNull != category) return@map element
+        val id = action["actionId"]?.jsonPrimitive?.contentOrNull
+        val decision = id?.let { event.decisions?.get(it)?.jsonPrimitive?.contentOrNull }
+        val resolvedState = when (decision) { "approved" -> "approved"; "denied" -> "denied"; else -> "resolved" }
+        JsonObject(action.toMutableMap().apply { put("state", JsonPrimitive(resolvedState)) })
+    }
+    if (actions.none { it.jsonObject["category"]?.jsonPrimitive?.contentOrNull == category }) return this
+    val pending = actions.any { action ->
+        action.jsonObject["category"]?.jsonPrimitive?.contentOrNull in setOf("privileged_other", "destructive_delete") &&
+            action.jsonObject["state"]?.jsonPrimitive?.contentOrNull.orEmpty() !in setOf("approved", "denied", "resolved", "cancelled", "expired")
+    }
+    val next = details.toMutableMap().apply { put("actions", buildJsonArray { actions.forEach(::add) }) }
+    return copy(status = if (pending) "pending" else "resolved", detailsJson = JsonObject(next).toString(), updatedAt = System.currentTimeMillis())
+}
 
 private fun ApprovalEntity.withApprovedActionState(event: SessionEventDto): ApprovalEntity {
     val details = runCatching {

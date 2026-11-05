@@ -120,6 +120,9 @@ interface AgentoCDao {
     @Query("SELECT * FROM approvals WHERE sessionId = :sessionId AND id = :approvalId LIMIT 1")
     suspend fun getApproval(sessionId: String, approvalId: String): ApprovalEntity?
 
+    @Query("SELECT * FROM approvals WHERE sessionId = :sessionId AND batchId = :batchId LIMIT 1")
+    suspend fun getApprovalByBatchId(sessionId: String, batchId: String): ApprovalEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertApprovals(items: List<ApprovalEntity>)
 
