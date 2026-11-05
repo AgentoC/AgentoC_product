@@ -310,10 +310,10 @@ data class Approval(
     val actions: List<ApprovalAction> = emptyList(),
     /**
      * Server-projected owner passkey checkpoint for legacy privileged-category
-     * batches. Absent (older persisted approvals) means required: the safe
-     * default keeps prompting for the passkey.
+     * batches. An absent flag requires a passkey for legacy batches, while
+     * ordinary runtime approvals do not carry this batch-specific field.
      */
-    val passkeyRequired: Boolean = true,
+    val passkeyRequired: Boolean = batchId != null,
     val selectionManifestHash: String? = null,
     val permissionMode: String? = null,
     val expiresAt: String? = null,

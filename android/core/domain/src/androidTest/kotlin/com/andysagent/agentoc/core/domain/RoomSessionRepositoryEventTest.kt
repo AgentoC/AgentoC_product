@@ -51,7 +51,9 @@ class RoomSessionRepositoryEventTest {
         ))
         val repository = RoomSessionRepository(database, transport)
         repository.refreshTimeline("session-1")
-        assertEquals("claude:1", repository.observePendingApprovals("session-1").first().single().id)
+        val approval = repository.observePendingApprovals("session-1").first().single()
+        assertEquals("claude:1", approval.id)
+        assertEquals(false, approval.passkeyRequired)
         assertTrue(transport.requests.any { it.path.contains("afterSeq=9") })
         repository.close()
     }

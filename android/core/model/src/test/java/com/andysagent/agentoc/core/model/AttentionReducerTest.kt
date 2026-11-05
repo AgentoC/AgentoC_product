@@ -166,7 +166,7 @@ class AttentionReducerTest {
     fun `plain runtime approvals resolve inline`() {
         val items = AttentionReducer.project(
             sessions = listOf(session("s1")),
-            approvals = listOf(approval("a1", "s1", passkeyRequired = false)),
+            approvals = listOf(Approval(id = "a1", sessionId = "s1", title = "Command", runId = "run-1")),
         )
         assertFalse(items.single().requiresSession)
     }

@@ -121,7 +121,6 @@ class ApprovalResolutionCoordinatorTest {
             title = "t",
             status = "pending",
             runId = "run-1",
-            passkeyRequired = false,
         )
         val coordinator = ApprovalResolutionCoordinator(repository)
         val outcome = coordinator.resolvePlainApproval("s1", "a1", approve = true)

@@ -2896,7 +2896,7 @@ private fun ApprovalEntity.toDomainApproval(): Approval {
         riskLevel = risk,
         questions = questions,
         actions = actions,
-        passkeyRequired = details?.get("passkeyRequired")?.jsonPrimitive?.booleanOrNull ?: true,
+        passkeyRequired = details?.get("passkeyRequired")?.jsonPrimitive?.booleanOrNull ?: (batchId != null),
         selectionManifestHash = selectionManifestHash,
         permissionMode = permissionMode,
         expiresAt = expiresAt,
