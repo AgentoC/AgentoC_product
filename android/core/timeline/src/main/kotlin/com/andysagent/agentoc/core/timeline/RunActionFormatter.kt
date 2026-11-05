@@ -37,7 +37,7 @@ object RunActionFormatter {
         val liveToolIsNewer = active != null && (sourceSeq == 0L || active.seq == 0L || active.seq > sourceSeq)
         val genericSubject = (activity?.get("subject") as? JsonPrimitive)?.contentOrNull.orEmpty().trim().lowercase()
             .substringAfterLast("__").substringAfterLast('/')
-        val genericTool = canonical?.kind in setOf("tool", "mcp", "other") && genericSubject in setOf("execute", "exec", "tool")
+        val genericTool = canonical?.kind in setOf("tool", "mcp", "other") && genericSubject in setOf("execute", "exec", "tool", "other", "unknown")
         if ((liveToolIsNewer || genericTool) && active != null &&
             (canonical == null || genericTool || canonical.kind in setOf("working", "thinking", "think", "responding", "other", "tool"))) {
             return fromOperation(active!!)
@@ -53,7 +53,7 @@ object RunActionFormatter {
         if (!expectedRunId.isNullOrBlank() && value("runId").isNotBlank() && value("runId") != expectedRunId) return null
         val kind = value("labelKind").ifBlank { value("kind") }.ifBlank { "working" }
         val detail = value("detail")
-        val subject = when {
+        val rawSubject = when {
             value("subject").isNotBlank() -> clipSubject(value("subject"), 48)
             kind in setOf("read", "file_edit", "edit", "delete") -> basename(detail)
             kind == "search" -> clipSubject(detail.substringBefore(" · "), 48)
@@ -61,6 +61,11 @@ object RunActionFormatter {
                 "task_create", "task_update", "task_read", "task_list", "task_stop", "message", "wait", "question",
                 "other", "command", "execute", "move", "switch_mode") -> clipSubject(detail, 80)
             else -> ""
+        }
+        val subject = when {
+            kind in setOf("command", "execute", "execute_composite") && rawSubject.lowercase() in setOf("execute", "exec", "bash", "shell", "command") -> "command"
+            kind == "read" && rawSubject.lowercase() in setOf("read", "readfile") -> "file"
+            else -> rawSubject
         }
         val lifecycle = value("operationState").ifBlank { value("state") }
         val group = activity["group"] as? JsonObject
@@ -94,7 +99,7 @@ object RunActionFormatter {
             lifecycle in setOf("running", "working", "started", "in_progress") && it.isNotBlank()
         }
         val genericName = subject.lowercase().substringAfterLast("__").substringAfterLast('/')
-        val isGenericTool = kind in setOf("tool", "mcp", "other") && genericName in setOf("execute", "exec", "tool")
+        val isGenericTool = kind in setOf("tool", "mcp", "other") && genericName in setOf("execute", "exec", "tool", "other", "unknown")
         val sentence = (modelDescription ?: if (isGenericTool && lifecycle in setOf("running", "working", "started", "in_progress")) {
             "Working on the task"
         } else listOf(action, subject.takeUnless { groupedExploration }.orEmpty()).filter { it.isNotBlank() }.joinToString(" ")) +
@@ -192,6 +197,10 @@ object RunActionFormatter {
             TimelineOperationKind.Unknown -> "working"
         }
         val subject = semantic?.second ?: operation.subject()
+        if (kind == "tool" && subject.lowercase() in setOf("other", "unknown", "tool", "execute", "exec")) {
+            return RunActionUiState("working", "Working on the task", operation.detail.compact().safeDisplay(), operation.id,
+                presentationVerb = "working")
+        }
         val sentence = when (kind) {
             "read" -> "Reading $subject"
             "list" -> "Listing $subject"
@@ -216,7 +225,7 @@ object RunActionFormatter {
             Regex("(?:^|[\\\"' ])(?:command|cmd|script|shell|program|executable)[\\\"' ]*[:=][\\\"']?([^\\\"'}\\n]+)", RegexOption.IGNORE_CASE)
                 .find(text)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }
         }?.let { return it }
-        return if (operationKindIsCommand() && detail.isNotBlank()) detail else null
+        return if (operationKindIsCommand() && detail.isNotBlank() && detail.trim().lowercase() !in setOf("bash", "shell", "execute", "exec", "command")) detail else null
     }
 
     private fun TimelineItem.Operation.operationKindIsCommand() =
@@ -225,9 +234,12 @@ object RunActionFormatter {
     private fun TimelineItem.Operation.subject(): String = when {
         isReasoning -> "the task"
         toolName.orEmpty().lowercase() in setOf("read", "write", "edit", "multiedit", "notebookedit") || kind == TimelineOperationKind.FileEdit ->
-            basename(inputField("file_path", "path", "notebook_path") ?: title.takeUnless { it.equals("edit", true) || it.equals("write", true) }.orEmpty().ifBlank { "file" })
+            basename(inputField("file_path", "path", "notebook_path") ?: title.takeUnless {
+                it.trim().lowercase() in setOf("read", "reading file", "edit", "editing file", "write", "writing file")
+            }.orEmpty().ifBlank { "file" })
         toolName.orEmpty().lowercase() in setOf("grep", "glob", "search") -> inputField("pattern", "query", "glob")?.let { clipSubject(it, 48) } ?: "workspace"
         toolName.orEmpty().lowercase().substringAfterLast("__") in setOf("bash", "shell", "execute", "exec") -> "command"
+        kind == TimelineOperationKind.Command -> "command"
         kind == TimelineOperationKind.Diff -> "workspace changes"
         kind == TimelineOperationKind.SubAgent -> title.ifBlank { "sub-agent" }.compact()
         else -> (toolName ?: title).ifBlank { "next step" }.compact()

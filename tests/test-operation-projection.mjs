@@ -186,6 +186,28 @@ const claudeProjection = buildOperationProjection([
   },
 ]);
 
+const completePreview = JSON.stringify({ file_path: 'G:\\qa\\acceptance.txt' });
+const commandPreview = JSON.stringify({ command: 'pwd', description: 'Show current working directory' });
+const previewProjection = buildOperationProjection([
+  { seq: 1, type: 'tool_use', toolName: 'Read', toolInput: '', bodyField: 'toolInput', bodyLoaded: false,
+    bodyPreview: completePreview, bodyBytes: Buffer.byteLength(completePreview), providerToolUseId: 'preview-read' },
+  { seq: 2, type: 'tool_use', toolName: 'Bash', toolInput: '', bodyField: 'toolInput', bodyLoaded: false,
+    bodyPreview: commandPreview, bodyBytes: Buffer.byteLength(commandPreview), providerToolUseId: 'preview-command' },
+]);
+assert.match(previewProjection.operations[0].detail, /acceptance\.txt/);
+assert.equal(previewProjection.operations[1].command, 'pwd');
+const truncatedPreview = buildOperationProjection([
+  { seq: 1, type: 'tool_use', toolName: 'Bash', toolInput: '', bodyField: 'toolInput', bodyLoaded: false,
+    bodyPreview: commandPreview, bodyBytes: Buffer.byteLength(commandPreview) + 1, providerToolUseId: 'truncated' },
+]);
+assert.notEqual(truncatedPreview.operations[0].command, 'pwd', 'partial preview must not be treated as a complete input');
+const sensitivePreview = JSON.stringify({ command: 'API_TOKEN=private-value pwd' });
+const safePreview = buildOperationProjection([
+  { seq: 1, type: 'tool_use', toolName: 'Bash', toolInput: '', bodyField: 'toolInput', bodyLoaded: false,
+    bodyPreview: sensitivePreview, bodyBytes: Buffer.byteLength(sensitivePreview), providerToolUseId: 'secret' },
+]);
+assert.doesNotMatch(JSON.stringify(safePreview.operations), /private-value/, 'preview-derived display must redact secrets');
+
 assert.equal(claudeProjection.operations.length, 1);
 assert.equal(claudeProjection.operations[0].kind, 'file_edit');
 assert.equal(claudeProjection.operations[0].state, 'completed');

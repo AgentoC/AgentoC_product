@@ -120,18 +120,26 @@ function readDetail(event, input, kind, command, toolName) {
 
 export function classifyProviderOperation(event = {}) {
   const toolName = trimString(event.toolName || event.sourceToolName);
-  const dialect = resolveProviderToolDialect({ toolName, toolInput: event.toolInput });
+  // Durable event pages may externalize toolInput and provide only a bounded
+  // preview. Use it only when it contains the complete body; a truncated JSON
+  // fragment must never be interpreted as a command or file name.
+  const preview = event.bodyField === 'toolInput' && event.bodyLoaded === false &&
+    typeof event.bodyPreview === 'string' && Number.isInteger(event.bodyBytes) &&
+    Buffer.byteLength(event.bodyPreview, 'utf8') === event.bodyBytes
+    ? event.bodyPreview : '';
+  const toolInput = event.toolInput || preview;
+  const dialect = resolveProviderToolDialect({ toolName, toolInput });
   const normalizedToolName = dialect.normalizedToolName || normalizeToolName(toolName);
   const input = dialect.input && typeof dialect.input === 'object'
     ? dialect.input
-    : parseToolInput(event.toolInput);
+    : parseToolInput(toolInput);
   const kind = inferKind(event, normalizedToolName, dialect);
-  const command = dialect.command || readCommand(event, input, kind);
+  const command = clipSingleLine(dialect.command || readCommand({ ...event, toolInput }, input, kind));
   const cwd = clipSingleLine(readFirstString(event, ['cwd']) || readFirstString(input, ['cwd']), 240);
-  const detail = readFirstString(event, ['operationDetail', 'detail'])
+  const detail = clipSingleLine(readFirstString(event, ['operationDetail', 'detail'])
     || dialect.detail
     || dialect.subject
-    || readDetail(event, input, kind, command, toolName);
+    || readDetail(event, input, kind, command, toolName));
   const action = parseProviderAction({
     ...event,
     operationKind: kind,

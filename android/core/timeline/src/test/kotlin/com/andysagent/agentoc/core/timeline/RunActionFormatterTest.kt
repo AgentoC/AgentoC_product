@@ -5,6 +5,22 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class RunActionFormatterTest {
+    @Test fun genericCommandAndReadSubjectsUseHumanReadableFallbacks() {
+        val json = kotlinx.serialization.json.Json
+        val command = json.parseToJsonElement("""{"state":"working","kind":"execute","labelKind":"execute","subject":"execute","detail":"Bash"}""") as kotlinx.serialization.json.JsonObject
+        val read = json.parseToJsonElement("""{"state":"working","kind":"read","subject":"read"}""") as kotlinx.serialization.json.JsonObject
+        assertEquals("Running command", RunActionFormatter.fromServer(command)?.sentence)
+        assertEquals("command", RunActionFormatter.fromServer(command)?.presentationSubject)
+        assertEquals("Reading file", RunActionFormatter.fromServer(read)?.sentence)
+        val operation = TimelineItem.Operation("o", 1, TimelineOperationKind.Command, "Running command", "Bash", TimelineOperationStatus.InProgress)
+        assertEquals("Running command", RunActionFormatter.forOperation(operation).sentence)
+        val projectedRead = TimelineItem.Operation("r", 2, TimelineOperationKind.Tool, "Reading file", "Read", TimelineOperationStatus.Completed, toolName = "read")
+        assertEquals("Reading file", RunActionFormatter.forOperation(projectedRead).sentence)
+        val other = json.parseToJsonElement("""{"state":"working","kind":"other","subject":"other"}""") as kotlinx.serialization.json.JsonObject
+        assertEquals("Working on the task", RunActionFormatter.fromServer(other)?.sentence)
+        val projectedOther = TimelineItem.Operation("x", 3, TimelineOperationKind.Tool, "Using tool", "", TimelineOperationStatus.InProgress, toolName = "other")
+        assertEquals("Working on the task", RunActionFormatter.forOperation(projectedOther).sentence)
+    }
     @Test fun completedOperationDoesNotLookLikeAnActiveAction() {
         val operation = TimelineItem.Operation("done", 1, TimelineOperationKind.Command, "Search", "rg pattern .",
             TimelineOperationStatus.Completed)
