@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -62,6 +64,18 @@ func TestMSIInstallClaimIsDurableAndSingleUse(t *testing.T) {
 	wg.Wait()
 	if claims != 1 || duplicates != 7 {
 		t.Fatalf("claims=%d duplicates=%d", claims, duplicates)
+	}
+	// A previous release uses strict decoding, so MSI must not add a new top-level field.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := fields["msiInstalls"]; exists {
+		t.Fatal("MSI state breaks legacy strict decoder")
 	}
 	winget := autoInstallGrant{Version: 1, KeyID: grant.KeyID, BrokerInstallationID: grant.BrokerInstallationID,
 		PolicyGeneration: grant.PolicyGeneration, RequestID: grant.RequestID, SessionID: grant.SessionID, RunID: grant.RunID,

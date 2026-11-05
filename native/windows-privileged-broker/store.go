@@ -62,7 +62,6 @@ type persistedBrokerState struct {
 	Enrollments       map[string]pendingDeviceEnrollment `json:"enrollments"`
 	Requests          map[string]requestRecord           `json:"requests"`
 	AutoInstalls      map[string]autoInstallRecord       `json:"autoInstalls,omitempty"`
-	MSIInstalls       map[string]msiInstallRecord        `json:"msiInstalls,omitempty"`
 	OwnerInstalls     map[string]ownerInstallRecord      `json:"ownerInstalls,omitempty"`
 	ServiceControls   map[string]serviceControlRecord    `json:"serviceControls,omitempty"`
 	AutoInstallSigner *autoInstallSigner                 `json:"autoInstallSigner,omitempty"`
@@ -192,17 +191,11 @@ func recoverInterruptedExecutions(state *persistedBrokerState, now time.Time) (b
 		}
 		recovered = true
 	}
-	for nonce, record := range state.MSIInstalls {
-		if record.Status != statusExecuting {
-			continue
-		}
-		record.Status, record.Code, record.UpdatedAt = statusUnknown, "EXECUTION_OUTCOME_UNKNOWN", now.UTC()
-		state.MSIInstalls[nonce] = record
-		if err := appendAuditState(state, "msi_install.unknown", record.Grant.RequestID, record.Code, record.Digest); err != nil {
-			return false, err
-		}
-		recovered = true
+	msiRecovered, err := markInterruptedMSIInstalls(state, "EXECUTION_OUTCOME_UNKNOWN")
+	if err != nil {
+		return false, err
 	}
+	recovered = recovered || msiRecovered
 	for nonce, record := range state.OwnerInstalls {
 		if record.Status != statusExecuting {
 			continue
@@ -695,15 +688,8 @@ func expireOutstandingApprovals(state *persistedBrokerState, code string, now ti
 			return err
 		}
 	}
-	for nonce, record := range state.MSIInstalls {
-		if record.Status != statusExecuting {
-			continue
-		}
-		record.Status, record.Code, record.UpdatedAt = statusUnknown, code, now.UTC()
-		state.MSIInstalls[nonce] = record
-		if err := appendAuditState(state, "msi_install.unknown", record.Grant.RequestID, code, record.Digest); err != nil {
-			return err
-		}
+	if _, err := markInterruptedMSIInstalls(state, code); err != nil {
+		return err
 	}
 	for nonce, record := range state.OwnerInstalls {
 		if record.Status != statusExecuting {
@@ -1027,16 +1013,12 @@ func validateState(state persistedBrokerState) error {
 		}
 		autoRequests[record.Grant.RequestID] = true
 	}
-	if len(state.MSIInstalls) > maxStoredRequests {
+	msiRecords, err := msiInstallRecords(&state)
+	if err != nil || len(msiRecords) > maxStoredRequests {
 		return errStateInvalid
 	}
-	for nonce, record := range state.MSIInstalls {
-		message, err := msiInstallSigningBytes(record.Grant)
-		if err != nil || nonce != record.Grant.Nonce || !autoInstallNoncePattern.MatchString(nonce) ||
-			!validRequestID(record.Grant.RequestID) || autoRequests[record.Grant.RequestID] || state.Requests[record.Grant.RequestID].Request.RequestID != "" ||
-			!isSHA256Hex(record.Digest) || record.Digest != fmt.Sprintf("%x", sha256.Sum256(message)) ||
-			!(record.Status == statusExecuting || record.Status == statusSucceeded || record.Status == statusFailed || record.Status == statusUnknown) ||
-			!validAuditCode(record.Code) || !record.CreatedAt.Equal(record.CreatedAt.UTC()) || !record.UpdatedAt.Equal(record.UpdatedAt.UTC()) {
+	for _, record := range msiRecords {
+		if autoRequests[record.Grant.RequestID] || state.Requests[record.Grant.RequestID].Request.RequestID != "" {
 			return errStateInvalid
 		}
 		autoRequests[record.Grant.RequestID] = true
