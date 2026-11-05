@@ -1325,7 +1325,7 @@ private fun ApprovalCardContent(
                 onClick = onDeny,
                 enabled = !approval.resolving,
                 modifier = Modifier.weight(1f).heightIn(min = 52.dp),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(50),
                 color = if (isDark) Color(0x1AFFFFFF) else Color(0x0F000000),
             ) {
                 Box(
@@ -1347,7 +1347,7 @@ private fun ApprovalCardContent(
                 onClick = onApprove,
                 enabled = !approval.resolving,
                 modifier = Modifier.weight(1f).heightIn(min = 52.dp),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(50),
                 color = if (approval.resolving) colors.strongSurface else colors.actionPrimary,
             ) {
                 Box(
