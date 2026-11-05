@@ -363,7 +363,7 @@ class PairingOnboardingViewModel(
         }
         runCatching { parsePairingUri(uri) }.onFailure {
             activePairingUri = null
-            showError(PairingErrorCopy("That QR code is not a valid AgentoC account-link code.", R.string.pairing_error_invalid_account_code))
+            showError(PairingErrorCopy("That QR code is not a valid Ragent account-link code.", R.string.pairing_error_invalid_account_code))
             return
         }
         activePairingUri = uri
@@ -492,7 +492,7 @@ class PairingOnboardingViewModel(
         }
         runCatching { parsePairingUri(uri) }.onFailure {
             activePairingUri = null
-            showError(PairingErrorCopy("That QR code is not a valid AgentoC account-link code.", R.string.pairing_error_invalid_account_code))
+            showError(PairingErrorCopy("That QR code is not a valid Ragent account-link code.", R.string.pairing_error_invalid_account_code))
             return
         }
         activePairingUri = uri

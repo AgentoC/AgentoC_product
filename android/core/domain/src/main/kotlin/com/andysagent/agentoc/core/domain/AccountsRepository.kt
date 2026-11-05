@@ -324,7 +324,7 @@ class DefaultAccountsRepository(
             if (instanceId.isBlank()) return@mapNotNull null
             DiscoveredComputer(
                 instanceId = instanceId,
-                alias = item["alias"]?.jsonPrimitive?.contentOrNull.orEmpty().ifBlank { "AgentoC computer" },
+                alias = item["alias"]?.jsonPrimitive?.contentOrNull.orEmpty().ifBlank { "Ragent computer" },
                 endpoint = item["endpoint"]?.jsonPrimitive?.contentOrNull,
                 boundAt = item["boundAt"]?.jsonPrimitive?.contentOrNull,
                 lastSeenAt = item["lastSeenAt"]?.jsonPrimitive?.contentOrNull,

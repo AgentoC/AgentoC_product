@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon.ico?v={{ASSET_VERSION}}" sizes="any">
   <link rel="icon" href="icon.svg?v={{ASSET_VERSION}}" type="image/svg+xml">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v={{ASSET_VERSION}}">
-  <title>AgentoC - Connect WeChat</title>
+  <title>Ragent - Connect WeChat</title>
   <link rel="stylesheet" href="m3-pages.css?v={{ASSET_VERSION}}">
   <style nonce="{{NONCE}}">
     :root {
@@ -237,9 +237,9 @@
 <body>
   <div class="shell">
     <div class="hero">
-      <div class="eyebrow">AgentoC WeChat</div>
+      <div class="eyebrow">Ragent WeChat</div>
       <h1>Connect This Workspace</h1>
-      <p class="intro">Keep this page open. If the QR code expires, AgentoC will fetch a fresh one automatically and keep the same entry link.</p>
+      <p class="intro">Keep this page open. If the QR code expires, Ragent will fetch a fresh one automatically and keep the same entry link.</p>
     </div>
 
     <div class="status-row">
@@ -299,7 +299,7 @@
 
       function stageBody(status) {
         if (status === 'connected') return 'WeChat is now connected for this workspace.';
-        if (status === 'confirmed') return 'WeChat confirmed the scan. AgentoC is finishing the binding.';
+        if (status === 'confirmed') return 'WeChat confirmed the scan. Ragent is finishing the binding.';
         if (status === 'scaned_but_redirect') return 'Scan received. Please confirm on your phone if WeChat asks.';
         if (status === 'qr_refreshed') return 'The old code expired. Scan the refreshed code below.';
         if (status === 'qr_ready' || status === 'wait') return 'Open WeChat and scan the QR code below.';
@@ -374,7 +374,7 @@
         } catch (error) {
           statusPill.textContent = 'Retrying';
           statusPill.classList.remove('ready');
-          statusNote.textContent = 'AgentoC is retrying the WeChat login status check.';
+          statusNote.textContent = 'Ragent is retrying the WeChat login status check.';
           qrStage.textContent = 'Waiting for the next status refresh...';
         } finally {
           inFlight = false;

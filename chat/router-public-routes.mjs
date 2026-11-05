@@ -189,7 +189,7 @@ if (pathname === '/m/install' && req.method === 'GET') {
   }));
   res.end(renderPageTemplate(installHtml, nonce, {
     ...buildTemplateReplacements(pageBuildInfo, getRequestProductBasePath(req)),
-    PAGE_TITLE: 'Install AgentoC',
+    PAGE_TITLE: 'Install Ragent',
     BODY_CLASS: 'mobile-install-page',
     MANIFEST_HREF: manifestHref,
     BOOTSTRAP_JSON: serializeJsonForScript({

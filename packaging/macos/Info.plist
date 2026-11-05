@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>AgentoC</string>
+    <string>Ragent</string>
     <key>CFBundleDisplayName</key>
-    <string>AgentoC</string>
+    <string>Ragent</string>
     <key>CFBundleIdentifier</key>
     <string>cloud.agenton.agentoc</string>
     <key>CFBundleVersion</key>

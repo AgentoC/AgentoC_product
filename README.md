@@ -10,6 +10,7 @@ across devices while the execution host remains under the user's control.
 > supported deployment configurations are still being verified.
 
 Windows x64 early-access packages are available from [GitHub Releases](https://github.com/ragent-app/Ragent_product/releases/latest).
+The current v0.0.1 package predates the rename and still displays AgentoC.
 The installer is unsigned and Windows may display a warning. Review the release
 notes for the package's exact source commit, validation results, and upgrade limitations before installing.
 
@@ -132,7 +133,7 @@ are still being prepared.
 
 ## Licensing
 
-AgentoC's own published code is licensed under Apache-2.0; see
+Ragent's own published code is licensed under Apache-2.0; see
 `LICENSE` and `NOTICE`. Third-party components retain their own licenses; see
 `THIRD_PARTY_NOTICES.md`. The dependency and asset review is not yet complete.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for focused checks and

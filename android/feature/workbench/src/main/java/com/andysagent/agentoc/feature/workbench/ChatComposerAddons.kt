@@ -1910,12 +1910,12 @@ fun AgentPanelModalBottomSheet(
                             }
                             Column {
                                 Text(
-                                    text = "AgentoC Default",
+                                    text = "Ragent Default",
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                     color = colors.primaryContent,
                                 )
                                 Text(
-                                    text = "Use AgentoC's default conversation behavior",
+                                    text = "Use Ragent's default conversation behavior",
                                     style = AgentocTextStyles.caption.copy(fontSize = 11.sp),
                                     color = colors.secondaryContent,
                                 )

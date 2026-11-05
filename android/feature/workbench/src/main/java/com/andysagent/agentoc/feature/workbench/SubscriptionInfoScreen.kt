@@ -105,7 +105,7 @@ fun SubscriptionInfoScreen(
             )
             Spacer(Modifier.height(14.dp))
             Text(
-                text = "Connect more phones and computers to the same AgentoC account. Pro is coming soon.",
+                text = "Connect more phones and computers to the same Ragent account. Pro is coming soon.",
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 22.sp),
                 color = colors.secondaryContent,
                 textAlign = TextAlign.Center,
@@ -129,7 +129,7 @@ fun SubscriptionInfoScreen(
                 AgentoDivider(modifier = Modifier.padding(start = 76.dp))
                 SubscriptionInfoRow(
                     title = "Account-level device management",
-                    detail = "Manage the devices connected to your AgentoC account.",
+                    detail = "Manage the devices connected to your Ragent account.",
                     glyph = AgentoWebGlyph.Settings,
                     tint = Color(0xFF34C759),
                 )

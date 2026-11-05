@@ -217,7 +217,7 @@ async function assertWelcomeBootstrapped(port, { archivedCount = 0 } = {}) {
     '[示例] 汇总最近行业热点，并把摘要发到指定邮箱',
     '[示例] 发一封邮件到这个实例，会自动开一个新会话',
     '[引导] 订阅日历，接收 AI 创建的日程事件',
-    '[引导] 安装快捷指令，用 Siri 或一键启动 AgentoC',
+    '[引导] 安装快捷指令，用 Siri 或一键启动 Ragent',
   ];
   const list = await waitFor(async () => {
     const response = await request(port, 'GET', '/api/sessions', null, { Cookie: ownerCookie });

@@ -688,7 +688,7 @@ function renderPageTemplate(template, nonce, replacements = {}) {
     BUILD_LABEL: BUILD_INFO.label,
     BUILD_TITLE: BUILD_INFO.title,
     BUILD_JSON: serializeJsonForScript(BUILD_INFO),
-    PAGE_TITLE: 'AgentoC Chat',
+    PAGE_TITLE: 'Ragent Chat',
     PAGE_HEAD_TAGS: '',
     PRODUCT_BASE_HREF: '/',
     BODY_CLASS: '',

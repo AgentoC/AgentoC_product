@@ -96,7 +96,7 @@ private const val MAX_VISIBLE_COMPOSER_LINES = 4
  * The ONLY permanent floating frosted glass layer.
  *
  * Three States:
- * 1. Compact: 56dp height idle input [ + ] Ask AgentoC what to do… [ ↑ ]
+ * 1. Compact: 56dp height idle input [ + ] Ask Ragent what to do… [ ↑ ]
  * 2. Expanded: 112–188dp typing area with internal attachment preview
  * 3. Task Settings: opened into bottom sheet from a single quiet pill
  */
@@ -356,7 +356,7 @@ fun TaskComposer(
                                 ) {
                                     if (value.isEmpty()) {
                                         Text(
-                                            "Ask AgentoC what to do…",
+                                            "Ask Ragent what to do…",
                                             style = AgentocTextStyles.userBody,
                                             color = colors.secondaryContent,
                                             maxLines = 1,
@@ -441,7 +441,7 @@ fun TaskComposer(
                                     ) {
                                         if (value.isEmpty()) {
                                             Text(
-                                                "Ask AgentoC what to do…",
+                                                "Ask Ragent what to do…",
                                                 style = AgentocTextStyles.userBody,
                                                 color = colors.secondaryContent,
                                                 maxLines = 1,

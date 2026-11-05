@@ -51,7 +51,7 @@
     <string name="settings_group_about">關於</string>
     <string name="welcome_value_summary">把任務交給電腦，\n在手機上查看進度與結果。</string>
     <string name="welcome_sign_in_hint">登入 Google 帳戶，讓電腦保持長期綁定。</string>
-    <string name="welcome_pairing_hint">在電腦版 AgentoC 中取得配對碼。未登入時，存取最長持續 10 分鐘。</string>
+    <string name="welcome_pairing_hint">在電腦版 Ragent 中取得配對碼。未登入時，存取最長持續 10 分鐘。</string>
     <string name="settings_title">設定</string>
     <string name="settings_back">返回設定</string>
     <string name="settings_appearance_display">外觀與顯示</string>
@@ -242,11 +242,11 @@
     <string name="sign_in_guide_google_account">Google\n帳號</string>
     <string name="sign_in_guide_connection_path_description">透過 Google 帳號連接本機與工作電腦</string>
     <string name="welcome_connection_methods_title">在電腦上建立連接。</string>
-    <string name="welcome_connection_methods_detail">在手機和電腦上登入同一個 Google 帳號，然後點選「嘗試直接連線」。如需免登入，請掃描電腦端 AgentoC 產生的臨時配對碼。</string>
+    <string name="welcome_connection_methods_detail">在手機和電腦上登入同一個 Google 帳號，然後點選「嘗試直接連線」。如需免登入，請掃描電腦端 Ragent 產生的臨時配對碼。</string>
     <string name="welcome_try_direct_connection">嘗試直接連線</string>
     <string name="pairing_dialog_title">連線至電腦</string>
     <string name="pairing_link_computer">連結電腦</string>
-    <string name="pairing_account_claim_guidance">掃描電腦上的一次性二維碼即可連結。下一步會說明如何安裝 AgentoC 並找到二維碼。</string>
+    <string name="pairing_account_claim_guidance">掃描電腦上的一次性二維碼即可連結。下一步會說明如何安裝 Ragent 並找到二維碼。</string>
     <string name="pairing_connect_selected">連線至所選裝置</string>
     <string name="pairing_connecting">正在連線…</string>
     <string name="pairing_continue">繼續</string>
@@ -275,7 +275,7 @@
     <string name="pairing_new_code_hint">此配對碼不能重複使用。請從電腦取得新碼並重新開始。</string>
     <string name="pairing_error_empty_scan">掃描結果中沒有連結碼。</string>
     <string name="pairing_error_invalid_control_code">暫時控制碼無效或已過期。</string>
-    <string name="pairing_error_invalid_account_code">此 QR 碼不是有效的 AgentoC 帳號連結碼。</string>
+    <string name="pairing_error_invalid_account_code">此 QR 碼不是有效的 Ragent 帳號連結碼。</string>
     <string name="pairing_error_temporary_unavailable">此版本暫不支援暫時配對。</string>
     <string name="pairing_error_control_unavailable">此版本暫不支援暫時完整控制。</string>
     <string name="pairing_error_use_account_code">此手機已登入。請掃描電腦上的一般帳號配對碼。</string>
@@ -322,7 +322,7 @@
     <string name="temporary_pairing_phone_quota">這台電腦目前已達手機連線數上限。請中斷另一支手機的連線，或等待現有暫時連線到期後重試。</string>
     <string name="temporary_pairing_rate_limited">這台電腦正在處理過多請求。請稍候，並使用同一個配對碼重試。</string>
     <string name="temporary_pairing_host_slow">這台電腦回應較慢。可以使用同一個配對碼安全重試。</string>
-    <string name="temporary_pairing_host_unavailable">電腦的暫時配對服務目前無法使用。請確認 AgentoC 正在執行後重試。</string>
+    <string name="temporary_pairing_host_unavailable">電腦的暫時配對服務目前無法使用。請確認 Ragent 正在執行後重試。</string>
     <string name="temporary_pairing_retry_hint">使用同一個配對碼重試是安全的。</string>
     <string name="account_pairing_waiting">正在自動完成帳號登入，請保持兩台裝置連線。</string>
     <string name="workbench_session_run_details">執行詳細資料</string>
@@ -415,8 +415,8 @@
     <string name="account_data_title">帳號與隱私</string>
     <string name="account_privacy_open">隱私權政策</string>
     <string name="account_deletion_request">申請刪除帳號和資料</string>
-    <string name="account_deletion_request_summary">向 AgentoC 支援提交請求。登出或解除電腦綁定不會刪除帳號。</string>
-    <string name="account_deletion_request_detail">將開啟 AgentoC 支援網站。請按照網頁的電子郵件說明，申請刪除帳號和關聯資料，或指定的資料記錄。支援人員會驗證帳號歸屬，並確認處理範圍和結果。開啟網頁不會提交請求，也不會刪除任何資料。請勿傳送密碼、API 金鑰或驗證權杖。你自己電腦上的檔案和備份（包括離線電腦上的副本）需要另行處理。</string>
+    <string name="account_deletion_request_summary">向 Ragent 支援提交請求。登出或解除電腦綁定不會刪除帳號。</string>
+    <string name="account_deletion_request_detail">將開啟 Ragent 支援網站。請按照網頁的電子郵件說明，申請刪除帳號和關聯資料，或指定的資料記錄。支援人員會驗證帳號歸屬，並確認處理範圍和結果。開啟網頁不會提交請求，也不會刪除任何資料。請勿傳送密碼、API 金鑰或驗證權杖。你自己電腦上的檔案和備份（包括離線電腦上的副本）需要另行處理。</string>
     <string name="account_deletion_open_web">開啟申請說明</string>
     <string name="account_data_browser_unavailable">無法開啟瀏覽器。請複製下方連結，在瀏覽器中開啟。尚未提交刪除請求。</string>
     <string name="demo_environment_full_title">測試帳號 · 隔離工作台</string>

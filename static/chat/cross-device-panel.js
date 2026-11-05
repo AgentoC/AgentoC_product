@@ -910,15 +910,15 @@
     try {
       if (typeof root.agentocDesktop?.writeText === "function") {
         if (await root.agentocDesktop.writeText(value)) {
-          showStatus(fallback("crossDevice.pair.copied", "Pairing link copied. Open it in the AgentoC app on the other device."), "success");
+          showStatus(fallback("crossDevice.pair.copied", "Pairing link copied. Open it in the Ragent app on the other device."), "success");
           return;
         }
       }
       if (!root.navigator?.clipboard?.writeText) throw new Error();
       await root.navigator.clipboard.writeText(value);
-      showStatus(fallback("crossDevice.pair.copied", "Pairing link copied. Open it in the AgentoC app on the other device."), "success");
+      showStatus(fallback("crossDevice.pair.copied", "Pairing link copied. Open it in the Ragent app on the other device."), "success");
     } catch {
-      showStatus(fallback("crossDevice.pair.copyFailed", "Could not copy the link. Scan the code with the AgentoC app instead."), "error");
+      showStatus(fallback("crossDevice.pair.copyFailed", "Could not copy the link. Scan the code with the Ragent app instead."), "error");
     }
   }
 
@@ -942,7 +942,7 @@
       }, target);
     } catch (error) {
       root.console?.warn?.("Pairing QR rendering failed", error?.message || "unknown error");
-      target.appendChild(make("div", "cross-device-pair-qr-fallback", fallback("crossDevice.pair.qrUnavailable", "QR preview is unavailable. Use the pairing code in the AgentoC app.")));
+      target.appendChild(make("div", "cross-device-pair-qr-fallback", fallback("crossDevice.pair.qrUnavailable", "QR preview is unavailable. Use the pairing code in the Ragent app.")));
     }
   }
 
@@ -1056,7 +1056,7 @@
     const actions = make("div", "cross-device-actions");
     if (!pairingState?.invitation) {
       const steps = make("ol", "cross-device-pair-steps");
-      steps.appendChild(make("li", "", fallback("crossDevice.pair.stepOne", "Open AgentoC on the other device.")));
+      steps.appendChild(make("li", "", fallback("crossDevice.pair.stepOne", "Open Ragent on the other device.")));
       steps.appendChild(make("li", "", fallback("crossDevice.pair.stepTwo", "Scan the code, then confirm the device name there.")));
       steps.appendChild(make("li", "", fallback("crossDevice.pair.stepThree", "This page will confirm when the device is ready.")));
       body.appendChild(steps);
@@ -1098,7 +1098,7 @@
         : fallback("crossDevice.pair.waitingTitle", "Waiting for the other device")));
       copy.appendChild(make("span", "", pairingState.completedDevice
         ? `${pairingState.completedDevice.deviceName || pairingState.completedDevice.id} · ${fallback("crossDevice.status.active", "Active")}`
-        : fallback("crossDevice.pair.waitingNote", "Scan the code in AgentoC. It expires automatically and cannot be reused.")));
+        : fallback("crossDevice.pair.waitingNote", "Scan the code in Ragent. It expires automatically and cannot be reused.")));
       pairing.appendChild(copy);
       const code = make("div", "cross-device-pair-code");
       code.appendChild(make("span", "", fallback("crossDevice.pair.codeLabel", "Pairing code")));
@@ -1160,7 +1160,7 @@
     const state = temporaryPairingState;
     if (!state) {
       body.appendChild(make("p", "cross-device-helper", fallback("crossDevice.control.steps",
-        "Create a code, scan it in AgentoC on the phone, then confirm the phone on this computer. The 10 minutes start when you confirm.")));
+        "Create a code, scan it in Ragent on the phone, then confirm the phone on this computer. The 10 minutes start when you confirm.")));
       actions.appendChild(action(fallback("crossDevice.temporary.create", "Create temporary code"), async (button) => {
         setBusy(button, true, fallback("crossDevice.pair.creating", "Creating code…"));
         try {
@@ -1272,7 +1272,7 @@
       if (title) title.textContent = fallback("desktopManager.pairingDialogTitle", "Pair a phone");
       if (description) description.textContent = fallback(
         "desktopManager.pairingDialogDescription",
-        "Scan this code in AgentoC on your Android phone to connect it to this computer.",
+        "Scan this code in Ragent on your Android phone to connect it to this computer.",
       );
     }
     setActiveView(requestedView);

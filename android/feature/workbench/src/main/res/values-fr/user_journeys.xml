@@ -10,7 +10,7 @@
     <string name="journey_code_ready">Code affiché</string>
     <string name="journey_previous">Précédent</string>
     <string name="journey_step_count">Étape %1$d sur %2$d</string>
-    <string name="journey_handoff_hint">Envoyez ce lien à votre ordinateur, puis installez et ouvrez AgentoC pour Windows.</string>
+    <string name="journey_handoff_hint">Envoyez ce lien à votre ordinateur, puis installez et ouvrez Ragent pour Windows.</string>
     <string name="journey_share_link">Partager le lien de téléchargement</string>
     <string name="journey_link_copied">Lien copié</string>
     <string name="journey_link_failed">Impossible d’ouvrir une autre application. Copiez l’adresse et ouvrez-la sur votre ordinateur.</string>
@@ -44,7 +44,7 @@
     <string name="journey_devices_retry">Réessayer</string>
     <string name="journey_on_computer">Sur votre ordinateur</string>
     <string name="journey_on_phone">Sur ce téléphone</string>
-    <string name="journey_login_title">Connexion à AgentoC</string>
+    <string name="journey_login_title">Connexion à Ragent</string>
     <string name="journey_desktop_tab">Association du téléphone</string>
     <string name="journey_desktop_start">Démarrer l’association</string>
     <string name="journey_desktop_trusted">Association de confiance</string>

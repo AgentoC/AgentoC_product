@@ -2133,7 +2133,7 @@ function buildProviderBasePrompt() {
     ? `${draft.reasoning.kind} (${draft.reasoning.levels.join(", ")})`
     : draft.reasoning.kind;
   return [
-    `I want to add a new tool/provider to AgentoC.`,
+    `I want to add a new tool/provider to Ragent.`,
     ``,
     `Target tool`,
     `- Name: ${draft.name}`,
@@ -2144,7 +2144,7 @@ function buildProviderBasePrompt() {
     `- Models:`,
     modelLines,
     ``,
-    `Work in the AgentoC repo root (usually \`~/code/agentoc\`; adjust if your checkout lives elsewhere).`,
+    `Work in the Ragent repo root (usually \`~/code/agentoc\`; adjust if your checkout lives elsewhere).`,
     `Read \`AGENTS.md\` (legacy \`CLAUDE.md\` is only a compatibility shim) and \`notes/directional/provider-architecture.md\` first.`,
     ``,
     `Please:`,

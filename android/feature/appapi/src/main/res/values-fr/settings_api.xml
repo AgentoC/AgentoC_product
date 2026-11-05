@@ -201,7 +201,7 @@
     <string name="share_intake_check_unavailable">Impossible de vérifier la prise en charge du routage de projet par cet ordinateur. Votre brouillon est enregistré.</string>
     <string name="share_intake_checking">Vérification de la prise en charge du routage de projet par cet ordinateur…</string>
     <string name="share_intake_retry_check">Vérifier à nouveau l’ordinateur</string>
-    <string name="share_intake_upgrade_pc">Cet ordinateur ne fournit pas le protocole de routage de projet requis. Mettez à jour ou vérifiez son service AgentoC. Votre brouillon est enregistré.</string>
+    <string name="share_intake_upgrade_pc">Cet ordinateur ne fournit pas le protocole de routage de projet requis. Mettez à jour ou vérifiez son service Ragent. Votre brouillon est enregistré.</string>
     <string name="share_material_help">Ceci est un document de référence. Ajoutez ce que vous souhaitez faire dans les instructions de la tâche.</string>
     <string name="share_no_text">Aucun texte partagé. Les fichiers restent joints à la tâche.</string>
     <string name="share_resolve_files">Terminez l’importation ou retirez les fichiers incomplets pour continuer.</string>

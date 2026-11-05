@@ -39,7 +39,7 @@
       "desktopManager.page.harnesses.title",
       "desktopManager.page.harnesses.description",
       "Harness management",
-      "Install, update, or remove AgentoC runtimes on this computer.",
+      "Install, update, or remove Ragent runtimes on this computer.",
     ],
     providers: [
       "desktopManager.page.providers.title",
@@ -74,7 +74,7 @@
     if (headingTitle) headingTitle.textContent = title;
     if (headingDescription) headingDescription.textContent = translate(descriptionKey, descriptionFallback);
     if (heading) heading.hidden = false;
-    doc.title = `AgentoC · ${title}`;
+    doc.title = `Ragent · ${title}`;
   }
 
   function hideSubpageHeader() {

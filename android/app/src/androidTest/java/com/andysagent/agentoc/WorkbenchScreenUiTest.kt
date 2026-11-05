@@ -960,7 +960,7 @@ class WorkbenchScreenUiTest {
         }
 
         composeRule.onNodeWithContentDescription("Home").performClick()
-        composeRule.onNodeWithText("AgentoC").assertIsDisplayed()
+        composeRule.onNodeWithText("Ragent").assertIsDisplayed()
         composeRule.onNodeWithText("Nothing needs your attention").assertDoesNotExist()
         composeRule.onNodeWithText("You’re offline").assertIsDisplayed()
         composeRule.onNodeWithText("Cross-device workspace").assertDoesNotExist()
@@ -1431,7 +1431,7 @@ class WorkbenchScreenUiTest {
         }
 
         composeRule.onAllNodesWithText("Not signed in").assertCountEquals(0)
-        composeRule.onAllNodesWithText("AgentoC account").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Ragent account").assertCountEquals(0)
         composeRule.onAllNodesWithText("G").assertCountEquals(0)
         composeRule.onNodeWithText("Sign in").performClick()
         composeRule.runOnIdle { assertTrue("Settings should expose Google sign-in", signInRequested) }
@@ -3033,7 +3033,7 @@ class WorkbenchScreenUiTest {
         }
 
         composeRule.onNodeWithContentDescription("Home").assertIsDisplayed()
-        composeRule.onNodeWithText("AgentoC").assertIsDisplayed()
+        composeRule.onNodeWithText("Ragent").assertIsDisplayed()
         composeRule.onNodeWithText("Cross-device workspace").assertDoesNotExist()
         composeRule.onNodeWithText("连接电脑").assertDoesNotExist()
     }

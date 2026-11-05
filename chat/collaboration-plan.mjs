@@ -152,7 +152,7 @@ export function compileCollaborationPlan(input = {}, policy) {
 
   return Object.freeze({
     version: Number.isInteger(input.version) && input.version > 0 ? input.version : 1,
-    title: trimString(input.title) || 'AgentoC collaboration',
+    title: trimString(input.title) || 'Ragent collaboration',
     workspacePolicy: policy.workspacePolicy,
     accessMode,
     executionIsolation,

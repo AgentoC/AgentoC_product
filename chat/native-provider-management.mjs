@@ -419,7 +419,7 @@ async function removeStaging(job) {
 
 async function readOAuthTokens(job) {
   if (job.agentType !== 'codex') {
-    throw new Error('Only Codex supports AgentoC-managed interactive OAuth login');
+    throw new Error('Only Codex supports Ragent-managed interactive OAuth login');
   }
   const file = join(job.providerHome, 'auth.json');
   // Windows-created JSON may carry a UTF-8/UTF-16 byte-order mark. Decode
@@ -1551,7 +1551,7 @@ async function finalizeOAuthJob(job, { registry, secretStore, ledger, credential
     return;
   }
   if (job.agentType !== 'codex') {
-    throw new Error('Only Codex supports AgentoC-managed interactive OAuth login');
+    throw new Error('Only Codex supports Ragent-managed interactive OAuth login');
   }
   const { tokens, accountMetadata } = await readOAuthTokens(job);
   if (job.targetProviderId) {
@@ -1660,7 +1660,7 @@ export async function startNativeOAuthLogin({
   resolveProxyEnvironment = resolveRunnerProxyEnvironment,
 } = {}) {
   if (trim(rawAgentType).toLowerCase() === 'claude') {
-    const error = new Error('Claude normal OAuth login has been removed; run claude setup-token on this machine and save the setup token in AgentoC.');
+    const error = new Error('Claude normal OAuth login has been removed; run claude setup-token on this machine and save the setup token in Ragent.');
     error.code = 'CLAUDE_OAUTH_REMOVED';
     error.statusCode = 410;
     throw error;
@@ -1677,7 +1677,7 @@ export async function startNativeOAuthLogin({
   const harness = trim(commandPath) ? null : await getHarnessDefinition(agentType);
   const command = trim(commandPath) || (harness?.installed ? trim(harness.path) : '');
   if (!command) {
-    const error = new Error(`${agentType} internal runtime is unavailable. Install it in AgentoC Harness management first.`);
+    const error = new Error(`${agentType} internal runtime is unavailable. Install it in Ragent Harness management first.`);
     error.code = 'HARNESS_RUNTIME_UNAVAILABLE';
     error.statusCode = 409;
     throw error;

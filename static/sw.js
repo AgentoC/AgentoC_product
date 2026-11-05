@@ -45,7 +45,7 @@ self.addEventListener('push', (event) => {
       for (const client of clientList) {
         if (client.visibilityState === 'visible') return;
       }
-      return self.registration.showNotification(data.title || 'AgentoC', {
+      return self.registration.showNotification(data.title || 'Ragent', {
         body: data.body || 'Task completed',
         icon: resolveScopeUrl('icon.svg'),
         badge: resolveScopeUrl('notification-badge.png'),

@@ -1002,8 +1002,8 @@ data class RuntimeApprovalDecisionRequestDto(
 
 fun parsePairingUri(value: String): PairingUriDto {
     val uri = URI(value)
-    require(uri.scheme == AgentocProtocol.PAIRING_SCHEME && uri.host == AgentocProtocol.PAIRING_HOST) {
-        "Unsupported AgentoC pairing URI"
+    require(uri.scheme in setOf(AgentocProtocol.PAIRING_SCHEME, "riollant", "ragent") && uri.host == AgentocProtocol.PAIRING_HOST) {
+        "Unsupported Ragent pairing URI"
     }
     val query = uri.rawQuery.orEmpty().split('&')
         .mapNotNull { part ->

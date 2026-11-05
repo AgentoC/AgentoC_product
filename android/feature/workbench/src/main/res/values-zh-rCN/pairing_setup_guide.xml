@@ -1,9 +1,9 @@
 <resources>
     <string name="pairing_setup_guide_title">设置电脑</string>
-    <string name="pairing_setup_guide_install">在电脑上打开 AgentoC 官网下载页，下载并安装 Windows 版。</string>
+    <string name="pairing_setup_guide_install">在电脑上打开 Ragent 官网下载页，下载并安装 Windows 版。</string>
     <string name="pairing_setup_guide_open">打开下载页</string>
     <string name="pairing_setup_guide_copy">复制下载地址</string>
-    <string name="pairing_setup_guide_desktop">打开电脑端 AgentoC，在“账号与权限”中找到手机连接二维码；也可以进入“手机配对”创建配对码。免登录使用时选择临时配对。</string>
+    <string name="pairing_setup_guide_desktop">打开电脑端 Ragent，在“账号与权限”中找到手机连接二维码；也可以进入“手机配对”创建配对码。免登录使用时选择临时配对。</string>
     <string name="pairing_setup_guide_scan_help">用手机扫描二维码，并按两端的提示完成连接。</string>
     <string name="pairing_setup_guide_scan">扫描二维码</string>
     <string name="pairing_setup_guide_add_another">添加另一台电脑</string>

@@ -14,7 +14,7 @@
         android:allowBackup="true"
         android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="AgentoC"
+        android:label="Ragent"
         android:localeConfig="@xml/locales_config"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
@@ -36,12 +36,16 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="agentoc" android:host="pair" />
+                <data android:scheme="riollant" android:host="pair" />
+                <data android:scheme="ragent" android:host="pair" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="agentoc" android:host="session" />
+                <data android:scheme="riollant" android:host="session" />
+                <data android:scheme="ragent" android:host="session" />
             </intent-filter>
         </activity>
         <activity android:name=".PairingQrScannerActivity" android:exported="false" android:screenOrientation="unspecified" />

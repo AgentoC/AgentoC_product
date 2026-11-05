@@ -1,4 +1,4 @@
-AgentoC — 本地 AI 自动化工作台 (macOS)
+Ragent — 本地 AI 自动化工作台 (macOS)
 
 快速开始 / Quick start
 ----------------------
@@ -41,7 +41,7 @@ Cloudflare Realtime TURN 中转。
      进入 设置 → 设备/账号 绑定 Google 账号
      （手机与 Mac 绑定同一 Google 账号；未绑定的 Mac 通过一次性
      account-claim 二维码由已绑定的手机授权）。
-  2. 手机端打开 AgentoC，选择这台 Mac：设备鉴权与引导经 DataChannel
+  2. 手机端打开 Ragent，选择这台 Mac：设备鉴权与引导经 DataChannel
      完成，连接先经 Cloudflare Realtime TURN 建立，网络允许时自动
      升级为 P2P 直连并释放 TURN 租约。
 

@@ -51,7 +51,7 @@
     <string name="settings_group_about">정보</string>
     <string name="welcome_value_summary">컴퓨터에 작업을 맡기고 휴대전화에서 진행 상황과 결과를 확인하세요.</string>
     <string name="welcome_sign_in_hint">Google 계정으로 로그인하면 컴퓨터 연결을 유지할 수 있습니다.</string>
-    <string name="welcome_pairing_hint">컴퓨터의 AgentoC에서 페어링 코드를 받으세요. 로그인하지 않으면 최대 10분 동안 접근할 수 있습니다.</string>
+    <string name="welcome_pairing_hint">컴퓨터의 Ragent에서 페어링 코드를 받으세요. 로그인하지 않으면 최대 10분 동안 접근할 수 있습니다.</string>
     <string name="settings_title">설정</string>
     <string name="settings_back">설정으로 돌아가기</string>
     <string name="settings_appearance_display">모양 및 표시</string>
@@ -237,11 +237,11 @@
     <string name="sign_in_guide_google_account">Google\n계정</string>
     <string name="sign_in_guide_connection_path_description">Google 계정으로 이 휴대전화와 업무용 컴퓨터를 연결합니다.</string>
     <string name="welcome_connection_methods_title">컴퓨터에서\n연결을 설정하세요.</string>
-    <string name="welcome_connection_methods_detail">두 기기에서 같은 Google 계정으로 로그인한 뒤 ‘직접 연결 시도’를 누르세요. 로그인 없이 연결하려면 컴퓨터의 AgentoC에서 만든 임시 코드를 스캔하세요.</string>
+    <string name="welcome_connection_methods_detail">두 기기에서 같은 Google 계정으로 로그인한 뒤 ‘직접 연결 시도’를 누르세요. 로그인 없이 연결하려면 컴퓨터의 Ragent에서 만든 임시 코드를 스캔하세요.</string>
     <string name="welcome_try_direct_connection">직접 연결 시도</string>
     <string name="pairing_dialog_title">컴퓨터 연결</string>
     <string name="pairing_link_computer">컴퓨터 연결하기</string>
-    <string name="pairing_account_claim_guidance">컴퓨터의 일회용 코드를 스캔하여 연결하세요. 다음 화면에서 AgentoC 설치 방법과 코드 위치를 안내합니다.</string>
+    <string name="pairing_account_claim_guidance">컴퓨터의 일회용 코드를 스캔하여 연결하세요. 다음 화면에서 Ragent 설치 방법과 코드 위치를 안내합니다.</string>
     <string name="pairing_connect_selected">선택한 기기 연결</string>
     <string name="pairing_connecting">연결 중…</string>
     <string name="pairing_continue">계속</string>

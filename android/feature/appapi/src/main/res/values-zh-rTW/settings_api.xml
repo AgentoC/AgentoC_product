@@ -200,7 +200,7 @@
     <string name="share_intake_check_unavailable">無法檢查此電腦是否支援專案路由。草稿已儲存。</string>
     <string name="share_intake_checking">正在檢查此電腦是否支援專案路由…</string>
     <string name="share_intake_retry_check">再次檢查電腦</string>
-    <string name="share_intake_upgrade_pc">此電腦未提供所需的專案路由協定。請更新或檢查其 AgentoC 服務。草稿已儲存。</string>
+    <string name="share_intake_upgrade_pc">此電腦未提供所需的專案路由協定。請更新或檢查其 Ragent 服務。草稿已儲存。</string>
     <string name="share_material_help">這是參考資料。請在工作指示中新增您希望完成的內容。</string>
     <string name="share_no_text">沒有分享文字，檔案仍附在工作中。</string>
     <string name="share_resolve_files">完成匯入或移除未完成的檔案以繼續。</string>

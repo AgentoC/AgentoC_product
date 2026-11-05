@@ -201,7 +201,7 @@
     <string name="share_intake_check_unavailable">No se pudo comprobar la compatibilidad del ordenador con el enrutamiento de proyectos. Tu borrador está guardado.</string>
     <string name="share_intake_checking">Comprobando la compatibilidad del ordenador con el enrutamiento de proyectos…</string>
     <string name="share_intake_retry_check">Comprobar ordenador de nuevo</string>
-    <string name="share_intake_upgrade_pc">Este ordenador no ofrece el protocolo de enrutamiento de proyectos requerido. Actualiza o comprueba su servicio AgentoC. Tu borrador está guardado.</string>
+    <string name="share_intake_upgrade_pc">Este ordenador no ofrece el protocolo de enrutamiento de proyectos requerido. Actualiza o comprueba su servicio Ragent. Tu borrador está guardado.</string>
     <string name="share_material_help">Este es material de referencia. Añade lo que quieres hacer en las instrucciones de la tarea.</string>
     <string name="share_no_text">No hay texto compartido. Los archivos siguen adjuntos a la tarea.</string>
     <string name="share_resolve_files">Termina la importación o elimina los archivos incompletos para continuar.</string>

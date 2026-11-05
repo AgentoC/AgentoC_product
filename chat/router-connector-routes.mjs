@@ -880,7 +880,7 @@ export async function handleConnectorApiRoutes({
       ]);
       await writeJsonAtomic(GOOGLE_CALENDAR_AUTH_STATE_PATH, {});
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end('Google authorization succeeded. Calendar, Gmail and Drive are now connected. You can return to AgentoC.');
+      res.end('Google authorization succeeded. Calendar, Gmail and Drive are now connected. You can return to Ragent.');
       return true;
     } catch (error) {
       res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -905,7 +905,7 @@ export async function handleConnectorApiRoutes({
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'private, no-store, max-age=0, must-revalidate',
       });
-      res.end(`GitHub authorization succeeded. Connected as ${result.user.login}. You can return to AgentoC.`);
+      res.end(`GitHub authorization succeeded. Connected as ${result.user.login}. You can return to Ragent.`);
       return true;
     } catch (error) {
       res.writeHead(400, {
