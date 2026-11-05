@@ -1023,6 +1023,14 @@ private fun QuestionAnswerRail(
             ),
             modifier = Modifier.weight(1f).onFocusChanged { if (it.isFocused) onEvent(AttentionEvent.SetExpanded(item.id, true)) },
         )
+        if (answer.isNotBlank()) {
+            AgentoButton(
+                text = "发送",
+                onClick = { onEvent(AttentionEvent.ResolveQuestion(item.id, 0, null, answer.trim())) },
+                enabled = !resolving,
+                secondary = false,
+            )
+        }
         AgentoButton(
             text = approvalLabel(item.approval?.denyLabel, "拒绝"),
             onClick = { onEvent(AttentionEvent.ResolveApproval(item.id, approve = false)) },

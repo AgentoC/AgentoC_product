@@ -90,6 +90,20 @@ class ApprovalAttentionDeviceTest {
         }
     }
 
+    @Test fun singleQuestionCustomAnswerHasVisibleSendButton() {
+        val approval = Approval(id = "custom", sessionId = "s", runId = "r", title = "Choose",
+            questions = listOf(ApprovalQuestion(question = "Choose a shape", options = listOf(ApprovalOption("Circle")))))
+        val state = AttentionReducer.reduce(AttentionUiState(), AttentionReducer.project(listOf(Session("s", "Other session")), listOf(approval))).copy(expanded = true)
+        val events = mutableListOf<AttentionEvent>()
+        rule.setContent { AgentocTheme { AttentionSurface(state, events::add, onOpenSession = {}) } }
+        rule.onNode(hasSetTextAction(), useUnmergedTree = true).performTextInput("triangle")
+        rule.onNodeWithText("发送").assertIsDisplayed().performClick()
+        rule.runOnIdle {
+            assertEquals(AttentionEvent.ResolveQuestion(requireNotNull(state.activeItemId), 0, null, "triangle"),
+                events.filterIsInstance<AttentionEvent.ResolveQuestion>().single())
+        }
+    }
+
     @Test fun multiSelectQuestionSendsAllSelectedOptionsAndCustomText() {
         val approval = Approval(id = "q", sessionId = "s", runId = "r", title = "Choose",
             questions = listOf(ApprovalQuestion(question = "Choose features", isMultiSelect = true,
