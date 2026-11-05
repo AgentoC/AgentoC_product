@@ -5,6 +5,12 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.andysagent.agentoc.core.domain.ApprovalResolutionCoordinator
 import com.andysagent.agentoc.core.domain.SessionRepository
+import com.andysagent.agentoc.core.domain.SwitchingSessionRepository
+import com.andysagent.agentoc.core.domain.RefreshResult
+import com.andysagent.agentoc.core.domain.SessionRepositoryException
+import com.andysagent.agentoc.core.domain.newRequestId
+import com.andysagent.agentoc.core.network.ApiException
+import com.andysagent.agentoc.core.protocol.WebAuthnProofDto
 import com.andysagent.agentoc.core.model.Approval
 import com.andysagent.agentoc.core.model.AttentionReducer
 import com.andysagent.agentoc.core.model.AttentionUiState
@@ -16,6 +22,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 sealed interface AttentionEvent {
     /** The Session currently open on screen; its items never surface globally. */
@@ -29,6 +36,7 @@ sealed interface AttentionEvent {
         val selectedActionIds: Set<String>,
         val approvalIntent: String = "approve",
     ) : AttentionEvent
+    data class ResolvePrivilegedCategory(val itemId: String, val category: String, val selectedIds: Set<String>) : AttentionEvent
 
     /**
      * Answers an ask-user approval from the overlay: tapping [optionIndex] of
@@ -61,6 +69,7 @@ sealed interface AttentionEvent {
 class AttentionCenterViewModel(
     private val repository: SessionRepository,
     private val brokerApprovalController: BrokerApprovalController? = null,
+    private val passkeyProvider: (suspend (String) -> WebAuthnProofDto)? = null,
 ) : ViewModel() {
 
     private val coordinator = ApprovalResolutionCoordinator(repository)
@@ -112,6 +121,7 @@ class AttentionCenterViewModel(
             }
             is AttentionEvent.ResolveApproval -> resolveApproval(event.itemId, event.approve)
             is AttentionEvent.ResolveActionBatch -> resolveActionBatch(event)
+            is AttentionEvent.ResolvePrivilegedCategory -> resolvePrivilegedCategory(event)
             is AttentionEvent.ResolveQuestion -> resolveQuestion(event)
             is AttentionEvent.ResolveQuestions -> resolveQuestions(event)
             AttentionEvent.ClearError -> mutableState.update { it.copy(error = null) }
@@ -161,6 +171,7 @@ class AttentionCenterViewModel(
         if (current.resolvingItemId != null) return
         val item = current.items.firstOrNull { it.id == event.itemId } ?: return
         val approval = item.approval ?: return
+        if (approval.kind == "privileged_batch_request") return
         val runId = approval.runId ?: return
         val batchId = approval.batchId ?: return
         if (approval.actions.isEmpty() || approval.actions.any { it.needsPasskey }) return
@@ -183,6 +194,80 @@ class AttentionCenterViewModel(
                 ApprovalResolutionCoordinator.Outcome.Failed(error.message ?: "审批提交失败")
             }
             consumeResolution(event.itemId, outcome)
+        }
+    }
+
+    private fun resolvePrivilegedCategory(event: AttentionEvent.ResolvePrivilegedCategory) {
+        val current = mutableState.value
+        if (current.resolvingItemId != null || event.category !in setOf("privileged_other", "destructive_delete")) return
+        val item = current.items.firstOrNull { it.id == event.itemId } ?: return
+        val original = item.approval ?: return
+        if (original.kind != "privileged_batch_request") return
+        val switching = repository as? SwitchingSessionRepository
+        val fixed = if (switching != null) switching.delegate.value ?: return else repository
+        mutableState.update { it.copy(resolvingItemId = event.itemId, error = null) }
+        viewModelScope.launch {
+            var attempted = false
+            try {
+                val pending = fixed.findPendingApproval(item.sessionId, original.id)
+                    ?.takeIf { it.status == "pending" && it.kind == "privileged_batch_request" }
+                    ?: error("This approval is no longer pending")
+                val runId = pending.runId ?: error("Approval run is unavailable")
+                val batchId = pending.batchId ?: error("Approval batch is unavailable")
+                val available = pending.actions.filter { it.category == event.category && it.state in setOf("proposed", "classified", "waiting_user") }
+                require(available.isNotEmpty() && event.selectedIds.all { id -> available.any { it.id == id } }) { "Approval selection is no longer valid" }
+                val selected = available.map { it.id }.filter { it in event.selectedIds }
+                val requestId = newRequestId()
+                val proof = if (selected.isNotEmpty() && pending.passkeyRequired) {
+                    val provider = passkeyProvider ?: error("Passkey approval requires the Android system credential provider")
+                    if (switching != null && switching.delegate.value !== fixed) error("The connected computer changed")
+                    val challenge = fixed.createPrivilegedCategoryWebAuthnChallenge(runId, batchId, event.category, selected, requestId)
+                    provider(challenge.toString())
+                } else null
+                if (switching != null && switching.delegate.value !== fixed) error("The connected computer changed")
+                attempted = true
+                fixed.resolvePrivilegedCategory(item.sessionId, runId, batchId, event.category, selected, proof, requestId)
+                if (refreshPrivilegedCategory(fixed, item.sessionId, original.id, event.category)) {
+                    mutableState.update { it.copy(resolvingItemId = null, error = null) }
+                } else {
+                    awaitPrivilegedCategory(fixed, switching, item.sessionId, original.id, event)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                val retryable = when (error) {
+                    is ApiException -> error.retryable
+                    is SessionRepositoryException -> error.retryable
+                    else -> true
+                }
+                if (attempted && retryable) awaitPrivilegedCategory(fixed, switching, item.sessionId, original.id, event)
+                else mutableState.update { it.copy(resolvingItemId = null, error = error.message ?: "Approval could not be resolved") }
+            }
+        }
+    }
+
+    private suspend fun refreshPrivilegedCategory(fixed: SessionRepository, sessionId: String, approvalId: String, category: String): Boolean {
+        if (fixed.refreshEvents(sessionId) !is RefreshResult.Applied) return false
+        val pending = fixed.findPendingApproval(sessionId, approvalId) ?: return true
+        return pending.status != "pending" || pending.actions.none {
+            it.category == category && it.state in setOf("proposed", "classified", "waiting_user")
+        }
+    }
+
+    private suspend fun awaitPrivilegedCategory(fixed: SessionRepository, switching: SwitchingSessionRepository?,
+        sessionId: String, approvalId: String, event: AttentionEvent.ResolvePrivilegedCategory) {
+        mutableState.update { it.copy(error = "Approval submitted; waiting to confirm the result.") }
+        while (true) {
+            delay(2_000)
+            if (switching != null && switching.delegate.value !== fixed) return
+            if (mutableState.value.items.none { it.id == event.itemId }) return
+            try {
+                if (refreshPrivilegedCategory(fixed, sessionId, approvalId, event.category)) {
+                    mutableState.update { it.copy(resolvingItemId = null, error = null) }
+                    return
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* Keep the decision locked until an authoritative result arrives. */ }
         }
     }
 
@@ -270,8 +355,9 @@ class AttentionCenterViewModel(
 class AttentionCenterViewModelFactory(
     private val repository: SessionRepository,
     private val brokerApprovalController: BrokerApprovalController? = null,
+    private val passkeyProvider: (suspend (String) -> WebAuthnProofDto)? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
-        AttentionCenterViewModel(repository, brokerApprovalController) as T
+        AttentionCenterViewModel(repository, brokerApprovalController, passkeyProvider) as T
 }

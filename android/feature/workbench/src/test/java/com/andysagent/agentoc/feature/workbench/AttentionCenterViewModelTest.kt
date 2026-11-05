@@ -6,6 +6,7 @@ import com.andysagent.agentoc.core.domain.SessionInvalidation
 import com.andysagent.agentoc.core.domain.SessionRepository
 import com.andysagent.agentoc.core.domain.SwitchingSessionRepository
 import com.andysagent.agentoc.core.model.Approval
+import com.andysagent.agentoc.core.model.ApprovalAction
 import com.andysagent.agentoc.core.model.ApprovalOption
 import com.andysagent.agentoc.core.model.ApprovalQuestion
 import com.andysagent.agentoc.core.model.AttentionKind
@@ -17,6 +18,10 @@ import com.andysagent.agentoc.core.model.RuntimeConnectionState
 import com.andysagent.agentoc.core.model.Session
 import com.andysagent.agentoc.core.model.SessionStatus
 import com.andysagent.agentoc.core.protocol.SessionEventDto
+import com.andysagent.agentoc.core.protocol.WebAuthnProofDto
+import com.andysagent.agentoc.core.protocol.WebAuthnProofResponseDto
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 import com.andysagent.agentoc.core.timeline.TimelineItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +33,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -326,6 +332,70 @@ class AttentionCenterViewModelTest {
     }
 
     @Test
+    fun `multi-question answers use the selected computer repository`() = runTest(dispatcher.scheduler) {
+        val repository = FakeRepository(sessions = listOf(Session(id = "s1", title = "One")), approvals = listOf(
+            Approval(id = "q", sessionId = "s1", title = "Questions", kind = "question", runId = "r",
+                questions = listOf(ApprovalQuestion(question = "First"), ApprovalQuestion(question = "Second"))),
+        ))
+        val switching = SwitchingSessionRepository(CoroutineScope(dispatcher))
+        switching.switchTo(repository)
+        val viewModel = AttentionCenterViewModel(switching)
+        advanceUntilIdle()
+        viewModel.onEvent(AttentionEvent.ResolveQuestions(AttentionReducer.approvalItemId("s1", "q"),
+            choices = listOf(-1, -1), customAnswers = listOf("first", "second")))
+        advanceUntilIdle()
+        assertEquals(listOf("first", "second"), repository.lastCustomAnswers)
+    }
+
+    @Test
+    fun `privileged groups resolve independently with passkey for selected actions`() = runTest(dispatcher.scheduler) {
+        val repository = FakeRepository(sessions = listOf(Session(id = "s1", title = "One")), approvals = listOf(
+            Approval(id = "b", sessionId = "s1", title = "Batch", kind = "privileged_batch_request", runId = "r", batchId = "b",
+                passkeyRequired = true, actions = listOf(
+                    ApprovalAction(id = "o", description = "Restart", category = "privileged_other"),
+                    ApprovalAction(id = "d", description = "Delete", category = "destructive_delete"),
+                )),
+        ))
+        val proof = WebAuthnProofDto("id", "raw", WebAuthnProofResponseDto("client", "auth", "sig"))
+        val viewModel = AttentionCenterViewModel(repository, passkeyProvider = { proof })
+        advanceUntilIdle()
+        val id = AttentionReducer.approvalItemId("s1", "b")
+        viewModel.onEvent(AttentionEvent.ResolvePrivilegedCategory(id, "privileged_other", setOf("o")))
+        advanceUntilIdle()
+        assertEquals(listOf("privileged_other" to listOf("o")), repository.privilegedCalls)
+        assertEquals(1, repository.challengeCalls)
+        assertEquals(proof, repository.lastProof)
+        assertEquals("waiting_user", viewModel.state.value.items.single().approval?.actions?.single { it.id == "d" }?.state)
+        viewModel.onEvent(AttentionEvent.ResolvePrivilegedCategory(id, "destructive_delete", emptySet()))
+        advanceUntilIdle()
+        assertEquals("destructive_delete" to emptyList(), repository.privilegedCalls.last())
+        assertEquals(1, repository.challengeCalls)
+        assertTrue(viewModel.state.value.items.isEmpty())
+    }
+
+    @Test
+    fun `uncertain privileged submission stays locked until category is confirmed`() = runTest(dispatcher.scheduler) {
+        val repository = FakeRepository(sessions = listOf(Session(id = "s1", title = "One")), approvals = listOf(
+            Approval(id = "b", sessionId = "s1", title = "Batch", kind = "privileged_batch_request", runId = "r", batchId = "b",
+                passkeyRequired = false, actions = listOf(ApprovalAction(id = "o", description = "Restart", category = "privileged_other"))),
+        ))
+        repository.privilegedUncertain = true
+        val viewModel = AttentionCenterViewModel(repository)
+        runCurrent()
+        val id = AttentionReducer.approvalItemId("s1", "b")
+        viewModel.onEvent(AttentionEvent.ResolvePrivilegedCategory(id, "privileged_other", setOf("o")))
+        runCurrent()
+        assertEquals(id, viewModel.state.value.resolvingItemId)
+        viewModel.onEvent(AttentionEvent.ResolvePrivilegedCategory(id, "privileged_other", setOf("o")))
+        runCurrent()
+        assertEquals(1, repository.privilegedCalls.size)
+        repository.approvalState.value = emptyList()
+        advanceTimeBy(2_000)
+        runCurrent()
+        assertNull(viewModel.state.value.resolvingItemId)
+    }
+
+    @Test
     fun `resolution failure keeps the item and surfaces an error`() = runTest(dispatcher.scheduler) {
         val repository = FakeRepository(
             sessions = listOf(Session(id = "s1", title = "One")),
@@ -384,6 +454,10 @@ class AttentionCenterViewModelTest {
         var lastCustomAnswer: String? = null
         var lastCustomAnswers: List<String> = emptyList()
         var resolveError: Throwable? = null
+        val privilegedCalls = mutableListOf<Pair<String, List<String>>>()
+        var challengeCalls = 0
+        var lastProof: WebAuthnProofDto? = null
+        var privilegedUncertain = false
 
         override val connectionState: StateFlow<RuntimeConnectionState> =
             MutableStateFlow(RuntimeConnectionState.Connected).asStateFlow()
@@ -449,6 +523,22 @@ class AttentionCenterViewModelTest {
             runtimeApprovalCalls += 1
             lastChoices = choices
             lastCustomAnswers = customAnswers
+        }
+
+        override suspend fun createPrivilegedCategoryWebAuthnChallenge(runId: String, batchId: String, category: String, checkedOpIds: List<String>, requestId: String): JsonObject {
+            challengeCalls += 1
+            return buildJsonObject { }
+        }
+
+        override suspend fun resolvePrivilegedCategory(sessionId: String, runId: String, batchId: String, category: String,
+            checkedOpIds: List<String>, webauthnProof: WebAuthnProofDto?, requestId: String) {
+            privilegedCalls += category to checkedOpIds
+            lastProof = webauthnProof
+            if (privilegedUncertain) error("connection lost after submission")
+            val changed = approvalState.value.map { approval -> approval.copy(actions = approval.actions.map {
+                if (it.category == category) it.copy(state = if (it.id in checkedOpIds) "approved" else "denied") else it
+            }) }
+            approvalState.value = changed.filter { approval -> approval.actions.any { it.state == "waiting_user" } }
         }
 
         override suspend fun resolveApproval(runId: String, batchId: String, decisionsJson: String, requestId: String) = Unit

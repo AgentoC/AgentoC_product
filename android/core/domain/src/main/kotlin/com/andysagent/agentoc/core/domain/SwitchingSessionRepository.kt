@@ -174,6 +174,8 @@ class SwitchingSessionRepository(scope: CoroutineScope) : SessionRepository {
     override suspend fun resolvePrivilegedCategory(sessionId: String, runId: String, batchId: String, category: String, checkedOpIds: List<String>, webauthnProof: WebAuthnProofDto?, requestId: String) =
         current().resolvePrivilegedCategory(sessionId, runId, batchId, category, checkedOpIds, webauthnProof, requestId)
     override suspend fun resolveRuntimeApproval(runId: String, approvalId: String, decision: String, choices: List<String>, customAnswer: String?, requestId: String) = current().resolveRuntimeApproval(runId, approvalId, decision, choices, customAnswer, requestId)
+    override suspend fun resolveRuntimeApprovalWithAnswers(runId: String, approvalId: String, choices: List<String>, customAnswers: List<String>, requestId: String) =
+        current().resolveRuntimeApprovalWithAnswers(runId, approvalId, choices, customAnswers, requestId)
     override suspend fun updateSessionGoal(sessionId: String, goal: String?, autoContinue: Boolean) = current().updateSessionGoal(sessionId, goal, autoContinue)
     override suspend fun submitPlanAction(sessionId: String, planId: String, action: String, text: String, requestId: String): JsonObject =
         current().submitPlanAction(sessionId, planId, action, text, requestId)

@@ -477,6 +477,7 @@ class MainActivity : ComponentActivity() {
                     factory = AttentionCenterViewModelFactory(
                         app.runtime.sessions,
                         windowsBrokerController,
+                        passkeyProvider = { publicKeyJson -> nativePasskeyHelper.getAssertion(publicKeyJson) },
                     ),
                 )
                 val attentionState by attention.state.collectAsStateWithLifecycle()

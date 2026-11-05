@@ -184,10 +184,12 @@ class AttentionReducerTest {
     }
 
     @Test
-    fun `legacy privileged categories are not sent through approved-action endpoint`() {
+    fun `legacy privileged categories with complete identity can be handled inline`() {
         val legacy = Approval(id = "b", sessionId = "s1", title = "Privileged", kind = "privileged_batch_request",
-            batchId = "b", passkeyRequired = false, actions = listOf(ApprovalAction(id = "op", description = "Restart")))
-        assertTrue(AttentionReducer.project(listOf(session("s1")), listOf(legacy)).single().requiresSession)
+            runId = "r", batchId = "b", passkeyRequired = false,
+            actions = listOf(ApprovalAction(id = "op", description = "Restart", category = "privileged_other")))
+        assertFalse(AttentionReducer.project(listOf(session("s1")), listOf(legacy)).single().requiresSession)
+        assertTrue(AttentionReducer.project(listOf(session("s1")), listOf(legacy.copy(runId = null))).single().requiresSession)
     }
 
     @Test

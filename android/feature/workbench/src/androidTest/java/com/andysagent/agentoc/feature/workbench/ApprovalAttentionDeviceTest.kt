@@ -7,6 +7,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.hasAnyAncestor
@@ -17,6 +20,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.andysagent.agentoc.core.designsystem.AgentocTheme
 import com.andysagent.agentoc.core.model.Approval
+import com.andysagent.agentoc.core.model.ApprovalAction
 import com.andysagent.agentoc.core.model.ApprovalOption
 import com.andysagent.agentoc.core.model.ApprovalQuestion
 import com.andysagent.agentoc.core.model.AttentionReducer
@@ -113,5 +117,26 @@ class ApprovalAttentionDeviceTest {
         rule.onNodeWithTag("decision-1-write-in").performTextInput("beta")
         rule.onNodeWithTag("decision-submit").performClick()
         rule.runOnIdle { assertEquals(mapOf(0 to "alpha", 1 to "beta"), submitted) }
+    }
+
+    @Test fun privilegedCategoriesKeepDeleteOptInAndUseSeparateActions() {
+        val approval = Approval(id = "b", sessionId = "s", runId = "r", batchId = "b", title = "Batch",
+            kind = "privileged_batch_request", passkeyRequired = true, actions = listOf(
+                ApprovalAction(id = "o", description = "Restart", category = "privileged_other"),
+                ApprovalAction(id = "d", description = "Delete", category = "destructive_delete"),
+            ))
+        val state = AttentionReducer.reduce(AttentionUiState(), AttentionReducer.project(listOf(Session("s", "Other session")), listOf(approval))).copy(expanded = true)
+        val events = mutableListOf<AttentionEvent>()
+        rule.setContent { AgentocTheme { AttentionSurface(state, events::add, onOpenSession = {}) } }
+        val approve = rule.onAllNodesWithText(rule.activity.getString(R.string.attention_approve_selected))
+        approve[0].assertIsEnabled().performClick()
+        approve[1].assertIsNotEnabled()
+        val deny = rule.onAllNodesWithText(rule.activity.getString(R.string.attention_deny))
+        deny[1].performClick()
+        rule.runOnIdle {
+            val id = requireNotNull(state.activeItemId)
+            assertEquals(listOf(AttentionEvent.ResolvePrivilegedCategory(id, "privileged_other", setOf("o")),
+                AttentionEvent.ResolvePrivilegedCategory(id, "destructive_delete", emptySet())), events)
+        }
     }
 }

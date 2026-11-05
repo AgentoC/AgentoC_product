@@ -6,4 +6,6 @@
     <string name="approval_scope_other">其他权限：%1$s</string>
     <string name="approval_notice_close">关闭通知</string>
     <string name="approval_answer_question">回答等待中的问题</string>
+    <string name="approval_category_privileged">特权操作</string>
+    <string name="approval_category_delete">删除操作</string>
 </resources>

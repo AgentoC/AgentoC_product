@@ -6,4 +6,6 @@
     <string name="approval_scope_other">Other permissions: %1$s</string>
     <string name="approval_notice_close">Dismiss notification</string>
     <string name="approval_answer_question">Answer the waiting question</string>
+    <string name="approval_category_privileged">Privileged operations</string>
+    <string name="approval_category_delete">Deletion operations</string>
 </resources>

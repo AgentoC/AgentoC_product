@@ -271,6 +271,7 @@ private fun AttentionCard(
     val colors = LocalAgentocColors.current
     val isAskUser = item.kind == AttentionKind.Question && item.isApproval && !item.requiresSession
     val isApprovalNotification = item.isApproval && !isAskUser
+    val isPrivilegedCategoryBatch = item.approval?.kind == "privileged_batch_request" && !item.requiresSession
     val isActionBatch = isApprovalNotification && item.approval?.actions?.isNotEmpty() == true && !item.requiresSession
     val isDangerousBatch = item.approval?.batchId != null
     val hasHighRiskAction = isDangerousBatch || item.approval?.riskLevel
@@ -285,6 +286,7 @@ private fun AttentionCard(
     var selectedActionIds by remember(item.id) {
         mutableStateOf(item.approval?.actions.orEmpty()
             .filter { it.state in setOf("proposed", "classified", "waiting_user") }
+            .filter { !isPrivilegedCategoryBatch || it.category == "privileged_other" }
             .map { it.id }.toSet())
     }
     val kindLabel = when {
@@ -582,7 +584,16 @@ private fun AttentionCard(
                             .verticalScroll(approvalScroll),
                         verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact),
                     ) {
-                        if (isActionBatch) {
+                        if (isPrivilegedCategoryBatch) {
+                            listOf("privileged_other" to R.string.approval_category_privileged,
+                                "destructive_delete" to R.string.approval_category_delete).forEach { (category, title) ->
+                                val actions = item.approval?.actions.orEmpty().filter { it.category == category }
+                                if (actions.isNotEmpty()) ActionBatchDetails(actions, selectedActionIds,
+                                    !resolving && expanded && disclosureProgress >= 0.999f,
+                                    onToggle = { actionId -> selectedActionIds = if (actionId in selectedActionIds) selectedActionIds - actionId else selectedActionIds + actionId },
+                                    heading = title)
+                            }
+                        } else if (isActionBatch) {
                             ActionBatchDetails(
                                 actions = item.approval?.actions.orEmpty(),
                                 selectedActionIds = selectedActionIds,
@@ -666,6 +677,8 @@ private fun AttentionCard(
                         secondary = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                } else if (isPrivilegedCategoryBatch) {
+                    PrivilegedCategoryActions(item, selectedActionIds, resolving, error, onEvent, onOpenSession)
                 } else {
                     AttentionActions(
                         item = item,
@@ -1154,18 +1167,54 @@ private fun AttentionActions(
 }
 
 @Composable
+private fun PrivilegedCategoryActions(
+    item: AttentionItem,
+    selected: Set<String>,
+    resolving: Boolean,
+    error: String?,
+    onEvent: (AttentionEvent) -> Unit,
+    onOpenSession: (String) -> Unit,
+) {
+    val colors = LocalAgentocColors.current
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf("privileged_other" to R.string.approval_category_privileged,
+            "destructive_delete" to R.string.approval_category_delete).forEach { (category, label) ->
+            val pending = item.approval?.actions.orEmpty().filter {
+                it.category == category && it.state in setOf("proposed", "classified", "waiting_user")
+            }
+            if (pending.isNotEmpty()) {
+                val checked = pending.map { it.id }.filterTo(mutableSetOf()) { it in selected }
+                Text(stringResource(label), color = colors.secondaryContent, style = MaterialTheme.typography.labelSmall)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AgentoButton(text = stringResource(R.string.attention_approve_selected),
+                        onClick = { onEvent(AttentionEvent.ResolvePrivilegedCategory(item.id, category, checked)) },
+                        enabled = !resolving && checked.isNotEmpty(), decision = true, modifier = Modifier.weight(1f))
+                    AgentoButton(text = stringResource(R.string.attention_deny),
+                        onClick = { onEvent(AttentionEvent.ResolvePrivilegedCategory(item.id, category, emptySet())) },
+                        enabled = !resolving, secondary = true, decision = true, modifier = Modifier.weight(1f))
+                }
+            }
+        }
+        if (resolving) Text(stringResource(R.string.attention_submitting), color = colors.secondaryContent, style = MaterialTheme.typography.labelSmall)
+        if (error != null) Text(error, color = colors.stateError, style = MaterialTheme.typography.bodySmall)
+        TextButton(onClick = { onOpenSession(item.sessionId) }, enabled = !resolving) { Text(stringResource(R.string.attention_details)) }
+    }
+}
+
+@Composable
 private fun ActionBatchDetails(
     actions: List<ApprovalAction>,
     selectedActionIds: Set<String>,
     enabled: Boolean,
     onToggle: (String) -> Unit,
+    heading: Int = R.string.attention_actions,
 ) {
     val colors = LocalAgentocColors.current
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(AgentocSpacing.xs),
     ) {
-        Text(stringResource(R.string.attention_actions), color = colors.primaryContent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(heading), color = colors.primaryContent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
         actions.forEach { action ->
             val selectable = action.state in setOf("proposed", "classified", "waiting_user")
             Row(
