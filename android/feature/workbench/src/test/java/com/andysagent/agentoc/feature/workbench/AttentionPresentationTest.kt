@@ -34,4 +34,12 @@ class AttentionPresentationTest {
         assertEquals(200, attentionDisclosureHeight(200, 2f))
         assertEquals(0, attentionDisclosureHeight(-200, .5f))
     }
+
+    @Test fun `ordinary approval shows the actual command and scope`() {
+        val ordinary = approval.copy(actions = emptyList(), command = "echo test", cwd = "/work", filePaths = listOf("/work/file"), grantRoot = "/work")
+        val details = approvalDetails(item.copy(approval = ordinary), skipActionList = false)
+        assertTrue(details.any { it.value == "echo test" })
+        assertTrue(details.any { it.value == "/work/file" })
+        assertTrue(details.any { it.value == "/work" })
+    }
 }

@@ -765,7 +765,10 @@ private fun QuestionOptionsBody(
                 description = firstOption.description,
                 enabled = !resolving,
                 selected = false,
-                onClick = { onEvent(AttentionEvent.ResolveQuestion(item.id, 0, 0)) },
+                onClick = {
+                    if (expanded) onEvent(AttentionEvent.ResolveQuestion(item.id, 0, 0))
+                    else onEvent(AttentionEvent.SetExpanded(item.id, true))
+                },
             )
         }
     }

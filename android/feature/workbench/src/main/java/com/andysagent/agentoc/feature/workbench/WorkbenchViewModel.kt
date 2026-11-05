@@ -1705,10 +1705,13 @@ class ChatViewModel(
         if (currentDecision.id != questionId || currentDecision.isSubmitted || currentDecision.isSubmitting) return
         val sessionId = mutableState.value.sessionId ?: return
 
-        val selectedChoices = currentDecision.selectedIndices.sorted().mapNotNull { idx ->
-            currentDecision.optionValues.getOrNull(idx)?.takeIf { it.isNotBlank() }
-                ?: currentDecision.options.getOrNull(idx)?.trim()?.takeIf { it.isNotBlank() }
+        if (currentDecision.selectedIndices.size > 1) {
+            updateState { copy(activeDecision = currentDecision.copy(submissionError = "This question requires a supported multiple-choice response.")) }
+            return
         }
+        // Runtime approvals expect one positional option index per question,
+        // not the option label or value shown in the interface.
+        val selectedChoices = currentDecision.selectedIndices.singleOrNull()?.let { listOf(it.toString()) }.orEmpty()
         val customAnswer = currentDecision.writeInText.trim().takeIf { it.isNotBlank() }
         if (selectedChoices.isEmpty() && customAnswer == null) return
 
@@ -1977,10 +1980,17 @@ class ChatViewModel(
                     if (!isCurrentSession(sessionId, generation)) return@collectLatest
                     val decisionApproval = approvals.firstOrNull { it.toDecisionQuestionUiState() != null }
                     val approval = approvals.firstOrNull { it.id != decisionApproval?.id }?.toUiState()
+                    val decision = decisionApproval?.toDecisionQuestionUiState()
                     updateState {
+                        val previous = activeDecision?.takeIf {
+                            decision != null && it.id == decision.id && it.question == decision.question && it.options == decision.options
+                        }
                         copy(
                             approval = approval,
-                            activeDecision = decisionApproval?.toDecisionQuestionUiState(),
+                            activeDecision = decision?.let { next -> previous?.let {
+                                next.copy(selectedIndices = it.selectedIndices, writeInText = it.writeInText,
+                                    isSubmitted = it.isSubmitted, isSubmitting = it.isSubmitting, submissionError = it.submissionError)
+                            } ?: next },
                             resolvingApprovalId = resolvingApprovalId?.takeIf { it == approval?.id },
                         )
                     }
@@ -3193,6 +3203,10 @@ private fun Approval.toUiState(): PermissionRequestUiState = PermissionRequestUi
     permissionMode = permissionMode,
     expiresAt = expiresAt,
     riskLevel = riskLevel,
+    command = command,
+    cwd = cwd,
+    filePaths = filePaths,
+    grantRoot = grantRoot,
     actions = actions.map { action ->
         ApprovalActionUiState(
             id = action.id,

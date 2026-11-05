@@ -1280,6 +1280,20 @@ private fun ApprovalCardContent(
             overflow = TextOverflow.Ellipsis,
         )
 
+        val scopeDetails = buildList {
+            approval.command?.takeIf(String::isNotBlank)?.let { add(stringResource(R.string.attention_command, it)) }
+            approval.cwd?.takeIf(String::isNotBlank)?.let { add(stringResource(R.string.attention_directory, it)) }
+            addAll(approval.filePaths.filter(String::isNotBlank))
+            approval.grantRoot?.takeIf(String::isNotBlank)?.let { add(it) }
+        }.distinct()
+        if (scopeDetails.isNotEmpty()) {
+            Column(Modifier.fillMaxWidth().heightIn(max = 160.dp).verticalScroll(rememberScrollState())) {
+                scopeDetails.forEach { detail ->
+                    Text(detail, style = MaterialTheme.typography.bodySmall, color = colors.secondaryContent)
+                }
+            }
+        }
+
         // Review is a separate, non-decision action. Keeping it above the
         // decision pair leaves both targets usable on narrow/large-text screens.
         if (approval.actions.isNotEmpty()) {

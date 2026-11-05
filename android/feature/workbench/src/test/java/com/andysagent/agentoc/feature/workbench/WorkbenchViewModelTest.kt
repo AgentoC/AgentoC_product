@@ -3,6 +3,8 @@ package com.andysagent.agentoc.feature.workbench
 import com.andysagent.agentoc.core.model.Approval
 import com.andysagent.agentoc.core.model.ApprovalAction
 import com.andysagent.agentoc.core.model.ApprovalActionDecision
+import com.andysagent.agentoc.core.model.ApprovalOption
+import com.andysagent.agentoc.core.model.ApprovalQuestion
 import com.andysagent.agentoc.core.model.Computer
 import com.andysagent.agentoc.core.model.Message
 import com.andysagent.agentoc.core.model.Project
@@ -1283,6 +1285,26 @@ class WorkbenchViewModelTest {
     }
 
     @Test
+    fun `question answer sends positional option index`() = runTest {
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        try {
+            val repository = FakeSessionRepository(
+                sessions = listOf(Session("session-1", "Task")),
+                approvals = listOf(Approval(
+                    id = "q1", sessionId = "session-1", title = "Pick", runId = "run-1",
+                    questions = listOf(ApprovalQuestion(question = "Which?", options = listOf(ApprovalOption("First"), ApprovalOption("Second")))),
+                )),
+            )
+            val viewModel = ChatViewModel(repository)
+            advanceUntilIdle()
+            viewModel.onEvent(ChatEvent.SelectDecisionOption("q1", 1))
+            viewModel.onEvent(ChatEvent.SubmitDecision("q1"))
+            advanceUntilIdle()
+            assertEquals(listOf("1"), repository.runtimeApprovalChoices)
+        } finally { Dispatchers.resetMain() }
+    }
+
+    @Test
     fun `approval forwards structured decision to repository`() = runTest {
         Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
         try {
@@ -1533,6 +1555,7 @@ private class FakeSessionRepository(
     var approvedActionsCall: ApprovedActionsCall? = null
     var approvedActionBatchCall: ApprovedActionBatchCall? = null
     var approvedActionsCalls: Int = 0
+    var runtimeApprovalChoices: List<String>? = null
     var createdProject: Project? = null
     var projectRefreshCalls: Int = 0
     var sessionRefreshCalls: Int = 0
@@ -1668,7 +1691,7 @@ private class FakeSessionRepository(
             approvedActionBatchCall = ApprovedActionBatchCall(sessionId, runId, batchId, decisions, approvalIntent)
         }
     }
-    override suspend fun resolveRuntimeApproval(runId: String, approvalId: String, decision: String, choices: List<String>, customAnswer: String?, requestId: String) = Unit
+    override suspend fun resolveRuntimeApproval(runId: String, approvalId: String, decision: String, choices: List<String>, customAnswer: String?, requestId: String) { runtimeApprovalChoices = choices }
     override suspend fun resumePendingOperations(): Int = 0
 }
 

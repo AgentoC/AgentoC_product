@@ -33,6 +33,10 @@ data class PermissionRequestUiState(
     val permissionMode: String? = null,
     val expiresAt: String? = null,
     val actions: List<ApprovalActionUiState> = emptyList(),
+    val command: String? = null,
+    val cwd: String? = null,
+    val filePaths: List<String> = emptyList(),
+    val grantRoot: String? = null,
 )
 
 @Immutable

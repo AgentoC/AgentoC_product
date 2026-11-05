@@ -33,6 +33,10 @@ internal fun approvalDetails(item: AttentionItem, skipActionList: Boolean): List
         addValue(R.string.attention_operation, approval.title)
         addValue(R.string.attention_batch, approval.batchId)
         addValue(null, approval.reason)
+        addValue(R.string.attention_command, approval.command)
+        addValue(R.string.attention_directory, approval.cwd)
+        approval.filePaths.forEach { addValue(null, it) }
+        addValue(null, approval.grantRoot)
         if (!skipActionList) approval.actions.forEach { action ->
             val operation = action.summary?.takeIf(String::isNotBlank)
                 ?: action.description.takeIf(String::isNotBlank) ?: action.command
