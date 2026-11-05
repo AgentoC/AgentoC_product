@@ -12,6 +12,16 @@ class ProtocolCodecTest {
     private val codec = ProtocolCodec()
 
     @Test
+    fun perQuestionAnswersUseExplicitCapabilityDecision() {
+        val request = RuntimeApprovalDecisionRequestDto("approve_with_answers", "req", listOf("-1", "-1"),
+            customAnswers = listOf("first", "second"))
+        val payload = codec.encode(serializer<RuntimeApprovalDecisionRequestDto>(), request)
+        val decoded = codec.decode(serializer<RuntimeApprovalDecisionRequestDto>(), payload)
+        assertEquals("approve_with_answers", decoded.decision)
+        assertEquals(listOf("first", "second"), decoded.customAnswers)
+    }
+
+    @Test
     fun targetRuntimeContractRoundTripsWithWebFieldNames() {
         val summary = TargetSummary(
             targetId = "target-a",

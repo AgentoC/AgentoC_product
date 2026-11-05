@@ -7,7 +7,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.andysagent.agentoc.core.designsystem.AgentocTheme
 import com.andysagent.agentoc.core.model.Approval
@@ -57,5 +61,21 @@ class ApprovalAttentionDeviceTest {
         rule.runOnIdle { assertEquals(listOf(AttentionEvent.SetExpanded(requireNotNull(state.activeItemId), true)), events) }
         rule.onNodeWithText("Canary").performClick()
         rule.runOnIdle { assertEquals(AttentionEvent.ResolveQuestion(requireNotNull(state.activeItemId), 0, 0), events.last()) }
+    }
+
+    @Test fun multipleQuestionsAcceptDistinctCustomAnswers() {
+        val approval = Approval(id = "multi", sessionId = "s", runId = "r", title = "Questions",
+            questions = listOf(ApprovalQuestion(question = "First question"), ApprovalQuestion(question = "Second question")))
+        val state = AttentionReducer.reduce(AttentionUiState(), AttentionReducer.project(listOf(Session("s", "Other session")), listOf(approval))).copy(expanded = true)
+        val events = mutableListOf<AttentionEvent>()
+        rule.setContent { AgentocTheme { AttentionSurface(state, events::add, onOpenSession = {}) } }
+        rule.onNode(hasSetTextAction() and hasAnyAncestor(hasContentDescription("问题 1 的自定义回复")), useUnmergedTree = true).performTextInput("alpha")
+        rule.onNode(hasSetTextAction() and hasAnyAncestor(hasContentDescription("问题 2 的自定义回复")), useUnmergedTree = true).performTextInput("beta")
+        rule.onNodeWithText("发送").performClick()
+        rule.runOnIdle {
+            val answer = events.filterIsInstance<AttentionEvent.ResolveQuestions>().single()
+            assertEquals(listOf(-1, -1), answer.choices)
+            assertEquals(listOf("alpha", "beta"), answer.customAnswers)
+        }
     }
 }
