@@ -16,6 +16,15 @@ const nameOf = value => path.win32.basename(String(value || '').replaceAll('/', 
 
 function directAdminProgram(name, args) {
   if (adminCmdlets.has(name)) return true;
+  if (name === 'winget' || name === 'winget.exe') {
+    const verb = String(args[0] || '').toLowerCase();
+    const machineScope = args.some((arg, index) => /^--scope=machine$/i.test(String(arg))
+      || (/^--scope$/i.test(String(arg)) && /^machine$/i.test(String(args[index + 1] || ''))));
+    // Machine-scope installation needs the broker even when the operation
+    // itself is safe to approve automatically. The broker still verifies the
+    // package operation, arguments and executable independently.
+    if (['install', 'upgrade'].includes(verb) && machineScope) return true;
+  }
   if (registryWriteCmdlets.has(name)) {
     let target = args[0] && !String(args[0]).startsWith('-') ? String(args[0]) : '';
     for (let i = 0; i < args.length; i += 1) {
@@ -58,7 +67,7 @@ export function isWindowsAdministrativeArgv(argv) {
 // This is guidance for explicit elevation, not a privilege or risk classifier.
 // Unrecognized and dynamic commands remain with the existing approval policy.
 export async function needsWindowsElevationGuidance(command, shell = 'PowerShell', parse = parseWindowsPowerShellAst) {
-  if (typeof command !== 'string' || !/runas|gsudo|sudo|localuser|localgroup|netfirewall|mppreference|hklm:|hkey_local_machine|(?:^|[\\/\s'\"])(?:sc|net|reg)(?:\.exe)?['\"]?(?:\s|$)|(?:new|remove|set|start|stop|restart)-service/i.test(command)) return false;
+  if (typeof command !== 'string' || !/runas|gsudo|sudo|winget|localuser|localgroup|netfirewall|mppreference|hklm:|hkey_local_machine|(?:^|[\\/\s'\"])(?:sc|net|reg)(?:\.exe)?['\"]?(?:\s|$)|(?:new|remove|set|start|stop|restart)-service/i.test(command)) return false;
   if (shell === 'Bash') {
     const words = parseLiteralBashWords(command);
     if (!words || words.length < 2) return false;

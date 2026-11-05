@@ -43,6 +43,10 @@ if (process.platform === 'win32') {
   assert.equal(await needsWindowsElevationGuidance("reg.exe add 'HKLM\\Software\\Fixture' /v Value /d 1", 'Bash'), true);
   assert.equal(await needsWindowsElevationGuidance("reg.exe query 'HKLM\\Software\\Fixture'", 'Bash'), false);
   assert.equal(isWindowsAdministrativeArgv(['reg.exe', 'add', 'HKLM\\Software\\Fixture']), true);
+  assert.equal(isWindowsAdministrativeArgv(['winget', 'install', '--id', '7zip.7zip', '--exact', '--scope', 'machine']), true);
+  assert.equal(isWindowsAdministrativeArgv(['winget.exe', 'upgrade', '--id', '7zip.7zip', '--scope=machine']), true);
+  assert.equal(isWindowsAdministrativeArgv(['winget', 'install', '--id', '7zip.7zip', '--scope', 'user']), false);
+  assert.equal(isWindowsAdministrativeArgv(['winget', 'list', '--scope', 'machine']), false);
   assert.equal(isWindowsAdministrativeArgv(['reg.exe', 'query', 'HKLM\\Software\\Fixture']), false);
   assert.equal(isWindowsAdministrativeArgv(['Set-ItemProperty', '-LiteralPath', 'HKLM:\\Software\\Fixture']), true);
   assert.equal(isWindowsAdministrativeArgv(['Set-ItemProperty', 'HKCU:\\Software\\Fixture', '-Value', 'HKLM:\\Text']), false);
