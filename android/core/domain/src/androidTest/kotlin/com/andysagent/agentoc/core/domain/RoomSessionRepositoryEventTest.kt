@@ -39,6 +39,15 @@ import org.junit.Assert.assertTrue
 
 @RunWith(AndroidJUnit4::class)
 class RoomSessionRepositoryEventTest {
+    @Test fun preservesEachQuestionsMultiSelectFlag() = runBlocking {
+        val repository = RoomSessionRepository(database, QueuedTransport(listOf(
+            """{"sessionId":"session-1","events":[{"seq":1,"type":"approval_request","approvalId":"q","runId":"r","kind":"question","questions":[{"question":"Choose several","multiSelect":true,"options":[{"label":"One"},{"label":"Two"}]},{"question":"Choose one","multiSelect":false,"options":[{"label":"Three"}]}]}],"latestSeq":1}""",
+        )))
+        repository.refreshEvents("session-1")
+        val questions = repository.observePendingApprovals("session-1").first().single().questions
+        assertEquals(listOf(true, false), questions.map { it.isMultiSelect })
+        repository.close()
+    }
     @Test fun categoryResponseWithoutDecisionDoesNotInventARejection() = runBlocking {
         val repository = RoomSessionRepository(database, QueuedTransport(listOf(
             """{"sessionId":"session-1","events":[{"seq":1,"type":"privileged_batch_request","batchId":"b","runId":"r","other":[{"opId":"o","description":"Restart"}],"delete":[{"opId":"d","description":"Remove"}],"defaultSelected":{"other":[],"delete":["d"]}}],"latestSeq":1}""",

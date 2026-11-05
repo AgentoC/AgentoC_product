@@ -2930,7 +2930,8 @@ private fun ApprovalEntity.toDomainApproval(): Approval {
                 header = question["header"]?.jsonPrimitive?.contentOrNull,
                 question = text,
                 options = options,
-                isMultiSelect = isMulti,
+                isMultiSelect = question["multiSelect"]?.jsonPrimitive?.booleanOrNull
+                    ?: question["isMultiSelect"]?.jsonPrimitive?.booleanOrNull ?: isMulti,
             )
         }.getOrNull()
     }
@@ -3026,6 +3027,7 @@ private fun buildApprovalDetails(event: SessionEventDto): String? {
                         question.id?.let { put("id", JsonPrimitive(it)) }
                         question.header?.let { put("header", JsonPrimitive(it)) }
                         question.question?.let { put("question", JsonPrimitive(it)) }
+                        (question.multiSelect ?: question.isMultiSelect)?.let { put("multiSelect", JsonPrimitive(it)) }
                         val questionOptions = question.allOptions()
                         if (questionOptions.isNotEmpty()) {
                             put("options", buildJsonArray {

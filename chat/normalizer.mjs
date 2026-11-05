@@ -74,6 +74,8 @@ function normalizeApprovalQuestionItem(question) {
     ...(header ? { header } : {}),
     ...(text ? { question: text } : {}),
     ...(options.length > 0 ? { options } : {}),
+    ...(typeof (question.multiSelect ?? question.isMultiSelect) === 'boolean'
+      ? { multiSelect: question.multiSelect ?? question.isMultiSelect } : {}),
   };
 }
 

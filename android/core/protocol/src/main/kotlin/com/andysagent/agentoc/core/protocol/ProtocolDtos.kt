@@ -638,6 +638,8 @@ data class ApprovalQuestionDto(
     val question: String? = null,
     val options: List<ApprovalOptionDto> = emptyList(),
     val choices: List<ApprovalOptionDto> = emptyList(),
+    val multiSelect: Boolean? = null,
+    val isMultiSelect: Boolean? = null,
 )
 
 fun ApprovalQuestionDto.allOptions(): List<ApprovalOptionDto> = options.ifEmpty { choices }
