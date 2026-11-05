@@ -40,6 +40,7 @@ type brokerRequest struct {
 	Choice           string                     `json:"choice,omitempty"`
 	Signature        string                     `json:"signature,omitempty"`
 	DeviceSignature  string                     `json:"deviceSignature,omitempty"`
+	MSIInstall       *msiInstallGrant           `json:"msiInstall,omitempty"`
 	AutoInstall      *autoInstallGrant          `json:"autoInstall,omitempty"`
 	OwnerInstall     *ownerInstallGrant         `json:"ownerInstall,omitempty"`
 	AutoInspect      *autoInstallInspectRequest `json:"autoInspect,omitempty"`
@@ -80,6 +81,7 @@ type brokerResponse struct {
 	AutoInstallReady    bool                       `json:"autoInstallReady"`
 	ServiceControlReady bool                       `json:"serviceControlReady"`
 	AutoInstallKeyID    string                     `json:"autoInstallKeyId,omitempty"`
+	MSIDigest           string                     `json:"msiDigest,omitempty"`
 	AutoInstall         *autoInstallGrant          `json:"autoInstall,omitempty"`
 	OwnerInstall        *ownerInstallGrant         `json:"ownerInstall,omitempty"`
 	OwnerIdentity       *ownerInstallIdentity      `json:"ownerIdentity,omitempty"`
@@ -176,6 +178,9 @@ func decodeBrokerRequest(payload []byte) (brokerRequest, error) {
 }
 
 func validateRequest(request brokerRequest) error {
+	if request.Type != "msi_install.execute" && request.MSIInstall != nil {
+		return errInvalidRequest
+	}
 	if request.Type != "service.execute" && request.Type != "service.deny" && request.Type != "service.approve" && request.DeviceSignature != "" {
 		return errInvalidRequest
 	}
@@ -261,6 +266,15 @@ func validateRequest(request brokerRequest) error {
 			return errInvalidRequest
 		}
 		if _, err := parseAutoInstallPublicKey(request.PublicKey); err != nil {
+			return errInvalidRequest
+		}
+	case "msi_install.execute":
+		if request.MSIInstall == nil || request.Signature == "" || len(request.Signature) > 1024 {
+			return errInvalidRequest
+		}
+		copy := request
+		copy.Signature = ""
+		if hasNonHealthFields(copy) {
 			return errInvalidRequest
 		}
 	case "auto_install.execute":

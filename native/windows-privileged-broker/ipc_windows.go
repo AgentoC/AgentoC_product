@@ -30,9 +30,12 @@ const (
 var impersonateNamedPipeClient = windows.NewLazySystemDLL("advapi32.dll").NewProc("ImpersonateNamedPipeClient")
 
 type brokerIPCServer struct {
-	store            *brokerStore
-	target           brokerTargetController
-	autoInstaller    autoInstaller
+	store         *brokerStore
+	target        brokerTargetController
+	autoInstaller autoInstaller
+	msiInstaller  interface {
+		Install(context.Context, msiInstallGrant) (requestStatus, string)
+	}
 	ownerInstaller   func(context.Context, string, string, string, string) ownerInstallResult
 	ownerPolicy      func() (ownerInstallPolicy, error)
 	ownerAvailable   func(string) bool
@@ -94,6 +97,7 @@ func newBrokerIPCServerForPipeNamesAndAdmin(store *brokerStore, controlPlaneSID 
 		serviceInspector:  inspectWindowsServiceControl,
 		serviceController: runWindowsServiceControl,
 		autoInstaller:     windowsAutoInstaller{},
+		msiInstaller:      windowsMSIInstaller{},
 		ownerInstaller:    runInstalledOwnerInstall,
 		ownerPolicy:       readInstalledOwnerPolicy,
 		ownerAvailable:    func(sid string) bool { _, err := discoverOwnerSession(sid); return err == nil },
@@ -716,6 +720,8 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 			response.Code = automatic.Code
 			grant := automatic.Grant
 			response.AutoInstall = &grant
+		} else if msi, found := s.store.GetMSIInstall(request.RequestID); found {
+			response.Status, response.Code, response.MSIDigest = msi.Status, msi.Code, msi.Digest
 		} else if owner, found := s.store.GetOwnerInstall(request.RequestID); found {
 			response.Status, response.Code = owner.Status, owner.Code
 			grant := owner.Grant
@@ -883,6 +889,42 @@ func (s *brokerIPCServer) handleRequest(payload []byte, health bool) brokerRespo
 		}
 		response := newResponse("auto_install_inspection")
 		response.SelectedInstaller = facts
+		return response
+	}
+	if request.Type == "msi_install.execute" {
+		s.autoMu.Lock()
+		defer s.autoMu.Unlock()
+		if s.msiInstaller == nil {
+			return newErrorResponse("MSI_INSTALL_UNAVAILABLE")
+		}
+		record, duplicate, err := s.store.ClaimMSIInstall(*request.MSIInstall, request.Signature, time.Now().UTC())
+		if err != nil {
+			if errors.Is(err, errRequestConflict) {
+				return newErrorResponse("REQUEST_ID_CONFLICT")
+			}
+			return newErrorResponse("MSI_INSTALL_AUTHORIZATION_DENIED")
+		}
+		if !duplicate {
+			parent := s.executionCtx
+			if parent == nil {
+				parent = context.Background()
+			}
+			ctx, cancel := context.WithCancel(parent)
+			if s.autoCancel == nil {
+				s.autoCancel = make(map[string]context.CancelFunc)
+			}
+			cancelKey := "msi:" + record.Grant.Nonce
+			s.autoCancel[cancelKey] = cancel
+			s.workers.Add(1)
+			go func() {
+				defer s.workers.Done()
+				defer func() { cancel(); s.autoMu.Lock(); delete(s.autoCancel, cancelKey); s.autoMu.Unlock() }()
+				status, code := s.msiInstaller.Install(ctx, record.Grant)
+				_, _ = s.store.FinishMSIInstall(record.Grant.Nonce, status, code, time.Now().UTC())
+			}()
+		}
+		response := newResponse("result")
+		response.RequestID, response.Status, response.Code, response.MSIDigest = record.Grant.RequestID, record.Status, record.Code, record.Digest
 		return response
 	}
 	if request.Type == "auto_install.execute" {
