@@ -71,9 +71,9 @@ object AttentionReducer {
 
     /**
      * Projects sessions plus globally pending approvals into attention items.
-     * A session contributes at most one item: a pending approval when present,
-     * otherwise its waiting/failed/completed status. Ordinary running progress
-     * never becomes a global interruption.
+     * Each pending approval remains independently reachable. A session with no
+     * pending approval can instead contribute its waiting/failed/completed status.
+     * Ordinary running progress never becomes a global interruption.
      */
     fun project(sessions: List<Session>, approvals: List<Approval>): List<AttentionItem> {
         val pendingBySession = approvals
@@ -82,11 +82,8 @@ object AttentionReducer {
         val items = ArrayList<AttentionItem>(sessions.size)
         for (session in sessions) {
             val pending = pendingBySession[session.id].orEmpty()
-            // The Room queries project pending approvals in updatedAt ASC
-            // order, so the latest pending approval for a session wins.
-            val approvalItem = pending.lastOrNull()?.let { approval -> approvalItem(session, approval) }
-            if (approvalItem != null) {
-                items += approvalItem
+            if (pending.isNotEmpty()) {
+                items += pending.map { approval -> approvalItem(session, approval) }
                 continue
             }
             statusItem(session)?.let { items += it }

@@ -172,6 +172,18 @@ class AttentionReducerTest {
     }
 
     @Test
+    fun `multiple pending requests from one session remain in the queue`() {
+        val items = AttentionReducer.project(
+            listOf(session("s1", status = SessionStatus.WaitingApproval)),
+            listOf(approval("a1", "s1", passkeyRequired = false), approval("a2", "s1", passkeyRequired = false)),
+        )
+        assertEquals(setOf("a1", "a2"), items.mapNotNull { it.approval?.id }.toSet())
+        val current = AttentionReducer.reduce(AttentionUiState(), items)
+        assertEquals(1, current.queuedCount)
+        assertEquals(1, AttentionReducer.reduce(current, items.filterNot { it.id == current.activeItemId }).items.size)
+    }
+
+    @Test
     fun `provider plan kind survives the approval event envelope`() {
         val approval = Approval(id = "plan-1", sessionId = "s1", title = "Plan", requestKind = "plan")
         assertEquals(AttentionKind.Plan, AttentionReducer.project(listOf(session("s1")), listOf(approval)).single().kind)
