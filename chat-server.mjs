@@ -16,6 +16,9 @@ import { isEnvToggleEnabled } from './lib/env-toggle.mjs';
 import { createOwnerServiceLifecycle } from './lib/windows-owner-service.mjs';
 import { createOwnerActivationService } from './lib/windows-owner-activation-service.mjs';
 import { createBindingAuthorityCarrierLifecycle } from './chat/binding-authority-carriers.mjs';
+import { ensureWindowsServiceHarnessState } from './lib/harness-registry.mjs';
+
+await ensureWindowsServiceHarnessState();
 
 const http = await import('http');
 const { monitorEventLoopDelay, performance } = await import('perf_hooks');
