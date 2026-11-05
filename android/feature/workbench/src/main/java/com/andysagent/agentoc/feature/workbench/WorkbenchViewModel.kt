@@ -3207,6 +3207,7 @@ private fun Approval.toUiState(): PermissionRequestUiState = PermissionRequestUi
     cwd = cwd,
     filePaths = filePaths,
     grantRoot = grantRoot,
+    permissionsJson = permissionsJson,
     actions = actions.map { action ->
         ApprovalActionUiState(
             id = action.id,

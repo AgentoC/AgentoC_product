@@ -26,12 +26,15 @@ class ApprovalAttentionDeviceTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
 
     @Test fun ordinaryApprovalOffersBothDecisions() {
-        val approval = Approval(id = "a", sessionId = "s", runId = "r", title = "Run command", command = "echo test")
-        val state = AttentionReducer.reduce(AttentionUiState(), AttentionReducer.project(listOf(Session("s", "Other session")), listOf(approval)))
+        val approval = Approval(id = "a", sessionId = "s", runId = "r", title = "Run command", command = "echo test",
+            permissionsJson = """{"network":{"enabled":true}}""")
+        val state = AttentionReducer.reduce(AttentionUiState(), AttentionReducer.project(listOf(Session("s", "Other session")), listOf(approval))).copy(expanded = true)
         val events = mutableListOf<AttentionEvent>()
         rule.setContent { AgentocTheme { AttentionSurface(state, events::add, onOpenSession = {}) } }
         val approve = rule.activity.getString(R.string.attention_approve)
         val deny = rule.activity.getString(R.string.attention_deny)
+        rule.onNodeWithText(rule.activity.getString(R.string.attention_command, "echo test")).assertIsDisplayed()
+        rule.onNodeWithText(rule.activity.getString(R.string.approval_scope_network)).assertIsDisplayed()
         rule.onNodeWithText(approve).assertIsDisplayed().performClick()
         rule.onNodeWithText(deny).assertIsDisplayed().performClick()
         rule.runOnIdle {

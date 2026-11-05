@@ -37,6 +37,7 @@ data class PermissionRequestUiState(
     val cwd: String? = null,
     val filePaths: List<String> = emptyList(),
     val grantRoot: String? = null,
+    val permissionsJson: String? = null,
 )
 
 @Immutable

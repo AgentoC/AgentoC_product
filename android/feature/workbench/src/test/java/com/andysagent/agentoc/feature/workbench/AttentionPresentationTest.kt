@@ -42,4 +42,11 @@ class AttentionPresentationTest {
         assertTrue(details.any { it.value == "/work/file" })
         assertTrue(details.any { it.value == "/work" })
     }
+
+    @Test fun `permission details show network and exact file scopes`() {
+        val details = approvalPermissionDetails("""{"network":{"enabled":true},"fileSystem":{"read":["/a"],"write":["/b"]}}""")
+        assertTrue(details.any { it.label == R.string.approval_scope_network })
+        assertTrue(details.any { it.label == R.string.approval_scope_read && it.value == "/a" })
+        assertTrue(details.any { it.label == R.string.approval_scope_write && it.value == "/b" })
+    }
 }

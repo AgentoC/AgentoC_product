@@ -1285,6 +1285,10 @@ private fun ApprovalCardContent(
             approval.cwd?.takeIf(String::isNotBlank)?.let { add(stringResource(R.string.attention_directory, it)) }
             addAll(approval.filePaths.filter(String::isNotBlank))
             approval.grantRoot?.takeIf(String::isNotBlank)?.let { add(it) }
+            approvalPermissionDetails(approval.permissionsJson).forEach { detail ->
+                add(if (detail.label == R.string.approval_scope_network) stringResource(R.string.approval_scope_network)
+                    else detail.label?.let { stringResource(it, detail.value) } ?: detail.value)
+            }
         }.distinct()
         if (scopeDetails.isNotEmpty()) {
             Column(Modifier.fillMaxWidth().heightIn(max = 160.dp).verticalScroll(rememberScrollState())) {

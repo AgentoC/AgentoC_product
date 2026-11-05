@@ -1196,7 +1196,8 @@ private fun ApprovalDetails(item: AttentionItem, skipActionList: Boolean) {
         )
         details.forEach { detail ->
             Text(
-                text = detail.label?.let { stringResource(it, detail.value) } ?: detail.value,
+                text = if (detail.label == R.string.approval_scope_network) stringResource(R.string.approval_scope_network)
+                    else detail.label?.let { stringResource(it, detail.value) } ?: detail.value,
                 color = colors.secondaryContent,
                 style = MaterialTheme.typography.bodySmall,
             )

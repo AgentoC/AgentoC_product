@@ -1,0 +1,7 @@
+<resources>
+    <string name="approval_scope_network">Network access</string>
+    <string name="approval_scope_read">Read: %1$s</string>
+    <string name="approval_scope_write">Write: %1$s</string>
+    <string name="approval_scope_entry">File access: %1$s</string>
+    <string name="approval_scope_other">Other permissions: %1$s</string>
+</resources>
