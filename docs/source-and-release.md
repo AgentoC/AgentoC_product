@@ -32,9 +32,10 @@ from the public source. Windows currently uses the project's hosted endpoints
 outside the isolated test configuration.
 
 Windows update checks compare the installed public version with the GitHub release
-tag. Publish each update with a new, higher public version and a matching release
-tag and setup filename; replacing an asset under the same version does not notify
-installed users. The MSI product version is a separate Windows Installer upgrade
-number and must also exceed the latest published MSI version. The source update
+tag. The current public version remains 0.0.1. Replacing an asset under the same
+version does not notify installed users through the version checker; they need
+the replacement package through another channel. The MSI product version is a
+separate Windows Installer upgrade number and must exceed the latest published
+MSI version, which is recorded in the release notes. The source update
 checker is included only in subsequently built installers; it does not retrofit
 an already installed package.
