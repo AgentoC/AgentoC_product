@@ -28,6 +28,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -176,6 +177,7 @@ fun AttentionSurface(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .imePadding()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
             .padding(top = 8.dp, start = 16.dp, end = 16.dp)
             .clipToBounds(),
@@ -442,6 +444,7 @@ private fun AttentionCard(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth().testTag("attention-card-content")
+                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                 ) {
                 if (isApprovalNotification) {

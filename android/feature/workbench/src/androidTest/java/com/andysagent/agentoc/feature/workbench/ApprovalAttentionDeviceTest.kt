@@ -18,6 +18,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -30,6 +31,7 @@ import com.andysagent.agentoc.core.model.AttentionReducer
 import com.andysagent.agentoc.core.model.AttentionUiState
 import com.andysagent.agentoc.core.model.Session
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -100,9 +102,18 @@ class ApprovalAttentionDeviceTest {
         rule.onNodeWithText("Feature B").performClick()
         rule.onNodeWithContentDescription("以此选项回答：Feature B").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "已选择"))
         rule.onNode(hasSetTextAction() and hasAnyAncestor(hasContentDescription("问题 1 的自定义回复")), useUnmergedTree = true).performTextInput("extra")
-        rule.onNodeWithText("发送").assertIsEnabled().performClick()
+        val submitBounds = rule.onNodeWithText("发送").assertIsEnabled().fetchSemanticsNode().boundsInWindow
+        var layoutDiagnostic = ""
         rule.runOnIdle {
-            assertEquals("Events: $events", 1, events.filterIsInstance<AttentionEvent.ResolveMultiChoices>().size)
+            val decor = rule.activity.window.decorView
+            val insets = decor.rootWindowInsets?.let { WindowInsetsCompat.toWindowInsetsCompat(it, decor) }
+            val imeBottom = insets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0
+            layoutDiagnostic = "submit bottom=${submitBounds.bottom}, windowHeight=${decor.height}, imeBottom=$imeBottom"
+            if (imeBottom > 0) assertTrue(layoutDiagnostic, submitBounds.bottom <= decor.height - imeBottom)
+        }
+        rule.onNodeWithText("发送").performClick()
+        rule.runOnIdle {
+            assertEquals("Events: $events; $layoutDiagnostic", 1, events.filterIsInstance<AttentionEvent.ResolveMultiChoices>().size)
             val answer = events.filterIsInstance<AttentionEvent.ResolveMultiChoices>().single()
             assertEquals(listOf(listOf(0, 1)), answer.selections)
             assertEquals(listOf("extra"), answer.customAnswers)
