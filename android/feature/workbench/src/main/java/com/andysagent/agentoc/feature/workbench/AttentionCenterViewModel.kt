@@ -81,6 +81,29 @@ class AttentionCenterViewModel(
     private val brokerApprovals = MutableStateFlow<List<Approval>>(emptyList())
 
     init {
+        // Live timeline events are an ephemeral projection; approval cards
+        // observe durable Room facts. Reconcile approval-bearing pushes for
+        // every session, including the currently visible one, and recover the
+        // same facts when a push degrades to an invalidation-only notification.
+        viewModelScope.launch {
+            repository.invalidations.collect { hint ->
+                val sessionId = hint.sessionId ?: return@collect
+                if (hint.type != "session_invalidated" && hint.events.none { event ->
+                        val type = event.type.orEmpty().lowercase()
+                        type.contains("approval") || type.contains("confirmation") ||
+                            type.startsWith("privileged_batch_") || type.startsWith("approved_action_")
+                    }) return@collect
+                val switching = repository as? SwitchingSessionRepository
+                val fixed = if (switching != null) switching.delegate.value ?: return@collect else repository
+                try {
+                    fixed.refreshEvents(sessionId)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Retain the last known facts; normal reconnect/reconciliation retries.
+                }
+            }
+        }
         viewModelScope.launch {
             combine(
                 repository.observeSessions(),

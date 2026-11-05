@@ -74,6 +74,19 @@ class AttentionCenterViewModelTest {
         passkeyRequired = passkeyRequired,
     )
 
+    @Test fun `approval pushes reconcile both visible and background sessions`() = runTest(dispatcher.scheduler) {
+        val repository = FakeRepository(sessions = listOf(Session("s1", "Visible"), Session("s2", "Other")))
+        val viewModel = AttentionCenterViewModel(repository)
+        viewModel.onEvent(AttentionEvent.SetVisibleSession("s1"))
+        runCurrent()
+        repository.invalidationEvents.emit(SessionInvalidation("session_events", "s1", listOf(SessionEventDto(type = "approval_request"))))
+        repository.invalidationEvents.emit(SessionInvalidation("session_events", "s2", listOf(SessionEventDto(type = "approval_response"))))
+        repository.invalidationEvents.emit(SessionInvalidation("session_events", "s2", listOf(SessionEventDto(type = "reasoning"))))
+        repository.invalidationEvents.emit(SessionInvalidation("session_invalidated", "s2"))
+        runCurrent()
+        assertEquals(listOf("s1", "s2", "s2"), repository.refreshedEvents)
+    }
+
     @Test
     fun `queue projects sessions and approvals and filters the visible session`() = runTest(dispatcher.scheduler) {
         val repository = FakeRepository(
@@ -538,7 +551,9 @@ class AttentionCenterViewModelTest {
 
         override val connectionState: StateFlow<RuntimeConnectionState> =
             MutableStateFlow(RuntimeConnectionState.Connected).asStateFlow()
-        override val invalidations: Flow<SessionInvalidation> = MutableSharedFlow()
+        val invalidationEvents = MutableSharedFlow<SessionInvalidation>()
+        override val invalidations: Flow<SessionInvalidation> = invalidationEvents
+        val refreshedEvents = mutableListOf<String>()
 
         override fun observeComputers(): Flow<List<Computer>> = MutableStateFlow(emptyList())
         override fun observeProjects(): Flow<List<Project>> = MutableStateFlow(emptyList())
@@ -561,7 +576,10 @@ class AttentionCenterViewModelTest {
         override suspend fun refreshComputers() = Unit
         override suspend fun refreshProjects() = Unit
         override suspend fun refreshSessions() = Unit
-        override suspend fun refreshEvents(sessionId: String): RefreshResult = RefreshResult.Applied(0, 0)
+        override suspend fun refreshEvents(sessionId: String): RefreshResult {
+            refreshedEvents += sessionId
+            return RefreshResult.Applied(0, 0)
+        }
         override suspend fun applyLiveEvents(sessionId: String, events: List<SessionEventDto>): RefreshResult =
             RefreshResult.Applied(events.size, 0)
 
