@@ -9,7 +9,7 @@ across devices while the execution host remains under the user's control.
 > **Early access:** the source is public for review. Windows packages and
 > supported deployment configurations are still being verified.
 
-Windows x64 early-access packages are available from [GitHub Releases](https://github.com/AgentoC/Ragent_product/releases/latest).
+Windows x64 early-access packages are available from [GitHub Releases](https://github.com/ragent-app/Ragent_product/releases/latest).
 The installer is unsigned and Windows may display a warning. Review the release
 notes for the package's exact source commit, validation results, and upgrade limitations before installing.
 
