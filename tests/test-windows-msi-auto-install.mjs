@@ -46,3 +46,5 @@ assert.equal(managed.duplicate,true);
 const bridge=buildClaudeWindowsInstallBridge({approval:{approvalId:'approval-1',providerMethod:'can_use_tool',params:{tool_name:'PowerShell',input:{command:'msiexec /i .\\test.msi /qn'}}},state:{windowsManagedActionChannel:{},riskMode:'recommended'},runId:'run-1',nodePath:'G:\\node.exe',scriptPath:'G:\\bridge.mjs'});
 assert.ok(bridge?.updatedCommand);
 console.log('MSI control-plane submission and replay passed');
+const vector = {version:1,keyId:'key',brokerInstallationId:'broker',policyGeneration:1,requestId:'request',sessionId:'session',runId:'run',turnId:'turn',actionId:'action',nonce:'abcdefghijklmnopqrstuvwx',artifactPath:'G:\\A & B\\测试.msi',artifactSha256:'a'.repeat(64),publisherSha256:'b'.repeat(64),issuedMs:1000,expiresMs:2000};
+assert.equal(hash(msiGrantBytes(vector)),'dfeee1d3ff0b93af8de9c44a4b7d861e8ad8212359f0bcf574b279b2d5ca7bcb');

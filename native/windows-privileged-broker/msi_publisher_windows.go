@@ -13,6 +13,22 @@ import (
 )
 
 var msiSignatureInformation = windows.NewLazySystemDLL("msi.dll").NewProc("MsiGetFileSignatureInformationW")
+var trustProviderState = windows.NewLazySystemDLL("wintrust.dll").NewProc("WTHelperProvDataFromStateData")
+var trustProviderSigner = windows.NewLazySystemDLL("wintrust.dll").NewProc("WTHelperGetProvSignerFromChain")
+var trustProviderCertificate = windows.NewLazySystemDLL("wintrust.dll").NewProc("WTHelperGetProvCertFromChain")
+
+type trustProviderCertHead struct {
+	Size uint32
+	Cert *windows.CertContext
+}
+
+func certificateFingerprint(cert *windows.CertContext) (string, error) {
+	if cert == nil || cert.EncodedCert == nil || cert.Length == 0 || cert.Length > 1024*1024 {
+		return "", errors.New("MSI signer certificate invalid")
+	}
+	digest := sha256.Sum256(unsafe.Slice(cert.EncodedCert, int(cert.Length)))
+	return hex.EncodeToString(digest[:]), nil
+}
 
 // Verify the Windows trust chain and match the actual signer certificate to
 // the policy-issued fingerprint while the exact file and ancestors remain
@@ -42,9 +58,25 @@ func inspectPinnedMSIPublisher(pins *msiArtifactPins) (string, error) {
 		StateAction: windows.WTD_STATEACTION_VERIFY, ProvFlags: windows.WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT,
 		FileOrCatalogOrBlobOrSgnrOrCert: unsafe.Pointer(&file)}
 	verifyErr := windows.WinVerifyTrustEx(windows.InvalidHWND, &windows.WINTRUST_ACTION_GENERIC_VERIFY_V2, &data)
+	var trustedFingerprint string
+	if verifyErr == nil && data.StateData != 0 {
+		provider, _, _ := trustProviderState.Call(uintptr(data.StateData))
+		if provider != 0 {
+			signer, _, _ := trustProviderSigner.Call(provider, 0, 0, 0)
+			if signer != 0 {
+				certPointer, _, _ := trustProviderCertificate.Call(signer, 0)
+				if certPointer != 0 {
+					certificate := (*trustProviderCertHead)(unsafe.Pointer(certPointer))
+					if certificate.Size >= uint32(unsafe.Sizeof(trustProviderCertHead{})) {
+						trustedFingerprint, _ = certificateFingerprint(certificate.Cert)
+					}
+				}
+			}
+		}
+	}
 	data.StateAction = windows.WTD_STATEACTION_CLOSE
 	closeErr := windows.WinVerifyTrustEx(windows.InvalidHWND, &windows.WINTRUST_ACTION_GENERIC_VERIFY_V2, &data)
-	if verifyErr != nil || closeErr != nil {
+	if verifyErr != nil || closeErr != nil || trustedFingerprint == "" {
 		return "", errors.New("MSI publisher trust verification failed")
 	}
 	var cert *windows.CertContext
@@ -55,9 +87,9 @@ func inspectPinnedMSIPublisher(pins *msiArtifactPins) (string, error) {
 		return "", errors.New("MSI signer certificate unavailable")
 	}
 	defer windows.CertFreeCertificateContext(cert)
-	if cert.EncodedCert == nil || cert.Length == 0 || cert.Length > 1024*1024 {
-		return "", errors.New("MSI signer certificate invalid")
+	fingerprint, err := certificateFingerprint(cert)
+	if err != nil || fingerprint != trustedFingerprint {
+		return "", errors.New("MSI verified signer mismatch")
 	}
-	digest := sha256.Sum256(unsafe.Slice(cert.EncodedCert, int(cert.Length)))
-	return hex.EncodeToString(digest[:]), nil
+	return fingerprint, nil
 }
