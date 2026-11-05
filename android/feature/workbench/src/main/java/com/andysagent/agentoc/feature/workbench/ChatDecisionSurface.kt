@@ -19,11 +19,14 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
@@ -48,6 +51,7 @@ import com.andysagent.agentoc.core.designsystem.AgentoWebGlyph
 import com.andysagent.agentoc.core.designsystem.AgentoWebIcon
 import com.andysagent.agentoc.core.designsystem.LocalAgentocColors
 import com.andysagent.agentoc.core.designsystem.motionPolicy
+import com.andysagent.agentoc.core.model.ApprovalQuestion
 
 @Immutable
 data class DecisionQuestionUiState(
@@ -66,6 +70,9 @@ data class DecisionQuestionUiState(
     val isSubmitted: Boolean = false,
     val isSubmitting: Boolean = false,
     val submissionError: String? = null,
+    val questionGroups: List<ApprovalQuestion> = emptyList(),
+    val selectedByQuestion: Map<Int, Int> = emptyMap(),
+    val customByQuestion: Map<Int, String> = emptyMap(),
 )
 
 /** Inline conversation content, not a floating navigation-glass layer. */
@@ -76,7 +83,14 @@ fun DecisionQuestionCard(
     onWriteInChanged: (String) -> Unit,
     onSubmit: () -> Unit,
     modifier: Modifier = Modifier,
+    onMultiOptionSelected: (Int, Int) -> Unit = { _, _ -> },
+    onMultiWriteInChanged: (Int, String) -> Unit = { _, _ -> },
+    onDeny: () -> Unit = {},
 ) {
+    if (state.questionGroups.size > 1) {
+        MultiDecisionQuestionCard(state, onMultiOptionSelected, onMultiWriteInChanged, onSubmit, onDeny, modifier)
+        return
+    }
     val colors = LocalAgentocColors.current
     val editable = !state.isSubmitted && !state.isSubmitting
     Surface(
@@ -149,12 +163,66 @@ fun DecisionQuestionCard(
                     Text(stringResource(if (state.isSubmitting) R.string.decision_submitting else R.string.decision_submit),
                         style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
                 }
+                TextButton(onClick = onDeny, enabled = editable, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.attention_deny))
+                }
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
                     AgentoWebIcon(AgentoWebGlyph.Check, contentDescription = null, modifier = Modifier.size(18.dp), tint = colors.success)
                     Text(stringResource(R.string.decision_submitted), style = MaterialTheme.typography.bodyMedium, color = colors.primaryContent)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MultiDecisionQuestionCard(
+    state: DecisionQuestionUiState,
+    onSelect: (Int, Int) -> Unit,
+    onWrite: (Int, String) -> Unit,
+    onSubmit: () -> Unit,
+    onDeny: () -> Unit,
+    modifier: Modifier,
+) {
+    val colors = LocalAgentocColors.current
+    val editable = !state.isSubmitting && !state.isSubmitted
+    val complete = state.questionGroups.indices.all { index ->
+        state.selectedByQuestion[index] in state.questionGroups[index].options.indices ||
+            state.customByQuestion[index].orEmpty().isNotBlank()
+    }
+    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = colors.surfaceLow,
+        border = BorderStroke(0.75.dp, colors.secondaryContent.copy(alpha = 0.12f))) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.fillMaxWidth().heightIn(max = 320.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                state.questionGroups.forEachIndexed { questionIndex, question ->
+                    Text(question.question, style = MaterialTheme.typography.titleMedium, color = colors.primaryContent,
+                        modifier = Modifier.semantics { heading() })
+                    question.options.forEachIndexed { optionIndex, option ->
+                        DecisionOptionRow(text = option.label, isSelected = state.selectedByQuestion[questionIndex] == optionIndex,
+                            isMultiSelect = false, isRecommended = false, enabled = editable,
+                            onClick = { onSelect(questionIndex, optionIndex) }, modifier = Modifier.testTag("decision-$questionIndex-option-$optionIndex"))
+                    }
+                    val writeInLabel = stringResource(R.string.decision_write_in)
+                    Text(writeInLabel, style = MaterialTheme.typography.labelMedium, color = colors.secondaryContent)
+                    BasicTextField(value = state.customByQuestion[questionIndex].orEmpty(),
+                        onValueChange = { onWrite(questionIndex, it) }, enabled = editable, minLines = 1, maxLines = 5,
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.primaryContent),
+                        cursorBrush = SolidColor(colors.accentPrimary),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
+                            .background(colors.surfaceHigh).testTag("decision-$questionIndex-write-in")
+                            .semantics { contentDescription = writeInLabel },
+                        decorationBox = { field -> Box(Modifier.padding(12.dp), contentAlignment = Alignment.CenterStart) { field() } })
+                }
+            }
+            state.submissionError?.let { Text(it, color = colors.error, style = MaterialTheme.typography.bodySmall) }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = onSubmit, enabled = editable && complete, modifier = Modifier.weight(1f).testTag("decision-submit")) {
+                    Text(stringResource(if (state.isSubmitting) R.string.decision_submitting else R.string.decision_submit))
+                }
+                TextButton(onClick = onDeny, enabled = editable) { Text(stringResource(R.string.attention_deny)) }
             }
         }
     }

@@ -11,6 +11,7 @@ import com.andysagent.agentoc.core.agentui.composerRuntimeIdentity
 import com.andysagent.agentoc.core.agentui.ApprovalActionUiState
 import com.andysagent.agentoc.core.agentui.PermissionRequestUiState
 import com.andysagent.agentoc.core.domain.RefreshResult
+import com.andysagent.agentoc.core.domain.ApprovalResolutionCoordinator
 import com.andysagent.agentoc.core.domain.OutboundAttachment
 import com.andysagent.agentoc.core.domain.ProjectFolder
 import com.andysagent.agentoc.core.domain.SessionRepository
@@ -261,8 +262,8 @@ sealed interface WorkbenchEvent {
     ) : WorkbenchEvent
     data class RemoveQueuedMessage(val messageId: String) : WorkbenchEvent
     data class SteerMessage(val messageId: String) : WorkbenchEvent
-    data class SelectDecisionOption(val questionId: String, val optionIndex: Int) : WorkbenchEvent
-    data class DecisionWriteInChanged(val questionId: String, val text: String) : WorkbenchEvent
+    data class SelectDecisionOption(val questionId: String, val optionIndex: Int, val questionIndex: Int = 0) : WorkbenchEvent
+    data class DecisionWriteInChanged(val questionId: String, val text: String, val questionIndex: Int = 0) : WorkbenchEvent
     data class SubmitDecision(val questionId: String) : WorkbenchEvent
     data class SelectApprovalAction(val approvalId: String, val actionId: String, val selected: Boolean) : WorkbenchEvent
     data class Approve(val approvalId: String) : WorkbenchEvent
@@ -580,8 +581,8 @@ sealed interface ChatEvent {
     data class SteerMessage(val messageId: String) : ChatEvent
 
     // Decision Card
-    data class SelectDecisionOption(val questionId: String, val optionIndex: Int) : ChatEvent
-    data class DecisionWriteInChanged(val questionId: String, val text: String) : ChatEvent
+    data class SelectDecisionOption(val questionId: String, val optionIndex: Int, val questionIndex: Int = 0) : ChatEvent
+    data class DecisionWriteInChanged(val questionId: String, val text: String, val questionIndex: Int = 0) : ChatEvent
     data class SubmitDecision(val questionId: String) : ChatEvent
 
     // Run Sheet & Diff
@@ -642,6 +643,7 @@ private fun Approval.toDecisionQuestionUiState(): DecisionQuestionUiState? {
         optionValues = values,
         isMultiSelect = question?.isMultiSelect ?: isMultiSelect,
         recommendedIndex = null,
+        questionGroups = questions,
     )
 }
 
@@ -1193,11 +1195,16 @@ class ChatViewModel(
             is ChatEvent.SteerMessage -> steerQueuedMessage(event.messageId)
 
             // Decision Question Card
-            is ChatEvent.SelectDecisionOption -> selectDecisionOption(event.questionId, event.optionIndex)
+            is ChatEvent.SelectDecisionOption -> selectDecisionOption(event.questionId, event.optionIndex, event.questionIndex)
             is ChatEvent.DecisionWriteInChanged -> updateState {
                 val current = activeDecision
                 if (current != null && current.id == event.questionId) {
-                    copy(activeDecision = current.copy(writeInText = event.text))
+                    if (current.questionGroups.size > 1 && event.questionIndex in current.questionGroups.indices) {
+                        copy(activeDecision = current.copy(
+                            customByQuestion = current.customByQuestion + (event.questionIndex to event.text),
+                            selectedByQuestion = current.selectedByQuestion - event.questionIndex,
+                        ))
+                    } else copy(activeDecision = current.copy(writeInText = event.text))
                 } else this
             }
             is ChatEvent.SubmitDecision -> submitDecision(event.questionId)
@@ -1684,9 +1691,18 @@ class ChatViewModel(
         }
     }
 
-    private fun selectDecisionOption(questionId: String, optionIndex: Int) {
+    private fun selectDecisionOption(questionId: String, optionIndex: Int, questionIndex: Int = 0) {
         val current = mutableState.value.activeDecision ?: return
         if (current.id != questionId || current.isSubmitted || current.isSubmitting) return
+
+        if (current.questionGroups.size > 1) {
+            if (questionIndex !in current.questionGroups.indices || optionIndex !in current.questionGroups[questionIndex].options.indices) return
+            updateState { copy(activeDecision = current.copy(
+                selectedByQuestion = current.selectedByQuestion + (questionIndex to optionIndex),
+                customByQuestion = current.customByQuestion - questionIndex,
+            )) }
+            return
+        }
 
         val newIndices = if (current.isMultiSelect) {
             if (current.selectedIndices.contains(optionIndex)) {
@@ -1704,6 +1720,35 @@ class ChatViewModel(
         val currentDecision = mutableState.value.activeDecision ?: return
         if (currentDecision.id != questionId || currentDecision.isSubmitted || currentDecision.isSubmitting) return
         val sessionId = mutableState.value.sessionId ?: return
+
+        if (currentDecision.questionGroups.size > 1) {
+            val fixed = selectedRepository ?: return
+            val choices = currentDecision.questionGroups.indices.map { currentDecision.selectedByQuestion[it] ?: -1 }
+            val answers = currentDecision.questionGroups.indices.map { currentDecision.customByQuestion[it].orEmpty().trim() }
+            if (choices.indices.any { choices[it] < 0 && answers[it].isBlank() }) return
+            updateState { copy(activeDecision = currentDecision.copy(isSubmitting = true, submissionError = null)) }
+            viewModelScope.launch {
+                val outcome = ApprovalResolutionCoordinator(fixed).resolveQuestionsApproval(
+                    sessionId, currentDecision.approvalId, choices, customAnswers = answers,
+                )
+                if (!isCurrentSession(sessionId) || mutableState.value.activeDecision?.id != questionId) return@launch
+                when (outcome) {
+                    ApprovalResolutionCoordinator.Outcome.Submitted -> {
+                        updateState { copy(activeDecision = currentDecision.copy(isSubmitting = false, isSubmitted = true)) }
+                        refreshSession(sessionId)
+                    }
+                    else -> {
+                        val message = when (outcome) {
+                            is ApprovalResolutionCoordinator.Outcome.Failed -> outcome.message
+                            ApprovalResolutionCoordinator.Outcome.Stale -> "This request is no longer pending."
+                            else -> "This request requires additional verification."
+                        }
+                        updateState { copy(activeDecision = currentDecision.copy(isSubmitting = false, submissionError = message)) }
+                    }
+                }
+            }
+            return
+        }
 
         if (currentDecision.selectedIndices.size > 1) {
             updateState { copy(activeDecision = currentDecision.copy(submissionError = "This question requires a supported multiple-choice response.")) }
@@ -1983,12 +2028,13 @@ class ChatViewModel(
                     val decision = decisionApproval?.toDecisionQuestionUiState()
                     updateState {
                         val previous = activeDecision?.takeIf {
-                            decision != null && it.id == decision.id && it.question == decision.question && it.options == decision.options
+                            decision != null && it.id == decision.id && it.questionGroups == decision.questionGroups && it.question == decision.question && it.options == decision.options
                         }
                         copy(
                             approval = approval,
                             activeDecision = decision?.let { next -> previous?.let {
                                 next.copy(selectedIndices = it.selectedIndices, writeInText = it.writeInText,
+                                    selectedByQuestion = it.selectedByQuestion, customByQuestion = it.customByQuestion,
                                     isSubmitted = it.isSubmitted, isSubmitting = it.isSubmitting, submissionError = it.submissionError)
                             } ?: next },
                             resolvingApprovalId = resolvingApprovalId?.takeIf { it == approval?.id },
@@ -2593,10 +2639,14 @@ class ChatViewModel(
         val sessionId = mutableState.value.sessionId ?: return
         val accepted = synchronized(approvalResolutionLock) {
             val current = mutableState.value
-            if (current.resolvingApprovalId != null || current.approval?.id != approvalId) {
+            if (current.resolvingApprovalId != null ||
+                (current.approval?.id != approvalId && current.activeDecision?.id != approvalId)) {
                 false
             } else {
-                mutableState.value = current.copy(resolvingApprovalId = approvalId, error = null)
+                mutableState.value = current.copy(resolvingApprovalId = approvalId, error = null,
+                    activeDecision = current.activeDecision?.let {
+                        if (it.id == approvalId) it.copy(isSubmitting = true, submissionError = null) else it
+                    })
                 true
             }
         }
@@ -2605,8 +2655,9 @@ class ChatViewModel(
             try {
                 val decision = if (approve) "approve" else "deny"
                 val pending = repository.findPendingApproval(sessionId, approvalId)
-                val runId = pending?.runId
-                val batchId = pending?.batchId
+                    ?.takeIf { it.status == "pending" } ?: error("This request is no longer pending.")
+                val runId = pending.runId
+                val batchId = pending.batchId
                 if (runId != null && batchId != null && pending.kind == "approved_action_batch_request") {
                     val visibleApproval = mutableState.value.approval
                     val decisions = pending.actions.map { action ->
@@ -2702,10 +2753,18 @@ class ChatViewModel(
                 }
                 refreshSession(sessionId)
             } catch (error: Throwable) {
+                mutableState.update { state ->
+                    state.copy(activeDecision = state.activeDecision?.let {
+                        if (it.id == approvalId) it.copy(submissionError = error.message ?: "Approval could not be resolved") else it
+                    })
+                }
                 showError(error, "Approval could not be resolved")
             } finally {
                 mutableState.update { state ->
-                    if (state.resolvingApprovalId == approvalId) state.copy(resolvingApprovalId = null) else state
+                    if (state.resolvingApprovalId == approvalId) state.copy(resolvingApprovalId = null,
+                        activeDecision = state.activeDecision?.let {
+                            if (it.id == approvalId) it.copy(isSubmitting = false) else it
+                        }) else state
                 }
             }
         }

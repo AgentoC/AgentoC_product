@@ -1305,6 +1305,41 @@ class WorkbenchViewModelTest {
     }
 
     @Test
+    fun `conversation question preserves distinct answers for each question`() = runTest {
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        try {
+            val repository = FakeSessionRepository(sessions = listOf(Session("session-1", "Task")), approvals = listOf(
+                Approval(id = "q", sessionId = "session-1", title = "Questions", runId = "run-1", kind = "question",
+                    questions = listOf(ApprovalQuestion(question = "First"), ApprovalQuestion(question = "Second"))),
+            ))
+            val viewModel = ChatViewModel(repository)
+            advanceUntilIdle()
+            viewModel.onEvent(ChatEvent.DecisionWriteInChanged("q", "alpha", 0))
+            viewModel.onEvent(ChatEvent.DecisionWriteInChanged("q", "beta", 1))
+            viewModel.onEvent(ChatEvent.SubmitDecision("q"))
+            advanceUntilIdle()
+            assertEquals(listOf("-1", "-1"), repository.runtimeApprovalChoices)
+            assertEquals(listOf("alpha", "beta"), repository.runtimeApprovalCustomAnswers)
+        } finally { Dispatchers.resetMain() }
+    }
+
+    @Test
+    fun `conversation question can be denied`() = runTest {
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        try {
+            val repository = FakeSessionRepository(sessions = listOf(Session("session-1", "Task")), approvals = listOf(
+                Approval(id = "q", sessionId = "session-1", title = "Question", runId = "run-1", kind = "question",
+                    questions = listOf(ApprovalQuestion(question = "First"))),
+            ))
+            val viewModel = ChatViewModel(repository)
+            advanceUntilIdle()
+            viewModel.onEvent(ChatEvent.Deny("q"))
+            advanceUntilIdle()
+            assertEquals("deny", repository.runtimeApprovalDecision)
+        } finally { Dispatchers.resetMain() }
+    }
+
+    @Test
     fun `approval forwards structured decision to repository`() = runTest {
         Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
         try {
@@ -1556,6 +1591,8 @@ private class FakeSessionRepository(
     var approvedActionBatchCall: ApprovedActionBatchCall? = null
     var approvedActionsCalls: Int = 0
     var runtimeApprovalChoices: List<String>? = null
+    var runtimeApprovalDecision: String? = null
+    var runtimeApprovalCustomAnswers: List<String>? = null
     var createdProject: Project? = null
     var projectRefreshCalls: Int = 0
     var sessionRefreshCalls: Int = 0
@@ -1691,7 +1728,14 @@ private class FakeSessionRepository(
             approvedActionBatchCall = ApprovedActionBatchCall(sessionId, runId, batchId, decisions, approvalIntent)
         }
     }
-    override suspend fun resolveRuntimeApproval(runId: String, approvalId: String, decision: String, choices: List<String>, customAnswer: String?, requestId: String) { runtimeApprovalChoices = choices }
+    override suspend fun resolveRuntimeApproval(runId: String, approvalId: String, decision: String, choices: List<String>, customAnswer: String?, requestId: String) {
+        runtimeApprovalChoices = choices
+        runtimeApprovalDecision = decision
+    }
+    override suspend fun resolveRuntimeApprovalWithAnswers(runId: String, approvalId: String, choices: List<String>, customAnswers: List<String>, requestId: String) {
+        runtimeApprovalChoices = choices
+        runtimeApprovalCustomAnswers = customAnswers
+    }
     override suspend fun resumePendingOperations(): Int = 0
 }
 

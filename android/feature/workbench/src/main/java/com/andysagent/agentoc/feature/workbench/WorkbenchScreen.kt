@@ -2366,6 +2366,16 @@ private fun ChatSurface(
                 else -> null
             }
 
+            activeDecision?.takeUnless { it.isSubmitted }?.let { decision ->
+                AgentoButton(
+                    text = stringResource(R.string.approval_answer_question),
+                    onClick = { scope.launch { listState.scrollToItem(turnGroups.size) } },
+                    enabled = !decision.isSubmitting,
+                    secondary = true,
+                    modifier = Modifier.widthIn(max = AgentocSizes.ContentMaxWidth).fillMaxWidth().testTag("decision-bottom-entry"),
+                )
+            }
+
             RunDock(
                 runStatus = state.runStatus,
                 approval = state.approval?.copy(
@@ -2816,6 +2826,13 @@ private fun ChatSurface(
                             onWriteInChanged = { onEvent(WorkbenchEvent.DecisionWriteInChanged(decision.id, it)) },
                             onSubmit = { onEvent(WorkbenchEvent.SubmitDecision(decision.id)) },
                             modifier = Modifier.padding(vertical = 4.dp).testTag("active-decision-card"),
+                            onMultiOptionSelected = { questionIndex, optionIndex ->
+                                onEvent(WorkbenchEvent.SelectDecisionOption(decision.id, optionIndex, questionIndex))
+                            },
+                            onMultiWriteInChanged = { questionIndex, text ->
+                                onEvent(WorkbenchEvent.DecisionWriteInChanged(decision.id, text, questionIndex))
+                            },
+                            onDeny = { onEvent(WorkbenchEvent.Deny(decision.id)) },
                         )
                     }
                 }

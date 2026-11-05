@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
@@ -98,5 +99,19 @@ class ApprovalAttentionDeviceTest {
         rule.mainClock.advanceTimeBy(12_500)
         rule.runOnIdle { assertEquals(listOf(AttentionEvent.Dismiss(requireNotNull(state.activeItemId))), events) }
         rule.mainClock.autoAdvance = true
+    }
+
+    @Test fun conversationShowsAndSubmitsAllQuestionAnswers() {
+        var state by mutableStateOf(DecisionQuestionUiState(id = "q", question = "First", options = emptyList(),
+            questionGroups = listOf(ApprovalQuestion(question = "First"), ApprovalQuestion(question = "Second"))))
+        var submitted: Map<Int, String>? = null
+        rule.setContent { AgentocTheme { DecisionQuestionCard(
+            state = state, onOptionSelected = {}, onWriteInChanged = {}, onSubmit = { submitted = state.customByQuestion },
+            onMultiWriteInChanged = { index, text -> state = state.copy(customByQuestion = state.customByQuestion + (index to text)) },
+        ) } }
+        rule.onNodeWithTag("decision-0-write-in").performTextInput("alpha")
+        rule.onNodeWithTag("decision-1-write-in").performTextInput("beta")
+        rule.onNodeWithTag("decision-submit").performClick()
+        rule.runOnIdle { assertEquals(mapOf(0 to "alpha", 1 to "beta"), submitted) }
     }
 }
