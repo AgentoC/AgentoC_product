@@ -25,9 +25,9 @@ const hash = value => createHash('sha256').update(value).digest('hex');
 const broker = createWindowsPrivilegedBrokerClient({platform:'win32',pipeExchange:async ({request})=>{
  if(request.type==='health') return {type:'health',msiInstallReady:true,autoInstallKeyId:'key-1',installationId:'broker-1',policyGeneration:1};
  if(request.type==='status') return saved || {type:'result',requestId:request.requestId,code:'REQUEST_NOT_FOUND'};
- if(request.type==='msi_install.inspect') { inspected++; return {type:'msi_install_inspection',msiFacts:{...request.msiInspect,publisherSha256:'b'.repeat(64)}}; }
+ if(request.type==='msi_install.inspect') { inspected++; return {type:'msi_install_inspection',msiFacts:{...request.msiInspect,publisherSha256:'0'.repeat(64)}}; }
  if(request.type==='msi_install.execute') {
-  calls++; const g=request.msiInstall; const bytes=msiGrantBytes(g);
+  calls++; const g=request.msiInstall; assert.equal(g.publisherSha256,'0'.repeat(64)); const bytes=msiGrantBytes(g);
   assert.ok(verify(null,bytes,publicKey,Buffer.from(request.signature,'base64url')));
   saved={type:'result',requestId:g.requestId,status:'executing',msiDigest:hash(bytes),msiBinding:hash(goJSON([g.requestId,g.sessionId,g.runId,g.turnId,g.actionId,g.artifactPath,g.artifactSha256]))}; return saved;
  }

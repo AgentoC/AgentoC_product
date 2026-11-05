@@ -34,3 +34,23 @@ func TestMSIInspectionSignedFixture(t *testing.T) {
 		t.Fatal("accepted incorrect digest")
 	}
 }
+func TestMSIInspectionUnsignedFixture(t *testing.T) {
+	path := os.Getenv("AGENTOC_TEST_UNSIGNED_MSI")
+	if path == "" {
+		t.Skip("unsigned fixture not configured")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(data)
+	facts, err := inspectWindowsMSI(msiInspectRequest{ArtifactPath: path, ArtifactSHA256: hex.EncodeToString(sum[:])})
+	if err != nil || facts == nil || facts.PublisherSHA256 != unsignedMSIPublisher {
+		t.Fatalf("unsigned inspection: %+v %v", facts, err)
+	}
+	prepared, err := prepareWindowsMSIInstall(msiInstallGrant{ArtifactPath: path, ArtifactSHA256: hex.EncodeToString(sum[:]), PublisherSHA256: unsignedMSIPublisher})
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared.Close()
+}

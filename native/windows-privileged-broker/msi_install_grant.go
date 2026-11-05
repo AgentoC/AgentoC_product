@@ -10,9 +10,10 @@ import (
 	"time"
 )
 
-// A policy-issued grant binds one MSI and signer to one exact Run. It does
-// not itself prove publisher trust or authorize execution without the broker's
-// independently configured signing key and current policy generation.
+// A policy-issued grant binds one MSI and its observed signature state to one
+// exact Run. The zero publisher fingerprint denotes an unsigned package; signed
+// packages must match a trusted signer. The broker also requires its configured
+// signing key and the current policy generation.
 type msiInstallGrant struct {
 	Version              int    `json:"version"`
 	KeyID                string `json:"keyId"`

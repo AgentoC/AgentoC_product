@@ -19,42 +19,8 @@ import (
 	"time"
 )
 
-// This opt-in test uses a disposable unsigned, per-user MSI generated for QA.
-// The test double replaces only publisher trust; normal signed-package trust is
-// exercised separately with a real signed package and remains mandatory in the
-// production windowsMSIInstaller.
-type localMSIFixtureInstaller struct {
-	system string
-	temp   string
-}
-
-func (i localMSIFixtureInstaller) Install(ctx context.Context, g msiInstallGrant) (requestStatus, string) {
-	if ctx.Err() != nil {
-		return statusFailed, "MSI_INSTALL_CANCELLED_BEFORE_START"
-	}
-	pins, err := pinWindowsMSIArtifact(g.ArtifactPath, g.ArtifactSHA256)
-	if err != nil {
-		return statusFailed, "MSI_INSTALL_VERIFICATION_FAILED"
-	}
-	defer pins.Close()
-	if verifyPinnedMSIEmbeddedMedia(pins) != nil {
-		return statusFailed, "MSI_INSTALL_VERIFICATION_FAILED"
-	}
-	exe := filepath.Join(i.system, "msiexec.exe")
-	executablePins, _, err := pinWindowsServiceImage(exe)
-	if err != nil {
-		return statusFailed, "MSI_INSTALL_VERIFICATION_FAILED"
-	}
-	defer executablePins.Close()
-	if verifyPinnedSystemCatalog(executablePins, exe) != nil {
-		return statusFailed, "MSI_INSTALL_VERIFICATION_FAILED"
-	}
-	code, err := runWindowsMSIProcess(exe, []string{"/i", pins.path, "/qn", "/norestart"}, os.Environ(), i.system)
-	if err == nil && code == 0 {
-		return statusSucceeded, "MSI_INSTALL_SUCCEEDED"
-	}
-	return statusFailed, "MSI_INSTALL_FAILED"
-}
+// This opt-in test exercises the production installer with a disposable,
+// unsigned per-user MSI whose payload is confined to the test directory.
 func TestMSIInstallRealLocalFixture(t *testing.T) {
 	path := os.Getenv("AGENTOC_QA_DISPOSABLE_MSI")
 	marker := os.Getenv("AGENTOC_QA_DISPOSABLE_MARKER")
@@ -100,19 +66,61 @@ func TestMSIInstallRealLocalFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	state := store.Snapshot()
-	grant := msiInstallGrant{Version: 1, KeyID: "key-1", BrokerInstallationID: state.InstallationID, PolicyGeneration: state.PolicyGeneration, RequestID: "qa-request", SessionID: "qa-session", RunID: "qa-run", TurnID: "qa-turn", ActionID: "qa-action", Nonce: "0123456789abcdefghijklmn", ArtifactPath: path, ArtifactSHA256: hex.EncodeToString(digest[:]), PublisherSHA256: hex.EncodeToString(digest[:]), IssuedMS: now.UnixMilli(), ExpiresMS: now.Add(time.Minute).UnixMilli()}
+	grant := msiInstallGrant{Version: 1, KeyID: "key-1", BrokerInstallationID: state.InstallationID, PolicyGeneration: state.PolicyGeneration, RequestID: "qa-request", SessionID: "qa-session", RunID: "qa-run", TurnID: "qa-turn", ActionID: "qa-action", Nonce: "0123456789abcdefghijklmn", ArtifactPath: path, ArtifactSHA256: hex.EncodeToString(digest[:]), PublisherSHA256: unsignedMSIPublisher, IssuedMS: now.UnixMilli(), ExpiresMS: now.Add(time.Minute).UnixMilli()}
 	bytes, err := msiInstallSigningBytes(grant)
 	if err != nil {
 		t.Fatal(err)
 	}
 	request := brokerRequest{Version: protocolVersion, Type: "msi_install.execute", MSIInstall: &grant, Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(priv, bytes))}
-	server := &brokerIPCServer{store: store, msiInstaller: localMSIFixtureInstaller{system: system, temp: os.TempDir()}}
-	first := server.handleRequest(mustJSON(t, request), false)
+	root, err := windows.GetWindowsDirectory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	suffix, err := randomID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	healthName := `\\.\pipe\AgentoC.PrivilegedBroker.LocalTest.` + suffix + `.Health.v1`
+	requestName := `\\.\pipe\AgentoC.PrivilegedBroker.LocalTest.` + suffix + `.Request.v1`
+	server, err := newBrokerIPCServerForPipeNames(store, user.User.Sid, healthName, requestName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.msiInstaller = windowsMSIInstaller{paths: func() (string, string, string, error) { return root, system, os.TempDir(), nil }}
+	runResult := make(chan error, 1)
+	go func() { runResult <- server.Run(context.Background()) }()
+	defer func() {
+		server.Stop()
+		select {
+		case e := <-runResult:
+			if e != nil {
+				t.Error(e)
+			}
+		case <-time.After(3 * time.Second):
+			t.Error("broker did not stop")
+		}
+	}()
+	inspection := exchangeTestPipeRequest(t, requestName, brokerRequest{Version: protocolVersion, Type: "msi_install.inspect", MSIInspect: &msiInspectRequest{ArtifactPath: path, ArtifactSHA256: grant.ArtifactSHA256}})
+	if inspection.MSIFacts == nil || inspection.MSIFacts.PublisherSHA256 != unsignedMSIPublisher {
+		t.Fatalf("inspection: %+v", inspection)
+	}
+	first := exchangeTestPipeRequest(t, requestName, request)
 	if first.Status != statusExecuting {
 		t.Fatalf("claim: %+v", first)
 	}
-	server.workers.Wait()
-	result := server.handleRequest(mustJSON(t, brokerRequest{Version: protocolVersion, Type: "status", RequestID: grant.RequestID}), false)
+	var result brokerResponse
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		result = exchangeTestPipeRequest(t, requestName, brokerRequest{Version: protocolVersion, Type: "status", RequestID: grant.RequestID})
+		if result.Status != statusExecuting {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 	if result.Status != statusSucceeded {
 		t.Fatalf("installer result: %+v", result)
 	}
@@ -120,7 +128,7 @@ func TestMSIInstallRealLocalFixture(t *testing.T) {
 	if err != nil || string(markerData) != "AgentoC disposable installer QA\r\n" {
 		t.Fatalf("installed marker: %q %v", markerData, err)
 	}
-	if replay := server.handleRequest(mustJSON(t, request), false); replay.Status != statusSucceeded {
+	if replay := exchangeTestPipeRequest(t, requestName, request); replay.Status != statusSucceeded {
 		t.Fatalf("replay: %+v", replay)
 	}
 }

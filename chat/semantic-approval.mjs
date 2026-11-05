@@ -178,7 +178,7 @@ export function authorizeWindowsUserInstall(options = {}) {
 }
 
 // The package identity is resolved from the server-side filesystem. Trust in
-// its signature is checked independently by the native broker before signing.
+// its signature state is checked independently by the broker before signing.
 export function authorizeWindowsMSIAutomaticInstall({ prepared, riskMode = '', kid = '', now } = {}) {
   if (!['recommended', 'full-auto'].includes(trimString(riskMode))) fail('SEMANTIC_AUTO_PROFILE_DENIED', 'automatic Windows installation is unavailable');
   const binding = assertBinding(prepared?.binding || {});
