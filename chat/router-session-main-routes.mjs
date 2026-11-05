@@ -2070,6 +2070,7 @@ export async function handleSessionMainRoutes({
           requestId: typeof payload?.requestId === 'string' ? payload.requestId : '',
           choices: Array.isArray(payload?.choices) ? payload.choices : [],
           customAnswer: typeof payload?.customAnswer === 'string' ? payload.customAnswer : '',
+          customAnswers: Array.isArray(payload?.customAnswers) ? payload.customAnswers : [],
           approvalActor: temporaryControlApprovalActor(authSession, 'approval.resolve'),
         });
         writeJson(res, outcome.duplicate ? 200 : 202, {

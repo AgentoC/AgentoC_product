@@ -3034,6 +3034,7 @@ async function flushClaudeBidiApprovalResponses(proc, state, run) {
     const message = buildClaudeBidiApprovalResponseMessage(pending, decision, entry?.choices, {
       updatedInput: entry?.updatedInput,
       customAnswer: entry?.customAnswer,
+      customAnswers: entry?.customAnswers,
     });
     if (!message || !writeClaudeBidiMessage(proc, message)) continue;
     state.sentApprovalResponseIds.add(responseId);

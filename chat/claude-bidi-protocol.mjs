@@ -121,7 +121,7 @@ export function buildClaudeBidiApprovalResponseMessage(approval, decision, choic
   const allow = normalized === 'approve' || normalized === 'approve_for_session';
   const request = approval?.params || approval?.request?.request || {};
   const askUserInput = allow
-    ? buildAskUserQuestionUpdatedInput(approval, request, choices, options?.customAnswer)
+    ? buildAskUserQuestionUpdatedInput(approval, request, choices, options?.customAnswer, options?.customAnswers)
     : null;
   const baseInput = request.input && typeof request.input === 'object' ? request.input : {};
   const overrideInput = options?.updatedInput && typeof options.updatedInput === 'object'
@@ -172,7 +172,7 @@ function isAskUserQuestionApproval(approval, request) {
   return toolName === 'AskUserQuestion';
 }
 
-function buildAskUserQuestionUpdatedInput(approval, request, choices, customAnswer = '') {
+function buildAskUserQuestionUpdatedInput(approval, request, choices, customAnswer = '', customAnswers = []) {
   if (!isAskUserQuestionApproval(approval, request)) return null;
   const questions = Array.isArray(request?.input?.questions) ? request.input.questions : [];
   if (questions.length === 0) return null;
@@ -189,10 +189,12 @@ function buildAskUserQuestionUpdatedInput(approval, request, choices, customAnsw
     const option = Number.isInteger(optionIndex) && optionIndex >= 0 && optionIndex < options.length
       ? options[optionIndex]
       : null;
-    if (!option && !normalizedCustomAnswer) return;
+    const questionAnswer = typeof customAnswers?.[index] === 'string' ? customAnswers[index].trim().slice(0, 8000) : '';
+    const answer = questionAnswer || normalizedCustomAnswer;
+    if (!option && !answer) return;
     const label = option && typeof option.label === 'string' && option.label.trim()
       ? option.label
-      : (option ? String(option.label ?? '').trim() : normalizedCustomAnswer);
+      : (option ? String(option.label ?? '').trim() : answer);
     const questionText = typeof question.question === 'string' && question.question.trim()
       ? question.question
       : String(question.question ?? '').trim();

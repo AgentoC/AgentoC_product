@@ -14788,6 +14788,7 @@ export async function submitRuntimeApproval(runId, approvalId, options = {}) {
     requestId: trimString(options.requestId) || '',
     choices: normalizeRuntimeApprovalChoices(options.choices),
     customAnswer: normalizeRuntimeApprovalCustomAnswer(options.customAnswer),
+    customAnswers: Array.isArray(options.customAnswers) ? options.customAnswers.slice(0, 6).map(normalizeRuntimeApprovalCustomAnswer) : [],
     state: 'pending',
     createdAt: nowIso(),
     ...(temporaryApproval ? { decisionSource: temporaryApproval.source,

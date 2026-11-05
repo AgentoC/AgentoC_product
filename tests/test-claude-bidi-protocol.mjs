@@ -186,6 +186,22 @@ assert.deepEqual(
   { 'Which color?': 'Use a muted teal instead.' },
 );
 
+const multipleApproval = readClaudeBidiApprovalRequest({
+  type: 'control_request', request_id: 'ask-many', request: {
+    subtype: 'can_use_tool', tool_name: 'AskUserQuestion', input: { questions: [
+      { question: 'First?', options: [{ label: 'A' }] },
+      { question: 'Second?', options: [{ label: 'B' }] },
+      { question: 'Third?', options: [{ label: 'C' }] },
+    ] },
+  },
+});
+assert.deepEqual(
+  buildClaudeBidiApprovalResponseMessage(multipleApproval, 'approve', [-1, 0, -1], {
+    customAnswers: ['first custom', '', 'third custom'],
+  }).response.response.updatedInput.answers,
+  { 'First?': 'first custom', 'Second?': 'B', 'Third?': 'third custom' },
+);
+
 // No choices provided -> graceful fallback to a generic allow that echoes the request
 // input (no structured answers), so the prompt is never silently dropped.
 const askUserNoChoice = buildClaudeBidiApprovalResponseMessage(askUserApproval, 'approve', []);
