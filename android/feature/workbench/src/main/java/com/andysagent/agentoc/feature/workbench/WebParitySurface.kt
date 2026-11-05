@@ -132,7 +132,8 @@ fun WebParitySurface(
     val writable = if (crossProviders) selectedProviderInstance?.available == true && !state.actionInProgress
         else page == WebParityPage.Harnesses || connectionAvailable
     CompositionLocalProvider(LocalRemoteSettingsWritable provides writable) {
-    AgentoSurface(modifier.fillMaxSize(), color = LocalAgentocColors.current.canvas) {
+    AgentoSurface(modifier.fillMaxSize(), color = if (page == WebParityPage.ModelProviders || page == WebParityPage.Harnesses)
+        LocalAgentocColors.current.surfaceLow else LocalAgentocColors.current.canvas) {
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             SettingsWebHeader(
                 onBack = { if (state.selectedFile != null) onEvent(WebParityEvent.CloseFile) else onBack() },
@@ -163,11 +164,13 @@ fun WebParitySurface(
                             WebParityPage.Agents -> AgentsAppsPage(state, onEvent, projectId)
                             WebParityPage.Connectors -> ConnectorsPage(state, onEvent)
                             WebParityPage.ModelProviders -> if (crossProviders) {
-                                Column(Modifier.fillMaxSize()) {
-                                    ProviderInstanceSelector(state, onEvent)
+                                Column(Modifier.fillMaxSize().background(LocalAgentocColors.current.surfaceLow)) {
+                                    if (state.providerTargetId == null || selectedProviderInstance?.available != true)
+                                        ProviderInstanceSelector(state, onEvent)
                                     if (state.providerTargetId == null) AccountProvidersOverview(state, onEvent)
                                     else if (selectedProviderInstance?.available == true) key(state.providerTargetId) {
-                                        ProvidersPage(restrictDemoParityState(state, LocalRestrictedDemoEnvironment.current), onEvent, providerLabel)
+                                        ProvidersPage(restrictDemoParityState(state, LocalRestrictedDemoEnvironment.current), onEvent, providerLabel,
+                                            instanceSelector = { ProviderInstanceSelector(state, onEvent, Modifier) })
                                     } else Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                         Text(stringResource(if (selectedProviderInstance?.loading == true) R.string.pi_loading else R.string.pi_unavailable))
                                         OnboardingTextAction(stringResource(R.string.pi_retry), { state.providerTargetId?.let { onEvent(WebParityEvent.RetryProviderInstance(it)) } })
@@ -217,8 +220,8 @@ private fun RemoteSettingsAction(text: String, onClick: () -> Unit, modifier: Mo
 
 @Composable
 private fun RemoteManagementAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
-    enabled: Boolean = true, secondary: Boolean = true, destructive: Boolean = false) {
-    ManagementAction(text, onClick, modifier, enabled && LocalRemoteSettingsWritable.current, secondary, destructive)
+    enabled: Boolean = true, secondary: Boolean = true, emphasized: Boolean = false) {
+    ManagementAction(text, onClick, modifier, enabled && LocalRemoteSettingsWritable.current, secondary, emphasized)
 }
 
 @Composable
@@ -596,7 +599,8 @@ private fun ProviderQuotaSection(snapshot: JsonObject) {
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
-private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> Unit, targetLabel: String?) {
+private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> Unit, targetLabel: String?,
+    instanceSelector: (@Composable () -> Unit)? = null) {
     val uriHandler = LocalUriHandler.current
     var dialog by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
@@ -627,15 +631,11 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
             onEvent(WebParityEvent.ClearExternalUrl)
         }
     }
-    LazyColumn(contentPadding = navigationContentPadding(), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
-        item(key = "provider-scope") {
-            Column(verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid)) {
-                state.providerSavedTarget?.let { Text(stringResource(R.string.pi_saved, it), style = MaterialTheme.typography.bodySmall) }
-                Text(stringResource(R.string.settings_provider_scope_hint), style = MaterialTheme.typography.bodySmall,
-                    color = LocalAgentocColors.current.secondaryContent)
-            }
-        }
-        if (!restrictedDemo) item {
+    Column(Modifier.fillMaxSize().background(LocalAgentocColors.current.surfaceLow)) {
+      FlowRow(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+          horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        instanceSelector?.invoke()
+        if (!restrictedDemo) {
             RemoteSettingsAction(stringResource(R.string.sp_add_provider), {
                 editingProvider = null
                 agentType = availableHarnesses.firstOrNull()?.id.orEmpty()
@@ -643,8 +643,13 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                 protocol = availableHarnesses.firstOrNull()?.protocols?.firstOrNull() ?: "chat"
                 name = ""; baseUrl = ""; apiKey = ""; model = ""
                 dialog = true
-            }, leadingIcon = { AgentoWebIcon(AgentoWebGlyph.Plus, null) })
+            }, leadingIcon = { AgentoWebIcon(AgentoWebGlyph.Plus, null, Modifier.size(18.dp)) })
         }
+      }
+      LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 80.dp)) {
+        state.providerSavedTarget?.let { saved -> item(key = "provider-saved") {
+            Text(stringResource(R.string.pi_saved, saved), style = MaterialTheme.typography.bodySmall)
+        } }
         if (!restrictedDemo && (state.providers.any { it.agentType == "agy" } || state.providerRotationEnabled || state.providerRotationIds.isNotEmpty())) item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(enabled = LocalRemoteSettingsWritable.current, checked = state.providerRotationEnabled, onCheckedChange = { onEvent(WebParityEvent.ToggleProviderRotation(it)) })
@@ -656,15 +661,14 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
         }
         items(state.providers, key = { it.id }) { provider ->
             val harnessInstalled = state.providerHarnessesLoaded && state.harnesses.any { it.id == provider.agentType && it.installed }
-            ManagementCard(Modifier.fillMaxWidth().testTag("provider-card-${provider.id}")) {
+            ManagementSection(Modifier.fillMaxWidth().testTag("provider-card-${provider.id}")) {
                 Row(modifier = Modifier.testTag("provider-info-${provider.id}"), horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact), verticalAlignment = Alignment.Top) {
-                    ManagementIdentity(if (provider.machineLocal) AgentoWebGlyph.Shield else AgentoWebGlyph.Agent)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid)) {
-                        Text(provider.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(provider.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         val machineLocal = provider.agentType in setOf("codex", "claude", "agy") && provider.authType in setOf("oauth", "oauth-token")
                         Text(if (machineLocal) stringResource(R.string.settings_provider_scope_local, targetLabel ?: stringResource(R.string.sp_this_computer))
                             else stringResource(R.string.settings_provider_scope_sync),
-                            style = MaterialTheme.typography.labelMedium, color = LocalAgentocColors.current.secondaryContent,
+                            style = MaterialTheme.typography.bodySmall, color = LocalAgentocColors.current.secondaryContent,
                             modifier = Modifier.testTag("provider-scope-${provider.id}"))
                     }
                 }
@@ -687,10 +691,8 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                 }
                 if (provider.baseUrl.isNotBlank()) Text(provider.baseUrl, style = MaterialTheme.typography.bodySmall,
                     color = LocalAgentocColors.current.tertiaryContent, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (!harnessInstalled) Text(stringResource(if (state.providerHarnessesLoaded) R.string.pi_harness_missing else R.string.sp_provider_harness_status_unavailable), style = MaterialTheme.typography.bodySmall)
                 if (provider.quotaSnapshot != null) ProviderQuotaSection(provider.quotaSnapshot)
                 else if (provider.quota.isNotBlank()) Text(stringResource(R.string.sp_quota, provider.quota), style = MaterialTheme.typography.labelSmall)
-                HorizontalDivider(color = LocalAgentocColors.current.primaryContent.copy(alpha = 0.07f))
                 FlowRow(
                     modifier = Modifier.fillMaxWidth().testTag("provider-actions-${provider.id}"),
                     horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact),
@@ -723,11 +725,12 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                             }
                             apiKey = ""
                             dialog = true
-                        }, modifier = Modifier.testTag("provider-edit-${provider.id}"), secondary = false)
-                        if (!restrictedDemo) RemoteManagementAction(stringResource(R.string.sp_delete), { deletingProvider = provider }, modifier = Modifier.testTag("provider-delete-${provider.id}"), destructive = true)
+                        }, modifier = Modifier.testTag("provider-edit-${provider.id}"), emphasized = true)
+                        if (!restrictedDemo) RemoteManagementAction(stringResource(R.string.sp_delete), { deletingProvider = provider }, modifier = Modifier.testTag("provider-delete-${provider.id}"))
                 }
             }
         }
+    }
     }
     deletingProvider?.let { provider ->
         RemoteSettingsDialog(
@@ -789,8 +792,9 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                         Text(providerRuntimeLabel(editingProvider?.agentType.orEmpty()), style = MaterialTheme.typography.labelMedium,
                             color = LocalAgentocColors.current.accentPrimary)
                     }
-                    ManagementHint(stringResource(if (authMode == "api-key") R.string.pi_shared_change else R.string.pi_local_change,
-                        targetLabel.orEmpty()), AgentoWebGlyph.Monitor)
+                    Text(stringResource(if (authMode == "api-key") R.string.pi_shared_change else R.string.pi_local_change,
+                        targetLabel.orEmpty()), style = MaterialTheme.typography.bodySmall,
+                        color = LocalAgentocColors.current.secondaryContent)
                     if (agentType.isNotBlank()) {
                         if (editingProvider == null) Row(horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
                             if (agentType != "agy") RemoteSettingsAction(stringResource(R.string.sp_api_key), { authMode = "api-key" }, modifier = Modifier.weight(1f), secondary = authMode != "api-key")
@@ -880,10 +884,8 @@ private fun HarnessesPage(
         selectedTargetIds = eligibleIds
     }
 
-    LazyColumn(modifier = Modifier.testTag("harness-catalog"), contentPadding = navigationContentPadding(), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
-        item {
-            ManagementHint(stringResource(R.string.sp_harness_info))
-        }
+    LazyColumn(modifier = Modifier.fillMaxSize().background(LocalAgentocColors.current.surfaceLow).testTag("harness-catalog"),
+        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 80.dp)) {
         state.statusMessage?.takeIf(String::isNotBlank)?.let { message ->
             item { AgentoStatus(message, AgentoStatusTone.Success) }
         }
@@ -915,15 +917,14 @@ private fun HarnessesPage(
                 harness.version.takeIf { it.isNotBlank() && !multipleTargets }?.let { stringResource(R.string.sp_version_value, it) },
                 harness.installationSource.takeIf { it.isNotBlank() && !multipleTargets }?.let { stringResource(R.string.sp_source_value, it) },
             ).joinToString(" · ")
-            ManagementCard(Modifier.fillMaxWidth()) {
+            ManagementSection(Modifier.fillMaxWidth()) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact)) {
                         ManagementIdentity(AgentoWebGlyph.Terminal)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid)) {
-                            Text(harness.name, style = MaterialTheme.typography.titleMedium)
+                            Text(harness.name, style = MaterialTheme.typography.titleSmall)
                             Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    HorizontalDivider(color = LocalAgentocColors.current.primaryContent.copy(alpha = 0.07f))
                     targets.forEach { target ->
                         val status = when {
                             !target.available -> R.string.settings_harness_unknown
@@ -931,16 +932,22 @@ private fun HarnessesPage(
                             !supports(target, harness) -> R.string.sp_unsupported
                             else -> R.string.sp_not_installed
                         }
-                        Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            AgentoWebIcon(AgentoWebGlyph.Monitor, null, Modifier.size(18.dp), tint = LocalAgentocColors.current.tertiaryContent)
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(target.label, style = MaterialTheme.typography.bodyMedium)
-                                Text(stringResource(status), style = MaterialTheme.typography.labelSmall,
+                        BoxWithConstraints(Modifier.fillMaxWidth().heightIn(min = 40.dp)) {
+                            val statusText: @Composable () -> Unit = {
+                                Text(stringResource(status), style = MaterialTheme.typography.bodySmall,
                                     color = if (status == R.string.sp_installed) LocalAgentocColors.current.success else LocalAgentocColors.current.secondaryContent,
                                     modifier = Modifier.testTag("harness-target-${harness.id}-${target.instanceId}"))
                             }
-                            if (status == R.string.sp_installed) AgentoWebIcon(AgentoWebGlyph.Check, null, Modifier.size(16.dp), tint = LocalAgentocColors.current.success)
+                            if (LocalDensity.current.fontScale > 1.3f || maxWidth < 280.dp) {
+                                Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(target.label, style = MaterialTheme.typography.bodyMedium)
+                                    statusText()
+                                }
+                            } else Row(Modifier.fillMaxWidth().heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text(target.label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                                statusText()
+                            }
                         }
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid), verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid)) {
@@ -949,7 +956,7 @@ private fun HarnessesPage(
                                     stringResource(R.string.sp_install),
                                     { requestAction(harness, WebHarnessOperation.Install) },
                                     enabled = !state.actionInProgress && candidates(harness, WebHarnessOperation.Install).any { eligible(it, harness, WebHarnessOperation.Install) },
-                                    secondary = false,
+                                    emphasized = true,
                                     modifier = Modifier.testTag("harness-install-${harness.id}"),
                                 )
                             }
@@ -966,7 +973,6 @@ private fun HarnessesPage(
                                     { requestAction(harness, WebHarnessOperation.Uninstall) },
                                     enabled = !state.actionInProgress && candidates(harness, WebHarnessOperation.Uninstall).any { eligible(it, harness, WebHarnessOperation.Uninstall) },
                                     secondary = true,
-                                    destructive = true,
                                     modifier = Modifier.testTag("harness-uninstall-${harness.id}"),
                                 )
                             }
@@ -1007,6 +1013,8 @@ private fun HarnessesPage(
             dismissEnabled = !state.actionInProgress,
         ) {
                 Column(verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Grid)) {
+                    if (operation == WebHarnessOperation.Uninstall) Text(stringResource(R.string.sp_harness_info),
+                        style = MaterialTheme.typography.bodySmall, color = LocalAgentocColors.current.secondaryContent)
                     Text(
                         stringResource(R.string.settings_harness_select_hint),
                         style = MaterialTheme.typography.bodySmall,
@@ -1019,8 +1027,6 @@ private fun HarnessesPage(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            AgentoWebIcon(AgentoWebGlyph.Monitor, null, Modifier.size(20.dp),
-                                tint = if (target.instanceId in eligibleSelectedIds) LocalAgentocColors.current.accentPrimary else LocalAgentocColors.current.tertiaryContent)
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(target.label, style = MaterialTheme.typography.bodyMedium)
                                 if (!target.available) Text(stringResource(R.string.settings_harness_unknown), style = MaterialTheme.typography.labelSmall,

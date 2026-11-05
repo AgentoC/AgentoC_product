@@ -10,6 +10,16 @@ import kotlinx.serialization.json.contentOrNull
 
 internal data class ApprovalPresentation(val headline: String, val consequence: String?)
 
+/** Suppress descriptions that merely instruct the user to choose the label itself. */
+internal fun questionOptionDetail(label: String, description: String?): String? {
+    val detail = description?.trim()?.takeIf(String::isNotEmpty) ?: return null
+    fun normalized(value: String) = value.trim().trim('.', '!', '。', '"', '\'', '“', '”', '`').trim().lowercase()
+    if (normalized(detail) == normalized(label)) return null
+    val instruction = Regex("^(?:choose|select|pick)\\s+(.+?)\\s+as\\s+(?:the|your)\\s+answer[.!。]?$", RegexOption.IGNORE_CASE)
+        .matchEntire(detail)?.groupValues?.get(1)
+    return detail.takeUnless { instruction != null && normalized(instruction) == normalized(label) }
+}
+
 /** Display actual operation and consequence once; never infer safety or effects. */
 internal fun approvalPresentation(item: AttentionItem): ApprovalPresentation {
     fun String?.value() = this?.trim()?.takeIf(String::isNotEmpty)

@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -84,6 +85,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.graphicsLayer
@@ -146,6 +148,23 @@ private val AttentionCardShape = RoundedCornerShape(AgentoShapes.Sheet)
 private val AskUserCardShape = RoundedCornerShape(32.dp)
 private val MaxAttentionCardWidth = 520.dp
 private val AttentionShadowPadding = 16.dp
+
+@Composable
+private fun AttentionNoticeSurface(modifier: Modifier, shape: Shape, question: Boolean,
+    backdropLayer: GraphicsLayer?, backdropOffset: IntOffset, content: @Composable BoxScope.() -> Unit) {
+    val colors = LocalAgentocColors.current
+    if (question) {
+        Surface(modifier, shape = shape, color = colors.surfaceLow, tonalElevation = 0.dp) {
+            Box(content = content)
+        }
+    } else AgentoFrostedGlassBox(modifier = modifier, shape = shape,
+        surface = AgentoGlassSurface.Neutral, blurRadius = AgentoFrostedTokens.BlurNavigation,
+        showTopHairline = true, backdropTone = AgentoBackdropTone.QuietHeader,
+        material = AgentoGlassMaterial.LiquidClear, backdropLayer = backdropLayer, backdropOffset = backdropOffset,
+        hasShadow = true, shadowElevation = 14.dp,
+        shadowAlpha = if (colors.canvas.red < 0.5f) 0.08f else 0.065f,
+        shadowSpotAlpha = if (colors.canvas.red < 0.5f) 0.06f else 0.02f, content = content)
+}
 
 /**
  * Global cross-session attention overlay. Presentation only: every fact comes
@@ -337,7 +356,7 @@ private fun AttentionCard(
             shadowAlpha = 0.05f,
             shadowSpotAlpha = 0.06f,
         ) {
-            AgentoFrostedGlassBox(
+            AttentionNoticeSurface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .onGloballyPositioned { coordinates ->
@@ -420,26 +439,9 @@ private fun AttentionCard(
                         contentDescription = "$announcement，向右滑动关闭通知"
                     },
                 shape = cardShape,
-                surface = AgentoGlassSurface.Neutral,
-                blurRadius = AgentoFrostedTokens.BlurNavigation,
-                // Keep the notification on the same LiquidClear substrate as
-                // the chat composer. Supplying the Dock/Card brush here draws
-                // an additional 35% white layer over the live blur, which is
-                // why this surface previously read as a milky opaque card.
-                showTopHairline = true,
-                backdropTone = AgentoBackdropTone.QuietHeader,
-                specularBrush = if (colors.canvas.red < 0.5f) {
-                    AgentoFrostedTokens.SpecularBorderDark
-                } else {
-                    AgentoFrostedTokens.SpecularBorderLight
-                },
-                material = AgentoGlassMaterial.LiquidClear,
+                question = isAskUser,
                 backdropLayer = backdropLayer,
                 backdropOffset = backdropOffset,
-                hasShadow = true,
-                shadowElevation = 14.dp,
-                shadowAlpha = if (colors.canvas.red < 0.5f) 0.08f else 0.065f,
-                shadowSpotAlpha = if (colors.canvas.red < 0.5f) 0.06f else 0.02f,
             ) {
                 Column(
                     modifier = Modifier
@@ -485,6 +487,25 @@ private fun AttentionCard(
                         Text(stringResource(R.string.attention_queued, queuedCount), color = colors.tertiaryContent,
                             style = MaterialTheme.typography.labelSmall)
                     }
+                } else if (isAskUser) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(item.sessionTitle, Modifier.weight(1f), color = colors.secondaryContent,
+                            style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        IconButton(onClick = { onEvent(AttentionEvent.SetExpanded(item.id, !expanded)) }, enabled = !resolving,
+                            modifier = Modifier.size(AgentocSpacing.MinTouchTarget)) {
+                            Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                                contentDescription = if (expanded) "收起问题详情" else "展开问题详情", tint = colors.secondaryContent)
+                        }
+                        IconButton(onClick = { onEvent(AttentionEvent.Dismiss(item.id)) }, enabled = !resolving,
+                            modifier = Modifier.size(AgentocSpacing.MinTouchTarget)) {
+                            Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.approval_notice_close), tint = colors.secondaryContent)
+                        }
+                    }
+                    Text(headline, color = colors.primaryContent, style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold, maxLines = if (expanded) Int.MAX_VALUE else 2,
+                        overflow = TextOverflow.Ellipsis)
+                    if (queuedCount > 0) Text(stringResource(R.string.attention_queued, queuedCount),
+                        color = colors.tertiaryContent, style = MaterialTheme.typography.labelSmall)
                 } else {
                 Row(verticalAlignment = Alignment.Top) {
                     Box(
@@ -678,13 +699,8 @@ private fun AttentionCard(
                         resolving = resolving,
                         onEvent = onEvent,
                     )
-                    AgentoButton(
-                        text = "详情",
-                        onClick = { onOpenSession(item.sessionId) },
-                        enabled = !resolving,
-                        secondary = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    TextButton(onClick = { onOpenSession(item.sessionId) }, enabled = !resolving,
+                        modifier = Modifier.align(Alignment.End)) { Text("详情", color = colors.secondaryContent) }
                 } else if (isPrivilegedCategoryBatch) {
                     PrivilegedCategoryActions(item, selectedActionIds, resolving, error, onEvent, onOpenSession)
                 } else {
@@ -729,13 +745,11 @@ private fun QuestionOptionsBody(
             selectedOptions[questionIndex].orEmpty().isNotEmpty() ||
                 customAnswers[questionIndex].orEmpty().trim().isNotEmpty()
         }
-        Text(
-            text = "已回答 $answeredCount/${questions.size}",
-            color = colors.tertiaryContent,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Medium,
-        )
-        Spacer(Modifier.size(AgentocSpacing.xs))
+        if (questions.size > 1) {
+            Text(text = "已回答 $answeredCount/${questions.size}", color = colors.tertiaryContent,
+                style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.size(AgentocSpacing.xs))
+        }
         val policy = motionPolicy()
         val duration = policy.duration(AgentocMotion.Feedback)
         AnimatedVisibility(
@@ -759,7 +773,7 @@ private fun QuestionOptionsBody(
                 verticalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact),
             ) {
                 questions.forEachIndexed { questionIndex, question ->
-                    if (question.question.isNotBlank()) {
+                    if (questions.size > 1 && question.question.isNotBlank()) {
                         Text(
                             text = "问题 ${questionIndex + 1}：${question.question}",
                             color = colors.primaryContent,
@@ -780,7 +794,7 @@ private fun QuestionOptionsBody(
                     AgentoTextField(
                         value = customAnswers[questionIndex].orEmpty(),
                         onValueChange = { onCustomAnswerChange(questionIndex, it) },
-                        label = "没有合适的选项时输入回复…",
+                        label = "其他回复",
                         enabled = !resolving,
                         // Multi-question answers are committed by the footer
                         // button; neither IME action nor Enter submits them.
@@ -879,26 +893,14 @@ private fun QuestionOptionRow(
     onClick: () -> Unit,
 ) {
     val colors = LocalAgentocColors.current
-    val isDark = colors.canvas.red < 0.5f
     Surface(
         onClick = onClick,
         enabled = enabled,
-        shape = AgentoShapes.SquircleS,
-        color = when {
-            selected && isDark -> colors.actionPrimary.copy(alpha = 0.22f)
-            selected -> colors.actionPrimary.copy(alpha = 0.12f)
-            isDark -> Color.White.copy(alpha = 0.06f)
-            else -> Color.White.copy(alpha = 0.62f)
-        },
-        border = BorderStroke(
-            0.5.dp,
-            if (selected) colors.accentPrimary.copy(alpha = 0.60f)
-            else if (isDark) AgentoFrostedTokens.SubtleHairline
-            else AgentoFrostedTokens.LightSubtleHairline,
-        ),
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) colors.accentPrimary.copy(alpha = 0.09f) else colors.canvas,
         modifier = Modifier
             .fillMaxWidth()
-            .agentoPressScale(pressedScale = 0.98f, onClick = onClick.takeIf { enabled })
+            .heightIn(min = 48.dp)
             .semantics {
                 contentDescription = "以此选项回答：$label"
                 stateDescription = if (selected) "已选择" else "未选择"
@@ -909,44 +911,21 @@ private fun QuestionOptionRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(AgentocSpacing.Compact),
         ) {
-            Surface(
-                modifier = Modifier.size(32.dp),
-                shape = RoundedCornerShape(9.dp),
-                color = if (selected) {
-                    colors.actionPrimary
-                } else if (isDark) {
-                    Color.White.copy(alpha = 0.08f)
-                } else {
-                    Color.White.copy(alpha = 0.54f)
-                },
-                shadowElevation = 0.dp,
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = optionNumber.toString(),
-                        color = if (selected) colors.actionPrimaryContent else if (isDark) Color.White else colors.primaryContent,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
+            Text(optionNumber.toString(), Modifier.width(20.dp), color = colors.secondaryContent,
+                style = MaterialTheme.typography.labelMedium)
             Column(Modifier.weight(1f)) {
                 Text(
                     text = label,
                     color = colors.primaryContent,
                     style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
-                val detail = description?.takeIf { it.isNotBlank() }
+                val detail = questionOptionDetail(label, description)
                 if (detail != null) {
                     Spacer(Modifier.size(AgentocSpacing.xs))
                     Text(
                         text = detail,
                         color = colors.secondaryContent,
                         style = MaterialTheme.typography.bodySmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -989,10 +968,6 @@ private fun QuestionAnswerRail(
         val normalizedAnswer = customAnswerIndexes.singleOrNull()?.let { index ->
             customAnswers[index].orEmpty().trim()
         }.orEmpty()
-        val status = when {
-            canSubmit -> "已回答 ${questions.size}/${questions.size}"
-            else -> "请回答所有问题"
-        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -1016,12 +991,7 @@ private fun QuestionAnswerRail(
                 enabled = !resolving && canSubmit,
                 secondary = false,
             )
-            Text(
-                text = status,
-                color = LocalAgentocColors.current.secondaryContent,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.weight(1f),
-            )
+            Spacer(Modifier.weight(1f))
             AgentoButton(
                 text = approvalLabel(item.approval?.denyLabel, "拒绝"),
                 onClick = { onEvent(AttentionEvent.ResolveApproval(item.id, approve = false)) },
@@ -1039,7 +1009,7 @@ private fun QuestionAnswerRail(
         AgentoTextField(
             value = answer,
             onValueChange = { answer = it },
-            label = "如果没有合适的选项，请直接输入…",
+            label = "其他回复",
             enabled = !resolving,
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),

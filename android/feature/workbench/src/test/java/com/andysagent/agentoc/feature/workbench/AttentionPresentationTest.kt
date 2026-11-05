@@ -10,6 +10,14 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AttentionPresentationTest {
+    @Test fun `option descriptions omit redundant instructions but retain real consequences`() {
+        assertEquals(null, questionOptionDetail("Canary", "Choose Canary as the answer."))
+        assertEquals(null, questionOptionDetail("Full", "Select \"Full\" as your answer"))
+        assertEquals(null, questionOptionDetail("Canary", "Canary"))
+        assertEquals("Choose Canary as the answer only for a staged rollout.",
+            questionOptionDetail("Canary", "Choose Canary as the answer only for a staged rollout."))
+        assertEquals("Publishes to all users", questionOptionDetail("Full", "Publishes to all users"))
+    }
     private val approval = Approval("a", "s", "Export report", reason = "Writes a shared report", actions = listOf(
         ApprovalAction("one", description = "Export sources", summary = "Export audited report", command = "export --sources", cwd = "C:/Reports")))
     private val item = AttentionItem("i", "s", "Weekly report", AttentionKind.Approval, "Export report", "Export report", approval = approval)
