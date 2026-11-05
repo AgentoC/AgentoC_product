@@ -184,6 +184,13 @@ class AttentionReducerTest {
     }
 
     @Test
+    fun `legacy privileged categories are not sent through approved-action endpoint`() {
+        val legacy = Approval(id = "b", sessionId = "s1", title = "Privileged", kind = "privileged_batch_request",
+            batchId = "b", passkeyRequired = false, actions = listOf(ApprovalAction(id = "op", description = "Restart")))
+        assertTrue(AttentionReducer.project(listOf(session("s1")), listOf(legacy)).single().requiresSession)
+    }
+
+    @Test
     fun `provider plan kind survives the approval event envelope`() {
         val approval = Approval(id = "plan-1", sessionId = "s1", title = "Plan", requestKind = "plan")
         assertEquals(AttentionKind.Plan, AttentionReducer.project(listOf(session("s1")), listOf(approval)).single().kind)

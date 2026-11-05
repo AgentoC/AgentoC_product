@@ -144,6 +144,7 @@ object AttentionReducer {
             // category batches and passkey actions must still open the
             // session-owned checkpoint.
             requiresSession = approval.kind != WINDOWS_BROKER_APPROVAL_KIND && (
+                approval.kind == "privileged_batch_request" ||
                 (approval.batchId != null && approval.actions.isEmpty()) ||
                 approval.actions.any { it.needsPasskey } ||
                 (approval.actions.isEmpty() && approval.passkeyRequired && !approval.isQuestionApproval())
