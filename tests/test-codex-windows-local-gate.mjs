@@ -47,7 +47,10 @@ const managedDelete = process.env.AGENTOC_QA_HOOK_MANAGED_DELETE === '1';
 const fileCommand = process.env.AGENTOC_QA_FILE_COMMAND || '';
 if (fileCommand && (!['rename', 'clear', 'dotnet', 'git-status', 'uninstall'].includes(fileCommand) || managedDelete || managedInstall || process.env.AGENTOC_QA_HOOK_REWRITE === '1' || process.env.AGENTOC_QA_SENSITIVE === '1')) throw new Error('invalid file command fixture mode');
 if (['git-status', 'uninstall'].includes(fileCommand) && process.env.AGENTOC_QA_EXPECT_DECISION !== 'prompt') throw new Error('review fixture must expect review');
-const fileFixture = path.join(home, 'ordinary-fixture.txt');
+const outsideWrite = process.env.AGENTOC_QA_FILE_OUTSIDE === '1';
+if (outsideWrite && fileCommand !== 'dotnet') throw new Error('outside-write fixture requires the fixed dotnet command');
+const outsideWriteRoot = outsideWrite ? await mkdtemp(path.join(tmpdir(), 'agentoc-codex-outside-write-')) : '';
+const fileFixture = path.join(outsideWriteRoot || home, 'ordinary-fixture.txt');
 if (fileCommand) await writeFile(fileFixture, 'fixture content');
 if (fileCommand === 'git-status') execFileSync('git', ['init', '-q'], { cwd: home, windowsHide: true });
 const safeFileCommand = fileCommand === 'rename'
@@ -297,6 +300,7 @@ createInterface({ input: child.stdout }).on('line', async line => {
       // Only the fixed, harmless Write-Output fixture may actually execute.
       stage = 4; child.stdin.write(JSON.stringify(sent[0]) + '\n');
     } else {
+      if (outsideWrite && await readFile(fileFixture, 'utf8') !== 'fixture content') { fixtureError('outside review fixture was modified'); return; }
       process.stdout.write(`codex-windows-local-gate: ${expected} passed\n`);
       child.stdin.write(JSON.stringify({ id: msg.id, result: { decision: 'decline' } }) + '\n');
       setTimeout(() => { child.kill(); server.close(); }, 100);
@@ -349,6 +353,10 @@ child.on('exit', async () => {
     await unlink(path.join(outsideFixture, 'target', 'keep.txt')).catch(() => {});
     await rmdir(path.join(outsideFixture, 'target')).catch(() => {});
     await rmdir(outsideFixture).catch(() => {});
+  }
+  if (outsideWriteRoot && path.dirname(path.resolve(outsideWriteRoot)).toLowerCase() === parent.toLowerCase() && path.basename(outsideWriteRoot).startsWith('agentoc-codex-outside-write-')) {
+    await unlink(fileFixture).catch(() => {});
+    await rmdir(outsideWriteRoot).catch(() => {});
   }
 });
 child.on('error', () => { clearTimeout(timeout); process.exitCode = 1; server.close(); });
