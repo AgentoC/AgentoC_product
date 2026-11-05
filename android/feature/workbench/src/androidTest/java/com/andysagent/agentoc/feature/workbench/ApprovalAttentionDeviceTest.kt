@@ -143,14 +143,14 @@ class ApprovalAttentionDeviceTest {
         rule.runOnIdle { assertEquals(listOf(AttentionEvent.Dismiss(requireNotNull(state.activeItemId))), events) }
     }
 
-    @Test fun untouchedNoticeAutomaticallyDismisses() {
+    @Test fun pendingApprovalRemainsVisibleUntilDismissedOrResolved() {
         val approval = Approval(id = "a", sessionId = "s", runId = "r", title = "Run command")
         val state = AttentionReducer.reduce(AttentionUiState(), AttentionReducer.project(listOf(Session("s", "Other session")), listOf(approval)))
         val events = mutableListOf<AttentionEvent>()
         rule.mainClock.autoAdvance = false
         rule.setContent { AgentocTheme { AttentionSurface(state, events::add, onOpenSession = {}) } }
         rule.mainClock.advanceTimeBy(12_500)
-        rule.runOnIdle { assertEquals(listOf(AttentionEvent.Dismiss(requireNotNull(state.activeItemId))), events) }
+        rule.runOnIdle { assertTrue(events.none { it is AttentionEvent.Dismiss }) }
         rule.mainClock.autoAdvance = true
     }
 

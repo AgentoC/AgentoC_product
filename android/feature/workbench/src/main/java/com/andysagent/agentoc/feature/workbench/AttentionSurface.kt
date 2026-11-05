@@ -185,7 +185,7 @@ fun AttentionSurface(
     var interacted by remember(item?.id) { mutableStateOf(false) }
     LaunchedEffect(item?.id, interacted, state.expanded, state.resolvingItemId) {
         val current = item ?: return@LaunchedEffect
-        if (!interacted && !state.expanded && state.resolvingItemId != current.id) {
+        if (!current.isApproval && !interacted && !state.expanded && state.resolvingItemId != current.id) {
             delay(12_000)
             onEvent(AttentionEvent.Dismiss(current.id))
         }
