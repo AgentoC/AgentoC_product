@@ -2065,8 +2065,15 @@ export async function handleSessionMainRoutes({
         return true;
       }
       try {
+        if (payload?.decision === 'approve_with_answers' && (!Array.isArray(payload.customAnswers) || payload.customAnswers.length === 0)) {
+          writeJson(res, 400, { error: 'Per-question answers are required' });
+          return true;
+        }
         const outcome = await submitRuntimeApproval(runId, approvalId, {
-          decision: typeof payload?.decision === 'string' ? payload.decision : payload?.action,
+          // Older servers reject this decision instead of silently discarding
+          // per-question answers. Only supported runtimes map it to approval.
+          decision: payload?.decision === 'approve_with_answers' ? 'approve'
+            : (typeof payload?.decision === 'string' ? payload.decision : payload?.action),
           requestId: typeof payload?.requestId === 'string' ? payload.requestId : '',
           choices: Array.isArray(payload?.choices) ? payload.choices : [],
           customAnswer: typeof payload?.customAnswer === 'string' ? payload.customAnswer : '',

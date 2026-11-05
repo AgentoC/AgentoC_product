@@ -52,7 +52,7 @@ async function route(value, suffix = '', options = {}) {
   const done = handleSessionMainRoutes({ req, res, parsedUrl: options.legacyUrl ? parseUrl(path, true) : url, pathname: url.pathname,
     authSession: options.auth || { role: 'owner', principalKind: 'trusted_device' },
     requireSessionAccess: async (response, _auth, id, flags) => {
-      checks++; assert.equal(id, value.sessionId); assert.equal(flags.metadataOnly, true);
+      checks++; assert.equal(id, value.sessionId); if (flags) assert.equal(flags.metadataOnly, true);
       const allowed = options.access ? await options.access(checks) : true;
       if (!allowed) Object.assign(response, { status: 403, body: { code: 'PERMISSION_DENIED' } });
       return allowed;
@@ -63,6 +63,25 @@ async function route(value, suffix = '', options = {}) {
   return { status: res.status, body: res.body, headers: res.headers, checks };
 }
 after(async () => { await meta.flushSessionsMetaNow(); console.log(`Retained Run API test root: ${root}`); });
+
+test('runtime approval carries independent custom answers and rejects an empty answer payload', async () => {
+  const v = await seed();
+  const run = await makeRun(v, 'running', { runtimeFamily: 'claude-stream-json-bidi' });
+  await active(v, run);
+  await runs.updateRun(run.id, { appServerPendingApprovals: [{ approvalId: 'claude:multi', state: 'pending', kind: 'question' }] });
+  const path = `/api/runs/${run.id}/approvals/${encodeURIComponent('claude:multi')}`;
+  const empty = await route(v, '', { path, method: 'POST', body: { decision: 'approve_with_answers', customAnswers: [] } });
+  assert.equal(empty.status, 400);
+  const response = await route(v, '', { path, method: 'POST', body: {
+    decision: 'approve_with_answers', requestId: 'question-reply', choices: [-1, -1], customAnswers: ['first', 'second'],
+  } });
+  assert.equal(response.status, 202);
+  const stored = await runs.getRun(run.id);
+  const entry = stored.appServerApprovalResponseQueue.find(item => item.approvalId === 'claude:multi');
+  assert.deepEqual(entry.choices, [-1, -1]);
+  assert.deepEqual(entry.customAnswers, ['first', 'second']);
+  await runs.updateRun(run.id, { state: 'cancelled' });
+});
 
 test('discovery describes six actual operations, honest cancellation and readonly support', async () => {
   const v = await seed();
