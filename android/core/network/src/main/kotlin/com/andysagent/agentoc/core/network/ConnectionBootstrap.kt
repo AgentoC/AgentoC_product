@@ -25,6 +25,7 @@ import kotlin.coroutines.resumeWithException
 data class VerifiedBootstrap(
     val contract: ConnectionBootstrapContractDto,
     val publicKey: ConnectionBootstrapPublicKeyDto,
+    val rawContract: String = "",
 )
 
 /**
@@ -45,7 +46,7 @@ class ConnectionBootstrapClient(
         val publicKey = decode(keyResponse.body, serializer<ConnectionBootstrapPublicKeyDto>())
         val contractResponse = get(endpoint, "/api/device-auth/bootstrap", credential)
         val verified = ConnectionBootstrapVerifier.verify(contractResponse.body, publicKey)
-        return VerifiedBootstrap(verified.contract, verified.publicKey)
+        return VerifiedBootstrap(verified.contract, verified.publicKey, contractResponse.body)
     }
 
     suspend fun report(report: ConnectionBootstrapReportRequestDto): ConnectionBootstrapReportAckDto {

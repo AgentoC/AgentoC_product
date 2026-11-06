@@ -13,6 +13,9 @@ import { CONNECTION_BOOTSTRAP_REPORT_PHASES } from '../lib/connection-bootstrap-
 import { loadOrCreateInstanceIdentity, publicInstanceIdentity } from '../lib/instance-identity.mjs';
 import { markTurnConnectionLeaseConnected, releaseTurnConnectionLease } from './turn-connection-leases.mjs';
 import { releaseOwnerAccountTurnConnection } from '../lib/owner-account-auth.mjs';
+import { getTrustedDeviceStatus } from './trusted-devices.mjs';
+import { validateTurnHandoffRequest } from './turn-handoff-request.mjs';
+import { requestP2PHostHandoff, getP2PHostHandoffPlan, commitP2PHostHandoff } from '../lib/p2p-host-registry.mjs';
 
 function trimString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -29,6 +32,9 @@ export async function handleConnectionBootstrapRoutes({ req, res, pathname, auth
     && pathname !== '/api/device-auth/bootstrap/report'
     && pathname !== '/api/device-auth/turn/release'
     && pathname !== '/api/device-auth/bootstrap/public-key'
+    && pathname !== '/api/device-auth/turn/handoff/request'
+    && pathname !== '/api/device-auth/turn/handoff/plan'
+    && pathname !== '/api/device-auth/turn/handoff/commit'
   ) {
     return false;
   }
@@ -38,6 +44,38 @@ export async function handleConnectionBootstrapRoutes({ req, res, pathname, auth
       error: 'A trusted-device session is required to access the connection bootstrap contract',
       code: 'device_session_required',
     });
+    return true;
+  }
+
+  if (pathname.startsWith('/api/device-auth/turn/handoff/') && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      if (pathname.endsWith('/request')) {
+        const device = await getTrustedDeviceStatus(authSession.deviceId);
+        const identity = await loadOrCreateInstanceIdentity();
+        const previous = validateTurnHandoffRequest({ contract: body.contract, identity,
+          accountId: device?.accountId, deviceId: authSession.deviceId });
+        const accepted = requestP2PHostHandoff(authSession.deviceId, previous);
+        writeJson(res, accepted ? 202 : 409, { accepted });
+        return true;
+      }
+      const handoffId = trimString(body.handoffId);
+      if (!/^[a-f0-9]{32}$/.test(handoffId)) {
+        writeJson(res, 400, { error: 'Invalid handoff identifier', code: 'turn_handoff_request_invalid' });
+        return true;
+      }
+      if (pathname.endsWith('/plan')) {
+        const contract = getP2PHostHandoffPlan(authSession.deviceId, handoffId);
+        if (!contract) { writeJson(res, 409, { error: 'Handoff plan unavailable', code: 'turn_handoff_unavailable' }); return true; }
+        res.setHeader('Cache-Control', 'private, no-store');
+        writeJson(res, 200, contract);
+        return true;
+      }
+      const committed = await commitP2PHostHandoff(authSession.deviceId, handoffId);
+      writeJson(res, committed ? 200 : 409, { committed });
+    } catch (error) {
+      writeJson(res, error?.statusCode || 400, { error: 'Handoff request failed', code: error?.code || 'turn_handoff_unavailable' });
+    }
     return true;
   }
 

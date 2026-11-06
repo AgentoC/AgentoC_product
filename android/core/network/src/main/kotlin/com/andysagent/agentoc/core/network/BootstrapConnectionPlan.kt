@@ -24,6 +24,7 @@ data class BootstrapConnectionPlan(
     val p2pCandidate: P2PCandidate?,
     val turnCarrier: TurnCarrier?,
     val publicKey: ConnectionBootstrapPublicKeyDto? = null,
+    val rawContract: String = "",
 ) {
     val connectionMode: String get() = contract.connectionMode
     val turnConnectionId: String?
@@ -79,6 +80,7 @@ object BootstrapConnectionPlanFactory {
             p2pCandidate = p2p,
             turnCarrier = turn,
             publicKey = verified.publicKey,
+            rawContract = verified.rawContract,
         )
     }
 

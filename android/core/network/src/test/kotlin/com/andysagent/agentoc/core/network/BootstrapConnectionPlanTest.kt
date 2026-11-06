@@ -39,7 +39,7 @@ class BootstrapConnectionPlanTest {
         val turn = turn()
         val contract = contract(turn = turn)
         val plan = BootstrapConnectionPlanFactory.create(
-            verified = VerifiedBootstrap(contract, ConnectionBootstrapPublicKeyDto("ed25519", "key-1", "pem")),
+            verified = VerifiedBootstrap(contract, ConnectionBootstrapPublicKeyDto("ed25519", "key-1", "pem"), "signed-json"),
             bootstrapEndpoint = "http://192.168.1.10:7690",
             p2pCredentials = BootstrapP2PCredentials("paired-secret"),
         )
@@ -54,6 +54,7 @@ class BootstrapConnectionPlanTest {
         assertEquals(plan.turnConnectionId, carrier.connectionId)
         assertEquals("http://192.168.1.10:7690", plan.preferredEndpoint)
         assertEquals("key-1", plan.publicKey?.keyId, "A replacement plan must use the originally verified key")
+        assertEquals("signed-json", plan.rawContract, "Sending a verified contract must preserve its signed JSON")
     }
 
     @Test

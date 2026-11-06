@@ -3,6 +3,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { mkdtemp, mkdir, writeFile, rm, realpath, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
+import { Readable } from 'node:stream';
 
 const home = await mkdtemp(join(tmpdir(), 'agentoc-handoff-bootstrap-'));
 const config = join(home, 'config');
@@ -67,6 +68,39 @@ try {
   assert.equal(state.leases.find(x => x.connectionId === old.turn.connectionId).status, 'reserved');
   assert.equal(state.leases.find(x => x.connectionId === host.turn.connectionId).handoffFrom, old.turn.connectionId);
   assert.equal(central.size, 2);
+  const registry = await import('../lib/p2p-host-registry.mjs');
+  const { handleConnectionBootstrapRoutes } = await import('../chat/router-connection-bootstrap-routes.mjs');
+  const agents = [];
+  const makeAgent = options => {
+    let end; const agent = { ready: Promise.resolve(), joined: Promise.resolve(), done: new Promise(r => { end = r; }),
+      stop() { end(); }, suspendSignaling() {}, resumeSignaling() {}, requestCarrierHandoff() { return true; }, activateHandoff() {} };
+    agents.push({ options, agent }); return agent;
+  };
+  await registry.startP2PHostForDevice(deviceId, { p2pAccess: { roomId: 'fixture', secret: 'fixture' },
+    signalingUrl: 'https://handoff.fixture.invalid/signal', activeConnectionId: old.turn.connectionId,
+    iceServers: old.turn.iceServers, expiresAt: old.turn.expiresAt, runHostAgent: async options => makeAgent(options),
+    prepareHandoff: async () => ({ contract: host, connectionId: host.turn.connectionId,
+      iceServers: host.turn.iceServers, expiresAt: host.turn.expiresAt }),
+    commitHandoff: async () => {}, releaseHandoff: async () => {} });
+  const callRoute = async (suffix, body, principal) => {
+    const req = Readable.from([JSON.stringify(body)]); req.method = 'POST';
+    let response;
+    await handleConnectionBootstrapRoutes({ req, res: { setHeader() {} }, pathname: `/api/device-auth/turn/handoff/${suffix}`,
+      authSession: principal, writeJson: (_, status, value) => { response = { status, value }; } });
+    return response;
+  };
+  const principal = { principalKind: 'trusted_device', deviceId };
+  assert.equal((await callRoute('request', { contract: old }, null)).status, 403);
+  assert.equal((await callRoute('request', { contract: old }, principal)).status, 202);
+  for (let n = 0; n < 80; n++) await Promise.resolve();
+  const standby = agents[1], handoffId = standby.options.handoffId;
+  assert.equal((await callRoute('plan', { handoffId }, { ...principal, deviceId: 'other' })).status, 409);
+  assert.equal((await callRoute('plan', { handoffId }, principal)).value.turn.connectionId, host.turn.connectionId);
+  assert.equal((await callRoute('commit', { handoffId }, principal)).status, 409);
+  standby.options.onGatewayResponse({ path: '/api/auth/me', status: 200 });
+  assert.equal((await callRoute('commit', { handoffId }, principal)).status, 200);
+  standby.options.onGatewayResponse({ path: '/api/device-auth/turn/handoff/commit', status: 200 });
+  await registry.stopAllP2PHosts();
   malformed = true;
   await assert.rejects(buildDeviceConnectionBootstrapContract({ deviceId, handoff: { ...handoff, connectionId: host.turn.connectionId } }),
     { code: 'turn_handoff_response_invalid' });

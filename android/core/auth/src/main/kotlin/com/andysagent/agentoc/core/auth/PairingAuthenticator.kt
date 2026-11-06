@@ -364,7 +364,7 @@ class PairingAuthenticator(
             expiresAt = credential.expiresAt,
             credentialScope = credential.scope,
             p2p = p2p,
-            verifiedBootstrap = VerifiedBootstrap(verified.contract, verified.publicKey),
+            verifiedBootstrap = VerifiedBootstrap(verified.contract, verified.publicKey, bootstrapJson.toString()),
         )
     }
 

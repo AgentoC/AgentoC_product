@@ -149,13 +149,17 @@ async function runRendezvousPoll() {
     const { pollOwnerAccountRendezvous } = await import('./lib/owner-account-auth.mjs');
     const result = await pollOwnerAccountRendezvous({
       buildBootstrap: buildDeviceConnectionBootstrapContract,
-      startP2PHost: ({ deviceId, p2p, iceServers, expiresAt }) => p2pHostRegistry.startP2PHostForDevice(deviceId, {
+      startP2PHost: ({ deviceId, p2p, bootstrap, iceServers, expiresAt }) => p2pHostRegistry.startP2PHostForDevice(deviceId, {
         p2pAccess: p2p,
         signalingUrl: P2P_SIGNALING_URL,
         localBaseUrl: `http://127.0.0.1:${CHAT_PORT}`,
         iceServers,
         relayOnly: true,
         expiresAt,
+        activeConnectionId: bootstrap?.turn?.connectionId || '',
+        prepareHandoff: prepareRequestedTurnHandoff,
+        commitHandoff: commitRequestedTurnHandoff,
+        releaseHandoff: releaseRequestedTurnHandoff,
         refreshHost: async (refreshDeviceId) => {
           const bootstrap = await buildDeviceConnectionBootstrapContract({ deviceId: refreshDeviceId });
           return {
@@ -179,6 +183,30 @@ async function runRendezvousPoll() {
   }
 }
 
+async function prepareRequestedTurnHandoff(deviceId, previous) {
+  const contract = await buildDeviceConnectionBootstrapContract({ deviceId, handoff: previous });
+  return { contract, connectionId: contract.turn?.connectionId,
+    iceServers: contract.turn?.iceServers || [], expiresAt: contract.turn?.expiresAt };
+}
+
+async function releaseRequestedTurnHandoff(deviceId, connectionId) {
+  const [{ releaseTurnConnectionLease }, { releaseOwnerAccountTurnConnection }] = await Promise.all([
+    import('./chat/turn-connection-leases.mjs'), import('./lib/owner-account-auth.mjs'),
+  ]);
+  await Promise.allSettled([
+    releaseTurnConnectionLease({ deviceId, connectionId, reason: 'handoff-aborted' }),
+    releaseOwnerAccountTurnConnection({ deviceId, connectionId, protocolVersion: 3, reason: 'handoff-aborted' }),
+  ]);
+}
+
+async function commitRequestedTurnHandoff(deviceId, connectionId) {
+  const [{ commitLocalTurnHandoff }, { commitOwnerAccountTurnHandoff }] = await Promise.all([
+    import('./chat/turn-connection-leases.mjs'), import('./lib/owner-account-auth.mjs'),
+  ]);
+  await commitOwnerAccountTurnHandoff({ deviceId, connectionId });
+  await commitLocalTurnHandoff({ deviceId, connectionId });
+}
+
 let accountHostsRecovery = null;
 async function restoreAccountP2PHosts() {
   if (accountHostsRecovery) return accountHostsRecovery;
@@ -195,6 +223,9 @@ async function restoreMissingAccountP2PHosts() {
     localBaseUrl: `http://127.0.0.1:${CHAT_PORT}`,
     getP2PAccess: getTrustedDeviceP2PAccess,
     getBootstrap: buildDeviceConnectionBootstrapContract,
+    prepareHandoff: prepareRequestedTurnHandoff,
+    commitHandoff: commitRequestedTurnHandoff,
+    releaseHandoff: releaseRequestedTurnHandoff,
   });
   if (result.attempted > 0) {
     console.log(`[p2p-host] account device recovery attempted=${result.attempted} started=${result.started} reused=${result.reused} failed=${result.failed}`);
