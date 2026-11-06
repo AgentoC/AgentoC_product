@@ -25,6 +25,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.jsonObject
@@ -1240,6 +1242,25 @@ class RoomSessionRepositoryEventTest {
         assertTrue(database.dao().pendingOperations().isEmpty())
     }
 
+    @Test fun pendingApprovalIsNotBlockedByAnotherSessionsLongPoll() = runBlocking {
+        database.dao().upsertSessions(listOf(
+            SessionEntity("waiting", "Waiting", null, "working", 0, 0),
+            SessionEntity("approval", "Approval", null, "working", 0, 0),
+        ))
+        val transport = BlockingOtherSessionTransport()
+        val repository = RoomSessionRepository(database, transport)
+        val waiting = async { repository.refreshEvents("waiting") }
+        try {
+            withTimeout(5_000L) { transport.entered.await() }
+            withTimeout(3_000L) { repository.refreshEvents("approval") }
+            assertEquals(listOf("approval-1"), repository.observePendingApprovals("approval").first().map { it.id })
+        } finally {
+            transport.release.complete(Unit)
+            waiting.await()
+            repository.close()
+        }
+    }
+
     @Test
     fun endpointlessSyncReconcilesPendingApprovalsInAlreadyTerminalSessions() = runBlocking {
         database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "completed", 10, 0)))
@@ -1287,6 +1308,24 @@ class RoomSessionRepositoryEventTest {
             repository.stopLiveSync()
         }
     }
+}
+
+private class BlockingOtherSessionTransport : AgentoCTransport {
+    val entered = CompletableDeferred<Unit>()
+    val release = CompletableDeferred<Unit>()
+    override val connectionState: StateFlow<RuntimeConnectionState> = MutableStateFlow(RuntimeConnectionState.Connected)
+    override val invalidations: Flow<InvalidationHint> = MutableSharedFlow()
+    override val requiresEventPolling: Boolean = true
+    override suspend fun execute(request: ApiRequest): ApiResponse {
+        if (request.path.startsWith("/api/sessions/waiting/")) {
+            entered.complete(Unit)
+            release.await()
+            return ApiResponse(200, """{"sessionId":"waiting","events":[],"latestSeq":0}""")
+        }
+        return ApiResponse(200, """{"sessionId":"approval","events":[{"seq":1,"type":"approval_request","approvalId":"approval-1","runId":"run-1"}],"latestSeq":1}""")
+    }
+    override fun connectInvalidationSocket() = Unit
+    override suspend fun close() = Unit
 }
 
 private class TerminalApprovalSyncTransport : AgentoCTransport {

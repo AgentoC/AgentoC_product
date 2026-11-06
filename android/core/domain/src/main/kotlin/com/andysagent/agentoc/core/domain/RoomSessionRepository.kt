@@ -201,7 +201,10 @@ class RoomSessionRepository(
     }
 
     private val dao: AgentoCDao = database.dao()
-    private val syncMutex = Mutex()
+    // A long-poll for one conversation must not delay approvals or history
+    // in another. Operations within a single conversation remain ordered.
+    private val sessionSyncMutexes = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
+    private fun sessionSyncMutex(sessionId: String): Mutex = sessionSyncMutexes.computeIfAbsent(sessionId) { Mutex() }
     private val sessionListRefreshMutex = Mutex()
     private val targetSummaryRefreshMutex = Mutex()
     private val liveProjectionMutex = Mutex()
@@ -214,9 +217,9 @@ class RoomSessionRepository(
     private val liveFeedCursors = java.util.concurrent.ConcurrentHashMap<String, Pair<String, Long>>()
     private val liveFeedMuted = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val liveFeedCapable = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-    private val approvalRecoveryAttempts = mutableMapOf<String, Long>()
-    private val terminalApprovalRecoveryAttempts = mutableMapOf<String, Long>()
-    private val terminalApprovalRecoveryOffsets = mutableMapOf<String, Int>()
+    private val approvalRecoveryAttempts = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val terminalApprovalRecoveryAttempts = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val terminalApprovalRecoveryOffsets = java.util.concurrent.ConcurrentHashMap<String, Int>()
     private val liveTimelineState = MutableStateFlow<Map<String, List<com.andysagent.agentoc.core.timeline.TimelineEvent>>>(emptyMap())
     private val runActivityState = MutableStateFlow<Map<String, JsonObject>>(emptyMap())
     override fun observeRunActivity(sessionId: String): Flow<JsonObject?> =
@@ -229,12 +232,12 @@ class RoomSessionRepository(
         }
     }
     private val durableArtifactState = MutableStateFlow<Map<String, List<SessionEventDto>>>(emptyMap())
-    // Accessed while syncMutex is held. Retry a failed visible projection on
+    // Retry a failed visible projection on
     // the next sync without rewinding the durable event cursor.
-    private val pendingVisibleOperationRefresh = mutableSetOf<String>()
+    private val pendingVisibleOperationRefresh = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val visibleTimelineState = MutableStateFlow<Map<String, List<TimelineItem>>>(emptyMap())
     private val timelinePagingState = MutableStateFlow<Map<String, TimelinePagingState>>(emptyMap())
-    private val visibleTimelineEvents = mutableMapOf<String, List<SessionEventDto>>()
+    private val visibleTimelineEvents = java.util.concurrent.ConcurrentHashMap<String, List<SessionEventDto>>()
     private val targetSummaryLedger = RoomTargetSummaryLedger(database, dao, codec)
 
     override val connectionState = transport.connectionState
@@ -1170,7 +1173,7 @@ class RoomSessionRepository(
     }
 
     override suspend fun refreshEvents(sessionId: String): RefreshResult {
-        return syncMutex.withLock { refreshEventsLocked(sessionId) }
+        return sessionSyncMutex(sessionId).withLock { refreshEventsLocked(sessionId) }
     }
 
     override fun observeTargetSummary(): Flow<TargetSummary?> {
@@ -1203,7 +1206,7 @@ class RoomSessionRepository(
         summary
     }
 
-    override suspend fun refreshTimeline(sessionId: String): RefreshResult = syncMutex.withLock {
+    override suspend fun refreshTimeline(sessionId: String): RefreshResult = sessionSyncMutex(sessionId).withLock {
         // Opening an idle/new conversation must not wait fifteen seconds for
         // a future event before enabling its composer. Background sync owns waits.
         val durableResult = refreshEventsLocked(sessionId, waitForEvents = false)
@@ -1211,13 +1214,13 @@ class RoomSessionRepository(
         refreshVisibleTimelineLocked(sessionId)
     }
 
-    override suspend fun loadOlderTimeline(sessionId: String): RefreshResult = syncMutex.withLock {
+    override suspend fun loadOlderTimeline(sessionId: String): RefreshResult = sessionSyncMutex(sessionId).withLock {
         val current = timelinePagingState.value[sessionId] ?: TimelinePagingState()
         val beforeSeq = current.nextBeforeSeq
         if (current.loadingOlder || !current.hasOlder || beforeSeq == null || beforeSeq <= 1L) {
             return@withLock RefreshResult.Applied(0, current.latestSeq)
         }
-        timelinePagingState.value = timelinePagingState.value + (sessionId to current.copy(loadingOlder = true, error = null))
+        timelinePagingState.update { it + (sessionId to current.copy(loadingOlder = true, error = null)) }
         try {
             val response = execute(ApiRequest(
                 "GET",
@@ -1225,7 +1228,7 @@ class RoomSessionRepository(
             ))
             val page = codec.decode(serializer<SessionEventsPageDto>(), response.body)
             if (page.resetRequired) {
-                timelinePagingState.value = timelinePagingState.value + (sessionId to current.copy(loadingOlder = false, error = page.reason))
+                timelinePagingState.update { it + (sessionId to current.copy(loadingOlder = false, error = page.reason)) }
                 return@withLock RefreshResult.ResetRequired(page.reason)
             }
             val existing = visibleTimelineEvents[sessionId].orEmpty()
@@ -1237,16 +1240,16 @@ class RoomSessionRepository(
             updateVisibleTimelineProjection(sessionId, merged)
             val nextBefore = page.pagination?.nextBeforeSeq ?: page.pagination?.oldestSeq
             val hasOlder = page.pagination?.hasMoreBefore == true && nextBefore != null && nextBefore < beforeSeq
-            timelinePagingState.value = timelinePagingState.value + (sessionId to current.copy(
+            timelinePagingState.update { it + (sessionId to current.copy(
                 loadingOlder = false,
                 hasOlder = hasOlder,
                 nextBeforeSeq = nextBefore,
                 latestSeq = maxOf(current.latestSeq, page.latestSeq ?: merged.maxOfOrNull { it.boundarySeq() } ?: 0L),
                 error = null,
-            ))
+            )) }
             RefreshResult.Applied(page.events.size, page.latestSeq ?: current.latestSeq)
         } catch (error: Throwable) {
-            timelinePagingState.value = timelinePagingState.value + (sessionId to current.copy(loadingOlder = false, error = error.message))
+            timelinePagingState.update { it + (sessionId to current.copy(loadingOlder = false, error = error.message)) }
             throw error
         }
     }
@@ -1347,7 +1350,7 @@ class RoomSessionRepository(
             liveTimelineState.value = liveTimelineState.value - sessionId
         }
         visibleTimelineEvents.remove(sessionId)
-        visibleTimelineState.value = visibleTimelineState.value - sessionId
+        visibleTimelineState.update { it - sessionId }
     }
 
     private suspend fun refreshEventsLocked(sessionId: String, waitForEvents: Boolean = transport.requiresEventPolling && sessionId !in dedicatedLiveSessions): RefreshResult {
@@ -1537,7 +1540,7 @@ class RoomSessionRepository(
         }
         recoverVisiblePendingApproval(sessionId, page)
         if (page.resetRequired) {
-            timelinePagingState.value = timelinePagingState.value + (sessionId to TimelinePagingState(error = page.reason))
+            timelinePagingState.update { it + (sessionId to TimelinePagingState(error = page.reason)) }
             return RefreshResult.ResetRequired(page.reason)
         }
         val events = page.events
@@ -1554,11 +1557,11 @@ class RoomSessionRepository(
         val nextBefore = page.pagination?.nextBeforeSeq ?: page.pagination?.oldestSeq
         val latestSeq = page.latestSeq ?: events.maxOfOrNull { it.boundarySeq() } ?: 0L
         val priorPaging = timelinePagingState.value[sessionId]
-        timelinePagingState.value = timelinePagingState.value + (sessionId to TimelinePagingState(
+        timelinePagingState.update { it + (sessionId to TimelinePagingState(
             hasOlder = if (older.isNotEmpty() && priorPaging != null) priorPaging.hasOlder else page.pagination?.hasMoreBefore == true && nextBefore != null && nextBefore > 1L,
             nextBeforeSeq = if (older.isNotEmpty() && priorPaging != null) priorPaging.nextBeforeSeq else nextBefore,
             latestSeq = latestSeq,
-        ))
+        )) }
         return RefreshResult.Applied(events.size, latestSeq)
     }
 
@@ -1612,7 +1615,7 @@ class RoomSessionRepository(
         val projector = LiveTimelineProjector()
         val projectedEvents = projector.projectPage(events)
         val projectedItems = TimelineProjector.project(emptyList(), projectedEvents)
-        visibleTimelineState.value = visibleTimelineState.value + (sessionId to projectedItems)
+        visibleTimelineState.update { it + (sessionId to projectedItems) }
     }
 
     private fun visibleEventPagePath(sessionId: String, beforeSeq: Long?): String = buildString {
