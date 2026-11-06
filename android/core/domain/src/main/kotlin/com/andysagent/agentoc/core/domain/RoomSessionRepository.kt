@@ -215,6 +215,7 @@ class RoomSessionRepository(
     private val liveFeedMuted = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val liveFeedCapable = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val approvalRecoveryAttempts = mutableMapOf<String, Long>()
+    private val terminalApprovalRecoveryAttempts = mutableMapOf<String, Long>()
     private val liveTimelineState = MutableStateFlow<Map<String, List<com.andysagent.agentoc.core.timeline.TimelineEvent>>>(emptyMap())
     private val runActivityState = MutableStateFlow<Map<String, JsonObject>>(emptyMap())
     override fun observeRunActivity(sessionId: String): Flow<JsonObject?> =
@@ -1427,6 +1428,34 @@ class RoomSessionRepository(
                     } catch (_: Exception) {
                         // A transient failure must not stop durable syncing;
                         // another poll retries recovery after the cooldown.
+                    }
+                }
+                // A previous client may have advanced its cursor past the
+                // terminal event. Recheck the exact runs before retiring any
+                // stale requests; an idle session by itself is not proof.
+                if ((activity?.get("state") as? JsonPrimitive)?.contentOrNull == "idle" &&
+                    (terminalApprovalRecoveryAttempts[sessionId]?.let { now - it >= 5_000L } != false)) {
+                    val pending = dao.getPendingApprovals(sessionId)
+                    if (pending.isNotEmpty()) {
+                        terminalApprovalRecoveryAttempts[sessionId] = now
+                        for (runId in pending.mapNotNull { it.runId?.takeIf(String::isNotBlank) }.distinct().take(8)) {
+                            try {
+                                val run = loadRunProjection(runId)
+                                val state = (run["state"] as? JsonPrimitive)?.contentOrNull?.lowercase()
+                                if ((run["id"] as? JsonPrimitive)?.contentOrNull == runId &&
+                                    (run["sessionId"] as? JsonPrimitive)?.contentOrNull == sessionId &&
+                                    state in setOf("completed", "failed", "cancelled", "canceled", "interrupted")) {
+                                    database.withTransaction {
+                                        val stale = dao.getPendingApprovals(sessionId).filter { it.runId == runId }
+                                        if (stale.isNotEmpty()) dao.upsertApprovals(stale.map {
+                                            it.copy(status = "resolved", updatedAt = System.currentTimeMillis())
+                                        })
+                                    }
+                                }
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) { /* Retry on a later sync. */ }
+                        }
                     }
                 }
                 RefreshResult.Applied(result.count, result.cursor.lastAppliedSeq)

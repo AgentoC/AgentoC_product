@@ -216,6 +216,23 @@ class RoomSessionRepositoryEventTest {
         repository.close()
     }
 
+    @Test fun idleSyncRechecksExactRunsBeforeClearingMissedApprovals() = runBlocking {
+        database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 10, 0)))
+        database.dao().upsertCursor(SyncCursorEntity("session-1", 10, null, updatedAt = 0))
+        database.dao().upsertApprovals(listOf(
+            ApprovalEntity(id = "old", sessionId = "session-1", title = "Old", status = "pending", runId = "old-run", updatedAt = 1),
+            ApprovalEntity(id = "active", sessionId = "session-1", title = "Active", status = "pending", runId = "active-run", updatedAt = 2),
+        ))
+        val repository = RoomSessionRepository(database, QueuedTransport(listOf(
+            """{"sessionId":"session-1","events":[],"latestSeq":10,"runActivity":{"state":"idle"}}""",
+            """{"run":{"id":"old-run","sessionId":"session-1","state":"completed"}}""",
+            """{"run":{"id":"active-run","sessionId":"session-1","state":"running"}}""",
+        )))
+        repository.refreshEvents("session-1")
+        assertEquals(listOf("active"), repository.observePendingApprovals("session-1").first().map { it.id })
+        repository.close()
+    }
+
     @Test fun restoresExplanationForExistingPendingApprovalWithoutReopeningResolved() = runBlocking {
         database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 10, 0)))
         database.dao().upsertCursor(SyncCursorEntity("session-1", 10, null, updatedAt = 0))
