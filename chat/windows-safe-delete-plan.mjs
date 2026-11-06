@@ -6,29 +6,34 @@ import { analyzeWindowsBash, gitBashPath, parseLiteralBashWords } from './window
 
 const win = path.win32;
 
-// PowerShell's literal path array names independent targets, all of which are
-// captured by the helper before it deletes any of them.
+// Collect literal targets across simple recursive deletion statements. The
+// helper captures the whole set before deleting any of them.
 export async function compileWindowsSafeDeleteList(command, { parse = parseWindowsPowerShellAst } = {}) {
   if (typeof command !== 'string' || !command.trim() || command.length > 8192) return null;
   let ast;
   try { ast = await parse(command); } catch { return null; }
-  if (ast.errors?.length || ast.dynamicNodes?.length || ast.expressions?.length || ast.commands?.length !== 1) return null;
-  const entry = ast.commands[0];
-  if (!['remove-item', 'rm', 'del', 'ri'].includes(String(entry.name || '').toLowerCase()) || entry.invocation !== 'Unknown' || entry.redirections || entry.pipelineInput !== false || !Array.isArray(entry.elements)) return null;
-  let targets = null, recurse = false, force = false, pathParameter = false;
-  for (let i = 1; i < entry.elements.length; i++) {
-    const element = entry.elements[i];
-    if (element.kind === 'literal_list' && !targets) { targets = element.values; continue; }
-    if (element.kind !== 'parameter' || element.argumentType || element.value != null) return null;
-    const name = String(element.name || '').toLowerCase();
-    if (name === 'recurse' && !recurse) { recurse = true; continue; }
-    if (name === 'force' && !force) { force = true; continue; }
-    if (['path', 'literalpath'].includes(name) && !pathParameter && !targets && entry.elements[i + 1]?.kind === 'literal_list') { pathParameter = true; continue; }
-    return null;
+  if (ast.errors?.length || ast.dynamicNodes?.length || ast.expressions?.length || !ast.commands?.length || ast.commands.length > 32) return null;
+  const targets = []; let sharedForce = null;
+  for (const entry of ast.commands) {
+    if (!['remove-item', 'rm', 'del', 'ri'].includes(String(entry.name || '').toLowerCase()) || entry.invocation !== 'Unknown' || entry.redirections || entry.pipelineInput !== false || !Array.isArray(entry.elements)) return null;
+    let paths = null, recurse = false, force = false, pathParameter = false;
+    for (let i = 1; i < entry.elements.length; i++) {
+      const element = entry.elements[i];
+      if (['literal', 'literal_list'].includes(element.kind) && !paths) { paths = element.kind === 'literal' ? [element.value] : element.values; continue; }
+      if (element.kind !== 'parameter' || element.argumentType || element.value != null) return null;
+      const name = String(element.name || '').toLowerCase();
+      if (name === 'recurse' && !recurse) { recurse = true; continue; }
+      if (name === 'force' && !force) { force = true; continue; }
+      if (['path', 'literalpath'].includes(name) && !pathParameter && !paths && ['literal', 'literal_list'].includes(entry.elements[i + 1]?.kind)) { pathParameter = true; continue; }
+      return null;
+    }
+    if (!recurse || !Array.isArray(paths) || !paths.length || (sharedForce !== null && force !== sharedForce)) return null;
+    sharedForce = force;
+    targets.push(...paths);
   }
-  if (!recurse || !Array.isArray(targets) || targets.length < 2 || targets.length > 32 ||
+  if (targets.length < 2 || targets.length > 32 ||
       targets.some(target => typeof target !== 'string' || !target || /[*?\[\]`$]/.test(target) || /^(?:[\\/]|[a-z]:[^\\/])/i.test(target))) return null;
-  return { targets, force };
+  return { targets, force: sharedForce };
 }
 
 export async function planWindowsSafeDeleteList({ command, state }, { parse = parseWindowsPowerShellAst, analyze = analyzeWindowsFileChanges } = {}) {

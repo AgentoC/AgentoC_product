@@ -31,8 +31,10 @@ const uninstallCase = process.env.AGENTOC_QA_CLAUDE_UNINSTALL === '1';
 const deleteCase = process.env.AGENTOC_QA_CLAUDE_DELETE === '1';
 const nativePowerShell = process.env.AGENTOC_QA_CLAUDE_NATIVE_POWERSHELL === '1';
 const deleteList = process.env.AGENTOC_QA_CLAUDE_DELETE_LIST === '1';
+const deleteSteps = process.env.AGENTOC_QA_CLAUDE_DELETE_STEPS === '1';
 if (nativePowerShell && !deleteCase) throw new Error('native PowerShell fixture requires deletion mode');
 if (deleteList && (!deleteCase || !nativePowerShell)) throw new Error('deletion list requires native PowerShell fixture');
+if (deleteSteps && (!deleteList || !nativePowerShell)) throw new Error('deletion steps require native PowerShell list fixture');
 const outsideFileCase = process.env.AGENTOC_QA_CLAUDE_FILE_OUTSIDE === '1';
 const dotnetCase = process.env.AGENTOC_QA_CLAUDE_DOTNET === '1';
 const guidanceCase = process.env.AGENTOC_QA_CLAUDE_ELEVATION === '1';
@@ -110,7 +112,7 @@ const server = createServer((req, res) => {
     if (tool) {
       const input = JSON.stringify(installCase ? { command: installCommand, description: 'Fixture installation' } : uninstallCase
         ? { command: 'winget uninstall --id AgentoC.Nonexistent.Test.Fixture --exact', description: 'Fixture uninstall' } : deleteCase
-        ? { command: deleteList ? (relativeDelete ? 'Remove-Item -LiteralPath delete-fixture,delete-extra.txt -Recurse -Force' : `Remove-Item -LiteralPath '${deleteTarget.replaceAll("'", "''")}','${extraFile.replaceAll("'", "''")}' -Recurse -Force`) : relativeDelete ? (nativePowerShell ? 'Remove-Item -LiteralPath delete-fixture -Recurse -Force' : 'rm -rf delete-fixture') : deleteCommand, description: 'Delete fixture' }
+        ? { command: deleteSteps ? (relativeDelete ? 'Remove-Item delete-extra.txt -Recurse -Force; Remove-Item delete-fixture -Recurse -Force' : `Remove-Item '${extraFile.replaceAll("'", "''")}' -Recurse -Force; Remove-Item '${deleteTarget.replaceAll("'", "''")}' -Recurse -Force`) : deleteList ? (relativeDelete ? 'Remove-Item -LiteralPath delete-fixture,delete-extra.txt -Recurse -Force' : `Remove-Item -LiteralPath '${deleteTarget.replaceAll("'", "''")}','${extraFile.replaceAll("'", "''")}' -Recurse -Force`) : relativeDelete ? (nativePowerShell ? 'Remove-Item -LiteralPath delete-fixture -Recurse -Force' : 'rm -rf delete-fixture') : deleteCommand, description: 'Delete fixture' }
         : dotnetCase ? { command: dotnetCommand, description: 'Write isolated fixture' }
         : guidanceCase ? { command: guidanceCommand, description: 'Administrative fixture' }
         : readCase ? { command: readCommand, description: 'Read isolated fixture' } : { file_path: artifact, content: 'local fixture\n' });

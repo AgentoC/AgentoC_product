@@ -112,7 +112,10 @@ for (const mode of ['recommended', 'full-auto']) {
   for (const command of ['Remove-Item -LiteralPath one.txt,danger -Recurse -Force',
     'Remove-Item -LiteralPath one.txt,..\\outside -Recurse -Force',
     'Remove-Item -LiteralPath one.txt,$env:TEMP -Recurse -Force',
-    'Remove-Item -LiteralPath one.txt,build -Recurse -WhatIf']) {
+    'Remove-Item -LiteralPath one.txt,build -Recurse -WhatIf',
+    'Remove-Item one.txt -Recurse -Force; Remove-Item build -Recurse',
+    'Remove-Item one.txt -Recurse -Force; Write-Output unsafe',
+    'Remove-Item one.txt -Recurse -Force; Remove-Item danger -Recurse -Force']) {
     assert.equal(await planWindowsSafeDeleteList({ command, state }), null, command);
   }
   const request = { type: 'control_request', request_id: 'list', request: { subtype: 'can_use_tool', tool_name: 'PowerShell', input: { command: 'Remove-Item -LiteralPath one.txt,build -Recurse -Force' } } };
@@ -124,6 +127,16 @@ for (const mode of ['recommended', 'full-auto']) {
   assert.equal(await readFile(path.join(workspace, 'one.txt'), 'utf8'), 'fixture');
   const result = await exec(helperPath, ['--request', encoded], { cwd: workspace, windowsHide: true });
   assert.deepEqual(JSON.parse(result.stdout), { ok: true, deleted: 3 });
+  await mkdir(path.join(workspace, 'build'));
+  await writeFile(path.join(workspace, 'build', 'fixture.txt'), 'fixture');
+  await writeFile(path.join(workspace, 'one.txt'), 'fixture');
+  const steps = { ...request, request_id: 'steps', request: { ...request.request, input: { command: 'Remove-Item one.txt -Recurse -Force; Remove-Item build -Recurse -Force' } } };
+  await trackClaudeBidiApprovalRequest(run.id, state, steps, proc, { safeDeleteHelperPath: helperPath });
+  assert.equal(sent[1]?.response?.response?.behavior, 'allow');
+  const stepRequest = /--request '([A-Za-z0-9_-]+)'$/.exec(sent[1].response.response.updatedInput.command)?.[1];
+  assert.ok(stepRequest);
+  const stepResult = await exec(helperPath, ['--request', stepRequest], { cwd: workspace, windowsHide: true });
+  assert.deepEqual(JSON.parse(stepResult.stdout), { ok: true, deleted: 3 });
 }
 for (const mode of ['recommended', 'full-auto']) {
   for (const shell of ['PowerShell', 'Bash']) {
