@@ -61,15 +61,7 @@ internal static class AgentoCSetup {
             if (!CreateHardLink(repairSourcePath, payloadPath, IntPtr.Zero))
                 File.Copy(payloadPath, repairSourcePath, false);
 
-            StringBuilder command = new StringBuilder("/i ").Append(Quote(payloadPath));
-            // Embedded UI locates the previous installation for interactive
-            // upgrades. MSI does not load it in quiet mode, so perform the
-            // same registration-based discovery before launching msiexec.
-            // The installer's own upgrade admission still validates the path.
-            string existingFolder;
-            if (IsQuiet(args) && !HasInstallFolder(args) && TryFindInstalledFolder(payloadPath, out existingFolder))
-                command.Append(' ').Append(Quote("AGENTOC_INSTALLFOLDER=" + existingFolder));
-            foreach (string arg in args) command.Append(' ').Append(Quote(arg));
+            string command = BuildMsiCommand(payloadPath, args);
             ProcessStartInfo start = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "msiexec.exe"), command.ToString());
             start.UseShellExecute = false;
             using (Process process = Process.Start(start)) {
@@ -99,6 +91,45 @@ internal static class AgentoCSetup {
         foreach (string arg in args)
             if (arg.StartsWith("AGENTOC_INSTALLFOLDER=", StringComparison.OrdinalIgnoreCase) || arg.StartsWith("INSTALLFOLDER=", StringComparison.OrdinalIgnoreCase)) return true;
         return false;
+    }
+
+    private static bool HasMsiProperty(string[] args, string name) {
+        string prefix = name + "=";
+        foreach (string arg in args)
+            if (arg.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private static bool IsExactProductInstalled(string msi) {
+        uint database;
+        if (MsiOpenDatabase(msi, IntPtr.Zero, out database) != 0)
+            throw new InvalidOperationException("Installer product identity could not be read.");
+        try {
+            string productCode = ReadMsiValue(database, "SELECT `Value` FROM `Property` WHERE `Property` = 'ProductCode'");
+            if (String.IsNullOrEmpty(productCode))
+                throw new InvalidOperationException("Installer product code is missing.");
+            return MsiQueryProductState(productCode) == 5;
+        } finally { MsiCloseHandle(database); }
+    }
+
+    private static bool ShouldAddReinstall(string msi, string[] args) {
+        return !HasMsiProperty(args, "REINSTALL") && IsExactProductInstalled(msi);
+    }
+
+    private static string BuildMsiCommand(string payloadPath, string[] args) {
+        StringBuilder command = new StringBuilder("/i ").Append(Quote(payloadPath));
+        // A same-ProductCode minor update is rejected by Windows Installer
+        // unless REINSTALL is explicit. Detect only this exact product so a
+        // different installed product cannot be treated as a minor update.
+        if (ShouldAddReinstall(payloadPath, args)) command.Append(" REINSTALL=ALL");
+        // Embedded UI discovers the previous installation interactively. MSI
+        // does not load it in quiet mode, so resolve its registered location.
+        // The installer's admission checks still validate the resulting path.
+        string existingFolder;
+        if (IsQuiet(args) && !HasInstallFolder(args) && TryFindInstalledFolder(payloadPath, out existingFolder))
+            command.Append(' ').Append(Quote("AGENTOC_INSTALLFOLDER=" + existingFolder));
+        foreach (string arg in args) command.Append(' ').Append(Quote(arg));
+        return command.ToString();
     }
 
     private static string ReadMsiValue(uint database, string query) {
