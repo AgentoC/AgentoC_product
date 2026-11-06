@@ -1,0 +1,65 @@
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { chromium } from '@playwright/test';
+import WebSocket from 'ws';
+import { runP2PHostAgent } from '../lib/p2p-host-agent.mjs';
+import { createP2PRoomId } from '../lib/p2p-signal-protocol.mjs';
+import { createP2PSignalingServer } from '../p2p/signaling-server.mjs';
+
+const listen = server => new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(server.address())));
+const close = server => new Promise(resolve => server.close(resolve));
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const secret = 'synthetic-suspend-signaling-secret';
+const roomId = createP2PRoomId(secret);
+const target = http.createServer((req, res) => { res.writeHead(200); res.end('ok'); });
+const signaling = createP2PSignalingServer({ host: '127.0.0.1', port: 0 });
+const source = await readFile(new URL('../static/p2p/agentoc-p2p-client.js', import.meta.url));
+const web = http.createServer((req, res) => {
+  if (req.url === '/client.js') { res.writeHead(200, { 'content-type': 'text/javascript' }); res.end(source); }
+  else res.end('<!doctype html>');
+});
+let agent, browser, standby;
+try {
+  const targetAddress = await listen(target);
+  const signalAddress = await signaling.listen();
+  const webAddress = await listen(web);
+  const signalingUrl = `http://127.0.0.1:${signalAddress.port}`;
+  agent = await runP2PHostAgent({ signalingUrl, roomId, secret,
+    localBaseUrl: `http://127.0.0.1:${targetAddress.port}`,
+    ...(process.env.AGENTOC_TEST_P2P_HOST_BINARY ? { binaryPath: process.env.AGENTOC_TEST_P2P_HOST_BINARY } : {}) });
+  await agent.ready;
+  browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  await page.goto(`http://127.0.0.1:${webAddress.port}/`);
+  const status = () => page.evaluate(async () => (await window.testClient.request({ method: 'GET', path: '/connectivity-health' })).status);
+  await page.evaluate(async options => {
+    const { AgentoCP2PClient } = await import('/client.js');
+    window.testClient = new AgentoCP2PClient({ ...options, iceServers: [], connectTimeoutMs: 12_000, requestTimeoutMs: 3_000 });
+    await window.testClient.connect();
+  }, { signalingUrl, roomId, secret });
+  assert.equal(await status(), 200);
+  agent.suspendSignaling();
+  await delay(250);
+  standby = new WebSocket(`ws://127.0.0.1:${signalAddress.port}/signal`);
+  await new Promise((resolve, reject) => { standby.once('open', resolve); standby.once('error', reject); });
+  standby.send(JSON.stringify({ type: 'join', roomId, role: 'host' }));
+  await new Promise(resolve => standby.once('message', resolve));
+  await delay(2_300);
+  assert.equal(standby.readyState, WebSocket.OPEN, 'suspended host must not evict the standby on reconnect');
+  assert.equal(await status(), 200, 'existing channel must remain usable without host signaling');
+  assert.equal(agent.child.exitCode, null, 'suspension must not stop the sidecar');
+  standby.close();
+  await new Promise(resolve => standby.once('close', resolve));
+  agent.resumeSignaling();
+  await delay(250);
+  assert.equal(await status(), 200, 'resuming signaling must preserve the existing channel');
+  await page.evaluate(() => window.testClient.close());
+  console.log('P2P host signaling suspension preserves real DataChannel requests');
+} finally {
+  standby?.terminate();
+  agent?.stop();
+  await browser?.close();
+  await signaling.close();
+  await Promise.all([close(target), close(web)]);
+}
