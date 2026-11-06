@@ -38,7 +38,7 @@ const readCase = process.env.AGENTOC_QA_CLAUDE_READ || '';
 const outsideCase = deleteCase && process.env.AGENTOC_QA_CLAUDE_DELETE_OUTSIDE === '1';
 const conservativeOutside = outsideFileCase && process.env.AGENTOC_QA_MODE === 'conservative-auto';
 const reviewCase = protectedCase || outsideCase || conservativeOutside || uninstallCase;
-const relativeDelete = deleteCase && process.env.AGENTOC_QA_CLAUDE_DELETE_RELATIVE === '1';
+const relativeDelete = deleteCase && (process.env.AGENTOC_QA_CLAUDE_DELETE_RELATIVE === '1' || process.env.AGENTOC_QA_CLAUDE_DELETE_RELATIVE_DIRECT === '1');
 if ((installCase && (protectedCase || deleteCase)) || (reviewCase && relativeDelete) || (outsideCase && protectedCase) || (outsideFileCase && (installCase || deleteCase || protectedCase)) || (dotnetCase && (installCase || deleteCase)) || (guidanceCase && (installCase || deleteCase || dotnetCase || protectedCase || outsideFileCase))) throw new Error('fixture modes are mutually exclusive');
 if (readCase && (!['numbered', 'list', 'git-status'].includes(readCase) || installCase || deleteCase || dotnetCase || guidanceCase || protectedCase || outsideFileCase)) throw new Error('invalid read fixture mode');
 if (uninstallCase && (installCase || deleteCase || dotnetCase || guidanceCase || protectedCase || outsideFileCase || readCase)) throw new Error('uninstall fixture must be isolated');
@@ -94,11 +94,10 @@ const server = createServer((req, res) => {
     }
     if (req.method !== 'POST' || !req.url.startsWith('/v1/messages')) { res.writeHead(404).end(); return; }
     requests++;
-    const tool = requests === 1 || (relativeDelete && requests === 2);
+    const tool = requests === 1;
     const toolName = nativePowerShell ? 'PowerShell' : installCase || uninstallCase || deleteCase || dotnetCase || guidanceCase || readCase ? 'Bash' : 'Write';
     if (tool && !request.tools?.some((item) => item.name === toolName)) { res.writeHead(400).end(); return; }
     if (!tool && installCase) toolResultObserved ||= JSON.stringify(request.messages || []).includes('Installation completed successfully');
-    if (relativeDelete && requests === 2 && !JSON.stringify(request.messages || []).includes('resolve each target against the command working directory')) { res.writeHead(400).end(); return; }
     if (!tool && deleteCase) toolResultObserved ||= JSON.stringify(request.messages || []).includes('deleted');
     if (!tool && guidanceCase) guidanceObserved ||= JSON.stringify(request.messages || []).includes('agentoc_request_actions');
     if (!tool && readCase) toolResultObserved ||= JSON.stringify(request.messages || []).includes(readCase === 'numbered' ? 'local read fixture' : 'fixture.md');
@@ -107,7 +106,7 @@ const server = createServer((req, res) => {
     if (tool) {
       const input = JSON.stringify(installCase ? { command: installCommand, description: 'Fixture installation' } : uninstallCase
         ? { command: 'winget uninstall --id AgentoC.Nonexistent.Test.Fixture --exact', description: 'Fixture uninstall' } : deleteCase
-        ? { command: relativeDelete && requests === 1 ? (nativePowerShell ? 'Remove-Item -LiteralPath delete-fixture -Recurse -Force' : 'rm -rf delete-fixture') : deleteCommand, description: 'Delete fixture' }
+        ? { command: relativeDelete ? (nativePowerShell ? 'Remove-Item -LiteralPath delete-fixture -Recurse -Force' : 'rm -rf delete-fixture') : deleteCommand, description: 'Delete fixture' }
         : dotnetCase ? { command: dotnetCommand, description: 'Write isolated fixture' }
         : guidanceCase ? { command: guidanceCommand, description: 'Administrative fixture' }
         : readCase ? { command: readCommand, description: 'Read isolated fixture' } : { file_path: artifact, content: 'local fixture\n' });
@@ -150,7 +149,7 @@ if (installCase) {
   gateState.windowsManagedActionChannel = true;
   gateState.windowsManagedActionBinding = { endpoint, token: 'fixture-token', sessionId: 'claude-local-fixture', runId: run.id, turnId: 'fixture-turn' };
 }
-const child = spawn(binary, buildClaudeBidiArgs({ permissionMode: 'default', model: 'claude-sonnet-4-5', maxTurns: relativeDelete ? 3 : 2 }), { cwd: root, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+const child = spawn(binary, buildClaudeBidiArgs({ permissionMode: 'default', model: 'claude-sonnet-4-5', maxTurns: 2 }), { cwd: root, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
 let errors = ''; child.stderr.on('data', (chunk) => { errors = (errors + String(chunk)).slice(-6000); });
 let approvals = 0; let terminal = null; let handlerFailure = null; let gitOwnerReviewObserved = false;
 const output = createInterface({ input: child.stdout });
@@ -197,7 +196,7 @@ try {
   if (handlerFailure) throw handlerFailure;
   assert.equal(code, 0, `Claude exited unexpectedly: ${errors}`);
   if (readCase) assert.ok(approvals <= 1, 'read fixture must not emit multiple approvals');
-  else assert.equal(approvals, relativeDelete ? 2 : 1, 'real Claude must emit the expected approval requests');
+  else assert.equal(approvals, 1, 'real Claude must emit the expected approval requests');
   assert.ok(terminal && !terminal.is_error, 'Claude must finish the turn');
   if (installCase) {
     assert.ok(preflights >= 1, 'sidecar must preflight the controlled install');
@@ -224,7 +223,6 @@ try {
   else if (readCase === 'git-status' && approvals && mode !== 'recommended') assert.ok(spool.some((record) => record.json?.type === 'agentoc.approval_response' && record.json?.autoDenied === true), 'unattended Git request must be denied when not auto-approved');
   else if (!reviewCase && (!readCase || approvals) && readCase !== 'git-status') assert.ok(spool.some((record) => record.json?.type === 'agentoc.approval_response' && record.json?.autoApproved === true), 'actual sidecar must persist the automatic decision');
   else if (reviewCase && mode !== 'recommended') assert.ok(spool.some((record) => record.json?.type === 'agentoc.approval_response' && record.json?.autoDenied === true), 'unattended protected write must be denied');
-  if (relativeDelete) assert.ok(spool.some((record) => record.json?.autoDenied === true && record.json?.reason?.includes('resolve each target against the command working directory')), 'relative target must be denied with an actionable retry');
   console.log(`claude-windows-local-gate: ${mode} real CLI${nativePowerShell ? ' native PowerShell' : ''} ${installCase ? 'controlled install reached mock service' : reviewCase ? 'dangerous operation denied' : deleteCase ? 'handle-bound fixture deletion completed' : guidanceCase ? 'managed executor guidance received' : readCase ? `${readCase} ${approvals ? 'approval observed' : 'read completed without approval request'}` : dotnetCase ? 'trusted PowerShell wrapped file write completed' : outsideFileCase ? 'outside-workspace file write completed' : 'file approval completed'}`);
 } finally {
   child.kill(); output.close(); await new Promise((resolve) => server.close(resolve));

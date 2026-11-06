@@ -27,7 +27,7 @@ export async function buildWindowsSafeDeleteBridge({ approval, state, runId, hel
   const command = params.input?.command;
   if (typeof command !== 'string') return null;
   const compiled = params.tool_name === 'Bash' ? compileWindowsBashSafeDelete(command) : await compileWindowsSafeDelete(command);
-  if (!compiled || !/^[a-z]:[\\/]/i.test(compiled.target)) return null;
+  if (!compiled) return null;
   // Claude's normal PowerShell tool runs in the session directory. Do not
   // infer how an additional working-directory override is interpreted.
   if (params.input?.cwd || params.input?.workdir || params.input?.working_directory || params.cwd) return null;
@@ -37,7 +37,13 @@ export async function buildWindowsSafeDeleteBridge({ approval, state, runId, hel
   const selected = await (plan || (params.tool_name === 'Bash' ? planWindowsBashSafeDelete : planWindowsSafeDelete))({ command, state });
   if (!selected) return null;
   const requestKey = `gate:${createHash('sha256').update(JSON.stringify([runId, approval.approvalId])).digest('hex')}`;
-  const request = { schemaVersion: 1, ...selected, requestKey, originalCommand: command };
+  // Relative paths are authorized against the run's trusted cwd, but the
+  // provider can execute in a different cwd. The native helper checks its
+  // actual cwd before resolving the target and rejects any mismatch.
+  const isRelative = !/^[a-z]:[\\/]/i.test(compiled.target);
+  const request = { schemaVersion: 1, ...selected,
+    ...(isRelative ? { relative: '', target: compiled.target, targetFromCwd: true, expectedCwd: path.win32.resolve(state.cwd) } : {}),
+    requestKey, originalCommand: command };
   const encoded = Buffer.from(JSON.stringify(request), 'utf8').toString('base64url');
   const quotedHelper = params.tool_name === 'Bash'
     ? `'${helperPath.replace(/\\/g, '/').replace(/'/g, `'"'"'`)}'`

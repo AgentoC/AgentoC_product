@@ -37,14 +37,26 @@ for (const mode of ['recommended', 'full-auto', 'conservative-auto']) {
     { state: { ...state, interactionMode: 'plan' } }, { state: { ...state, riskContextValid: false } },
     { approval: { ...approval, params: { ...approval.params, additionalPermissions: { network: true } } } },
     { approval: { ...approval, params: { ...approval.params, input: { ...approval.params.input, cwd: workspace } } } },
-    { approval: { ...approval, params: { ...approval.params, input: { command: 'Remove-Item build -Recurse -Force' } } } },
     { helperPath: path.join(workspace, 'nonexistent.exe') },
   ]) assert.equal(await buildWindowsSafeDeleteBridge({ approval, state, runId: run.id, helperPath, ...changed }), null);
   const relative = { type: 'control_request', request_id: 'relative-fixture', request: { subtype: 'can_use_tool', tool_name: 'PowerShell', input: { command: 'Remove-Item -LiteralPath build -Recurse -Force' } } };
   await trackClaudeBidiApprovalRequest(run.id, state, relative, proc, { safeDeleteHelperPath: helperPath });
-  assert.equal(sent[0]?.response?.response?.behavior, 'deny');
-  if (mode !== 'conservative-auto') assert.match(sent[0]?.response?.response?.message || '', /absolute path/);
-  assert.equal(await readFile(path.join(workspace, 'build', 'fixture.txt'), 'utf8'), 'fixture');
+  if (mode === 'conservative-auto') {
+    assert.equal(sent[0]?.response?.response?.behavior, 'deny');
+  } else {
+    assert.equal(sent[0]?.response?.response?.behavior, 'allow');
+    const encodedRelative = /--request '([A-Za-z0-9_-]+)'$/.exec(sent[0].response.response.updatedInput.command)?.[1];
+    assert.ok(encodedRelative);
+    const relativeRequest = JSON.parse(Buffer.from(encodedRelative, 'base64url').toString('utf8'));
+    assert.equal(relativeRequest.expectedCwd, workspace);
+    assert.equal(relativeRequest.targetFromCwd, true);
+    await assert.rejects(exec(helperPath, ['--request', encodedRelative], { cwd: root, windowsHide: true }));
+    assert.equal(await readFile(path.join(workspace, 'build', 'fixture.txt'), 'utf8'), 'fixture');
+    const relativeResult = await exec(helperPath, ['--request', encodedRelative], { cwd: workspace, windowsHide: true });
+    assert.deepEqual(JSON.parse(relativeResult.stdout), { ok: true, deleted: 2 });
+    await mkdir(path.join(workspace, 'build'));
+    await writeFile(path.join(workspace, 'build', 'fixture.txt'), 'fixture');
+  }
   await trackClaudeBidiApprovalRequest(run.id, state, message, proc, { safeDeleteHelperPath: helperPath });
   if (mode === 'conservative-auto') {
     assert.equal(sent[1]?.response?.response?.behavior, 'deny');
@@ -72,11 +84,13 @@ for (const mode of ['recommended', 'full-auto', 'conservative-auto']) {
     const bashTarget = `/${bashDir[0].toLowerCase()}${bashDir.slice(2).replaceAll('\\', '/')}`;
     const makeBash = (id, command) => ({ type: 'control_request', request_id: id, request: { subtype: 'can_use_tool', tool_name: 'Bash', input: { command } } });
     await trackClaudeBidiApprovalRequest(run.id, state, makeBash('bash-relative', 'rm -rf bash-build'), proc, { safeDeleteHelperPath: helperPath });
-    assert.equal(sent.at(-1)?.response?.response?.behavior, 'deny');
-    assert.match(sent.at(-1)?.response?.response?.message || '', /absolute path/);
-    await trackClaudeBidiApprovalRequest(run.id, state, makeBash('bash-absolute', `rm -rf '${bashTarget}'`), proc, { safeDeleteHelperPath: helperPath });
     assert.equal(sent.at(-1)?.response?.response?.behavior, 'allow');
     const bashEnv = { ...process.env }; delete bashEnv.BASH_ENV; delete bashEnv.ENV; delete bashEnv.SHELLOPTS;
+    const relativeRun = await exec(bash, ['--noprofile', '--norc', '-c', sent.at(-1).response.response.updatedInput.command], { cwd: workspace, env: bashEnv, windowsHide: true });
+    assert.deepEqual(JSON.parse(relativeRun.stdout), { ok: true, deleted: 2 });
+    await mkdir(bashDir); await writeFile(path.join(bashDir, 'fixture.txt'), 'fixture');
+    await trackClaudeBidiApprovalRequest(run.id, state, makeBash('bash-absolute', `rm -rf '${bashTarget}'`), proc, { safeDeleteHelperPath: helperPath });
+    assert.equal(sent.at(-1)?.response?.response?.behavior, 'allow');
     const executed = await exec(bash, ['--noprofile', '--norc', '-c', sent.at(-1).response.response.updatedInput.command], { cwd: workspace, env: bashEnv, windowsHide: true });
     assert.deepEqual(JSON.parse(executed.stdout), { ok: true, deleted: 2 });
     await assert.rejects(readFile(path.join(bashDir, 'fixture.txt')), { code: 'ENOENT' });

@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	safedelete "agentoc/windows-safe-delete"
@@ -26,6 +27,7 @@ type request struct {
 	Relative        string `json:"relative"`
 	Target          string `json:"target,omitempty"`
 	TargetFromCwd   bool   `json:"targetFromCwd,omitempty"`
+	ExpectedCwd     string `json:"expectedCwd,omitempty"`
 	ContentsOnly    bool   `json:"contentsOnly"`
 	Force           bool   `json:"force"`
 	RequestKey      string `json:"requestKey"`
@@ -52,16 +54,19 @@ func run(args []string) (int, error) {
 	if err = decoder.Decode(&extra); err != io.EOF {
 		return 0, errors.New("invalid trailing request data")
 	}
-	if input.SchemaVersion != 1 || len(input.Workspace) > 32767 || len(input.Relative) > 32767 || len(input.OriginalCommand) > 8192 || !requestKey.MatchString(input.RequestKey) {
+	if input.SchemaVersion != 1 || len(input.Workspace) > 32767 || len(input.Relative) > 32767 || len(input.ExpectedCwd) > 32767 || len(input.OriginalCommand) > 8192 || !requestKey.MatchString(input.RequestKey) {
 		return 0, errors.New("invalid request fields")
 	}
 	if input.TargetFromCwd {
-		if input.Relative != "" || input.Target == "" || len(input.Target) > 8192 {
+		if input.Relative != "" || input.Target == "" || len(input.Target) > 8192 || !filepath.IsAbs(input.ExpectedCwd) {
 			return 0, errors.New("invalid working-directory target")
 		}
 		cwd, cwdErr := os.Getwd()
 		if cwdErr != nil {
 			return 0, errors.New("working directory unavailable")
+		}
+		if !strings.EqualFold(filepath.Clean(cwd), filepath.Clean(input.ExpectedCwd)) {
+			return 0, errors.New("working directory differs from approved context")
 		}
 		target := input.Target
 		if !filepath.IsAbs(target) {
@@ -71,7 +76,7 @@ func run(args []string) (int, error) {
 		if err != nil {
 			return 0, errors.New("target is outside workspace")
 		}
-	} else if input.Target != "" || input.Relative == "" {
+	} else if input.Target != "" || input.ExpectedCwd != "" || input.Relative == "" {
 		return 0, errors.New("invalid relative target")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)

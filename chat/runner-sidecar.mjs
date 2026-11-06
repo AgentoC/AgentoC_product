@@ -2815,10 +2815,12 @@ export async function trackClaudeBidiApprovalRequest(runId, state, parsed, proc,
     ? { decision: PRIVILEGED_GATE_DECISION.PASS, reason: 'MCP tool requires explicit server binding or user approval' }
     : await decideRunGate(approval, state);
 
+  const deleteBridge = process.platform === 'win32' && !WORKBENCH_EXECUTION_POLICY && !isMcpTool
+    ? await buildWindowsSafeDeleteBridge({ approval, state, runId, helperPath: safeDeleteHelperPath }) : null;
   const relativeRetry = gateDecision.reason === 'working directory is not attested' && approval.kind === 'command' &&
     ['PowerShell', 'Bash'].includes(approval.params?.tool_name) && state.turnActive === true && state.riskContextValid === true &&
     ['recommended', 'full-auto'].includes(state.riskMode) && state.interactionMode !== 'plan' && state.permissionMode !== 'plan';
-  if (process.platform === 'win32' && !WORKBENCH_EXECUTION_POLICY && !isMcpTool &&
+  if (process.platform === 'win32' && !WORKBENCH_EXECUTION_POLICY && !isMcpTool && !deleteBridge &&
       (relativeRetry || await needsClaudeAbsoluteDeleteRetry({ approval, state, helperPath: safeDeleteHelperPath }))) {
     const reason = 'For this Windows operation, resolve each target against the command working directory and retry the same command using absolute paths and the same options.';
     const message = buildClaudeBidiApprovalResponseMessage(approval, 'deny', null, { message: reason });
@@ -2829,8 +2831,6 @@ export async function trackClaudeBidiApprovalRequest(runId, state, parsed, proc,
     return null;
   }
 
-  const deleteBridge = process.platform === 'win32' && !WORKBENCH_EXECUTION_POLICY && !isMcpTool
-    ? await buildWindowsSafeDeleteBridge({ approval, state, runId, helperPath: safeDeleteHelperPath }) : null;
   if (deleteBridge) {
     const message = buildClaudeBidiApprovalResponseMessage(approval, 'approve', null, { updatedInput: { command: deleteBridge.updatedCommand } });
     if (!message || !writeClaudeBidiMessage(proc, message)) throw new Error('Unable to send controlled deletion response');
