@@ -443,17 +443,21 @@ export async function startAccountsServer(options = {}) {
   });
 
   const rateLimitOptions = options.rateLimit || {};
-  // Keep signed inbox polling and account control in separate per-IP buckets.
-  // Each remains bounded by the configured POST limit and retains normal authentication.
+  // Keep signed authority refresh, inbox polling and account control in
+  // separate per-IP buckets. High-volume pairing and connection recovery must
+  // not starve the short-lived authority proofs used by active devices.
   const rateLimits = resolveAccountsRateLimits({ options: rateLimitOptions, env: process.env });
   fastify.log.info({ getMax: rateLimits.getMax, postMax: rateLimits.postMax }, 'accounts rate limits');
   const basePath = new URL(serverOptions.publicBaseUrl).pathname.replace(/\/+$/, '');
   const inboxPath = '/v1/owner-auth/rendezvous/inbox';
   const inboxPaths = new Set([inboxPath, ...(basePath && basePath !== '/' ? [`${basePath}${inboxPath}`] : [])]);
+  const authorityPath = '/v1/owner-auth/instances/authority';
+  const authorityPaths = new Set([authorityPath, ...(basePath && basePath !== '/' ? [`${basePath}${authorityPath}`] : [])]);
   const mount = (method, max, path = '/*') =>
     fastify[method](path, { config: { rateLimit: { max, timeWindow: '1 minute',
       ...(method === 'post' && path === '/*' ? { keyGenerator: request => JSON.stringify([
-        request.ip, inboxPaths.has(String(request.url).split(/[?#]/, 1)[0]) ? 'rendezvous-inbox' : 'account-control',
+        request.ip, inboxPaths.has(String(request.url).split(/[?#]/, 1)[0]) ? 'rendezvous-inbox'
+          : authorityPaths.has(String(request.url).split(/[?#]/, 1)[0]) ? 'binding-authority' : 'account-control',
       ]) } : {}),
     } },
       ...(path.includes('/v1/account-deletion/') ? { bodyLimit: ACCOUNT_DELETION_BODY_LIMIT } : {}) }, async (request, reply) => {
