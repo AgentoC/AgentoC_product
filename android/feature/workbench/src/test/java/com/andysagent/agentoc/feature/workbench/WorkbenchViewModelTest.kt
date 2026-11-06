@@ -24,6 +24,7 @@ import com.andysagent.agentoc.core.domain.ProjectFolderBrowser
 import com.andysagent.agentoc.core.domain.RuntimeSelection
 import com.andysagent.agentoc.core.domain.SessionInvalidation
 import com.andysagent.agentoc.core.domain.SessionRepository
+import com.andysagent.agentoc.core.domain.SessionRepositoryException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
@@ -46,6 +47,22 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class WorkbenchViewModelTest {
+    @Test fun `permission denial preserves connection while revoked device asks to pair`() = runTest {
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        try {
+            for ((error, expected) in listOf(
+                SessionRepositoryException(403, "OWNER_REQUIRED", "Owner permission required", false) to com.andysagent.agentoc.core.agentui.AgentConnectionStatus.Connected,
+                SessionRepositoryException(403, "DEVICE_REVOKED", "Device revoked", false) to com.andysagent.agentoc.core.agentui.AgentConnectionStatus.AuthenticationRequired,
+                SessionRepositoryException(401, "UNAUTHORIZED", "Unauthorized", false) to com.andysagent.agentoc.core.agentui.AgentConnectionStatus.AuthenticationRequired,
+            )) {
+                val repo = FakeSessionRepository(sessions = listOf(Session("s", "Test")), failSessionRefresh = error)
+                val model = ChatViewModel(repo)
+                advanceUntilIdle()
+                assertEquals(expected, model.state.value.connection)
+                assertNotNull(model.state.value.error)
+            }
+        } finally { Dispatchers.resetMain() }
+    }
     @Test
     fun `tablet shell keeps its open chat while navigating the list until explicit back`() = runTest {
         Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
@@ -1304,6 +1321,28 @@ class WorkbenchViewModelTest {
         } finally { Dispatchers.resetMain() }
     }
 
+    @Test fun `project and computer refresh errors clear after reconnect and successful reload`() = runTest {
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        try {
+            val repository = FakeSessionRepository(connection = RuntimeConnectionState.Disconnected)
+            repository.failProjectsRefresh = IllegalStateException("The computer is reconnecting")
+            repository.failComputersRefresh = IllegalStateException("The computer is reconnecting")
+            val projects = ProjectsViewModel(repository)
+            val computers = ComputersViewModel(repository)
+            projects.onEvent(ProjectsEvent.Refresh)
+            computers.onEvent(ComputersEvent.Retry)
+            advanceUntilIdle()
+            assertNotNull(projects.state.value.error)
+            assertNotNull(computers.state.value.error)
+            repository.failProjectsRefresh = null
+            repository.failComputersRefresh = null
+            repository.setConnection(RuntimeConnectionState.Connected)
+            advanceUntilIdle()
+            assertEquals(null, projects.state.value.error)
+            assertEquals(null, computers.state.value.error)
+        } finally { Dispatchers.resetMain() }
+    }
+
     @Test
     fun `pair action closes dialog after successful pairing`() = runTest {
         Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
@@ -1639,6 +1678,8 @@ private class FakeSessionRepository(
     var runtimeApprovalCustomAnswers: List<String>? = null
     var createdProject: Project? = null
     var projectRefreshCalls: Int = 0
+    var failProjectsRefresh: Throwable? = null
+    var failComputersRefresh: Throwable? = null
     var sessionRefreshCalls: Int = 0
     private val folders = mutableMapOf(
         "~" to ProjectFolderBrowser(
@@ -1700,9 +1741,10 @@ private class FakeSessionRepository(
         folders[path] = ProjectFolderBrowser(path = path, parentPath = parentPath)
         return ProjectFolder(path, name)
     }
-    override suspend fun refreshComputers() = Unit
+    override suspend fun refreshComputers() { failComputersRefresh?.let { throw it } }
     override suspend fun refreshProjects() {
         projectRefreshCalls += 1
+        failProjectsRefresh?.let { throw it }
     }
     override suspend fun refreshSessions() {
         sessionRefreshCalls += 1

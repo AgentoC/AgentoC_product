@@ -651,6 +651,10 @@ private fun Approval.toDecisionQuestionUiState(): DecisionQuestionUiState? {
     )
 }
 
+internal fun requiresDeviceReauthentication(error: Throwable): Boolean =
+    error is SessionRepositoryException &&
+        (error.statusCode == 401 || (error.statusCode == 403 && error.code == "DEVICE_REVOKED"))
+
 class ChatViewModel(
     private val repository: SessionRepository,
     private val passkeyProvider: (suspend (publicKeyJson: String) -> WebAuthnProofDto)? = null,
@@ -2872,7 +2876,7 @@ class ChatViewModel(
     }
 
     private fun showError(error: Throwable, fallback: String) {
-        if (error is SessionRepositoryException && (error.statusCode == 401 || error.statusCode == 403)) {
+        if (requiresDeviceReauthentication(error)) {
             updateState { copy(connection = AgentConnectionStatus.AuthenticationRequired, error = "Authentication required. Pair this Android device again.") }
             return
         }
@@ -2994,6 +2998,7 @@ class ProjectsViewModel(private val repository: SessionRepository) : ViewModel()
     private var projectsHydrated = false
     private var sessionsHydrated = false
     private var projectFolderRequestId = 0L
+    private var refreshError: String? = null
 
     init {
         viewModelScope.launch {
@@ -3023,6 +3028,11 @@ class ProjectsViewModel(private val repository: SessionRepository) : ViewModel()
         viewModelScope.launch {
             repository.invalidations.collectLatest { hint ->
                 if (hint.type in setOf("projects_invalidated", "project_invalidated", "sessions_invalidated", "session_invalidated")) refresh()
+            }
+        }
+        viewModelScope.launch {
+            repository.connectionState.collectLatest { connection ->
+                if (connection == RuntimeConnectionState.Connected && refreshError != null) refresh()
             }
         }
     }
@@ -3161,11 +3171,26 @@ class ProjectsViewModel(private val repository: SessionRepository) : ViewModel()
         }
     }
 
-    private suspend fun refresh() = runCatching {
-        repository.refreshProjects()
-        repository.refreshSessions()
+    private suspend fun refresh(allowRecoveryRetry: Boolean = true) {
+        try {
+            repository.refreshProjects()
+            repository.refreshSessions()
+            val previous = refreshError
+            refreshError = null
+            if (previous != null) updateState { if (error == previous) copy(error = null) else this }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            val message = failure.message ?: "Projects could not be loaded"
+            refreshError = message
+            updateState { copy(error = message) }
+            // A failed call may finish after the Connected event has already
+            // arrived. Recheck once, without an unbounded retry loop.
+            if (allowRecoveryRetry && repository.connectionState.value == RuntimeConnectionState.Connected) {
+                viewModelScope.launch { kotlinx.coroutines.delay(500); refresh(allowRecoveryRetry = false) }
+            }
+        }
     }
-        .onFailure { updateState { copy(error = it.message ?: "Projects could not be loaded") } }
 
     private fun updateState(transform: ProjectsUiState.() -> ProjectsUiState) {
         mutableState.value = mutableState.value.transform()
@@ -3204,10 +3229,14 @@ class ComputersViewModel(
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(ComputersUiState())
     val state: StateFlow<ComputersUiState> = mutableState.asStateFlow()
+    private var refreshError: String? = null
 
     init {
         viewModelScope.launch { repository.observeComputers().collectLatest { computers -> updateState { copy(computers = computers) } } }
-        viewModelScope.launch { repository.connectionState.collectLatest { connection -> updateState { copy(connection = connection.toAgentConnectionStatus()) } } }
+        viewModelScope.launch { repository.connectionState.collectLatest { connection ->
+            updateState { copy(connection = connection.toAgentConnectionStatus()) }
+            if (connection == RuntimeConnectionState.Connected && refreshError != null) refresh()
+        } }
         viewModelScope.launch {
             repository.invalidations.collectLatest { hint ->
                 if (hint.type in setOf("computers_invalidated", "devices_invalidated", "device_invalidated")) refresh()
@@ -3245,8 +3274,23 @@ class ComputersViewModel(
         }
     }
 
-    private suspend fun refresh() = runCatching { repository.refreshComputers() }
-        .onFailure { updateState { copy(error = it.message ?: "Computers could not be loaded") } }
+    private suspend fun refresh(allowRecoveryRetry: Boolean = true) {
+        try {
+            repository.refreshComputers()
+            val previous = refreshError
+            refreshError = null
+            if (previous != null) updateState { if (error == previous) copy(error = null) else this }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            val message = failure.message ?: "Computers could not be loaded"
+            refreshError = message
+            updateState { copy(error = message) }
+            if (allowRecoveryRetry && repository.connectionState.value == RuntimeConnectionState.Connected) {
+                viewModelScope.launch { kotlinx.coroutines.delay(500); refresh(allowRecoveryRetry = false) }
+            }
+        }
+    }
 
     private fun updateState(transform: ComputersUiState.() -> ComputersUiState) {
         mutableState.value = mutableState.value.transform()
