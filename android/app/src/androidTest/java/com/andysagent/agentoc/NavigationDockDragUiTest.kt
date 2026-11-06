@@ -70,6 +70,48 @@ class NavigationDockDragUiTest {
         assertEquals(bounds.left + bounds.width * (slot + .5f) / 3f, lens.center.x, 2f)
     }
 
+    @Test fun holdingAnotherTabKeepsOneCapsuleUntilRelease() {
+        show(policy = MotionPreference.None)
+        val tab = rule.onNodeWithTag("bottom-navigation-tab-settings")
+        val before = tab.captureToImage().toPixelMap()
+        val initialCenter = rule.onNodeWithTag("bottom-navigation-selection").fetchSemanticsNode().boundsInRoot.center.x
+        tab.performTouchInput { down(center); advanceEventTime(500) }
+        rule.waitForIdle()
+        val held = tab.captureToImage().toPixelMap()
+        var difference = 0f
+        for (y in 0 until before.height) for (x in 0 until before.width)
+            difference += kotlin.math.abs(before[x, y].red - held[x, y].red)
+        assertTrue("Holding an unselected tab must not draw a second capsule: $difference", difference < 3f)
+        assertEquals(initialCenter, rule.onNodeWithTag("bottom-navigation-selection").fetchSemanticsNode().boundsInRoot.center.x, 1f)
+        rule.runOnIdle { assertEquals(AgentoDestination.Home, selected); assertTrue(selections.isEmpty()) }
+        tab.performTouchInput { up() }
+        rule.waitForIdle()
+        rule.runOnIdle { assertEquals(listOf(AgentoDestination.Settings), selections) }
+        assertCentered(AgentoDestination.Settings)
+    }
+
+    @Test fun draggingFromAnUnselectedTabDoesNotTeleportTheCapsule() {
+        show(policy = MotionPreference.None)
+        val tab = rule.onNodeWithTag("bottom-navigation-tab-settings")
+        val initialCenter = rule.onNodeWithTag("bottom-navigation-selection").fetchSemanticsNode().boundsInRoot.center.x
+        tab.performTouchInput { down(center); moveTo(center + Offset(-30f, 0f), 100) }
+        assertEquals(initialCenter, rule.onNodeWithTag("bottom-navigation-selection").fetchSemanticsNode().boundsInRoot.center.x, 1f)
+        tab.performTouchInput { up() }
+        rule.waitForIdle()
+        rule.runOnIdle { assertEquals(AgentoDestination.Home, selected); assertTrue(selections.isEmpty()) }
+        assertCentered(AgentoDestination.Home)
+    }
+    @Test fun draggingOutsideTheSelectedCapsuleDoesNotMoveIt() {
+        show(policy = MotionPreference.None)
+        val bounds = shell().fetchSemanticsNode().boundsInRoot
+        val lens = rule.onNodeWithTag("bottom-navigation-selection").fetchSemanticsNode().boundsInRoot
+        val start = Offset(lens.center.x - bounds.left, 1f)
+        shell().performTouchInput { down(start); moveTo(start + Offset(45f, 0f), 120) }
+        assertEquals(lens.center.x, rule.onNodeWithTag("bottom-navigation-selection").fetchSemanticsNode().boundsInRoot.center.x, 1f)
+        shell().performTouchInput { up() }
+        rule.waitForIdle()
+        rule.runOnIdle { assertEquals(AgentoDestination.Home, selected); assertTrue(selections.isEmpty()) }
+    }
     @Test fun draggingFollowsFingerAndCommitsOnlyOnReleaseInRealPages() {
         show(actualPages = true)
         capture("resting")

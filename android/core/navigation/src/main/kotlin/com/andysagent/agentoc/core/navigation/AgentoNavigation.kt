@@ -670,13 +670,21 @@ fun AgentoBottomNavigation(
                             val originX = if (layoutDirection == LayoutDirection.Rtl) 1f - contactOrigin.x else contactOrigin.x
                             val originSlot = originX * 3f - .5f
                             dragOriginX = originX * size.width
-                            smoothDragStart = kotlin.math.abs(originSlot - frame.lensSlot) <= .5f
-                            dragGrip = if (smoothDragStart)
-                                originSlot - frame.lensSlot else 0f
-                            dragFrame = frame
-                            updatePointer(position)
+                            // A drag must start inside the actual capsule, not
+                            // merely somewhere in its tab or on another tab.
+                            val inset = (dockHeight - selectionHeight).toPx() / 2f
+                            val slotWidth = size.width / 3f
+                            val originY = contactOrigin.y * size.height
+                            smoothDragStart = dragOriginX in
+                                (frame.lensSlot * slotWidth + inset)..((frame.lensSlot + 1f) * slotWidth - inset) &&
+                                originY in inset..(size.height - inset)
+                            if (smoothDragStart) {
+                                dragGrip = originSlot - frame.lensSlot
+                                dragFrame = frame
+                                updatePointer(position)
+                            }
                         },
-                        onHorizontalDrag = { change, _ -> change.consume(); updatePointer(change.position) },
+                        onHorizontalDrag = { change, _ -> if (dragFrame != null) { change.consume(); updatePointer(change.position) } },
                         onDragEnd = { currentFinish(false) },
                         onDragCancel = { currentFinish(true) },
                     )
@@ -746,8 +754,6 @@ fun AgentoBottomNavigation(
                             showLabels = showLabels,
                             height = selectionHeight,
                             emphasis = { dockFrame().emphasis[destination.ordinal] },
-                            dragActive = dragFrame != null,
-                            contactPressure = contactPressure,
                             onClick = { onDestinationSelected(destination) },
                         )
                     }
@@ -808,46 +814,20 @@ private fun RowScope.NavigationDockTab(
     showLabels: Boolean,
     height: androidx.compose.ui.unit.Dp,
     emphasis: () -> Float,
-    dragActive: Boolean,
-    contactPressure: androidx.compose.runtime.MutableState<Float>,
     onClick: () -> Unit,
 ) {
     val colors = LocalAgentocColors.current
     val inactiveColor = if (colors.canvas.red < .5f) Color(0x99EBEBF5) else Color(0x993C3C43)
     val label = stringResource(destination.labelRes)
     val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val policy = LocalMotionPolicy.current
-    var contact by remember { mutableStateOf(Offset(.5f, .5f)) }
-    var contactLoad by contactPressure
-    val contactStrength by animateFloatAsState(if (pressed && !isSelected && !dragActive) contactLoad else 0f,
-        animationSpec = if (policy.preference == MotionPreference.None) snap() else tween(100), label = "tab-contact")
     val foregroundPaint = remember { Paint() }
     Box(
         modifier = Modifier.weight(1f).height(height)
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull()?.let {
-                            if (it.pressed) {
-                                contact = Offset(it.position.x / size.width, it.position.y / size.height)
-                                contactLoad = navigationContactLoad(it.pressure)
-                            }
-                        }
-                    }
-                }
-            }
             .clickable(interactionSource = interactionSource, indication = null, role = Role.Tab, onClick = onClick)
             .testTag("bottom-navigation-tab-${destination.route}")
             .semantics { selected = isSelected; contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.fillMaxSize().padding(horizontal = 4.dp).graphicsLayer {
-            val pose = navigationContactPose(contact, contactStrength)
-            rotationX = pose.rotationX; rotationY = pose.rotationY
-            scaleX = pose.scale; scaleY = pose.scale
-            cameraDistance = 6f
-        }.background(colors.primaryContent.copy(alpha = .07f * contactStrength), AgentoShapes.PillShape))
         Column(
             modifier = Modifier.padding(horizontal = 4.dp)
                 .testTag("bottom-navigation-foreground-${destination.route}")
