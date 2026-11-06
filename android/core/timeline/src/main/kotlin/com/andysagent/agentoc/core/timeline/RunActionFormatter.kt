@@ -214,6 +214,7 @@ object RunActionFormatter {
             "search" -> "Searching $subject"
             "inspect" -> "Inspecting $subject"
             "edit" -> "Editing $subject"
+            "delete" -> "Deleting $subject"
             "delegate" -> "Delegating $subject"
             "tool" -> "Using $subject"
             "execute" -> "Running $subject"
@@ -293,7 +294,7 @@ object RunActionFormatter {
                 else -> args.firstOrNull() ?: "git"
             }
             name in INSPECT -> if (name == "pwd" || name == "get-location") "current location" else name
-            name in EDIT -> basename(path.ifBlank { "file" })
+            name in EDIT || name in DELETE -> basename(path.ifBlank { "file" })
             else -> name.ifBlank { "command" }
         }
         val kind = when {
@@ -302,6 +303,7 @@ object RunActionFormatter {
             name in SEARCH -> "search"
             name == "git" && args.firstOrNull()?.lowercase() in setOf("status", "diff", "log", "branch") -> "inspect"
             name in INSPECT -> "inspect"
+            name in DELETE -> "delete"
             name in EDIT -> "edit"
             else -> "execute"
         }
@@ -330,6 +332,7 @@ object RunActionFormatter {
     private val LIST = setOf("ls", "dir", "tree", "exa", "eza", "get-childitem", "gci")
     private val SEARCH = setOf("rg", "ripgrep", "grep", "egrep", "fgrep", "find", "findstr", "select-string", "sls")
     private val INSPECT = setOf("pwd", "whoami", "where", "ver", "get-location", "test-path", "get-command", "get-service", "get-process")
-    private val EDIT = setOf("set-content", "add-content", "new-item", "copy-item", "move-item", "remove-item")
+    private val EDIT = setOf("set-content", "add-content", "new-item", "copy-item", "move-item")
+    private val DELETE = setOf("remove-item", "rm", "del", "erase", "rmdir", "rd")
     private val SHELL_WRAPPERS = setOf("bash", "sh", "zsh", "fish", "env", "command", "xargs")
 }

@@ -238,7 +238,7 @@ private fun ProcessOperationRow(operation: TimelineItem.Operation) {
     val text = state.let {
         when (operation.status) {
             TimelineOperationStatus.Completed -> presentCompletedAction(it)
-            TimelineOperationStatus.Failed -> stringResource(R.string.run_action_failed, presentRunAction(it))
+            TimelineOperationStatus.Failed -> presentFailedAction(it)
             else -> presentRunAction(it)
         }
     }

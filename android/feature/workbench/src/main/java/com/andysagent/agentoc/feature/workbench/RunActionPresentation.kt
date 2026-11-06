@@ -14,6 +14,7 @@ internal fun presentRunAction(action: RunActionUiState): String {
         "search" -> stringResource(R.string.run_action_search, subject)
         "inspect" -> stringResource(R.string.run_action_inspect, subject)
         "edit" -> stringResource(R.string.run_action_edit, subject)
+        "delete" -> stringResource(R.string.run_action_delete, subject)
         "execute" -> stringResource(R.string.run_action_execute, subject)
         "delegate" -> stringResource(R.string.run_action_delegate, subject)
         "tool" -> stringResource(R.string.run_action_tool, subject)
@@ -36,11 +37,22 @@ internal fun presentCompletedAction(action: RunActionUiState): String {
         "search" -> stringResource(R.string.run_action_done_search, subject)
         "inspect" -> stringResource(R.string.run_action_done_inspect, subject)
         "edit" -> stringResource(R.string.run_action_done_edit, subject)
+        "delete" -> stringResource(R.string.run_action_done_delete, subject)
         "execute" -> stringResource(R.string.run_action_done_execute, subject)
         "question" -> stringResource(R.string.run_action_done_question)
         "delegate" -> stringResource(R.string.run_action_done_delegate, subject)
         "tool" -> stringResource(R.string.run_action_done_tool, subject)
         else -> stringResource(R.string.run_action_done_generic)
+    }
+}
+
+@Composable
+internal fun presentFailedAction(action: RunActionUiState): String {
+    val subject = presentActionSubject(action.presentationSubject.ifBlank { if (action.presentationVerb == "execute") "command" else "" })
+    return when (action.presentationVerb) {
+        "delete" -> stringResource(R.string.run_action_failed_delete, subject)
+        "execute" -> stringResource(R.string.run_action_failed_execute, subject)
+        else -> stringResource(R.string.run_action_failed_generic)
     }
 }
 

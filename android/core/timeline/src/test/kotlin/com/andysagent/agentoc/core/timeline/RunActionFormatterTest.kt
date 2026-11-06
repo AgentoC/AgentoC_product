@@ -5,6 +5,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class RunActionFormatterTest {
+    @Test fun powershellRemovalIsPresentedAsDeletion() {
+        val operation = TimelineItem.Operation("remove", 1, TimelineOperationKind.Command, "Command",
+            "Remove-Item -LiteralPath G:/test/example -Recurse -Force", TimelineOperationStatus.Failed)
+        val result = RunActionFormatter.forOperation(operation)
+        assertEquals("delete", result.presentationVerb)
+        assertEquals("example", result.presentationSubject)
+    }
     @Test fun genericCommandAndReadSubjectsUseHumanReadableFallbacks() {
         val json = kotlinx.serialization.json.Json
         val command = json.parseToJsonElement("""{"state":"working","kind":"execute","labelKind":"execute","subject":"execute","detail":"Bash"}""") as kotlinx.serialization.json.JsonObject

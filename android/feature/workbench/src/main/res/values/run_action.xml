@@ -1,4 +1,9 @@
 <resources>
+    <string name="run_action_delete">Deleting %1$s</string>
+    <string name="run_action_done_delete">Deleted %1$s</string>
+    <string name="run_action_failed_delete">Could not delete %1$s</string>
+    <string name="run_action_failed_execute">Could not run %1$s</string>
+    <string name="run_action_failed_generic">Action did not complete</string>
     <string name="run_action_read">Reading %1$s</string>
     <string name="run_action_list">Listing %1$s</string>
     <string name="run_action_search">Searching %1$s</string>

@@ -1,4 +1,9 @@
 <resources>
+    <string name="run_action_delete">正在刪除 %1$s</string>
+    <string name="run_action_done_delete">刪除了 %1$s</string>
+    <string name="run_action_failed_delete">未能刪除 %1$s</string>
+    <string name="run_action_failed_execute">未能執行 %1$s</string>
+    <string name="run_action_failed_generic">操作未完成</string>
     <string name="run_action_read">正在讀取 %1$s</string>
     <string name="run_action_list">正在列出 %1$s</string>
     <string name="run_action_search">正在搜尋 %1$s</string>
