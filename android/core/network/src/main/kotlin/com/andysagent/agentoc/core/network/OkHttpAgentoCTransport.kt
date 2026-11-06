@@ -179,8 +179,7 @@ class OkHttpAgentoCTransport(
             apiResponse
         } catch (error: ApiException) {
             currentCoroutineContext().ensureActive()
-            if (serverRelativeRequest) handleAuthenticationFailure(error, attemptedCredential)
-            throw error
+            throw if (serverRelativeRequest) handleAuthenticationFailure(error, attemptedCredential) else error
         } catch (error: IOException) {
             currentCoroutineContext().ensureActive()
             val rootCause = generateSequence<Throwable>(error) { it.cause }.take(8).last()
@@ -262,8 +261,7 @@ class OkHttpAgentoCTransport(
         )
         if (!response.isSuccessful) {
             val error = response.toApiException(codec)
-            handleAuthenticationFailure(error, attemptedCredential)
-            throw error
+            throw handleAuthenticationFailure(error, attemptedCredential)
         }
         return response
     }
@@ -311,8 +309,7 @@ class OkHttpAgentoCTransport(
         )
         if (!response.isSuccessful) {
             val error = response.toApiException(codec)
-            handleAuthenticationFailure(error, attemptedCredential)
-            throw error
+            throw handleAuthenticationFailure(error, attemptedCredential)
         }
         return response
     }
@@ -412,14 +409,21 @@ class OkHttpAgentoCTransport(
         socket?.cancel()
     }
 
-    private suspend fun handleAuthenticationFailure(error: ApiException, attemptedCredential: String?) {
+    private suspend fun handleAuthenticationFailure(error: ApiException, attemptedCredential: String?): ApiException {
         currentCoroutineContext().ensureActive()
-        if (requiresAuthentication(error)) requireAuthentication(attemptedCredential)
+        if (!requiresAuthentication(error)) return error
+        if (requireAuthentication(attemptedCredential)) return error
+        // The rejected credential was replaced or the target changed while
+        // this request was in flight. A stale 401 must not make the UI ask to
+        // pair a newly renewed device again.
+        return ApiException(0, "CARRIER_UNAVAILABLE", "The computer is reconnecting", retryable = true)
     }
 
-    private suspend fun requireAuthentication(attemptedCredential: String?, stillCurrent: () -> Boolean = { true }, onInvalidated: () -> Unit = {}) {
+    private suspend fun requireAuthentication(attemptedCredential: String?, stillCurrent: () -> Boolean = { true }, onInvalidated: () -> Unit = {}): Boolean {
+        var applied = false
         val invalidate = {
             if (stillCurrent()) {
+                applied = true
                 mutableConnectionState.value = RuntimeConnectionState.AuthenticationRequired
                 onAuthenticationRequired?.invoke()
                 onInvalidated()
@@ -427,6 +431,7 @@ class OkHttpAgentoCTransport(
         }
         if (credentialRejectionHandler != null) credentialRejectionHandler.reject(attemptedCredential, stillCurrent, invalidate)
         else if (credentialProvider()?.takeIf { it.isNotBlank() } == attemptedCredential) invalidate()
+        return applied
     }
 
     private fun requiresAuthentication(error: ApiException): Boolean =

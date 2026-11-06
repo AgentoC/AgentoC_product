@@ -217,7 +217,9 @@ class OkHttpAgentoCTransportTest {
                 onAuthenticationRequired = { notifications++; token.set(null) })
             try {
                 transport.updateCarrierConnectionState(RuntimeConnectionState.Connected)
-                assertEquals(status, assertFailsWith<ApiException> { transport.execute(ApiRequest("POST", "/unknown-write", "{}")) }.statusCode)
+                val error = assertFailsWith<ApiException> { transport.execute(ApiRequest("POST", "/unknown-write", "{}")) }
+                assertEquals("CARRIER_UNAVAILABLE", error.code)
+                assertTrue(error.retryable)
                 assertEquals("rda_new", token.get()); assertEquals(0, notifications)
                 assertEquals(RuntimeConnectionState.Connected, transport.connectionState.value)
                 assertEquals(1, server.requestCount)
@@ -244,7 +246,9 @@ class OkHttpAgentoCTransportTest {
             try {
                 if (turn) transport.setTurnSession(session) else transport.setP2PSession(session)
                 transport.updateCarrierConnectionState(RuntimeConnectionState.Connected)
-                assertEquals(403, assertFailsWith<ApiException> { transport.execute(ApiRequest("POST", "/unknown-write", "{}")) }.statusCode)
+                val error = assertFailsWith<ApiException> { transport.execute(ApiRequest("POST", "/unknown-write", "{}")) }
+                assertEquals("CARRIER_UNAVAILABLE", error.code)
+                assertTrue(error.retryable)
                 assertEquals("rda_new", token.get()); assertEquals(0, notifications); assertEquals(1, writes)
                 assertEquals(RuntimeConnectionState.Connected, transport.connectionState.value)
             } finally { transport.close() }
@@ -640,6 +644,40 @@ class OkHttpAgentoCTransportTest {
             transport.close()
         } finally {
             server.shutdown()
+        }
+    }
+
+    @Test
+    fun staleAuthenticationFailuresAfterRenewalRemainRetryable() = runBlocking {
+        for (carrier in listOf("http", "p2p", "turn")) {
+            val server = MockWebServer()
+            server.enqueue(MockResponse().setResponseCode(401).setBody("{\"error\":\"expired\"}"))
+            server.start()
+            var token = "old-token"
+            var notified = false
+            try {
+                val transport = OkHttpAgentoCTransport(
+                    endpointProvider = { server.url("/").toString().trimEnd('/') },
+                    credentialProvider = { token },
+                    onAuthenticationRequired = { notified = true },
+                    credentialRejectionHandler = CredentialRejectionHandler { attempted, _, _ ->
+                        assertEquals("old-token", attempted)
+                        // Renewal commits before the old response is handled.
+                        token = "new-token"
+                    },
+                )
+                transport.updateCarrierConnectionState(RuntimeConnectionState.Connected)
+                val peerResponse = P2PHttpResponse(id = "unused", status = 401)
+                if (carrier == "p2p") transport.setP2PSession(RecordingP2PSession(peerResponse))
+                if (carrier == "turn") transport.setTurnSession(RecordingP2PSession(peerResponse))
+                val error = assertFailsWith<ApiException> { transport.execute(ApiRequest("GET", "/api/test")) }
+                assertEquals("CARRIER_UNAVAILABLE", error.code, carrier)
+                assertTrue(error.retryable, carrier)
+                assertEquals(RuntimeConnectionState.Connected, transport.connectionState.value, carrier)
+                assertFalse(notified, carrier)
+                assertEquals("new-token", token, carrier)
+                transport.close()
+            } finally { server.shutdown() }
         }
     }
 
