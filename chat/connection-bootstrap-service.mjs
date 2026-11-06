@@ -33,7 +33,7 @@ import {
   publicTurnAuthorization,
 } from '../lib/turn-authorization.mjs';
 import { requestTurnCredentials } from '../lib/turn-credential-broker-client.mjs';
-import { createTurnLeaseId } from '../lib/turn-lease-identity.mjs';
+import { createTurnLeaseId, matchesTurnLeasePair } from '../lib/turn-lease-identity.mjs';
 import { reserveRendezvousTurnConnection } from '../lib/rendezvous-turn-reservation.mjs';
 import {
   listActiveTurnConnectionDeviceIds,
@@ -55,7 +55,7 @@ function nowIso() {
 // provider secret stays in the independent broker; this process receives only
 // short-lived credentials for the signed bootstrap contract.
 async function resolveInstanceTurnRouting({ device, instanceId, turnAuthorizationProvider = null,
-  rendezvousExpiresAt = '', clock = Date.now, signal } = {}) {
+  rendezvousExpiresAt = '', clock = Date.now, signal, handoff = null } = {}) {
   const accountId = trimString(device?.accountId);
   let accountBinding = null;
   try {
@@ -104,7 +104,13 @@ async function resolveInstanceTurnRouting({ device, instanceId, turnAuthorizatio
   const staleLocalQuota = accountsConfigured && typeof turnAuthorizationProvider !== 'function'
     && decision.status === 'quota-exceeded';
   if (!decision.authorized && !staleLocalQuota) return { turn: null, authorization: publicTurnAuthorization(decision) };
-  decision = { ...decision, connectionId: createTurnLeaseId(decision.connectionId) };
+  const logicalId = decision.connectionId;
+  if (handoff && (!accountsConfigured || !matchesTurnLeasePair(handoff.from, logicalId)
+    || (handoff.connectionId && !matchesTurnLeasePair(handoff.connectionId, logicalId))
+    || !Number.isSafeInteger(handoff.signedExpiry) || handoff.signedExpiry <= clock())) {
+    throw Object.assign(new Error('Invalid TURN handoff identity or deadline'), { code: 'turn_handoff_request_invalid', statusCode: 400 });
+  }
+  decision = { ...decision, connectionId: handoff?.connectionId || createTurnLeaseId(logicalId) };
 
   // Accounts is authoritative for cross-instance connection slots when it is
   // configured. The local lease remains a restart/release mirror for the
@@ -119,11 +125,22 @@ async function resolveInstanceTurnRouting({ device, instanceId, turnAuthorizatio
         deviceKind,
         connectionId: decision.connectionId,
         expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        ...(handoff ? { protocolVersion: 3, reason: `handoff:${handoff.from}:${handoff.signedExpiry}` } : {}),
       };
       centralLease = rendezvousExpiresAt
         ? await reserveRendezvousTurnConnection({ reserve: reserveOwnerAccountTurnConnection,
           reservation, expiresAt: rendezvousExpiresAt, clock, signal })
         : await reserveOwnerAccountTurnConnection(reservation);
+      if (handoff && (centralLease?.lease?.connectionId !== decision.connectionId
+        || centralLease?.authorization?.connectionId !== decision.connectionId
+        || centralLease?.lease?.handoffFrom !== handoff.from
+        || !Number.isFinite(Date.parse(centralLease?.lease?.handoffDeadline || ''))
+        || Date.parse(centralLease.lease.handoffDeadline) <= clock()
+        || Date.parse(centralLease.lease.handoffDeadline) > handoff.signedExpiry)) {
+        await releaseOwnerAccountTurnConnection({ deviceId: device?.id, connectionId: decision.connectionId,
+          reason: 'turn-handoff-response-invalid', protocolVersion: 3 }).catch(() => {});
+        throw Object.assign(new Error('Accounts returned an invalid TURN handoff'), { code: 'turn_handoff_response_invalid', statusCode: 503 });
+      }
       decision = centralLease.authorization || decision;
       if (!decision.authorized) return { turn: null, authorization: publicTurnAuthorization(decision) };
       if (!centralLease?.brokerCredential?.token) {
@@ -207,6 +224,8 @@ async function resolveInstanceTurnRouting({ device, instanceId, turnAuthorizatio
       ...activeCounts,
       connectionId: decision.connectionId,
       expiresAt: brokerResponse.expiresAt,
+      ...(handoff ? { handoffFrom: centralLease?.lease?.handoffFrom,
+        handoffDeadline: centralLease?.lease?.handoffDeadline } : {}),
     });
     return {
       turn: {
@@ -245,7 +264,7 @@ async function resolveInstanceTurnRouting({ device, instanceId, turnAuthorizatio
 }
 
 export async function buildDeviceConnectionBootstrapContract({ deviceId, turnAuthorizationProvider = null,
-  rendezvousExpiresAt = '', clock = Date.now, signal } = {}) {
+  rendezvousExpiresAt = '', clock = Date.now, signal, handoff = null } = {}) {
   const normalizedDeviceId = trimString(deviceId);
   if (!normalizedDeviceId) {
     const error = new Error('deviceId is required');
@@ -270,7 +289,7 @@ export async function buildDeviceConnectionBootstrapContract({ deviceId, turnAut
   const instanceId = trimString(instanceIdentity.instanceId);
   const [p2pRoom, turnResult] = await Promise.all([
     getTrustedDeviceP2PRoom(normalizedDeviceId),
-    resolveInstanceTurnRouting({ device, instanceId, turnAuthorizationProvider, rendezvousExpiresAt, clock, signal }),
+    resolveInstanceTurnRouting({ device, instanceId, turnAuthorizationProvider, rendezvousExpiresAt, clock, signal, handoff }),
   ]);
   if (!turnResult.turn) {
     const error = new Error('TURN bootstrap is unavailable for this device');

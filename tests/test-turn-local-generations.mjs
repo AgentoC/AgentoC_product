@@ -27,6 +27,16 @@ try {
   await assert.rejects(leases.markTurnConnectionLeaseConnected({ deviceId: pair.deviceId }), { code: 'turn_connection_id_required' });
   assert.equal((await release(b)).released, 1);
   await assert.rejects(reserve(b), { code: 'turn_connection_generation_retired' });
+  const old = createTurnLeaseId(logical, undefined, now), next = createTurnLeaseId(logical, undefined, now);
+  await reserve(old);
+  const handoff = { ...pair, connectionId: next, expiresAt: new Date(now + 300_000).toISOString(),
+    handoffFrom: old, handoffDeadline: new Date(now + 30_000).toISOString(), deviceKind: 'phone', clock: () => now };
+  await leases.reserveTurnConnectionLease(handoff);
+  assert.equal((await leases.listActiveTurnConnectionCounts({ accountId: pair.accountId, clock: () => now })).activePhones, 1);
+  assert.equal((await leases.markTurnConnectionLeaseConnected({ deviceId: pair.deviceId, connectionId: old, clock: () => now })).updated, true);
+  await leases.commitLocalTurnHandoff({ deviceId: pair.deviceId, connectionId: next, clock: () => now });
+  assert.equal((await release(old)).released, 1);
+  assert.equal((await release(next)).released, 1);
   now += 181_000;
   const c = createTurnLeaseId(logical, undefined, now); await reserve(c); await release(c);
   await release(c); // Reopen JSON and prune old records while keeping the pair watermark.

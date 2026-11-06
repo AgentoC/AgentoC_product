@@ -6,6 +6,7 @@ import {
 } from '../lib/turn-authorization.mjs';
 import { createSerialTaskQueue, readJson, writeJsonAtomic } from './fs-utils.mjs';
 import { isTurnLeaseId, canAdmitTurnLeaseId, pruneTurnLeases, turnLeasePairClock, turnLeaseObservedAt } from '../lib/turn-lease-identity.mjs';
+import { prepareTurnHandoff, commitTurnHandoff, expireTurnHandoffs } from '../accounts/turn-handoff-policy.mjs';
 
 const leaseQueue = createSerialTaskQueue();
 
@@ -40,6 +41,9 @@ function normalizeState(value) {
           expiresAt: trimString(entry?.expiresAt),
           releasedAt: trimString(entry?.releasedAt),
           releaseReason: trimString(entry?.releaseReason),
+          handoffFrom: trimString(entry?.handoffFrom),
+          handoffDeadline: trimString(entry?.handoffDeadline),
+          handoffCommittedAt: trimString(entry?.handoffCommittedAt),
         })).filter((entry) => entry.connectionId && entry.accountId && entry.deviceId)
       : [],
   };
@@ -47,6 +51,10 @@ function normalizeState(value) {
 
 function isActiveLease(entry, nowMs) {
   if (!entry || !['reserved', 'connected'].includes(entry.status)) return false;
+  if (entry.handoffFrom && !entry.handoffCommittedAt) {
+    const deadline = Date.parse(entry.handoffDeadline || '');
+    if (!Number.isFinite(deadline) || deadline <= nowMs) return false;
+  }
   const expiresAtMs = Date.parse(entry.expiresAt || '');
   return Number.isFinite(expiresAtMs) && expiresAtMs > nowMs;
 }
@@ -55,6 +63,7 @@ async function mutateState(mutator, clock = Date.now) {
   return leaseQueue(async () => {
     const state = normalizeState(await readJson(TURN_CONNECTION_LEASES_FILE, null));
     const nowMs = clock();
+    expireTurnHandoffs(state.leases, nowMs);
     state.leases = pruneTurnLeases(state.leases, nowMs)
       .filter((entry) => isActiveLease(entry, nowMs) || entry.status === 'released' || isTurnLeaseId(entry.connectionId));
     const result = await mutator(state, nowMs);
@@ -111,6 +120,8 @@ export async function reserveTurnConnectionLease({
   expiresAt,
   activePhones,
   activeComputers,
+  handoffFrom = '',
+  handoffDeadline = '',
   clock = Date.now,
 } = {}) {
   const normalizedAccountId = trimString(accountId);
@@ -176,12 +187,15 @@ export async function reserveTurnConnectionLease({
       throw error;
     }
     if (isTurnLeaseId(normalizedConnectionId) && existing) {
+      if (handoffFrom && existing.handoffFrom !== handoffFrom) {
+        throw Object.assign(new Error('TURN handoff predecessor differs'), { statusCode: 409, code: 'turn_handoff_request_invalid' });
+      }
       existing.updatedAt = new Date(Math.max(nowMs, turnLeaseObservedAt(existing))).toISOString();
       return { ...decision, connectionId: existing.connectionId, leaseId: existing.connectionId, expiresAt: existing.expiresAt };
     }
     const timestamp = isTurnLeaseId(normalizedConnectionId)
       ? new Date(turnLeasePairClock(state.leases, normalizedConnectionId, nowMs)).toISOString() : nowIso(clock);
-    if (isTurnLeaseId(normalizedConnectionId)) {
+    if (isTurnLeaseId(normalizedConnectionId) && !handoffFrom) {
       for (const previous of state.leases) {
         if (previous.accountId === normalizedAccountId && previous.instanceId === normalizedInstanceId
           && previous.deviceId === normalizedDeviceId && isActiveLease(previous, nowMs)) {
@@ -211,8 +225,20 @@ export async function reserveTurnConnectionLease({
     lease.updatedAt = timestamp;
     lease.expiresAt = trimString(expiresAt);
     lease.releasedAt = '';
-    if (!existing) state.leases.push(lease);
-    return { ...decision, connectionId: lease.connectionId, leaseId: lease.connectionId, expiresAt: lease.expiresAt };
+    const reserved = existing ? lease : handoffFrom ? prepareTurnHandoff(state.leases, handoffFrom, lease, nowMs, handoffDeadline)
+      : (state.leases.push(lease), lease);
+    return { ...decision, connectionId: reserved.connectionId, leaseId: reserved.connectionId, expiresAt: reserved.expiresAt };
+  }, clock);
+}
+
+export async function commitLocalTurnHandoff({ deviceId, connectionId, clock = Date.now } = {}) {
+  return mutateState((state, nowMs) => {
+    const lease = state.leases.find(entry => entry.connectionId === trimString(connectionId)
+      && entry.deviceId === trimString(deviceId));
+    if (!lease || !lease.handoffFrom) throw Object.assign(new Error('TURN handoff not found'), { code: 'turn_handoff_commit_invalid', statusCode: 409 });
+    if (lease.handoffCommittedAt && isActiveLease(lease, nowMs)) return { committed: true };
+    commitTurnHandoff(state.leases, lease.connectionId, nowMs);
+    return { committed: true };
   }, clock);
 }
 
