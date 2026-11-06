@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -10,6 +11,21 @@ using System.Windows.Forms;
 internal static class AgentoCSetup {
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool CreateHardLink(string newFileName, string existingFileName, IntPtr securityAttributes);
+    [DllImport("msi.dll", CharSet = CharSet.Unicode, EntryPoint = "MsiOpenDatabaseW")]
+    private static extern uint MsiOpenDatabase(string path, IntPtr persist, out uint database);
+    [DllImport("msi.dll", CharSet = CharSet.Unicode, EntryPoint = "MsiDatabaseOpenViewW")]
+    private static extern uint MsiDatabaseOpenView(uint database, string query, out uint view);
+    [DllImport("msi.dll")] private static extern uint MsiViewExecute(uint view, uint record);
+    [DllImport("msi.dll")] private static extern uint MsiViewFetch(uint view, out uint record);
+    [DllImport("msi.dll", CharSet = CharSet.Unicode, EntryPoint = "MsiRecordGetStringW")]
+    private static extern uint MsiRecordGetString(uint record, uint field, StringBuilder value, ref uint length);
+    [DllImport("msi.dll")] private static extern uint MsiCloseHandle(uint handle);
+    [DllImport("msi.dll", CharSet = CharSet.Unicode, EntryPoint = "MsiEnumRelatedProductsW")]
+    private static extern uint MsiEnumRelatedProducts(string upgradeCode, uint reserved, uint index, StringBuilder product);
+    [DllImport("msi.dll", CharSet = CharSet.Unicode, EntryPoint = "MsiQueryProductStateW")]
+    private static extern int MsiQueryProductState(string product);
+    [DllImport("msi.dll", CharSet = CharSet.Unicode, EntryPoint = "MsiGetComponentPathW")]
+    private static extern int MsiGetComponentPath(string product, string component, StringBuilder path, ref uint length);
     private const string PayloadResource = "AgentoC.Payload.msi";
     private const string HashResource = "AgentoC.Payload.sha256";
 
@@ -46,6 +62,13 @@ internal static class AgentoCSetup {
                 File.Copy(payloadPath, repairSourcePath, false);
 
             StringBuilder command = new StringBuilder("/i ").Append(Quote(payloadPath));
+            // Embedded UI locates the previous installation for interactive
+            // upgrades. MSI does not load it in quiet mode, so perform the
+            // same registration-based discovery before launching msiexec.
+            // The installer's own upgrade admission still validates the path.
+            string existingFolder;
+            if (IsQuiet(args) && !HasInstallFolder(args) && TryFindInstalledFolder(payloadPath, out existingFolder))
+                command.Append(' ').Append(Quote("AGENTOC_INSTALLFOLDER=" + existingFolder));
             foreach (string arg in args) command.Append(' ').Append(Quote(arg));
             ProcessStartInfo start = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "msiexec.exe"), command.ToString());
             start.UseShellExecute = false;
@@ -62,6 +85,54 @@ internal static class AgentoCSetup {
             try { if (payloadPath != null && File.Exists(payloadPath)) File.Delete(payloadPath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             try { if (directory != null && Directory.Exists(directory)) Directory.Delete(directory, false); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
+    }
+
+    private static bool IsQuiet(string[] args) {
+        foreach (string arg in args) {
+            string value = arg.ToLowerInvariant();
+            if (value == "/q" || value == "/quiet" || value == "/passive" || value.StartsWith("/qn", StringComparison.Ordinal) || value.StartsWith("/qb", StringComparison.Ordinal)) return true;
+        }
+        return false;
+    }
+
+    private static bool HasInstallFolder(string[] args) {
+        foreach (string arg in args)
+            if (arg.StartsWith("AGENTOC_INSTALLFOLDER=", StringComparison.OrdinalIgnoreCase) || arg.StartsWith("INSTALLFOLDER=", StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private static string ReadMsiValue(uint database, string query) {
+        uint view = 0, record = 0;
+        try {
+            if (MsiDatabaseOpenView(database, query, out view) != 0 || MsiViewExecute(view, 0) != 0 || MsiViewFetch(view, out record) != 0) return null;
+            var value = new StringBuilder(256); uint length = (uint)value.Capacity;
+            return MsiRecordGetString(record, 1, value, ref length) == 0 ? value.ToString() : null;
+        } finally { if (record != 0) MsiCloseHandle(record); if (view != 0) MsiCloseHandle(view); }
+    }
+
+    private static bool TryFindInstalledFolder(string msi, out string folder) {
+        folder = null; uint database;
+        if (MsiOpenDatabase(msi, IntPtr.Zero, out database) != 0) return false;
+        string upgradeCode, component;
+        try {
+            upgradeCode = ReadMsiValue(database, "SELECT `Value` FROM `Property` WHERE `Property` = 'UpgradeCode'");
+            component = ReadMsiValue(database, "SELECT `ComponentId` FROM `Component` WHERE `Component` = 'ManagedServiceHost'");
+        } finally { MsiCloseHandle(database); }
+        if (String.IsNullOrEmpty(upgradeCode) || String.IsNullOrEmpty(component)) return false;
+        var installed = new List<string>();
+        for (uint i = 0; ; i++) {
+            var product = new StringBuilder(40); uint result = MsiEnumRelatedProducts(upgradeCode, 0, i, product);
+            if (result == 259) break; // ERROR_NO_MORE_ITEMS
+            if (result != 0) return false;
+            if (MsiQueryProductState(product.ToString()) == 5) installed.Add(product.ToString());
+        }
+        if (installed.Count != 1) return false;
+        var service = new StringBuilder(32768); uint length = (uint)service.Capacity;
+        if (MsiGetComponentPath(installed[0], component, service, ref length) != 3) return false; // INSTALLSTATE_LOCAL
+        string servicePath = service.ToString();
+        if (!Path.IsPathRooted(servicePath) || !String.Equals(Path.GetFileName(servicePath), "AgentoC.ServiceHost.exe", StringComparison.OrdinalIgnoreCase)) return false;
+        folder = Path.GetDirectoryName(servicePath);
+        return !String.IsNullOrEmpty(folder);
     }
 
     // Windows command line escaping for CommandLineToArgvW / MSI arguments.
