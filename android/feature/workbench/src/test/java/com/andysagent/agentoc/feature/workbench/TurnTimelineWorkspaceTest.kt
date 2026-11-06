@@ -29,6 +29,7 @@ class TurnTimelineWorkspaceTest {
             TimelineItem.Message("c", 3, TimelineRole.Agent, "answer", false),
         )
         assertEquals("two", latestTimelineRunId(items))
+        assertEquals("two", latestTimelineRunId(items + TimelineItem.Message("late-old", 4, TimelineRole.Agent, "old reply", true, runId = "one")))
     }
 
     @Test fun `run detail completion settles only its matching latest turn`() {
@@ -44,6 +45,11 @@ class TurnTimelineWorkspaceTest {
         assertFalse(latestTurnHasTerminalRun(items, pending.copy(state = PendingTurnState.Accepted), AgentRunStatus.Completed, metrics))
         assertTrue((com.andysagent.agentoc.core.timeline.settleLatestTurnMessages(items,
             latestTurnHasTerminalRun(items, null, AgentRunStatus.Idle, metrics)).last() as TimelineItem.Message).completed)
+        val requestOnly = listOf(prompt.copy(runId = null, requestId = "request-1"), answer.copy(requestId = "request-1"))
+        assertTrue(latestTurnHasTerminalRun(requestOnly, null, AgentRunStatus.Idle, metrics))
+        assertFalse(latestTurnHasTerminalRun(requestOnly, null, AgentRunStatus.Idle, metrics.copy(runId = "other")))
+        val ambiguous = requestOnly + answer.copy(id = "other", requestId = "request-1", runId = "other")
+        assertFalse(latestTurnHasTerminalRun(ambiguous, null, AgentRunStatus.Idle, metrics))
     }
 
     @Test fun `active run stays attached to its own turn when another request is queued`() {

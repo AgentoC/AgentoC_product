@@ -96,15 +96,27 @@ sealed interface TimelineItem {
     ) : TimelineItem
 }
 
+/** Identify the latest prompt's run without borrowing an unrelated run. */
+fun latestTurnRunId(items: List<TimelineItem>): String? {
+    val start = items.indexOfLast { it is TimelineItem.Message && it.role == TimelineRole.User }
+    if (start < 0) return null
+    val prompt = items[start] as TimelineItem.Message
+    prompt.runId?.takeIf(String::isNotBlank)?.let { return it }
+    val requestId = prompt.requestId?.takeIf(String::isNotBlank) ?: return null
+    // Some durable user messages carry only a request ID. Infer a run only
+    // when replies explicitly linked to that request agree on its identity.
+    return items.asSequence().filterIsInstance<TimelineItem.Message>()
+        .filter { it.role == TimelineRole.Agent && it.requestId == requestId }
+        .mapNotNull { it.runId?.takeIf(String::isNotBlank) }
+        .distinct().toList().singleOrNull()
+}
+
 /** Settle the latest turn when the authoritative session says its run ended. */
 fun settleLatestTurnMessages(items: List<TimelineItem>, terminal: Boolean): List<TimelineItem> {
     if (!terminal) return items
-    val start = items.indexOfLast { it is TimelineItem.Message && it.role == TimelineRole.User }
-    if (start < 0) return items
-    val runId = (items[start] as TimelineItem.Message).runId?.takeIf(String::isNotBlank) ?: return items
-    return items.mapIndexed { index, item ->
+    val runId = latestTurnRunId(items) ?: return items
+    return items.map { item ->
         when {
-            index <= start -> item
             item is TimelineItem.Message && item.role == TimelineRole.Agent && item.runId == runId && !item.completed ->
                 item.copy(completed = true, messageState = "completed")
             item is TimelineItem.Operation && item.isReasoning && item.runId == runId &&

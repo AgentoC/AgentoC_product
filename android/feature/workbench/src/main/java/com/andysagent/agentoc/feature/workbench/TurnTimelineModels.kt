@@ -8,6 +8,7 @@ import com.andysagent.agentoc.core.timeline.TimelineItem
 import com.andysagent.agentoc.core.timeline.TimelineOperationKind
 import com.andysagent.agentoc.core.timeline.TimelineOperationStatus
 import com.andysagent.agentoc.core.timeline.TimelineRole
+import com.andysagent.agentoc.core.timeline.latestTurnRunId
 
 /**
  * Representation of a user prompt within a Turn.
@@ -68,7 +69,7 @@ data class TurnGroup(
     val entries: List<TimelineItem> = emptyList(),
 )
 
-internal fun latestTimelineRunId(items: List<TimelineItem>): String? = items.asReversed().firstNotNullOfOrNull { item ->
+internal fun latestTimelineRunId(items: List<TimelineItem>): String? = latestTurnRunId(items) ?: items.asReversed().firstNotNullOfOrNull { item ->
     when (item) {
         is TimelineItem.Message -> item.runId
         is TimelineItem.Operation -> item.runId
@@ -86,8 +87,8 @@ internal fun latestTurnHasTerminalRun(items: List<TimelineItem>, pending: Pendin
     sessionStatus: AgentRunStatus, metrics: RunMetricsUiState): Boolean {
     if (pending?.state == PendingTurnState.Sending || pending?.state == PendingTurnState.Accepted) return false
     val terminal = setOf(AgentRunStatus.Completed, AgentRunStatus.Failed, AgentRunStatus.Cancelled)
-    val lastUser = items.lastOrNull { it is TimelineItem.Message && it.role == TimelineRole.User } as? TimelineItem.Message
-    val matchingRun = !lastUser?.runId.isNullOrBlank() && lastUser?.runId == metrics.runId && metrics.status in terminal
+    val runId = latestTurnRunId(items)
+    val matchingRun = runId != null && runId == metrics.runId && metrics.status in terminal
     return sessionStatus in terminal || matchingRun
 }
 

@@ -132,6 +132,22 @@ class TimelineEngineTest {
         assertEquals(false, (settled[3] as TimelineItem.Message).completed)
         assertEquals(TimelineOperationStatus.Completed, (settled[4] as TimelineItem.Operation).status)
     }
+    @Test fun terminalRunCanBeResolvedFromAnUnambiguousRequestEvenWhenReplyArrivesFirst() {
+        val reply = TimelineItem.Message("reply", 1, TimelineRole.Agent, "answer", false, requestId = "req", runId = "run")
+        val prompt = TimelineItem.Message("user", 2, TimelineRole.User, "request", true, requestId = "req")
+        val unrelated = TimelineItem.Message("other", 3, TimelineRole.Agent, "other", false, requestId = "other", runId = "other-run")
+        val items = listOf(reply, prompt, unrelated)
+        assertEquals("run", latestTurnRunId(items))
+        val settled = settleLatestTurnMessages(items, true)
+        assertTrue((settled[0] as TimelineItem.Message).completed)
+        assertEquals(false, (settled[2] as TimelineItem.Message).completed)
+        val ambiguous = items + reply.copy(id = "different-run", runId = "run-2")
+        assertEquals(null, latestTurnRunId(ambiguous))
+        assertEquals(ambiguous, settleLatestTurnMessages(ambiguous, true))
+        val unlinked = listOf(prompt.copy(requestId = null), reply)
+        assertEquals(null, latestTurnRunId(unlinked))
+        assertEquals(unlinked, settleLatestTurnMessages(unlinked, true))
+    }
     @Test fun liveTerminalEventSettlesTheRunAndRejectsLateUnsequencedTokens() {
         val projector = LiveTimelineProjector()
         projector.apply(listOf(SessionEventDto(id = "delta", type = "text_delta", entityId = "block-1", runId = "run-1", text = "answer")))
