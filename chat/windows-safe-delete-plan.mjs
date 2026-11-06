@@ -13,7 +13,7 @@ export async function compileWindowsSafeDeleteList(command, { parse = parseWindo
   let ast;
   try { ast = await parse(command); } catch { return null; }
   if (ast.errors?.length || ast.dynamicNodes?.length || ast.expressions?.length || !ast.commands?.length || ast.commands.length > 32) return null;
-  const targets = []; let sharedForce = null;
+  const targets = []; const filesOnly = []; let sharedForce = null;
   for (const entry of ast.commands) {
     if (!['remove-item', 'rm', 'del', 'ri'].includes(String(entry.name || '').toLowerCase()) || entry.invocation !== 'Unknown' || entry.redirections || entry.pipelineInput !== false || !Array.isArray(entry.elements)) return null;
     let paths = null, recurse = false, force = false, pathParameter = false;
@@ -27,13 +27,14 @@ export async function compileWindowsSafeDeleteList(command, { parse = parseWindo
       if (['path', 'literalpath'].includes(name) && !pathParameter && !paths && ['literal', 'literal_list'].includes(entry.elements[i + 1]?.kind)) { pathParameter = true; continue; }
       return null;
     }
-    if (!recurse || !Array.isArray(paths) || !paths.length || (sharedForce !== null && force !== sharedForce)) return null;
+    if (!Array.isArray(paths) || !paths.length || (sharedForce !== null && force !== sharedForce)) return null;
     sharedForce = force;
     targets.push(...paths);
+    filesOnly.push(...paths.map(() => !recurse));
   }
   if (targets.length < 2 || targets.length > 32 ||
       targets.some(target => typeof target !== 'string' || !target || /[*?\[\]`$]/.test(target) || /^(?:[\\/]|[a-z]:[^\\/])/i.test(target))) return null;
-  return { targets, force: sharedForce };
+  return { targets, filesOnly, force: sharedForce };
 }
 
 export async function planWindowsSafeDeleteList({ command, state }, { parse = parseWindowsPowerShellAst, analyze = analyzeWindowsFileChanges } = {}) {
@@ -47,8 +48,8 @@ export async function planWindowsSafeDeleteList({ command, state }, { parse = pa
   if (relatives.some(relative => !relative || relative === '..' || relative.startsWith('..\\') || win.isAbsolute(relative))) return null;
   let result;
   try { result = await analyze(compiled.targets.map(target => ({ path: target, kind: 'delete' })), context); } catch { return null; }
-  if (!result?.complete || result.actions.length !== relatives.length || result.actions.some(action => !action.workspace || action.protected || action.workspaceRoot || (action.recursive && !action.recursiveVerified))) return null;
-  return { workspace: win.resolve(root), relative: '', relatives, force: compiled.force,
+  if (!result?.complete || result.actions.length !== relatives.length || result.actions.some((action, index) => !action.workspace || action.protected || action.workspaceRoot || (action.recursive && !action.recursiveVerified) || (compiled.filesOnly[index] && !action.regularFile))) return null;
+  return { workspace: win.resolve(root), relative: '', relatives, filesOnly: compiled.filesOnly, force: compiled.force,
     ...(compiled.targets.some(target => !/^[a-z]:[\\/]/i.test(target)) ? { expectedCwd: win.resolve(context.cwd) } : {}) };
 }
 

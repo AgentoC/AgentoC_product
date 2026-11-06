@@ -115,6 +115,7 @@ for (const mode of ['recommended', 'full-auto']) {
     'Remove-Item -LiteralPath one.txt,build -Recurse -WhatIf',
     'Remove-Item one.txt -Recurse -Force; Remove-Item build -Recurse',
     'Remove-Item one.txt -Recurse -Force; Write-Output unsafe',
+    'Remove-Item one.txt -Force; Remove-Item build -Force',
     'Remove-Item one.txt -Recurse -Force; Remove-Item danger -Recurse -Force']) {
     assert.equal(await planWindowsSafeDeleteList({ command, state }), null, command);
   }
@@ -130,11 +131,12 @@ for (const mode of ['recommended', 'full-auto']) {
   await mkdir(path.join(workspace, 'build'));
   await writeFile(path.join(workspace, 'build', 'fixture.txt'), 'fixture');
   await writeFile(path.join(workspace, 'one.txt'), 'fixture');
-  const steps = { ...request, request_id: 'steps', request: { ...request.request, input: { command: 'Remove-Item one.txt -Recurse -Force; Remove-Item build -Recurse -Force' } } };
+  const steps = { ...request, request_id: 'steps', request: { ...request.request, input: { command: 'Remove-Item one.txt -Force; Remove-Item build -Recurse -Force' } } };
   await trackClaudeBidiApprovalRequest(run.id, state, steps, proc, { safeDeleteHelperPath: helperPath });
   assert.equal(sent[1]?.response?.response?.behavior, 'allow');
   const stepRequest = /--request '([A-Za-z0-9_-]+)'$/.exec(sent[1].response.response.updatedInput.command)?.[1];
   assert.ok(stepRequest);
+  assert.deepEqual(JSON.parse(Buffer.from(stepRequest, 'base64url').toString('utf8')).filesOnly, [true, false]);
   const stepResult = await exec(helperPath, ['--request', stepRequest], { cwd: workspace, windowsHide: true });
   assert.deepEqual(JSON.parse(stepResult.stdout), { ok: true, deleted: 3 });
 }

@@ -22,8 +22,17 @@ type CapturedTree struct {
 // CaptureForest validates every independent target before any deletion. It
 // shares the same handle and size bounds as a single captured tree.
 func CaptureForest(ctx context.Context, workspace string, relatives []string) (_ *CapturedTree, err error) {
+	return CaptureForestWithFileChecks(ctx, workspace, relatives, nil)
+}
+
+// fileOnly prevents a target analyzed as a non-recursive file from being
+// replaced by a directory before the native helper opens it.
+func CaptureForestWithFileChecks(ctx context.Context, workspace string, relatives []string, fileOnly []bool) (_ *CapturedTree, err error) {
 	if len(relatives) == 0 || len(relatives) > 32 {
 		return nil, errors.New("target count is invalid")
+	}
+	if len(fileOnly) != 0 && len(fileOnly) != len(relatives) {
+		return nil, errors.New("file target checks are invalid")
 	}
 	seen := make([]string, 0, len(relatives))
 	forest := &CapturedTree{}
@@ -32,7 +41,7 @@ func CaptureForest(ctx context.Context, workspace string, relatives []string) (_
 			forest.Close()
 		}
 	}()
-	for _, relative := range relatives {
+	for index, relative := range relatives {
 		clean := strings.ToLower(filepath.Clean(relative))
 		for _, other := range seen {
 			if clean == other || strings.HasPrefix(clean, other+`\`) || strings.HasPrefix(other, clean+`\`) {
@@ -43,6 +52,10 @@ func CaptureForest(ctx context.Context, workspace string, relatives []string) (_
 		tree, captureErr := CaptureTree(ctx, workspace, relative, false)
 		if captureErr != nil {
 			return nil, captureErr
+		}
+		if len(fileOnly) > 0 && fileOnly[index] && (len(tree.order) != 1 || tree.order[0].directory) {
+			tree.Close()
+			return nil, errors.New("non-recursive target is not a file")
 		}
 		forest.held = append(forest.held, tree.held...)
 		forest.order = append(forest.order, tree.order...)

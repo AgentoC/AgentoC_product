@@ -107,3 +107,30 @@ func TestMultipleTargetsRejectUnsafeEntryBeforeDeletion(t *testing.T) {
 		t.Fatalf("count=%d err=%v", count, err)
 	}
 }
+
+func TestMultipleTargetsRejectFileReplacedWithDirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "one.txt"), []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "swapped"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "swapped", "keep.txt"), []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	req := request{SchemaVersion: 1, Workspace: root, Relatives: []string{"one.txt", "swapped"}, FilesOnly: []bool{true, true}, RequestKey: "gate:" + strings.Repeat("d", 64)}
+	if _, err := run([]string{"--request", envelope(t, req)}); err == nil {
+		t.Fatal("replacement directory accepted")
+	}
+	for _, name := range []string{"one.txt", filepath.Join("swapped", "keep.txt")} {
+		if _, err := os.Stat(filepath.Join(root, name)); err != nil {
+			t.Fatalf("%s changed: %v", name, err)
+		}
+	}
+	req.FilesOnly = []bool{true, false}
+	count, err := run([]string{"--request", envelope(t, req)})
+	if err != nil || count != 3 {
+		t.Fatalf("count=%d err=%v", count, err)
+	}
+}

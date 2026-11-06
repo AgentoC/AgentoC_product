@@ -26,6 +26,7 @@ type request struct {
 	Workspace       string   `json:"workspace"`
 	Relative        string   `json:"relative"`
 	Relatives       []string `json:"relatives,omitempty"`
+	FilesOnly       []bool   `json:"filesOnly,omitempty"`
 	Target          string   `json:"target,omitempty"`
 	TargetFromCwd   bool     `json:"targetFromCwd,omitempty"`
 	ExpectedCwd     string   `json:"expectedCwd,omitempty"`
@@ -70,11 +71,14 @@ func run(args []string) (int, error) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		forest, captureErr := safedelete.CaptureForest(ctx, input.Workspace, input.Relatives)
+		forest, captureErr := safedelete.CaptureForestWithFileChecks(ctx, input.Workspace, input.Relatives, input.FilesOnly)
 		if captureErr != nil {
 			return 0, fmt.Errorf("target validation failed: %w", captureErr)
 		}
 		return forest.CommitWithOptions(ctx, input.Force)
+	}
+	if len(input.FilesOnly) > 0 {
+		return 0, errors.New("file checks require multiple targets")
 	}
 	if input.TargetFromCwd {
 		if input.Relative != "" || input.Target == "" || len(input.Target) > 8192 || !filepath.IsAbs(input.ExpectedCwd) {
