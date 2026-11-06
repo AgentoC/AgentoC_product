@@ -125,6 +125,10 @@ assert.equal((await inspect("Write-Output hello > '.env.'")).decision, 'review')
 assert.equal((await inspect('Get-Content ordinary-link')).decision, 'review');
 assert.equal((await inspect('Set-Content ordinary-link -Value hello')).decision, 'review');
 assert.equal((await inspect('Remove-Item ordinary-link')).decision, 'allow');
+assert.equal((await inspect('Remove-Item -Confirm:$false readme.txt')).decision, 'allow');
+assert.equal((await inspect('Remove-Item -Confirm readme.txt')).decision, 'review');
+assert.equal((await inspect('Remove-Item -Confirm:$true readme.txt')).decision, 'review');
+assert.equal((await inspect('Remove-Item -Confirm:$env:FLAG readme.txt')).decision, 'review');
 assert.equal((await inspect('Remove-Item readme.txt -Recurse')).decision, 'review');
 assert.equal(decideWindowsPowerShellActions(await analyzeWindowsFileChanges([{ path: path.join(workspace, 'ordinary-link'), kind: 'write' }], context)).decision, 'review');
 result = await inspect('Copy-Item -Path readme.txt -Destination result.txt');

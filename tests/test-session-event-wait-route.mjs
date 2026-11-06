@@ -14,7 +14,8 @@ process.env.AGENTOC_ALLOW_EXTERNAL_TEST_INSTANCE_OVERRIDES = '1';
 process.env.AGENTOC_INSTANCE_ROOT = home;
 
 const { appendEvent } = await import('../chat/history.mjs');
-const { createRun } = await import('../chat/runs.mjs');
+const { createRun, updateRun } = await import('../chat/runs.mjs');
+const { mutateSessionMeta } = await import('../chat/session-meta-store.mjs');
 const { createSession, getSession, killAll } = await import('../chat/session-manager.mjs');
 const { handleSessionMainRoutes } = await import('../chat/router-session-main-routes.mjs');
 const { __getSessionEventWaiterCountForTest } = await import('../chat/session-event-waiter.mjs');
@@ -146,10 +147,31 @@ try {
     const query = { filter: 'all', afterSeq: '1', direction: 'forward', limit: '20', timeoutMs: '10' };
     const full = await runWaitRoute(session.id, query, async () => true, kind);
     const compact = await runWaitRoute(session.id, { ...query, compact: '1' }, async () => true, kind);
+    const visible = await runWaitRoute(session.id, { filter: 'visible', limit: '50', direction: 'latest' }, async () => true, 'events');
+    assert.deepEqual(compact.payload.runActivity, visible.payload.runActivity, `${kind} mobile activity matches the visible projection`);
     assert.ok(full.payload.events[0].providerCapabilities, `${kind} fixture must exercise capability enrichment`);
     const { providerCapabilities, ...expected } = full.payload.events[0];
     assert.deepEqual(compact.payload.events[0], expected, `${kind} must remove only redundant capability metadata`);
     assert.deepEqual(compact.payload.pagination, full.payload.pagination);
+  }
+  const waiting = await createSession(join(home, 'workspace'), 'missing-tool', 'Pending approval', {});
+  const waitingRun = await createRun({
+    status: { sessionId: waiting.id, requestId: 'req_waiting', state: 'accepted', tool: 'fake-codex', runtimeFamily: 'codex-json' },
+    manifest: { sessionId: waiting.id, requestId: 'req_waiting', folder: '~', tool: 'fake-codex', prompt: 'fixture',
+      runtimeFamily: 'codex-json', options: { runtimeFamily: 'codex-json' } },
+  });
+  await mutateSessionMeta(waiting.id, draft => { draft.activeRunId = waitingRun.id; return true; });
+  await updateRun(waitingRun.id, { state: 'running' });
+  await appendEvent(waiting.id, { type: 'approval_request', approvalId: 'fixture-approval', runId: waitingRun.id,
+    kind: 'command', title: 'fixture request', status: 'pending' });
+  for (const kind of ['events', 'event-wait']) {
+    // The durable cursor already passed the request: the activity must still
+    // identify it so a client can fetch the original event for recovery.
+    const page = await runWaitRoute(waiting.id, { filter: 'all', compact: '1', afterSeq: '1', timeoutMs: '10' }, async () => true, kind);
+    assert.deepEqual(page.payload.events, []);
+    assert.equal(page.payload.runActivity?.kind, 'approval');
+    assert.equal(page.payload.runActivity?.actionRequired, true);
+    assert.equal(page.payload.runActivity?.sourceSeq, 1);
   }
 } finally {
   await killAll();

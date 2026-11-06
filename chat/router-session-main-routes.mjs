@@ -659,11 +659,18 @@ export async function handleSessionMainRoutes({
         historyMeta: readSnapshot.historyMeta,
         strict: true,
       });
+      // Mobile durable synchronization also uses the current activity to
+      // recover pending requests after its event cursor has passed them.
+      // A raw event page alone cannot describe that current state.
+      const mobileActivity = parsedUrl.query.compact === '1'
+        ? (await getSessionTimelineBundle(sessionId, { ...readSnapshot, strict: true })).runActivity || null
+        : undefined;
       writeJsonCached(req, res, {
         schemaVersion: 2,
         sessionId,
         filter: 'all',
         events: parsedUrl.query.compact === '1' ? compactMobileDurableEvents(events) : events,
+        ...(parsedUrl.query.compact === '1' ? { runActivity: mobileActivity } : {}),
         pagination,
         truncated: pagination?.hasMoreBefore === true || pagination?.hasMoreAfter === true,
         consistency: {
@@ -821,6 +828,9 @@ export async function handleSessionMainRoutes({
       // writer therefore cannot make the client mistake a partial page for a
       // complete, stable transcript.
       const finalSnapshot = await getSessionReadSnapshot(sessionId);
+      const mobileActivity = parsedUrl.query.compact === '1' && finalSnapshot
+        ? (await getSessionTimelineBundle(sessionId, { ...finalSnapshot, strict: true })).runActivity || null
+        : undefined;
       const latestSeq = Number.isInteger(page?.pagination?.totalLatestSeq)
         ? page.pagination.totalLatestSeq
         : getEventBoundarySeq(page?.events?.at(-1));
@@ -830,6 +840,7 @@ export async function handleSessionMainRoutes({
         sessionId,
         filter: 'all',
         events: parsedUrl.query.compact === '1' ? compactMobileDurableEvents(page?.events || []) : (page?.events || []),
+        ...(parsedUrl.query.compact === '1' ? { runActivity: mobileActivity ?? null } : {}),
         pagination: page?.pagination || null,
         latestSeq,
         timedOut: waited.timedOut === true,

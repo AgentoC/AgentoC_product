@@ -24,8 +24,8 @@ const FILTERS = new Set(['select-object', 'sort-object', 'measure-object', 'out-
 const SAFE_FILTER_PARAMS = new Set(['first', 'last', 'skip', 'unique', 'property', 'descending', 'width', 'line', 'name', 'displayname', 'noenumerate', 'id', 'module', 'commandtype', 'all', 'listimported', 'includeusername']);
 const SAFE_FILTER_SWITCHES = new Set(['unique', 'descending', 'noenumerate', 'all', 'listimported', 'includeusername']);
 const GET_COMMAND_TYPES = new Set(['alias', 'function', 'filter', 'cmdlet', 'externalscript', 'application', 'script', 'configuration', 'all']);
-const FILE_PARAMS = new Set(['path', 'literalpath', 'destination', 'value', 'itemtype', 'name', 'recurse', 'force', 'raw', 'encoding', 'filter', 'include', 'exclude']);
-const SWITCHES = new Set(['recurse', 'force', 'raw']);
+const FILE_PARAMS = new Set(['path', 'literalpath', 'destination', 'value', 'itemtype', 'name', 'recurse', 'force', 'raw', 'encoding', 'filter', 'include', 'exclude', 'confirm']);
+const SWITCHES = new Set(['recurse', 'force', 'raw', 'confirm']);
 const CONTENT_READ_PARAMS = new Set([...FILE_PARAMS, 'totalcount', 'tail', 'readcount', 'delimiter', 'asbytestream']);
 const CONTENT_READ_SWITCHES = new Set([...SWITCHES, 'asbytestream']);
 const CONTENT_WRITE_PARAMS = new Set([...FILE_PARAMS, 'nonewline', 'asbytestream']);
@@ -60,6 +60,10 @@ function parseArguments(elements, allowed, switches = new Set()) {
     const key = String(element.name || '').toLowerCase();
     if (!allowed.has(key) || named.has(key)) return null;
     if (switches.has(key)) {
+      if (key === 'confirm' && element.argumentType === 'StaticConfirmFalse' && element.value === 'false') {
+        named.set(key, false); continue;
+      }
+      if (key === 'confirm') return null;
       if (element.argumentType || element.value != null) return null;
       named.set(key, true); continue;
     }
