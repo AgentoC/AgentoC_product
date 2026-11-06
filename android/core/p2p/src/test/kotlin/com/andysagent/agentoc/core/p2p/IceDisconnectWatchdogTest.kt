@@ -14,7 +14,7 @@ class IceDisconnectWatchdogTest {
         val watchdog = IceDisconnectWatchdog(this) { failures++ }
         watchdog.channelOpened(iceDisconnected = true)
         runCurrent()
-        advanceTimeBy(2_001)
+        advanceTimeBy(8_001)
         runCurrent()
         assertEquals(1, failures)
     }
@@ -23,7 +23,7 @@ class IceDisconnectWatchdogTest {
         var failures = 0
         val watchdog = IceDisconnectWatchdog(this) { failures++ }
         watchdog.channelOpened(iceDisconnected = false)
-        advanceTimeBy(2_001)
+        advanceTimeBy(8_001)
         runCurrent()
         assertEquals(0, failures)
     }
@@ -33,7 +33,9 @@ class IceDisconnectWatchdogTest {
         val watchdog = IceDisconnectWatchdog(this) { failures++ }
         watchdog.disconnected()
         runCurrent()
-        advanceTimeBy(1_500)
+        advanceTimeBy(3_500)
+        runCurrent()
+        assertEquals(0, failures, "A brief outage must not destroy the carrier")
         watchdog.recovered()
         advanceTimeBy(1_000)
         runCurrent()
@@ -47,7 +49,7 @@ class IceDisconnectWatchdogTest {
         runCurrent()
         advanceTimeBy(1_000)
         watchdog.disconnected()
-        advanceTimeBy(1_001)
+        advanceTimeBy(7_001)
         runCurrent()
         assertEquals(1, failures)
     }
@@ -64,7 +66,7 @@ class IceDisconnectWatchdogTest {
         advanceTimeBy(1_000)
         runCurrent()
         assertEquals(0, failures)
-        advanceTimeBy(1_001)
+        advanceTimeBy(7_001)
         runCurrent()
         assertEquals(1, failures)
     }

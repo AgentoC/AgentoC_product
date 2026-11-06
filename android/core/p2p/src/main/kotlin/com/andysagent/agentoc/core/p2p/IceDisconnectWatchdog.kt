@@ -5,10 +5,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Give transient ICE loss a short chance to recover before replacing a carrier. */
+/** Give transient ICE loss time to recover; FAILED and CLOSED bypass this watchdog. */
 internal class IceDisconnectWatchdog(
     private val scope: CoroutineScope,
-    private val graceMs: Long = 2_000,
+    private val graceMs: Long = 8_000,
     private val onPersistentDisconnect: () -> Unit,
 ) {
     private val lock = Any()
