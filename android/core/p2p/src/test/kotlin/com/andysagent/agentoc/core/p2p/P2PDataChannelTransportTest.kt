@@ -33,12 +33,15 @@ class P2PDataChannelTransportTest {
     @Test
     fun `only durable history GET requests use the optional bulk channel`() {
         fun request(path: String, method: String = "GET") = P2PHttpRequest(id = "x", method = method, path = path)
-        assertTrue(isBulkHistoryRequest(request("/api/sessions/s/events?filter=all&limit=200")))
-        assertTrue(isBulkHistoryRequest(request("/api/sessions/s/events/wait?afterSeq=4&filter=all")))
-        assertFalse(isBulkHistoryRequest(request("/api/sessions/s/events?filter=visible")))
-        assertFalse(isBulkHistoryRequest(request("/api/sessions/s/events/wait?filter=all&liveOnly=1")))
-        assertFalse(isBulkHistoryRequest(request("/api/sessions/s/events?filter=all", "POST")))
-        assertFalse(isBulkHistoryRequest(request("/api/projects?filter=all")))
+        assertTrue(isBulkReadRequest(request("/api/sessions/s/events?filter=all&limit=200")))
+        assertTrue(isBulkReadRequest(request("/api/sessions/s/events/wait?afterSeq=4&filter=all")))
+        assertTrue(isBulkReadRequest(request("/api/workspace-files/content?sessionId=s&path=report.pdf")))
+        assertFalse(isBulkReadRequest(request("/api/workspace-files/content?path=report.pdf", "POST")))
+        assertFalse(isBulkReadRequest(request("/api/workspace-files/content-other?path=report.pdf")))
+        assertFalse(isBulkReadRequest(request("/api/sessions/s/events?filter=visible")))
+        assertFalse(isBulkReadRequest(request("/api/sessions/s/events/wait?filter=all&liveOnly=1")))
+        assertFalse(isBulkReadRequest(request("/api/sessions/s/events?filter=all", "POST")))
+        assertFalse(isBulkReadRequest(request("/api/projects?filter=all")))
     }
 
     @Test
@@ -55,6 +58,21 @@ class P2PDataChannelTransportTest {
         assertFalse(attempts[1].second)
         assertNotEquals(original.id, attempts[1].first.id)
         assertEquals(original.path, attempts[1].first.path)
+        assertEquals(original.id, result.getOrThrow().id)
+    }
+
+    @Test
+    fun `closed bulk channel retries file preview once on primary`() = kotlinx.coroutines.test.runTest {
+        val original = P2PHttpRequest(id = "file", method = "GET", path = "/api/workspace-files/content?path=report.pdf")
+        val attempts = mutableListOf<Pair<P2PHttpRequest, Boolean>>()
+        val result = requestWithBulkFallback(original) { request, allowBulk ->
+            attempts += request to allowBulk
+            if (allowBulk) Result.failure(BulkChannelClosedException())
+            else Result.success(P2PHttpResponse(id = request.id, status = 200))
+        }
+        assertEquals(2, attempts.size)
+        assertFalse(attempts[1].second)
+        assertNotEquals(original.id, attempts[1].first.id)
         assertEquals(original.id, result.getOrThrow().id)
     }
 

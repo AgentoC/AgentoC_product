@@ -82,23 +82,24 @@ fun interface P2PSessionFactory {
     suspend fun create(candidate: P2PCandidate): P2PSession
 }
 
-/** Only durable history pages are eligible; live events stay interactive. */
-internal fun isBulkHistoryRequest(request: P2PHttpRequest): Boolean {
+/** Large, read-only responses use the bulk channel; live events stay interactive. */
+internal fun isBulkReadRequest(request: P2PHttpRequest): Boolean {
     if (request.method != "GET") return false
     val path = request.path.substringBefore('?')
+    if (path == "/api/workspace-files/content") return true
     if (!path.startsWith("/api/sessions/") || !(path.endsWith("/events") || path.endsWith("/events/wait"))) return false
     val query = request.path.substringAfter('?', "").split('&').toSet()
     return "filter=all" in query && "liveOnly=1" !in query
 }
 
-internal class BulkChannelClosedException : IllegalStateException("P2P history channel closed")
+internal class BulkChannelClosedException : IllegalStateException("P2P bulk channel closed")
 
 internal suspend fun requestWithBulkFallback(
     request: P2PHttpRequest,
     attempt: suspend (P2PHttpRequest, Boolean) -> Result<P2PHttpResponse>,
 ): Result<P2PHttpResponse> {
     val result = attempt(request, true)
-    if (!isBulkHistoryRequest(request) || result.exceptionOrNull() !is BulkChannelClosedException) return result
+    if (!isBulkReadRequest(request) || result.exceptionOrNull() !is BulkChannelClosedException) return result
     // The retry uses a fresh wire ID so a late response from the closed
     // channel cannot be mistaken for the response on the primary channel.
     return attempt(request.copy(id = java.util.UUID.randomUUID().toString()), false)
@@ -569,10 +570,10 @@ class WebRTCDataChannelTransport(
         if (primary.state() != DataChannel.State.OPEN) {
             return Result.failure(IllegalStateException("DataChannel is not open"))
         }
-        val historyRequest = allowBulk && isBulkHistoryRequest(request)
-        if (historyRequest && bulkChannel == null) requestBulkChannel()
-        val channel = bulkChannel?.takeIf { historyRequest && it.state() == DataChannel.State.OPEN } ?: primary
-        if (channel !== primary) traceConnect("history_bulk_routed")
+        val bulkRequest = allowBulk && isBulkReadRequest(request)
+        if (bulkRequest && bulkChannel == null) requestBulkChannel()
+        val channel = bulkChannel?.takeIf { bulkRequest && it.state() == DataChannel.State.OPEN } ?: primary
+        if (channel !== primary) traceConnect("bulk_read_routed")
 
         val id = request.id
         val trace = debuggable && request.method == "GET" && request.path == "/api/projects"
