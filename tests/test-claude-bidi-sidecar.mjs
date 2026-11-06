@@ -140,6 +140,15 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   }
   if (message.type === 'user') {
     userTurn += 1;
+    if (String(message.message?.content || '').includes('__CLAUDE_SCOPED_TRIGGER_TEST__')) {
+      require('child_process').execFile(process.execPath, [${JSON.stringify(join(repoRoot, 'cli.js'))},
+        'trigger', 'create', '--in', '2h', '--text', 'Scoped trigger fixture', '--json'],
+        { env: process.env, timeout: 15000, windowsHide: true }, (error) => {
+          result(error ? 'scoped trigger failed' : 'scoped trigger created', error ? { is_error: true, subtype: 'error' } : {});
+          setTimeout(() => process.exit(error ? 1 : 0), 50);
+        });
+      return;
+    }
     if (String(message.message?.content || '').includes('__CLAUDE_MANAGED_MCP_TEST__')) {
       pendingApproval = { requestId: 'claude-managed-mcp-1' };
       send({
@@ -377,6 +386,24 @@ try {
     1,
     `intermediate interrupted result must not finalize the run: ${JSON.stringify(eventsRes.json.events)}`,
   );
+
+  const scopedSessionRes = await request(port, 'POST', '/api/sessions', {
+    folder: repoRoot, tool: 'fake-claude-bidi', name: 'Run-scoped trigger fixture',
+  });
+  assert.equal(scopedSessionRes.status, 201, scopedSessionRes.text);
+  const scopedSessionId = scopedSessionRes.json.session.id;
+  const scopedStart = await request(port, 'POST', `/api/sessions/${scopedSessionId}/messages`, {
+    requestId: 'req-claude-scoped-trigger', text: '__CLAUDE_SCOPED_TRIGGER_TEST__', tool: 'fake-claude-bidi', model: 'fake-model',
+  });
+  assert.ok([200, 202].includes(scopedStart.status), scopedStart.text);
+  const scopedRun = await waitFor(async () => {
+    const response = await request(port, 'GET', `/api/runs/${scopedStart.json.run.id}`);
+    return ['completed', 'failed', 'cancelled'].includes(response.json?.run?.state) ? response.json.run : false;
+  }, 'run-scoped trigger terminal');
+  assert.equal(scopedRun.state, 'completed', JSON.stringify(scopedRun));
+  const scopedTriggers = await request(port, 'GET', `/api/triggers?sessionId=${encodeURIComponent(scopedSessionId)}`);
+  assert.equal(scopedTriggers.status, 200);
+  assert.ok(scopedTriggers.json.triggers.some(trigger => trigger.sessionId === scopedSessionId && trigger.text === 'Scoped trigger fixture'));
 
   writeFileSync(fixture.recordPath, '', 'utf8');
   const cancelSessionRes = await request(port, 'POST', '/api/sessions', {
