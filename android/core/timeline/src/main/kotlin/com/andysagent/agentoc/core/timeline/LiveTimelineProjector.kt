@@ -246,7 +246,9 @@ class LiveTimelineProjector {
 
         val operationState = event.status ?: event.state ?: event.operationLifecycle
         val isToolUse = type == "tool_use" || type == "tool_call" || (type == "operation" && operationState in setOf("in_progress", "running", "started"))
-        val isToolResult = type == "tool_result" || (type == "operation" && operationState in setOf("completed", "failed", "error"))
+        val isToolResult = type == "tool_result" || (type == "operation" && operationState in setOf(
+            "completed", "failed", "error", "declined", "denied", "interrupted", "cancelled", "canceled",
+        ))
         val isFileChange = type == "file_change" || event.fileChanges.isNotEmpty()
         val isAttachment = type == "attachment_delivery" || event.attachments.isNotEmpty() || event.images.isNotEmpty()
         val isMessageLike = !isReasoning && !isToolUse && !isToolResult && !isFileChange && !isAttachment && (
@@ -385,7 +387,9 @@ class LiveTimelineProjector {
             isReasoning -> if (isComplete || lateDelta) TimelineOperationStatus.Completed else TimelineOperationStatus.InProgress
             operationState in setOf("waiting_approval", "waiting_user", "approval_requested", "pending") -> TimelineOperationStatus.Pending
             operationState in setOf("started", "running", "in_progress") -> TimelineOperationStatus.InProgress
-            isToolResult -> if ((exitCode != null && exitCode != 0) || operationState == "failed" || operationState == "error") TimelineOperationStatus.Failed else TimelineOperationStatus.Completed
+            isToolResult -> if ((exitCode != null && exitCode != 0) || operationState in setOf(
+                "failed", "error", "declined", "denied", "interrupted", "cancelled", "canceled",
+            )) TimelineOperationStatus.Failed else TimelineOperationStatus.Completed
             isToolUse -> TimelineOperationStatus.InProgress
             isFileChange -> TimelineOperationStatus.Completed
             isComplete || lateDelta -> TimelineOperationStatus.Completed

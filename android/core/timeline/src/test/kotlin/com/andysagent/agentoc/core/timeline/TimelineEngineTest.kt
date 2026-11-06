@@ -11,6 +11,16 @@ import com.andysagent.agentoc.core.protocol.SessionEventDto
 import com.andysagent.agentoc.core.model.Message
 
 class TimelineEngineTest {
+    @Test fun projectedDeclinedAndInterruptedOperationsAreTerminalFailures() {
+        for (state in listOf("failed", "declined", "denied", "interrupted", "cancelled", "canceled")) {
+            val event = SessionEventDto(seq = 4, type = "operation", operationId = "tool-1", runId = "r",
+                kind = "command", state = state, title = "Command")
+            val operation = TimelineProjector.project(emptyList(), LiveTimelineProjector().projectPage(listOf(event)))
+                .filterIsInstance<TimelineItem.Operation>().single()
+            assertEquals(TimelineOperationStatus.Failed, operation.status, state)
+            assertEquals(TimelineOperationKind.Command, operation.kind, state)
+        }
+    }
     @Test fun toolResultOverridesStaleRunningProjectionRegardlessOfArrivalOrder() {
         val running = TimelineItem.Operation("tool:1", 4, TimelineOperationKind.Tool, "Command", "Running",
             TimelineOperationStatus.InProgress, requiresApproval = true, toolName = "Bash", inputJson = "input", runId = "run")
