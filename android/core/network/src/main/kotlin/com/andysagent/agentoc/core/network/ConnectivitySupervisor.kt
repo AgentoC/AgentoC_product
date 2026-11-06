@@ -82,6 +82,9 @@ class ConnectivitySupervisor(
     private val onTurnReservationFailed: ((TurnCarrier?, String) -> Unit)? = null,
     private val bootstrapPending: () -> Boolean = { false },
     private val onTurnHandoffReady: ((P2PSession) -> Unit)? = null,
+    private val useSignedHandoff: () -> Boolean = { false },
+    private val signedHandoffPlan: (suspend (String) -> BootstrapConnectionPlan?)? = null,
+    private val onSignedHandoffFinished: ((Boolean) -> Unit)? = null,
 ) {
     companion object {
         // Visible for testing.
@@ -621,13 +624,16 @@ class ConnectivitySupervisor(
         val job = scope.launch(start = CoroutineStart.LAZY) {
             var next: P2PSession? = null
             var installed = false
+            val signed = useSignedHandoff()
             try {
                 // The host will reclaim signaling at its deadline. Stop our
                 // attempt early so a delayed offer cannot evict the old peer.
                 withTimeoutOrNull((timeoutMs - 5_000L).coerceIn(1L, 15_000L)) {
                     if (!old.suspendSignalingForHandoff()) return@withTimeoutOrNull
-                    requestRecovery("carrier-handoff")
-                    val plan = ticket.nextPlan.await()
+                    val plan = if (signed) signedHandoffPlan?.invoke(handoffId) ?: return@withTimeoutOrNull else {
+                        requestRecovery("carrier-handoff")
+                        ticket.nextPlan.await()
+                    }
                     val carrier = plan.turnCarrier ?: return@withTimeoutOrNull
                     val credential = credentialProvider()?.takeIf { it.isNotBlank() } ?: return@withTimeoutOrNull
                     next = turnSessionFactory?.invoke(carrier) ?: return@withTimeoutOrNull
@@ -638,11 +644,20 @@ class ConnectivitySupervisor(
                         path = "/api/auth/me", headers = mapOf("Authorization" to "Bearer $credential"))).getOrNull()
                     if (result == null || result.status !in 200..299 || !result.error.isNullOrBlank()) return@withTimeoutOrNull
                     if (credentialProvider()?.takeIf { it.isNotBlank() } != credential) return@withTimeoutOrNull
+                    if (signed) {
+                        val body = "{\"handoffId\":\"$handoffId\"}".toByteArray(Charsets.UTF_8)
+                        val commit = candidate.request(P2PHttpRequest(id = UUID.randomUUID().toString(), method = "POST",
+                            path = "/api/device-auth/turn/handoff/commit", bodyBase64 = java.util.Base64.getEncoder().encodeToString(body),
+                            headers = mapOf("Authorization" to "Bearer $credential", "Content-Type" to "application/json"))).getOrNull()
+                        if (commit == null || commit.status !in 200..299 || !commit.error.isNullOrBlank()
+                            || credentialProvider()?.takeIf { it.isNotBlank() } != credential) return@withTimeoutOrNull
+                    }
                     synchronized(handoffLock) {
                         if (handoff !== ticket || stopped || turnSession !== old || !old.isOpen || !candidate.isOpen) return@synchronized
                         cancelTurnRecheck()
                         turnSession = candidate
                         activeTurnCarrier = carrier
+                        if (signed) bootstrapPlan = plan
                         observeUnexpectedClose(candidate, isTurn = true)
                         ready(candidate)
                         installed = true
@@ -654,6 +669,7 @@ class ConnectivitySupervisor(
             } catch (_: Exception) {
                 // Keep the original carrier if a standby cannot be verified.
             } finally {
+                if (signed) onSignedHandoffFinished?.invoke(installed)
                 if (!installed) {
                     next?.close()
                     if (!stopped && turnSession === old && old.isOpen) {

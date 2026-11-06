@@ -12,6 +12,7 @@ import com.andysagent.agentoc.core.p2p.WebRTCDataChannelTransport
 import com.andysagent.agentoc.core.protocol.ProtocolCodec
 import com.andysagent.agentoc.core.protocol.ConnectionBootstrapReportRequestDto
 import com.andysagent.agentoc.core.protocol.ConnectionBootstrapTurnReleaseRequestDto
+import com.andysagent.agentoc.core.protocol.ConnectionBootstrapVerifier
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
@@ -71,6 +72,9 @@ internal class BoundTargetConnection(
         release: (String) -> Unit,
     ) : P2PSession by TurnLeaseSession(carrier, delegate, release)
     private val activeTurnSession = java.util.concurrent.atomic.AtomicReference<PlannedTurnSession?>(null)
+    @Volatile private var earlyHandoffJob: Job? = null
+    @Volatile private var signedHandoffRequested = false
+    @Volatile private var signedCandidatePlan: BootstrapConnectionPlan? = null
 
     private val supervisor: ConnectivitySupervisor = ConnectivitySupervisor(
         endpointProvider = endpointProvider,
@@ -88,7 +92,8 @@ internal class BoundTargetConnection(
         onP2PSessionClosed = { transport.clearP2PSession(it) },
         turnSessionFactory = { carrier: TurnCarrier ->
             try {
-                val window = plan?.takeIf { it.turnCarrier === carrier }?.retentionWindow()
+                val window = (signedCandidatePlan?.takeIf { it.turnCarrier === carrier }
+                    ?: plan?.takeIf { it.turnCarrier === carrier })?.retentionWindow()
                 PlannedTurnSession(carrier, window, WebRTCDataChannelTransport(carrier.p2pCandidate, application)) { id ->
                     releaseTurnConnection(id, "turn-session-closed")
                 }
@@ -97,11 +102,23 @@ internal class BoundTargetConnection(
                 throw error
             }
         },
-        onTurnSessionReady = { lastFailedTurnCarrier = null; activeTurnSession.set(it as? PlannedTurnSession); transport.setTurnSession(it) },
-        onTurnHandoffReady = { lastFailedTurnCarrier = null; activeTurnSession.set(it as? PlannedTurnSession); transport.handoffTurnSession(it) },
+        onTurnSessionReady = { lastFailedTurnCarrier = null; activeTurnSession.set(it as? PlannedTurnSession); transport.setTurnSession(it); scheduleEarlyHandoff(it as? PlannedTurnSession) },
+        onTurnHandoffReady = {
+            lastFailedTurnCarrier = null
+            val old = activeTurnSession.getAndSet(it as? PlannedTurnSession)
+            signedCandidatePlan?.takeIf { candidate -> candidate.turnCarrier === (it as? PlannedTurnSession)?.carrier }?.let { candidate ->
+                plan = candidate; lastReportedTransport = null
+            }
+            transport.handoffTurnSession(it)
+            scheduleEarlyHandoff(it as? PlannedTurnSession)
+            old?.takeIf { previous -> previous !== it }?.let(::closeRetiringSessionAtExpiry)
+        },
         onTurnSessionClosed = {
             transport.clearTurnSession(it)
-            if (it is PlannedTurnSession) activeTurnSession.compareAndSet(it, null)
+            if (it is PlannedTurnSession && activeTurnSession.compareAndSet(it, null)) {
+                earlyHandoffJob?.cancel(); earlyHandoffJob = null
+                signedHandoffRequested = false; signedCandidatePlan = null
+            }
         },
         onTurnReservationFailed = { carrier, reason ->
             lastFailedTurnCarrier = carrier
@@ -109,6 +126,9 @@ internal class BoundTargetConnection(
         },
         bootstrapPending = { synchronized(refreshLock) { refreshJob?.isActive == true } },
         onRecoveryRequired = ::requestRecovery,
+        useSignedHandoff = { signedHandoffRequested },
+        signedHandoffPlan = ::fetchSignedHandoffPlan,
+        onSignedHandoffFinished = { signedHandoffRequested = false; signedCandidatePlan = null },
     )
     override val connectivityState get() = supervisor.state
 
@@ -179,6 +199,8 @@ internal class BoundTargetConnection(
     override suspend fun stop() {
         connectionDebugTrace(application, instanceId, "controller-stop")
         started = false
+        signedHandoffRequested = false
+        earlyHandoffJob?.cancelAndJoin(); earlyHandoffJob = null
         renewalMonitorJob?.cancelAndJoin()
         renewalMonitorJob = null
         val pendingRefresh = synchronized(refreshLock) {
@@ -338,6 +360,64 @@ internal class BoundTargetConnection(
             && session.retentionWindow?.let { it.monotonicDeadline - System.nanoTime() > 0L
                 && it.signedExpiry > System.currentTimeMillis() } == true
             && supervisor.state.value.status == ConnectionStatus.Connected
+
+    private fun scheduleEarlyHandoff(session: PlannedTurnSession?) {
+        earlyHandoffJob?.cancel()
+        val current = plan
+        val window = session?.retentionWindow
+        if (session == null || current == null || window == null || current.rawContract.isBlank()
+            || current.turnConnectionId != session.carrier.connectionId || endpointProvider().isNotBlank()) {
+            earlyHandoffJob = null; return
+        }
+        scope.launch {
+            closeCarrierAtSignedExpiry(window.signedExpiry, window.monotonicDeadline,
+                isOpen = { started && activeTurnSession.get() === session && session.isOpen },
+                close = { session.close(); supervisor.carrierRequestFailed(session) })
+        }
+        earlyHandoffJob = scope.launch {
+            requestEarlyCarrierHandoff(window.signedExpiry, window.monotonicDeadline,
+                isCurrent = { started && activeTurnSession.get() === session && session.isOpen && plan === current },
+                request = {
+                    signedHandoffRequested = true
+                    try {
+                        transport.execute(ApiRequest("POST", "/api/device-auth/turn/handoff/request",
+                            "{\"contract\":${current.rawContract}}")).statusCode
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (error: ApiException) {
+                        if (error.statusCode in setOf(401, 403, 404, 405)) signedHandoffRequested = false
+                        error.statusCode
+                    }
+                })
+        }
+    }
+
+    private suspend fun fetchSignedHandoffPlan(handoffId: String): BootstrapConnectionPlan? {
+        if (!handoffId.matches(Regex("[a-f0-9]{32}"))) return null
+        val current = plan ?: return null
+        val active = activeTurnSession.get() ?: return null
+        val key = current.publicKey ?: return null
+        val previousId = current.turnConnectionId ?: return null
+        if (previousId != active.carrier.connectionId || !active.isOpen) return null
+        val credential = credentialProvider()?.takeIf { it.isNotBlank() } ?: return null
+        val response = transport.execute(ApiRequest("POST", "/api/device-auth/turn/handoff/plan",
+            "{\"handoffId\":\"$handoffId\"}"))
+        val verified = ConnectionBootstrapVerifier.verifyHandoff(response.body, key, instanceId,
+            current.contract.deviceId, previousId)
+        val next = BootstrapConnectionPlanFactory.create(VerifiedBootstrap(verified.contract, verified.publicKey, response.body),
+            "", p2pCredentialsProvider())
+        if (next.turnCarrier == null || !started || plan !== current || activeTurnSession.get() !== active
+            || credentialProvider()?.takeIf { it.isNotBlank() } != credential) return null
+        signedCandidatePlan = next
+        return next
+    }
+
+    private fun closeRetiringSessionAtExpiry(session: PlannedTurnSession) {
+        val window = session.retentionWindow ?: return
+        scope.launch {
+            closeCarrierAtSignedExpiry(window.signedExpiry, window.monotonicDeadline,
+                isOpen = { session.isOpen }, close = { session.close() })
+        }
+    }
 
     private fun BootstrapConnectionPlan.retentionWindow(): CarrierRetentionWindow {
         val expiry = listOfNotNull(contract.expiresAt, contract.turn?.expiresAt,

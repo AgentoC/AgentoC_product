@@ -28,6 +28,26 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ConnectivitySupervisorTest {
+    @Test fun `signed handoff waits for standby commit and keeps old carrier on rejection`() = runTest {
+        for (status in listOf(200, 409)) {
+            val old = FakeSession(Result.success(Unit)).apply { supportsHandoff = true }
+            val replacement = FakeSession(Result.success(Unit)).apply { commitGate = CompletableDeferred() }
+            var creates = 0; var switched = false; var finished: Boolean? = null
+            val supervisor = ConnectivitySupervisor({ "" }, { "rda_fixture" }, FakeNetworkMonitor(), this,
+                turnSessionFactory = { if (creates++ == 0) old else replacement },
+                onTurnHandoffReady = { switched = true }, onRecoveryRequired = {},
+                useSignedHandoff = { true }, signedHandoffPlan = { plan() }, onSignedHandoffFinished = { finished = it })
+            try {
+                supervisor.start(); supervisor.applyBootstrap(plan()); runCurrent()
+                old.requestHandoff(); runCurrent()
+                assertFalse(switched); assertTrue(old.isOpen)
+                replacement.commitGate!!.complete(status); runCurrent()
+                assertEquals(status == 200, switched); assertEquals(status == 200, finished)
+                assertTrue(old.isOpen)
+                if (status != 200) { assertFalse(replacement.isOpen); assertEquals(1, old.resumptions) }
+            } finally { supervisor.stop(); old.close() }
+        }
+    }
     @Test fun `verified handoff switches only after the new carrier answers`() = runTest {
         val old = FakeSession(Result.success(Unit)).apply { supportsHandoff = true }
         val replacement = FakeSession(Result.success(Unit))
@@ -1027,6 +1047,7 @@ class ConnectivitySupervisorTest {
         var supportsHandoff = false
         var suspensions = 0
         var resumptions = 0
+        var commitGate: CompletableDeferred<Int>? = null
 
         override var isOpen: Boolean = false
             private set
@@ -1047,8 +1068,12 @@ class ConnectivitySupervisorTest {
             return connectResult
         }
 
-        override suspend fun request(request: P2PHttpRequest): Result<P2PHttpResponse> = responseResult
-            .map { it.copy(id = request.id) }
+        override suspend fun request(request: P2PHttpRequest): Result<P2PHttpResponse> {
+            if (request.path == "/api/device-auth/turn/handoff/commit" && commitGate != null) {
+                return Result.success(P2PHttpResponse(id = request.id, status = commitGate!!.await()))
+            }
+            return responseResult.map { it.copy(id = request.id) }
+        }
 
         fun failReads() { responseResult = Result.failure(IllegalStateException("fixture unreachable")) }
         fun answerReads(response: P2PHttpResponse) { responseResult = Result.success(response) }
