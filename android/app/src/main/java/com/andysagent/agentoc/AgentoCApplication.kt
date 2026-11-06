@@ -1218,6 +1218,7 @@ class AndroidRuntimeGraph internal constructor(
         retainUiConnections = true
         scope.launch {
             initialized.await()
+            if (foreground) retryUnhealthyForegroundConnection(activeTargetRuntime()?.controller)
             synchronizeDirectory()
             // Foregrounding can lift shortcut throttling. Retry deferred publication;
             // an already published directory is a no-op inside the publisher.

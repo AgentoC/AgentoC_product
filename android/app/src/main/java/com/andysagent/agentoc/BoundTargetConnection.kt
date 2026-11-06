@@ -24,6 +24,14 @@ internal interface TargetConnectionController : TargetConnectionResource {
     fun refresh()
 }
 
+/** Wake an unhealthy selected connection when foreground network access returns. */
+internal fun retryUnhealthyForegroundConnection(controller: TargetConnectionController?) {
+    when (controller?.connectivityState?.value?.status) {
+        ConnectionStatus.Offline, ConnectionStatus.Degraded, ConnectionStatus.Error -> controller.refresh()
+        else -> Unit // Keep healthy, authenticating and explicitly rejected connections untouched.
+    }
+}
+
 /** Fixed-target signed bootstrap and carrier controller, shared by all callers. */
 internal class BoundTargetConnection(
     private val instanceId: String,
