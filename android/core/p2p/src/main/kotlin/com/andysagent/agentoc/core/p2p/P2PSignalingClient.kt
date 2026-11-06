@@ -64,6 +64,7 @@ class P2PSignalingClient(
         fun onAnswer(sdp: String)
         fun onIceCandidate(candidate: String, sdpMid: String?, sdpMLineIndex: Int)
         fun onError(error: String)
+        fun onCarrierHandoffRequested() = Unit
     }
 
     // ── State ─────────────────────────────────────────────────────────
@@ -302,6 +303,9 @@ class P2PSignalingClient(
             // Dispatch to callback.
             if (envPayload is JSONObject) {
                 when (envPayload.optString("type")) {
+                    "carrier_handoff_requested" -> {
+                        if (envPayload.optInt("version", 0) == 1) callback.onCarrierHandoffRequested()
+                    }
                     "answer" -> {
                         val sdp = envPayload.optString("sdp", "")
                         if (sdp.isNotEmpty()) callback.onAnswer(sdp)

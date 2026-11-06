@@ -16,6 +16,40 @@ import kotlin.test.assertTrue
  */
 class P2PSignalingClientTest {
 
+    @Test fun `handoff requests require a verified versioned signal`() = runTest {
+        val room = "handoff-room"
+        val secret = "handoff-secret"
+        var requests = 0
+        val client = P2PSignalingClient("http://127.0.0.1:1", room, secret,
+            object : P2PSignalingClient.SignalingCallback {
+                override fun onAnswer(sdp: String) = Unit
+                override fun onIceCandidate(candidate: String, sdpMid: String?, sdpMLineIndex: Int) = Unit
+                override fun onError(error: String) = Unit
+                override fun onCarrierHandoffRequested() { requests++ }
+            }, this)
+        fun signal(seq: Int, version: Int, signingKey: String): String {
+            val payload = JSONObject().put("type", "carrier_handoff_requested").put("version", version)
+            val timestamp = System.currentTimeMillis()
+            val mac = P2PProtocol.sign(room, signingKey, seq, payload.toString(), timestamp)
+            return JSONObject().put("type", "signal").put("roomId", room).put("envelope",
+                JSONObject().put("v", 1).put("roomId", room).put("seq", seq).put("timestamp", timestamp)
+                    .put("payload", payload).put("mac", mac)).toString()
+        }
+        client.handleMessage(signal(1, 1, "wrong-secret"))
+        client.handleMessage(signal(1, 2, secret))
+        assertEquals(0, requests)
+        client.handleMessage(signal(2, 1, secret))
+        client.handleMessage(signal(2, 1, secret))
+        assertEquals(1, requests, "invalid and replayed handoff requests must not be delivered")
+        client.close()
+    }
+
+    @Test fun `handoff signature matches the Windows host wire format`() {
+        val payload = """{"type":"carrier_handoff_requested","version":1}"""
+        assertTrue(P2PProtocol.verify("handoff-room", "handoff-secret", 1, 1793934000000L,
+            payload, "1xT1JzIYXh8Hg6zRIl9486dXcCyyLHO9UFqcNmHx52s", maxSkewMs = Long.MAX_VALUE))
+    }
+
     // ── Signal dispatch: answer ───────────────────────────────────────
 
     @Test

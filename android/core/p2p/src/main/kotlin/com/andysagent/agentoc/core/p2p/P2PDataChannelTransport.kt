@@ -42,6 +42,13 @@ interface P2PSession {
      */
     fun setUnexpectedCloseListener(listener: ((String) -> Unit)?) {}
 
+    /** A verified peer requests a new carrier while this session stays usable. */
+    fun setCarrierHandoffListener(listener: (() -> Unit)?) {}
+
+    /** Release/reacquire signaling without intentionally closing the carrier. */
+    fun suspendSignalingForHandoff(): Boolean = false
+    suspend fun resumeSignalingAfterHandoff(): Boolean = false
+
     /**
      * Establish the signalling + WebRTC connection.
      * Returns [Result.success] once the DataChannel reports OPEN,
@@ -178,6 +185,7 @@ class WebRTCDataChannelTransport(
 
     // Signalling
     private var signaling: P2PSignalingClient? = null
+    @Volatile private var carrierHandoffListener: (() -> Unit)? = null
 
     @Volatile override var isOpen: Boolean = false
         private set
@@ -364,6 +372,9 @@ class WebRTCDataChannelTransport(
     // ── Signalling callback ───────────────────────────────────────────
 
     private val signalingCallback = object : P2PSignalingClient.SignalingCallback {
+        override fun onCarrierHandoffRequested() {
+            if (isOpen && !closeNotified) carrierHandoffListener?.invoke()
+        }
         override fun onAnswer(sdp: String) {
             traceConnect("answer_received")
             Log.i(TAG, "signaling_answer_received sdpBytes=" + sdp.length)
@@ -421,6 +432,28 @@ class WebRTCDataChannelTransport(
 
     override fun setUnexpectedCloseListener(listener: ((String) -> Unit)?) {
         unexpectedCloseListener = listener
+    }
+
+    override fun setCarrierHandoffListener(listener: (() -> Unit)?) {
+        carrierHandoffListener = listener
+    }
+
+    override fun suspendSignalingForHandoff(): Boolean {
+        if (!isOpen || closeNotified) return false
+        val current = signaling ?: return false
+        current.close()
+        return isOpen && !closeNotified
+    }
+
+    override suspend fun resumeSignalingAfterHandoff(): Boolean {
+        if (!isOpen || closeNotified) return false
+        val current = signaling ?: return false
+        return try {
+            current.connect()
+            if (!isOpen || closeNotified) { current.close(); false } else true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) { false }
     }
 
     override suspend fun connect(): Result<Unit> {

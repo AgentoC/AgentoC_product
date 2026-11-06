@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { chromium } from '@playwright/test';
 import WebSocket from 'ws';
 import { runP2PHostAgent } from '../lib/p2p-host-agent.mjs';
-import { createP2PRoomId } from '../lib/p2p-signal-protocol.mjs';
+import { createP2PRoomId, verifyP2PSignal } from '../lib/p2p-signal-protocol.mjs';
 import { createP2PSignalingServer } from '../p2p/signaling-server.mjs';
 
 const listen = server => new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(server.address())));
@@ -19,7 +19,7 @@ const web = http.createServer((req, res) => {
   if (req.url === '/client.js') { res.writeHead(200, { 'content-type': 'text/javascript' }); res.end(source); }
   else res.end('<!doctype html>');
 });
-let agent, browser, standby;
+let agent, browser, standby, mobile;
 try {
   const targetAddress = await listen(target);
   const signalAddress = await signaling.listen();
@@ -29,6 +29,17 @@ try {
     localBaseUrl: `http://127.0.0.1:${targetAddress.port}`,
     ...(process.env.AGENTOC_TEST_P2P_HOST_BINARY ? { binaryPath: process.env.AGENTOC_TEST_P2P_HOST_BINARY } : {}) });
   await agent.ready;
+  mobile = new WebSocket(`ws://127.0.0.1:${signalAddress.port}/signal`);
+  await new Promise((resolve, reject) => { mobile.once('open', resolve); mobile.once('error', reject); });
+  mobile.send(JSON.stringify({ type: 'join', roomId, role: 'mobile' }));
+  await new Promise(resolve => mobile.once('message', resolve));
+  const handoffSignal = new Promise(resolve => mobile.once('message', raw => resolve(JSON.parse(raw))));
+  assert.equal(agent.requestCarrierHandoff(), true);
+  const handoff = await handoffSignal;
+  assert.equal(verifyP2PSignal(handoff.envelope, { roomId, secret }), true);
+  assert.deepEqual(handoff.envelope.payload, { type: 'carrier_handoff_requested', version: 1 });
+  mobile.close();
+  await new Promise(resolve => mobile.once('close', resolve));
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${webAddress.port}/`);
@@ -58,6 +69,7 @@ try {
   console.log('P2P host signaling suspension preserves real DataChannel requests');
 } finally {
   standby?.terminate();
+  mobile?.terminate();
   agent?.stop();
   await browser?.close();
   await signaling.close();
