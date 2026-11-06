@@ -107,6 +107,7 @@ import {
 } from './privileged-gate.mjs';
 import { decideWindowsApproval } from './windows-approval-gate.mjs';
 import { buildClaudeWindowsInstallBridge, checkWindowsInstallBridgeReadiness } from './windows-auto-install-bridge.mjs';
+import { buildWindowsCliReadBridge } from './windows-cli-read-bridge.mjs';
 import { needsWindowsElevationGuidance, windowsElevationGuidance, shouldInstallWindowsElevationHook } from './windows-elevation-guidance.mjs';
 import { verifyCodexWindowsInstallBridgeApproval } from './codex-windows-install-hook.mjs';
 import { createCodexManagedHookSetup } from './codex-managed-hook-setup.mjs';
@@ -2754,7 +2755,7 @@ export async function trackCodexAppServerApprovalRequest(runId, state, parsed, p
   return record;
 }
 
-export async function trackClaudeBidiApprovalRequest(runId, state, parsed, proc, { safeDeleteHelperPath = join(PROJECT_ROOT, 'bin', 'agentoc-safe-delete.exe') } = {}) {
+export async function trackClaudeBidiApprovalRequest(runId, state, parsed, proc, { safeDeleteHelperPath = join(PROJECT_ROOT, 'bin', 'agentoc-safe-delete.exe'), cliReadHelperPath = join(PROJECT_ROOT, 'bin', 'agentoc-cli-read-bridge.exe') } = {}) {
   if (!state || !parsed) return null;
   const approval = readClaudeBidiApprovalRequest(parsed);
   if (!approval?.approvalId) return null;
@@ -2839,6 +2840,21 @@ export async function trackClaudeBidiApprovalRequest(runId, state, parsed, proc,
       type: 'agentoc.approval_response', approvalId: approval.approvalId, provider: 'claude', decision: 'approved', status: 'approved',
       providerRequestId: approval.providerRequestIdString || String(approval.providerRequestId ?? ''), providerMethod: approval.providerMethod || '',
       autoApproved: true, reason: 'handle-bound workspace deletion',
+    } });
+    const record = markApprovalRecordAutoResponded(serializeCodexAppServerApprovalForRun(approval, gateDecision.risk));
+    if (record) state.pendingApprovals.set(approval.approvalId, record);
+    return record;
+  }
+
+  const cliReadBridge = process.platform === 'win32' && !WORKBENCH_EXECUTION_POLICY && !isMcpTool
+    ? await buildWindowsCliReadBridge({ approval, state, runId, port: Number(CHAT_PORT), helperPath: cliReadHelperPath }) : null;
+  if (cliReadBridge) {
+    const message = buildClaudeBidiApprovalResponseMessage(approval, 'approve', null, { updatedInput: { command: cliReadBridge.updatedCommand } });
+    if (!message || !writeClaudeBidiMessage(proc, message)) throw new Error('Unable to send controlled read response');
+    await appendRunSpoolRecord(runId, { ts: nowIso(), stream: 'stdout', json: {
+      type: 'agentoc.approval_response', approvalId: approval.approvalId, provider: 'claude', decision: 'approved', status: 'approved',
+      providerRequestId: approval.providerRequestIdString || String(approval.providerRequestId ?? ''), providerMethod: approval.providerMethod || '',
+      autoApproved: true, reason: 'controlled read-only CLI operation',
     } });
     const record = markApprovalRecordAutoResponded(serializeCodexAppServerApprovalForRun(approval, gateDecision.risk));
     if (record) state.pendingApprovals.set(approval.approvalId, record);
@@ -3532,6 +3548,14 @@ async function main() {
       cwd: resolvedFolder.cwd,
     })
     : null;
+  if (claudeBidiState) {
+    // The read-only CLI bridge must not replace a command unless this child
+    // actually has a complete capability for its own run and session.
+    claudeBidiState.sessionControlReadAvailable = Boolean(spawnEnv.AGENTOC_SESSION_CONTROL_TOKEN &&
+      spawnEnv.AGENTOC_SESSION_CONTROL_RUN_ID === runId &&
+      spawnEnv.AGENTOC_SESSION_CONTROL_SESSION_ID === manifest.sessionId &&
+      spawnEnv.AGENTOC_SESSION_ID === manifest.sessionId && spawnEnv.AGENTOC_SESSION_CONTROL_TURN_ID);
+  }
   // —— 2026-08-06 防污染兜底：codex run 启动前把 managed home 镜像到 DB current 行 ——
   // 切换可走平台端点或 cc-switch 自身，两者都可能不同步 managed home；
   // 官方形态下顺带停掉代理 daemon，杜绝按陈旧 backup 转发 401。
