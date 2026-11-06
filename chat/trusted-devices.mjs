@@ -24,6 +24,7 @@ const MAX_INVITATION_TTL_MS = 10 * 60 * 1000;
 // Preserve the reviewed short-lived device capability contract. A reconnect
 // repair must not silently turn a 15-minute bearer into a 30-day credential.
 const DEFAULT_DEVICE_TOKEN_TTL_MS = 15 * 60 * 1000;
+const RENDEZVOUS_CREDENTIAL_OVERLAP_MS = 60 * 1000;
 const runTrustedDeviceMutation = createSerialTaskQueue();
 
 function trimString(value) {
@@ -155,6 +156,7 @@ function normalizeState(value) {
           bindingAuthorityRevision: trimString(entry?.bindingAuthorityRevision),
           createdAt: trimString(entry?.createdAt),
           expiresAt: trimString(entry?.expiresAt),
+          retiredAt: trimString(entry?.retiredAt),
         })).filter((entry) => entry.tokenHash && entry.deviceId)
       : [],
     accountJoinIntents: Array.isArray(state.accountJoinIntents)
@@ -482,12 +484,12 @@ function replayAccountCompletionCredential(state, intent, device) {
   const expiresAtMs = Date.parse(intent.completionCredentialExpiresAt || '');
   const token = intent.completionCredentialVersion === 1
     ? deriveAccountCompletionCredential(state, intent) : '';
-  // The retained hash is also the generation fence. A newer join, account
-  // convergence, or explicit revoke removes it. Replays never recreate it;
-  // separately issued credentials may coexist under the existing policy.
+  // The active hash is also the generation fence. A newer join retires it;
+  // account convergence or explicit revoke removes it. Replays never recreate
+  // it; separately issued credentials may coexist under the existing policy.
   const retained = state.authTokens.find(entry => entry.deviceId === intent.deviceId
     && entry.tokenHash === hashSecret(token) && entry.kind === 'bound'
-    && entry.scope === 'device-access'
+    && entry.scope === 'device-access' && !entry.retiredAt
     && entry.createdAt === intent.completionCredentialIssuedAt
     && entry.expiresAt === intent.completionCredentialExpiresAt);
   if (!token || !device || device.revokedAt || !isBoundDevice(device)
@@ -615,6 +617,13 @@ export async function completeTrustedDeviceAccountIntent({
       && BigInt(device.bindingAuthorityRevision) > BigInt(bindingAuthorityRevision)) {
       throw Object.assign(new Error('Device binding authority was superseded'), { code: 'owner_auth_native_replay', statusCode: 409 });
     }
+    // A same-key, same-authority rendezvous is a renewal. Its predecessor can
+    // finish requests briefly, but cannot be replayed as a completion result.
+    const canOverlapCredential = verifiedAccountCompletion === true && device
+      && isBoundDevice(device) && device.accountId === normalizedAccountId
+      && device.bindingAuthorityRevision === bindingAuthorityRevision
+      && Boolean(device.devicePublicKey)
+      && createDevicePublicKeyFingerprint(device.devicePublicKey) === intent.devicePublicKeyFingerprint;
     let keyRotated = false;
     if (device && device.accountId && device.accountId !== normalizedAccountId) {
       const error = new Error('Device is already bound to another account');
@@ -695,7 +704,15 @@ export async function completeTrustedDeviceAccountIntent({
     const expiresAt = new Date(nowMs + DEFAULT_DEVICE_TOKEN_TTL_MS).toISOString();
     intent.completionCredentialExpiresAt = expiresAt;
     const token = deriveAccountCompletionCredential(draft, intent);
-    draft.authTokens = (draft.authTokens || []).filter((entry) => entry.deviceId !== device.id);
+    draft.authTokens = (draft.authTokens || []).flatMap((entry) => {
+      if (entry.deviceId !== device.id) return [entry];
+      const expiry = Date.parse(entry.expiresAt || '');
+      const retired = entry.retiredAt ? Date.parse(entry.retiredAt) : Infinity;
+      if (!canOverlapCredential || entry.kind !== 'bound' || entry.scope !== 'device-access'
+        || entry.bindingAuthorityRevision !== bindingAuthorityRevision
+        || !Number.isFinite(expiry) || expiry <= nowMs || !(retired > nowMs)) return [];
+      return [{ ...entry, retiredAt: new Date(Math.min(expiry, retired, nowMs + RENDEZVOUS_CREDENTIAL_OVERLAP_MS)).toISOString() }];
+    });
     draft.authTokens.push({
       tokenHash: hashSecret(token),
       deviceId: device.id,
@@ -1026,7 +1043,9 @@ export async function authenticateTrustedDeviceToken(token) {
   if (normalizedToken.startsWith('rda_') || normalizedToken.startsWith('rdp_')) {
     const authToken = state.authTokens.find((entry) => entry.tokenHash === tokenHash);
     if (!authToken) return null;
-    const expiresAtMs = Date.parse(authToken.expiresAt || '');
+    const originalExpiry = Date.parse(authToken.expiresAt || '');
+    const retirementExpiry = authToken.retiredAt ? Date.parse(authToken.retiredAt) : Infinity;
+    const expiresAtMs = Math.min(originalExpiry, retirementExpiry);
     if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) return null;
     const device = state.devices.find((entry) => entry.id === authToken.deviceId && !entry.revokedAt);
     if (!device) return null;

@@ -8,7 +8,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-const cases = ['replay', 'superseded', 'revoked', 'legacy', 'expired', 'coexisting'];
+const cases = ['replay', 'superseded', 'overlap-expiry', 'revoked', 'legacy', 'expired', 'coexisting'];
 const selected = process.argv[2];
 if (!selected) {
   let failed = 0;
@@ -102,10 +102,25 @@ if (!selected) {
       const second = await complete('rji_second');
       assert(second.credential.token !== first.credential.token, 'A fresh join must replace the old credential');
       assert(await api.authenticateTrustedDeviceToken(second.credential.token), 'New generation must authenticate');
+      assert(await api.authenticateTrustedDeviceToken(first.credential.token), 'Same-device renewal allows the old carrier a bounded overlap');
       const before = readFileSync(file, 'utf8');
       await assert.rejects(() => complete('rji_first'), e => e?.code === 'owner_auth_native_replay');
       assert(readFileSync(file, 'utf8') === before, 'An old completion must not mutate the replacement generation');
       assert(await api.authenticateTrustedDeviceToken(second.credential.token), 'Old replay must preserve the replacement credential');
+      instant += 30_000;
+      await complete('rji_third');
+      instant += 30_000;
+      assert(!await api.authenticateTrustedDeviceToken(first.credential.token), 'Further renewal must not extend an existing overlap');
+      assert(await api.authenticateTrustedDeviceToken(second.credential.token), 'Newer overlap retains its own deadline');
+      await api.revokeTrustedDevice(deviceId);
+      assert(!await api.authenticateTrustedDeviceToken(second.credential.token), 'Revocation immediately invalidates overlap');
+    } else if (selected === 'overlap-expiry') {
+      instant += 14 * 60_000 + 59_000;
+      const next = await complete('rji_near_expiry');
+      assert(await api.authenticateTrustedDeviceToken(first.credential.token));
+      instant += 1_000;
+      assert(!await api.authenticateTrustedDeviceToken(first.credential.token), 'Overlap cannot extend the original token expiration');
+      assert(await api.authenticateTrustedDeviceToken(next.credential.token));
     } else if (selected === 'revoked') {
       await api.revokeTrustedDevice(deviceId);
       const before = readFileSync(file, 'utf8');
