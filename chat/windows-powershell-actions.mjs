@@ -18,11 +18,11 @@ const BUILTIN_ALIASES = new Map([
   ['mv', 'move-item'], ['move', 'move-item'], ['mi', 'move-item'],
   ['ren', 'rename-item'], ['rni', 'rename-item'],
   ['rm', 'remove-item'], ['del', 'remove-item'], ['ri', 'remove-item'],
-  ['echo', 'write-output'], ['write', 'write-output'], ['sort', 'sort-object'],
+  ['echo', 'write-output'], ['write', 'write-output'], ['sort', 'sort-object'], ['ft', 'format-table'],
 ]);
-const FILTERS = new Set(['select-object', 'sort-object', 'measure-object', 'out-string', 'write-output', 'get-date', 'get-location', 'get-service', 'get-process', 'get-command']);
-const SAFE_FILTER_PARAMS = new Set(['first', 'last', 'skip', 'unique', 'property', 'descending', 'width', 'line', 'name', 'displayname', 'noenumerate', 'id', 'module', 'commandtype', 'all', 'listimported', 'includeusername']);
-const SAFE_FILTER_SWITCHES = new Set(['unique', 'descending', 'noenumerate', 'all', 'listimported', 'includeusername']);
+const FILTERS = new Set(['select-object', 'sort-object', 'format-table', 'measure-object', 'out-string', 'write-output', 'get-date', 'get-location', 'get-service', 'get-process', 'get-command']);
+const SAFE_FILTER_PARAMS = new Set(['first', 'last', 'skip', 'unique', 'property', 'descending', 'width', 'line', 'name', 'displayname', 'noenumerate', 'id', 'module', 'commandtype', 'all', 'listimported', 'includeusername', 'autosize']);
+const SAFE_FILTER_SWITCHES = new Set(['unique', 'descending', 'noenumerate', 'all', 'listimported', 'includeusername', 'autosize']);
 const GET_COMMAND_TYPES = new Set(['alias', 'function', 'filter', 'cmdlet', 'externalscript', 'application', 'script', 'configuration', 'all']);
 const FILE_PARAMS = new Set(['path', 'literalpath', 'destination', 'value', 'itemtype', 'name', 'recurse', 'force', 'raw', 'encoding', 'filter', 'include', 'exclude', 'confirm']);
 const SWITCHES = new Set(['recurse', 'force', 'raw', 'confirm']);
@@ -238,6 +238,19 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
     const index = lists[0];
     const program = BUILTIN_ALIASES.get(String(entry.name || '').toLowerCase()) || String(entry.name || '').toLowerCase();
     const previous = entry.elements[index - 1];
+    // Literal property names describe formatting/selection only. Keep dynamic
+    // calculated properties and arbitrary list-bearing commands out of this path.
+    if (lists.length === 1 && ['select-object', 'sort-object', 'format-table'].includes(program) &&
+        (index === 1 || (index === 2 && previous?.kind === 'parameter' &&
+          String(previous.name || '').toLowerCase() === 'property' && !previous.argumentType)) &&
+        Array.isArray(entry.elements[index].values) && entry.elements[index].values.length > 0 &&
+        entry.elements[index].values.length <= 128 &&
+        entry.elements[index].values.every(value => typeof value === 'string' && /^[\w*?]+$/.test(value))) {
+      const elements = entry.elements.slice();
+      elements.splice(index, 1, ...entry.elements[index].values.map(value => ({ kind: 'literal', value })));
+      commands.push({ ...entry, elements });
+      continue;
+    }
     const prefixSwitches = entry.elements.slice(1, index).every(element => element.kind === 'parameter' &&
       ['force', 'raw', 'recurse', 'confirm'].includes(String(element.name || '').toLowerCase()));
     const pathPosition = prefixSwitches || (previous?.kind === 'parameter' && !previous.argumentType &&

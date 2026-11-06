@@ -282,6 +282,17 @@ assert.equal(result.decision, 'review');
 result = await inspect('ls . | Select-Object -First 1');
 assert.equal(result.decision, 'allow');
 assert.equal(result.actions[0].program, 'get-childitem');
+for (const command of [
+  'Get-ChildItem . | Select-Object Name,Length | Format-Table -AutoSize',
+  'Get-ChildItem . | Select-Object -Property Name,Length | ft -AutoSize',
+  'Get-ChildItem . | Sort-Object Name,Length | Format-Table Name,Length',
+]) assert.equal((await inspect(command)).decision, 'allow', command);
+for (const command of [
+  'Get-ChildItem . | Select-Object Name,$env:TEMP | Format-Table -AutoSize',
+  'Get-ChildItem . | Select-Object @{Name="x";Expression={Remove-Item readme.txt}}',
+  'Get-ChildItem . | Format-Table -GroupBy $env:TEMP',
+  'Get-ChildItem ..\\protected | Select-Object Name,Length | ft -AutoSize',
+]) assert.equal((await inspect(command)).decision, 'review', command);
 result = await inspect('Get-Content readme.txt | Unknown-Command');
 assert.equal(result.decision, 'review');
 result = await inspect('New-Item -Path . -Name .env -ItemType File');
