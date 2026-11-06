@@ -646,10 +646,21 @@ class ConnectivitySupervisor(
                     if (credentialProvider()?.takeIf { it.isNotBlank() } != credential) return@withTimeoutOrNull
                     if (signed) {
                         val body = "{\"handoffId\":\"$handoffId\"}".toByteArray(Charsets.UTF_8)
-                        val commit = candidate.request(P2PHttpRequest(id = UUID.randomUUID().toString(), method = "POST",
-                            path = "/api/device-auth/turn/handoff/commit", bodyBase64 = java.util.Base64.getEncoder().encodeToString(body),
-                            headers = mapOf("Authorization" to "Bearer $credential", "Content-Type" to "application/json"))).getOrNull()
-                        if (commit == null || commit.status !in 200..299 || !commit.error.isNullOrBlank()
+                        // The host can commit and promote even if its response is lost.
+                        // Its handoff receipt is idempotent, so retry an uncertain
+                        // result on the same authenticated standby before abandoning it.
+                        var commit: com.andysagent.agentoc.core.p2p.P2PHttpResponse? = null
+                        repeat(2) {
+                            if (commit == null && candidate.isOpen && credentialProvider() == credential) {
+                                commit = withTimeoutOrNull(3_000L) {
+                                    candidate.request(P2PHttpRequest(id = UUID.randomUUID().toString(), method = "POST",
+                                        path = "/api/device-auth/turn/handoff/commit", bodyBase64 = java.util.Base64.getEncoder().encodeToString(body),
+                                        headers = mapOf("Authorization" to "Bearer $credential", "Content-Type" to "application/json"))).getOrNull()
+                                }
+                            }
+                        }
+                        val committedResponse = commit ?: return@withTimeoutOrNull
+                        if (committedResponse.status !in 200..299 || !committedResponse.error.isNullOrBlank()
                             || credentialProvider()?.takeIf { it.isNotBlank() } != credential) return@withTimeoutOrNull
                     }
                     synchronized(handoffLock) {

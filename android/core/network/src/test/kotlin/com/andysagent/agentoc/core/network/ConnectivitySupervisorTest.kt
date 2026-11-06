@@ -28,6 +28,25 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ConnectivitySupervisorTest {
+    @Test fun `lost commit response is retried on the authenticated standby`() = runTest {
+        for (timeout in listOf(false, true)) {
+            val old = FakeSession(Result.success(Unit)).apply { supportsHandoff = true }
+            val replacement = FakeSession(Result.success(Unit)).apply { loseFirstCommit = true; hangFirstCommit = timeout }
+            var creates = 0; var switched = false
+            val supervisor = ConnectivitySupervisor({ "" }, { "rda_fixture" }, FakeNetworkMonitor(), this,
+                turnSessionFactory = { if (creates++ == 0) old else replacement },
+                onTurnHandoffReady = { switched = true }, onRecoveryRequired = {},
+                useSignedHandoff = { true }, signedHandoffPlan = { plan() })
+            try {
+                supervisor.start(); supervisor.applyBootstrap(plan()); runCurrent()
+                old.requestHandoff(); runCurrent()
+                if (timeout) { advanceTimeBy(3_001); runCurrent() }
+                assertEquals(2, replacement.commitAttempts)
+                assertTrue(switched)
+                assertTrue(old.isOpen)
+            } finally { supervisor.stop(); old.close() }
+        }
+    }
     @Test fun `signed handoff waits for standby commit and keeps old carrier on rejection`() = runTest {
         for (status in listOf(200, 409)) {
             val old = FakeSession(Result.success(Unit)).apply { supportsHandoff = true }
@@ -1048,6 +1067,9 @@ class ConnectivitySupervisorTest {
         var suspensions = 0
         var resumptions = 0
         var commitGate: CompletableDeferred<Int>? = null
+        var loseFirstCommit = false
+        var hangFirstCommit = false
+        var commitAttempts = 0
 
         override var isOpen: Boolean = false
             private set
@@ -1069,8 +1091,13 @@ class ConnectivitySupervisorTest {
         }
 
         override suspend fun request(request: P2PHttpRequest): Result<P2PHttpResponse> {
-            if (request.path == "/api/device-auth/turn/handoff/commit" && commitGate != null) {
-                return Result.success(P2PHttpResponse(id = request.id, status = commitGate!!.await()))
+            if (request.path == "/api/device-auth/turn/handoff/commit") {
+                commitAttempts++
+                if (loseFirstCommit && commitAttempts == 1) {
+                    if (hangFirstCommit) delay(60_000)
+                    return Result.failure(IllegalStateException("commit response lost"))
+                }
+                if (commitGate != null) return Result.success(P2PHttpResponse(id = request.id, status = commitGate!!.await()))
             }
             return responseResult.map { it.copy(id = request.id) }
         }
