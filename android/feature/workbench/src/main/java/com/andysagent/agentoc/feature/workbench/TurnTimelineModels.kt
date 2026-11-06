@@ -68,6 +68,20 @@ data class TurnGroup(
     val entries: List<TimelineItem> = emptyList(),
 )
 
+internal fun latestTimelineRunId(items: List<TimelineItem>): String? = items.asReversed().firstNotNullOfOrNull { item ->
+    when (item) {
+        is TimelineItem.Message -> item.runId
+        is TimelineItem.Operation -> item.runId
+        is TimelineItem.Plan -> item.runId
+        is TimelineItem.Notice -> null
+    }?.takeIf(String::isNotBlank)
+}
+
+internal fun shouldAcceptRunProjection(current: RunMetricsUiState, runId: String, incoming: AgentRunStatus?): Boolean {
+    val terminal = setOf(AgentRunStatus.Completed, AgentRunStatus.Failed, AgentRunStatus.Cancelled)
+    return current.runId != runId || current.status !in terminal || incoming in terminal
+}
+
 internal fun latestTurnHasTerminalRun(items: List<TimelineItem>, pending: PendingTurnUiState?,
     sessionStatus: AgentRunStatus, metrics: RunMetricsUiState): Boolean {
     if (pending?.state == PendingTurnState.Sending || pending?.state == PendingTurnState.Accepted) return false

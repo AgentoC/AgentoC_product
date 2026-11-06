@@ -1963,7 +1963,18 @@ class ChatViewModel(
             }
             launch {
                 fixed.observeRunActivity(sessionId).collectLatest { activity ->
-                    if (isCurrentSession(sessionId, generation)) updateState { copy(serverRunActivity = activity) }
+                    if (isCurrentSession(sessionId, generation)) {
+                        updateState { copy(serverRunActivity = activity) }
+                        // A terminal status may arrive after the last timeline
+                        // item without changing the timeline itself. Refresh
+                        // the run when the server transitions to idle so the
+                        // final message cannot retain a stale live cursor.
+                        if (activity?.get("state")?.jsonPrimitive?.contentOrNull == "idle") {
+                            latestTimelineRunId(mutableState.value.timelineItems)?.let { runId ->
+                                loadRunProjection(sessionId, runId, generation)
+                            }
+                        }
+                    }
                 }
             }
             launch {
@@ -2165,7 +2176,7 @@ class ChatViewModel(
             try {
                 if (!isCurrentSession(sessionId, generation)) return@launch
                 val projection = fixed.loadRunProjection(runId)
-                if (isCurrentSession(sessionId, generation)) {
+                if (isCurrentSession(sessionId, generation) && latestTimelineRunId(mutableState.value.timelineItems) == runId) {
                     updateRunMetricsFromProjection(projection, runId)
                     completedRunDuration(projection)?.let { fixed.saveRunDuration(sessionId, runId, it) }
                 }
@@ -2239,6 +2250,8 @@ class ChatViewModel(
         val duration = projection.longValue("durationMs") ?: if (started != null && finished != null) finished - started else null
         val usage = projection["usage"] as? JsonObject
         updateState {
+            val incomingStatus = state?.toRunStatus()
+            if (!shouldAcceptRunProjection(runMetrics, runId, incomingStatus)) return@updateState this
             copy(runMetrics = runMetrics.copy(
                 runId = runId,
                 phase = projection.stringValue("phase"),
@@ -2249,7 +2262,7 @@ class ChatViewModel(
                 durationFormatted = duration?.let(::formatDuration) ?: runMetrics.durationFormatted,
                 promptTokens = (projection.longValue("promptTokens") ?: usage?.longValue("promptTokens"))?.toInt() ?: runMetrics.promptTokens,
                 completionTokens = (projection.longValue("completionTokens") ?: usage?.longValue("completionTokens"))?.toInt() ?: runMetrics.completionTokens,
-                status = state?.toRunStatus() ?: runMetrics.status,
+                status = incomingStatus ?: runMetrics.status,
             ))
         }
     }

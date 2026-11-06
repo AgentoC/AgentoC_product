@@ -17,6 +17,20 @@ import org.junit.Test
 
 class TurnTimelineWorkspaceTest {
 
+    @Test fun `late run projections cannot undo completion and new runs remain independent`() {
+        val completed = RunMetricsUiState(runId = "one", status = AgentRunStatus.Completed)
+        assertFalse(shouldAcceptRunProjection(completed, "one", AgentRunStatus.Working))
+        assertFalse(shouldAcceptRunProjection(completed, "one", null))
+        assertTrue(shouldAcceptRunProjection(completed, "one", AgentRunStatus.Completed))
+        assertTrue(shouldAcceptRunProjection(completed, "two", AgentRunStatus.Working))
+        val items = listOf(
+            TimelineItem.Message("a", 1, TimelineRole.User, "old", true, runId = "one"),
+            TimelineItem.Message("b", 2, TimelineRole.User, "new", true, runId = "two"),
+            TimelineItem.Message("c", 3, TimelineRole.Agent, "answer", false),
+        )
+        assertEquals("two", latestTimelineRunId(items))
+    }
+
     @Test fun `run detail completion settles only its matching latest turn`() {
         val prompt = TimelineItem.Message("user", 1, TimelineRole.User, "request", true, runId = "run-1")
         val answer = TimelineItem.Message("answer", 2, TimelineRole.Agent, "done", false, runId = "run-1")
