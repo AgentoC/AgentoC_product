@@ -201,6 +201,10 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
     if (!entry.redirections) return '';
     if (!Array.isArray(entry.redirectFacts) || entry.redirectFacts.length !== entry.redirections || entry.redirectFacts.length > 8) return 'redirection details unavailable';
     for (const redirect of entry.redirectFacts) {
+      // PowerShell's merging redirection (for example 2>&1) only combines
+      // output streams. It does not open a file; the command and any file
+      // redirections are still independently classified below.
+      if (redirect.type === 'MergingRedirectionAst') continue;
       if (redirect.type !== 'FileRedirectionAst' || !['StringConstantExpressionAst', 'ConstantExpressionAst'].includes(redirect.locationType)) return 'dynamic or unsupported redirection';
       if (lacksAttestedAbsolutePath(redirect.location, context)) return 'working directory is not attested';
       const target = await resolveTarget(redirect.location, context.cwd, fsApi, context);
@@ -231,7 +235,7 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
     if (!['StringConstantExpressionAst', 'ConstantExpressionAst'].includes(expression.expressionType)) return { complete: false, actions, reason: 'dynamic or unsupported expression' };
     const reason = await appendRedirects(expression, 'literal');
     if (reason) return { complete: false, actions, reason };
-    if (!expression.redirections) actions.push({ kind: 'read', program: 'literal', target: null });
+    actions.push({ kind: 'read', program: 'literal', target: null });
   }
   // Expand static lists only for cmdlets whose path argument independently
   // identifies each read or removal target. The normal policy still checks

@@ -116,7 +116,7 @@ assert.equal((await inspect('Write-Output hello >> result.txt')).decision, 'allo
 assert.equal((await inspect('Write-Output hello > ..\\protected\\result.txt')).decision, 'review');
 assert.equal((await inspect('Write-Output hello > ordinary-link')).decision, 'review');
 assert.equal((await inspect('Write-Output hello > $env:TEMP')).decision, 'review');
-assert.equal((await inspect('Write-Output hello 2>&1')).decision, 'review');
+assert.equal((await inspect('Write-Output hello 2>&1')).decision, 'allow');
 assert.equal((await inspect("'hello' > result.txt")).decision, 'allow');
 assert.equal((await inspect("'hello' >> result.txt")).decision, 'allow');
 assert.equal((await inspect("'hello' > ..\\protected\\result.txt")).decision, 'review');
@@ -290,6 +290,16 @@ for (const command of [
 const conditionalRead = `if (Test-Path -LiteralPath '${workspace.replaceAll("'", "''")}\\build') { Get-ChildItem -LiteralPath '${workspace.replaceAll("'", "''")}\\build' -Force | Select-Object Mode,LastWriteTime,Length,Name | Format-Table -AutoSize | Out-String } else { 'TARGET_MISSING' }`;
 assert.equal((await inspect(conditionalRead)).decision, 'allow', 'read-only existence check and listing should not require approval');
 for (const command of [
+  'Get-Content readme.txt 2>&1 | Out-String',
+  'Get-ChildItem . 3>&1 2>&1 | Out-String',
+  "'status' 2>&1",
+]) assert.equal((await inspect(command)).decision, 'allow', command);
+for (const command of [
+  'Get-Content readme.txt 2>&1 > ..\\protected\\result.txt',
+  'Remove-Item ..\\outside-folder -Recurse 2>&1',
+  'Unknown-Command 2>&1 | Out-String',
+]) assert.equal((await inspect(command)).decision, 'review', command);
+for (const command of [
   "if (Test-Path readme.txt) { Remove-Item readme.txt } else { 'missing' }",
   "if (Test-Path readme.txt) { Set-Content output.txt changed }",
   "if (Test-Path readme.txt) { 'text' > output.txt }",
@@ -354,6 +364,8 @@ for (const command of [
 for (const riskMode of ['recommended', 'full-auto']) {
   const state = { cwd: workspace, riskContext: context, riskContextValid: true, riskMode };
   const request = command => ({ kind: 'command', providerMethod: 'can_use_tool', params: { tool_name: 'PowerShell', input: { command } } });
+  assert.equal((await decideWindowsApproval(request(`Get-Content -LiteralPath ${ordinaryFile} 2>&1 | Out-String`), state)).decision, 'auto-allow', `${riskMode}: merge safe output streams`);
+  assert.equal((await decideWindowsApproval(request(`Get-Content -LiteralPath ${ordinaryFile} 2>&1 > ${protectedFile}`), state)).decision, 'prompt', `${riskMode}: protected output remains gated`);
   assert.equal((await decideWindowsApproval(request(`[System.IO.File]::WriteAllText(${outsideFile}, 'x')`), state)).decision, 'auto-allow');
   assert.equal((await decideWindowsApproval(request(`[System.IO.File]::WriteAllText(${outsideFile}, 'x', [System.Text.Encoding]::UTF8)`), state)).decision, 'auto-allow');
   assert.equal((await decideWindowsApproval(request(`[System.IO.File]::WriteAllText(${protectedFile}, 'x')`), state)).decision, 'prompt');
