@@ -9,7 +9,8 @@ android {
     compileSdk = 37
     defaultConfig {
         minSdk = 26
-        testApplicationId = "com.andysagent.agentoc.feature.workbench.test"
+        testApplicationId = providers.gradleProperty("agentocWorkbenchTestApplicationId")
+            .orElse("com.andysagent.agentoc.feature.workbench.test").get()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
