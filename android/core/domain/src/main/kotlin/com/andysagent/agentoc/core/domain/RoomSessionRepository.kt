@@ -216,6 +216,7 @@ class RoomSessionRepository(
     private val liveFeedCapable = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val approvalRecoveryAttempts = mutableMapOf<String, Long>()
     private val terminalApprovalRecoveryAttempts = mutableMapOf<String, Long>()
+    private val terminalApprovalRecoveryOffsets = mutableMapOf<String, Int>()
     private val liveTimelineState = MutableStateFlow<Map<String, List<com.andysagent.agentoc.core.timeline.TimelineEvent>>>(emptyMap())
     private val runActivityState = MutableStateFlow<Map<String, JsonObject>>(emptyMap())
     override fun observeRunActivity(sessionId: String): Flow<JsonObject?> =
@@ -258,11 +259,18 @@ class RoomSessionRepository(
                         delay(3_000)
                     }
                 }
-                observeSessions().collect { sessions ->
+                combine(observeSessions(), observeRows(dao.observeAllPendingApprovals())) { sessions, approvals ->
+                    sessions to approvals
+                }.collect { (sessions, approvals) ->
                     val sessionIds = sessions.mapTo(mutableSetOf()) { it.id }
                     val activeIds = sessions
                         .filter { it.status == SessionStatus.Working || it.status == SessionStatus.WaitingApproval }
                         .mapTo(mutableSetOf()) { it.id }
+                    // A previous client may have persisted an approval after
+                    // its run ended. Terminal sessions need reconciliation too;
+                    // otherwise neither surface ever gets an authoritative clear.
+                    approvals.filter { !it.runId.isNullOrBlank() && it.sessionId in sessionIds }
+                        .mapTo(activeIds) { it.sessionId }
                     synchronized(liveSyncLock) {
                         liveSyncJobs.keys
                             // A worker may have just applied the terminal
@@ -401,14 +409,21 @@ class RoomSessionRepository(
                 val result = refreshEvents(sessionId)
                 if (result is RefreshResult.ResetRequired) return
                 val terminal = detail == null || detail.status == SessionStatus.Completed ||
-                    detail.status == SessionStatus.Failed || detail.status == SessionStatus.Cancelled
+                    detail.status == SessionStatus.Failed || detail.status == SessionStatus.Cancelled ||
+                    detail.status == SessionStatus.Idle
                 // A finished run can still have unread event pages or a failed
                 // visible-history refresh. Keep reconciling until the terminal
                 // message and tool results have actually reached the UI.
                 if (terminal && result is RefreshResult.Applied &&
                     result.latestSeq >= (detail?.latestSeq ?: 0L) &&
                     sessionId !in pendingVisibleOperationRefresh
-                ) return
+                ) {
+                    if (dao.getPendingApprovals(sessionId).none { !it.runId.isNullOrBlank() }) return
+                    // Keep retrying missed terminal events or transient run
+                    // lookups, without a tight loop on unverifiable requests.
+                    delay(5_000L)
+                    continue
+                }
                 retryDelayMs = 1_000L
                 delay(if (sessionId in dedicatedLiveSessions) 1_000L else if (sessionId in liveFeedCapable) 200L else retryDelayMs)
             } catch (error: CancellationException) {
@@ -1438,7 +1453,12 @@ class RoomSessionRepository(
                     val pending = dao.getPendingApprovals(sessionId)
                     if (pending.isNotEmpty()) {
                         terminalApprovalRecoveryAttempts[sessionId] = now
-                        for (runId in pending.mapNotNull { it.runId?.takeIf(String::isNotBlank) }.distinct().take(8)) {
+                        val runs = pending.mapNotNull { it.runId?.takeIf(String::isNotBlank) }.distinct()
+                        val start = if (runs.isEmpty()) 0 else (terminalApprovalRecoveryOffsets[sessionId] ?: 0) % runs.size
+                        val selected = if (runs.isEmpty()) emptyList() else
+                            (runs.drop(start) + runs.take(start)).take(8)
+                        terminalApprovalRecoveryOffsets[sessionId] = if (runs.isEmpty()) 0 else (start + selected.size) % runs.size
+                        for (runId in selected) {
                             try {
                                 val run = loadRunProjection(runId)
                                 val state = (run["state"] as? JsonPrimitive)?.contentOrNull?.lowercase()

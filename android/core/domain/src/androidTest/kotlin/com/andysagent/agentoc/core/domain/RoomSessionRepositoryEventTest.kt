@@ -1241,6 +1241,29 @@ class RoomSessionRepositoryEventTest {
     }
 
     @Test
+    fun endpointlessSyncReconcilesPendingApprovalsInAlreadyTerminalSessions() = runBlocking {
+        database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "completed", 10, 0)))
+        database.dao().upsertCursor(SyncCursorEntity("session-1", 10, null, updatedAt = 0))
+        database.dao().upsertApprovals(listOf(
+            ApprovalEntity(id = "old", sessionId = "session-1", title = "Old", status = "pending", runId = "old-run", updatedAt = 1),
+            ApprovalEntity(id = "active", sessionId = "session-1", title = "Active", status = "pending", runId = "active-run", updatedAt = 2),
+        ))
+        val repository = RoomSessionRepository(database, TerminalApprovalSyncTransport())
+        repository.startLiveSync()
+        try {
+            withTimeout(10_000L) {
+                while (database.dao().getApproval("session-1", "old")?.status == "pending") delay(20L)
+            }
+            assertEquals("resolved", database.dao().getApproval("session-1", "old")?.status)
+            assertEquals("pending", database.dao().getApproval("session-1", "active")?.status)
+            assertEquals(listOf("active"), repository.observeAllPendingApprovals().first().map { it.id })
+        } finally {
+            repository.stopLiveSync()
+            repository.close()
+        }
+    }
+
+    @Test
     fun endpointlessLiveSyncReconcilesFinalEventsAfterDetailBecomesTerminal() = runBlocking {
         database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 0, 0)))
         val transport = LiveSyncTransport()
@@ -1264,6 +1287,29 @@ class RoomSessionRepositoryEventTest {
             repository.stopLiveSync()
         }
     }
+}
+
+private class TerminalApprovalSyncTransport : AgentoCTransport {
+    override val connectionState: StateFlow<RuntimeConnectionState> = MutableStateFlow(RuntimeConnectionState.Connected)
+    override val invalidations: Flow<InvalidationHint> = MutableSharedFlow()
+    override val requiresEventPolling: Boolean = true
+    override suspend fun execute(request: ApiRequest): ApiResponse {
+        val body = when {
+            request.path == "/api/sessions" || request.path == "/api/sessions?view=summary" ->
+                """{"sessions":[{"id":"session-1","name":"Task","status":"completed","latestSeq":10}]}"""
+            request.path.startsWith("/api/runs/") -> {
+                val run = request.path.substringAfterLast('/')
+                val status = if (run == "old-run") "completed" else "running"
+                """{"run":{"id":"$run","sessionId":"session-1","state":"$status"}}"""
+            }
+            request.path.contains("/events") ->
+                """{"sessionId":"session-1","events":[],"latestSeq":10,"runActivity":{"state":"idle"}}"""
+            else -> """{"session":{"id":"session-1","status":"completed","latestSeq":10}}"""
+        }
+        return ApiResponse(200, body)
+    }
+    override fun connectInvalidationSocket() = Unit
+    override suspend fun close() = Unit
 }
 
 private class FakeTransport(private val responseBody: String) : AgentoCTransport {
