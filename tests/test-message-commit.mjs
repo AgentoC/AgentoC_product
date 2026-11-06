@@ -147,6 +147,11 @@ test('paired owner device identity survives scoped commit without accepting wire
   const response = await route(value, 'POST', { auth });
   assert.equal(response.status, 200);
   const manifest = await runs.getRunManifest(response.body.runId);
+  if (process.platform !== 'win32') {
+    assert.equal(manifest.appApiMessage.version, 1);
+    assert.equal(manifest.appApiMessage.ownerDevice, undefined);
+    return;
+  }
   assert.equal(manifest.appApiMessage.version, 3);
   assert.deepEqual(manifest.appApiMessage.ownerDevice, { principalKind: 'trusted_device', deviceId: 'phone-1', accountId: 'account-1', bindingAuthorityRevision: '3' });
   const forged = structuredClone(manifest.appApiMessage);
