@@ -29,6 +29,8 @@ const protectedCase = process.env.AGENTOC_QA_CLAUDE_PROTECTED === '1';
 const installCase = process.env.AGENTOC_QA_CLAUDE_INSTALL === '1';
 const uninstallCase = process.env.AGENTOC_QA_CLAUDE_UNINSTALL === '1';
 const deleteCase = process.env.AGENTOC_QA_CLAUDE_DELETE === '1';
+const nativePowerShell = process.env.AGENTOC_QA_CLAUDE_NATIVE_POWERSHELL === '1';
+if (nativePowerShell && !deleteCase) throw new Error('native PowerShell fixture requires deletion mode');
 const outsideFileCase = process.env.AGENTOC_QA_CLAUDE_FILE_OUTSIDE === '1';
 const dotnetCase = process.env.AGENTOC_QA_CLAUDE_DOTNET === '1';
 const guidanceCase = process.env.AGENTOC_QA_CLAUDE_ELEVATION === '1';
@@ -58,7 +60,9 @@ if (deleteCase) {
   await writeFile(keepFile, 'keep fixture');
 }
 const bashTarget = deleteTarget.replace(/^([A-Za-z]):\\/, (_, drive) => `/${drive.toLowerCase()}/`).replaceAll('\\', '/');
-const deleteCommand = `rm -rf '${bashTarget.replace(/'/g, "'\\''")}'`;
+const deleteCommand = nativePowerShell
+  ? `Remove-Item -LiteralPath '${deleteTarget.replaceAll("'", "''")}' -Recurse -Force`
+  : `rm -rf '${bashTarget.replace(/'/g, "'\\''")}'`;
 const artifact = path.join(outsideFileCase ? outsideFileRoot : protectedCase ? protectedRoot : root, 'fixture.md');
 const bashQuote = value => `'${value.replaceAll("'", `'"'"'`)}'`;
 if (readCase) await writeFile(artifact, 'local read fixture\n');
@@ -91,7 +95,7 @@ const server = createServer((req, res) => {
     if (req.method !== 'POST' || !req.url.startsWith('/v1/messages')) { res.writeHead(404).end(); return; }
     requests++;
     const tool = requests === 1 || (relativeDelete && requests === 2);
-    const toolName = installCase || uninstallCase || deleteCase || dotnetCase || guidanceCase || readCase ? 'Bash' : 'Write';
+    const toolName = nativePowerShell ? 'PowerShell' : installCase || uninstallCase || deleteCase || dotnetCase || guidanceCase || readCase ? 'Bash' : 'Write';
     if (tool && !request.tools?.some((item) => item.name === toolName)) { res.writeHead(400).end(); return; }
     if (!tool && installCase) toolResultObserved ||= JSON.stringify(request.messages || []).includes('Installation completed successfully');
     if (relativeDelete && requests === 2 && !JSON.stringify(request.messages || []).includes('resolve each target against the command working directory')) { res.writeHead(400).end(); return; }
@@ -103,7 +107,7 @@ const server = createServer((req, res) => {
     if (tool) {
       const input = JSON.stringify(installCase ? { command: installCommand, description: 'Fixture installation' } : uninstallCase
         ? { command: 'winget uninstall --id AgentoC.Nonexistent.Test.Fixture --exact', description: 'Fixture uninstall' } : deleteCase
-        ? { command: relativeDelete && requests === 1 ? 'rm -rf delete-fixture' : deleteCommand, description: 'Delete fixture' }
+        ? { command: relativeDelete && requests === 1 ? (nativePowerShell ? 'Remove-Item -LiteralPath delete-fixture -Recurse -Force' : 'rm -rf delete-fixture') : deleteCommand, description: 'Delete fixture' }
         : dotnetCase ? { command: dotnetCommand, description: 'Write isolated fixture' }
         : guidanceCase ? { command: guidanceCommand, description: 'Administrative fixture' }
         : readCase ? { command: readCommand, description: 'Read isolated fixture' } : { file_path: artifact, content: 'local fixture\n' });
@@ -133,6 +137,7 @@ const run = await createRun({ status: { sessionId: 'claude-local-fixture', reque
 const gateState = { riskMode: mode, permissionMode: 'default', cwd: root, projectRoot: root, turnActive: true, riskContextValid: boundContext?.valid ?? true,
   riskContext: boundContext?.riskContext ?? { platform: 'win32', trustedWorkspaceRoot: root, protectedRoots: protectedCase ? [protectedRoot] : [] }, pendingApprovals: new Map(), autoApprovedMcpRequestIds: new Set() };
 if (installCase || uninstallCase || deleteCase || dotnetCase || guidanceCase || readCase) env.CLAUDE_CODE_GIT_BASH_PATH = process.env.AGENTOC_TEST_BASH_BINARY;
+if (nativePowerShell) env.CLAUDE_CODE_USE_POWERSHELL_TOOL = '1';
 if (guidanceCase) {
   gateState.windowsManagedActionChannel = true;
   gateState.windowsManagedActionBinding = { runId: run.id };
@@ -220,7 +225,7 @@ try {
   else if (!reviewCase && (!readCase || approvals) && readCase !== 'git-status') assert.ok(spool.some((record) => record.json?.type === 'agentoc.approval_response' && record.json?.autoApproved === true), 'actual sidecar must persist the automatic decision');
   else if (reviewCase && mode !== 'recommended') assert.ok(spool.some((record) => record.json?.type === 'agentoc.approval_response' && record.json?.autoDenied === true), 'unattended protected write must be denied');
   if (relativeDelete) assert.ok(spool.some((record) => record.json?.autoDenied === true && record.json?.reason?.includes('resolve each target against the command working directory')), 'relative target must be denied with an actionable retry');
-  console.log(`claude-windows-local-gate: ${mode} real CLI ${installCase ? 'controlled install reached mock service' : reviewCase ? 'dangerous operation denied' : deleteCase ? 'handle-bound fixture deletion completed' : guidanceCase ? 'managed executor guidance received' : readCase ? `${readCase} ${approvals ? 'approval observed' : 'read completed without approval request'}` : dotnetCase ? 'trusted PowerShell wrapped file write completed' : outsideFileCase ? 'outside-workspace file write completed' : 'file approval completed'}`);
+  console.log(`claude-windows-local-gate: ${mode} real CLI${nativePowerShell ? ' native PowerShell' : ''} ${installCase ? 'controlled install reached mock service' : reviewCase ? 'dangerous operation denied' : deleteCase ? 'handle-bound fixture deletion completed' : guidanceCase ? 'managed executor guidance received' : readCase ? `${readCase} ${approvals ? 'approval observed' : 'read completed without approval request'}` : dotnetCase ? 'trusted PowerShell wrapped file write completed' : outsideFileCase ? 'outside-workspace file write completed' : 'file approval completed'}`);
 } finally {
   child.kill(); output.close(); await new Promise((resolve) => server.close(resolve));
   const parent = path.resolve(os.tmpdir()).toLowerCase();
