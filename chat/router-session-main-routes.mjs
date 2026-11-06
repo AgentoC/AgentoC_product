@@ -172,7 +172,7 @@ function temporaryControlRunAuthority(authSession) {
 
 function authenticatedTurnOptions(authSession) {
   const authority = temporaryControlRunAuthority(authSession);
-  const ownerDevice = authenticatedOwnerDeviceDescriptor(authSession);
+  const ownerDevice = process.platform === 'win32' ? authenticatedOwnerDeviceDescriptor(authSession) : null;
   return { authenticatedPrincipalKind: resolveAuthenticatedTurnPrincipalKind(authSession),
     ...(ownerDevice ? { authenticatedOwnerDevice: ownerDevice } : {}),
     ...(authority ? { temporaryControlAuthority: authority } : {}) };
