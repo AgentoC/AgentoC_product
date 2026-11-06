@@ -24,6 +24,8 @@ internal static class AgentoCSetup {
     private static extern uint MsiEnumRelatedProducts(string upgradeCode, uint reserved, uint index, StringBuilder product);
     [DllImport("msi.dll", CharSet = CharSet.Unicode, EntryPoint = "MsiQueryProductStateW")]
     private static extern int MsiQueryProductState(string product);
+    [DllImport("msi.dll", CharSet = CharSet.Unicode, EntryPoint = "MsiGetProductInfoW")]
+    private static extern uint MsiGetProductInfo(string product, string property, StringBuilder value, ref uint length);
     [DllImport("msi.dll", CharSet = CharSet.Unicode, EntryPoint = "MsiGetComponentPathW")]
     private static extern int MsiGetComponentPath(string product, string component, StringBuilder path, ref uint length);
     private const string PayloadResource = "AgentoC.Payload.msi";
@@ -33,7 +35,7 @@ internal static class AgentoCSetup {
     private static int Main(string[] args) {
         string directory = null;
         string payloadPath = null;
-        string repairSourcePath = null;
+        var repairSourcePaths = new List<string>();
         try {
             directory = Path.Combine(Path.GetTempPath(), "AgentoC-setup-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(directory);
@@ -55,11 +57,17 @@ internal static class AgentoCSetup {
                 throw new InvalidOperationException("Installer payload verification failed.");
 
             // Secure Repair resolves the package name registered by the first
-            // install, even when a repair is launched from this extracted MSI.
-            // Support both names used by the released MSI and EXE installers.
-            repairSourcePath = Path.Combine(directory, "AgentoC-0.0.1.msi");
-            if (!CreateHardLink(repairSourcePath, payloadPath, IntPtr.Zero))
-                File.Copy(payloadPath, repairSourcePath, false);
+            // install. That name can differ between MSI and EXE distributions.
+            var aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            aliases.Add("AgentoC-0.0.1.msi");
+            string registeredPackageName = GetRegisteredPackageName(payloadPath);
+            if (!String.IsNullOrEmpty(registeredPackageName)) aliases.Add(registeredPackageName);
+            foreach (string alias in aliases) {
+                string aliasPath = Path.Combine(directory, alias);
+                if (String.Equals(aliasPath, payloadPath, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!CreateHardLink(aliasPath, payloadPath, IntPtr.Zero)) File.Copy(payloadPath, aliasPath, false);
+                repairSourcePaths.Add(aliasPath);
+            }
 
             string command = BuildMsiCommand(payloadPath, args);
             ProcessStartInfo start = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "msiexec.exe"), command.ToString());
@@ -73,7 +81,9 @@ internal static class AgentoCSetup {
             MessageBox.Show("Ragent setup could not start.\n\n" + error.Message, "Ragent Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
         } finally {
-            try { if (repairSourcePath != null && File.Exists(repairSourcePath)) File.Delete(repairSourcePath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            foreach (string repairSourcePath in repairSourcePaths) {
+                try { if (File.Exists(repairSourcePath)) File.Delete(repairSourcePath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            }
             try { if (payloadPath != null && File.Exists(payloadPath)) File.Delete(payloadPath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             try { if (directory != null && Directory.Exists(directory)) Directory.Delete(directory, false); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
@@ -110,6 +120,24 @@ internal static class AgentoCSetup {
                 throw new InvalidOperationException("Installer product code is missing.");
             return MsiQueryProductState(productCode) == 5;
         } finally { MsiCloseHandle(database); }
+    }
+
+    private static string GetRegisteredPackageName(string msi) {
+        uint database;
+        if (MsiOpenDatabase(msi, IntPtr.Zero, out database) != 0)
+            throw new InvalidOperationException("Installer product identity could not be read.");
+        string productCode;
+        try { productCode = ReadMsiValue(database, "SELECT `Value` FROM `Property` WHERE `Property` = 'ProductCode'"); }
+        finally { MsiCloseHandle(database); }
+        if (String.IsNullOrEmpty(productCode) || MsiQueryProductState(productCode) != 5) return null;
+        var value = new StringBuilder(512); uint length = (uint)value.Capacity;
+        if (MsiGetProductInfo(productCode, "PackageName", value, ref length) != 0) return null;
+        string name = value.ToString();
+        if (String.IsNullOrWhiteSpace(name) || name.Length > 240 ||
+            !String.Equals(Path.GetFileName(name), name, StringComparison.Ordinal) ||
+            !String.Equals(Path.GetExtension(name), ".msi", StringComparison.OrdinalIgnoreCase) ||
+            name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return null;
+        return name;
     }
 
     private static string BuildMsiCommand(string payloadPath, string[] args) {

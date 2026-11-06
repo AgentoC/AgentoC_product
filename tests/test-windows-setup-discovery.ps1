@@ -13,6 +13,7 @@ $discover=$type.GetMethod('TryFindInstalledFolder',$flags)
 $quiet=$type.GetMethod('IsQuiet',$flags)
 $specified=$type.GetMethod('HasInstallFolder',$flags)
 $sameProductInstalled=$type.GetMethod('IsExactProductInstalled',$flags)
+$registeredPackageName=$type.GetMethod('GetRegisteredPackageName',$flags)
 $buildCommand=$type.GetMethod('BuildMsiCommand',$flags)
 $arguments=[object[]]@([IO.Path]::GetFullPath($MsiPath),$null)
 if(-not $discover.Invoke($null,$arguments) -or
@@ -28,8 +29,10 @@ if($quiet.Invoke($null,[object[]]@(,[string[]]@('/norestart')))){throw 'interact
 if(-not $specified.Invoke($null,[object[]]@(,[string[]]@('AGENTOC_INSTALLFOLDER=D:\Apps\Ragent')))){throw 'explicit folder was missed'}
 if($specified.Invoke($null,[object[]]@(,[string[]]@('/qn')))){throw 'absent folder was detected'}
 if(-not $sameProductInstalled.Invoke($null,[object[]]@([IO.Path]::GetFullPath($MsiPath)))){throw 'same product was not recognized as installed'}
+$sourceName=[string]$registeredPackageName.Invoke($null,[object[]]@([IO.Path]::GetFullPath($MsiPath)))
+if([string]::IsNullOrWhiteSpace($sourceName) -or [IO.Path]::GetFileName($sourceName) -cne $sourceName -or [IO.Path]::GetExtension($sourceName) -ine '.msi'){throw 'registered installer source package name was not safely resolved'}
 $command=[string]$buildCommand.Invoke($null,[object[]]@([IO.Path]::GetFullPath($MsiPath),[string[]]@('/qn','/norestart')))
 $explicit=[string]$buildCommand.Invoke($null,[object[]]@([IO.Path]::GetFullPath($MsiPath),[string[]]@('/qn','REINSTALL=ALL','REINSTALLMODE=vomus')))
 if($command -notmatch 'REINSTALL=ALL' -or $command -notmatch 'REINSTALLMODE=vomus' -or $command -notmatch 'AGENTOC_INSTALLFOLDER=' -or
    ([regex]::Matches($explicit,'REINSTALL=ALL')).Count -ne 1 -or ([regex]::Matches($explicit,'REINSTALLMODE=vomus')).Count -ne 1) {throw 'quiet minor-update command was incomplete or duplicated'}
-Write-Output 'Windows setup installed-folder discovery passed'
+Write-Output ('Windows setup installed-folder discovery passed; registered MSI source name: ' + $sourceName)
