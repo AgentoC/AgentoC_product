@@ -362,6 +362,9 @@ function turnConnectionLeaseToRow(lease) {
     expires_at: iso(lease.expiresAt),
     released_at: iso(lease.releasedAt),
     release_reason: iso(lease.releaseReason),
+    handoff_from: iso(lease.handoffFrom),
+    handoff_deadline: iso(lease.handoffDeadline),
+    handoff_committed_at: iso(lease.handoffCommittedAt),
   };
 }
 
@@ -382,6 +385,9 @@ function rowToTurnConnectionLease(row) {
     expiresAt: toIso(row.expires_at),
     releasedAt: toIso(row.released_at),
     releaseReason: toIso(row.release_reason),
+    handoffFrom: String(row.handoff_from || ''),
+    handoffDeadline: toIso(row.handoff_deadline),
+    handoffCommittedAt: toIso(row.handoff_committed_at),
   };
 }
 
@@ -875,7 +881,7 @@ async function writeSnapshot(client, snapshot, previousSnapshot) {
   await replaceRows(
     client,
     'account_connection_leases',
-    ['connection_id', 'account_id', 'instance_id', 'device_id', 'device_kind', 'quota_device_id', 'plan', 'status', 'created_at', 'updated_at', 'expires_at', 'released_at', 'release_reason'],
+    ['connection_id', 'account_id', 'instance_id', 'device_id', 'device_kind', 'quota_device_id', 'plan', 'status', 'created_at', 'updated_at', 'expires_at', 'released_at', 'release_reason', 'handoff_from', 'handoff_deadline', 'handoff_committed_at'],
     snapshot.turnConnectionLeases || [],
     turnConnectionLeaseToRow,
   );
