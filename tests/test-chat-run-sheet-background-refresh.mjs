@@ -53,12 +53,13 @@ function makeElement() {
   };
 }
 
-function buildContext({ currentSessionId, sessions }) {
+function buildContext({ currentSessionId, sessions, projectedSession = null }) {
   let nextTimerId = 1;
   let fakeNow = 1_000_000;
   const RealDate = Date;
   const pending = new Map();
   const captured = { ids: [], count: 0 };
+  captured.terminalRefreshes = [];
   const storeSubscribers = new Set();
   const activitySubscribers = new Set();
   const document = {
@@ -80,6 +81,10 @@ function buildContext({ currentSessionId, sessions }) {
           return () => activitySubscribers.delete(subscriber);
         },
       },
+      refreshCurrentSession(options) {
+        captured.terminalRefreshes.push(options);
+        return Promise.resolve(null);
+      },
     },
     PointerEvent: function PointerEvent() {},
     requestAnimationFrame() { return 0; },
@@ -98,7 +103,7 @@ function buildContext({ currentSessionId, sessions }) {
         ok: true,
         json: async () => ({
           runSheet: {
-            session: { id },
+            session: projectedSession ? projectedSession(id) : { id },
             artifactFiles: [],
             changedFiles: [],
             progressPlan: null,
@@ -214,6 +219,46 @@ const sessions = [
     beforeBurst + 2,
     `after the minimum interval the throttled background refresh should land, got ${captured.count}`,
   );
+}
+
+// Scenario 3: the detail projection can observe an idle/terminal server
+// session before the session catalog has received that transition. Reconcile
+// the full current-session snapshot so the composer and live message do not
+// remain in a stale running state. A terminal projection for an older run must
+// not clear a newer local run.
+{
+  const sessions = [{
+    id: 'session-current',
+    archived: false,
+    activity: { run: { state: 'running', runId: 'run-current' } },
+  }];
+  const { captured, pending } = buildContext({
+    currentSessionId: 'session-current',
+    sessions,
+    projectedSession: (id) => ({ id, activity: { run: null } }),
+  });
+  await flushBackground(pending);
+  assert.equal(captured.terminalRefreshes.length, 1, 'an idle authoritative projection should refresh the stale current session');
+  assert.equal(captured.terminalRefreshes[0].forceFresh, true, 'terminal reconciliation should bypass stale session caches');
+  assert.equal(captured.terminalRefreshes[0].essential, true, 'terminal reconciliation should use the essential session refresh path');
+}
+
+{
+  const sessions = [{
+    id: 'session-current',
+    archived: false,
+    activity: { run: { state: 'running', runId: 'run-current' } },
+  }];
+  const { captured, pending } = buildContext({
+    currentSessionId: 'session-current',
+    sessions,
+    projectedSession: (id) => ({
+      id,
+      activity: { run: { state: 'completed', runId: 'run-older' } },
+    }),
+  });
+  await flushBackground(pending);
+  assert.equal(captured.terminalRefreshes.length, 0, 'a terminal projection for an older run must not clear the currently running run');
 }
 
 console.log('test-chat-run-sheet-background-refresh: ok');

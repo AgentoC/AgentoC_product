@@ -93,6 +93,7 @@
   let pendingRefreshOptions = null;
   let lastBackgroundRefreshAt = 0;
   const modelCache = new Map();
+  const terminalSessionRefreshes = new Set();
 
   function tr(key, vars = {}) {
     return root.agentocT ? root.agentocT(key, vars) : key;
@@ -266,6 +267,35 @@
 
   function isRunningSession(session) {
     return normalizeActivity(session)?.run?.state === "running";
+  }
+
+  function reconcileTerminalSessionSnapshot(sessionId, projectedSession) {
+    const id = String(sessionId || "").trim();
+    if (!id || id !== String(currentSessionId || "").trim()) return false;
+    const localSession = knownSessions().find((entry) => String(entry?.id || "") === id);
+    if (!localSession || !isRunningSession(localSession)) return false;
+    if (!projectedSession || String(projectedSession.id || "") !== id) return false;
+
+    const projectedRun = normalizeActivity(projectedSession)?.run || {};
+    if (projectedRun.state === "running") return false;
+    const activeRun = normalizeActivity(localSession)?.run || {};
+    const activeRunId = String(activeRun.runId || activeRun.id || "").trim();
+    const projectedRunId = String(projectedRun.runId || projectedRun.id || "").trim();
+    if (activeRunId && projectedRunId && activeRunId !== projectedRunId) return false;
+    if (terminalSessionRefreshes.has(id) || typeof root.refreshCurrentSession !== "function") return false;
+
+    // The detail projection and composer read separate client models. If this
+    // authoritative snapshot says the current run is over, refresh the full
+    // session snapshot so the stop button and live-message presentation settle
+    // from the same session state. A mismatched run id is ignored above to
+    // avoid an older projection clearing a newer run.
+    terminalSessionRefreshes.add(id);
+    Promise.resolve(root.refreshCurrentSession({ forceFresh: true, essential: true }))
+      .catch((error) => {
+        console.warn("[run-sheet] Failed to reconcile terminal session state:", error?.message || error);
+      })
+      .finally(() => terminalSessionRefreshes.delete(id));
+    return true;
   }
 
   function sessionSortTime(session) {
@@ -519,7 +549,9 @@
         if (!response.ok) throw new Error(`${response.status} ${response.statusText || ""}`.trim());
         return response.json();
       });
-    return modelFromRunSheet(payload, target);
+    const model = modelFromRunSheet(payload, target);
+    reconcileTerminalSessionSnapshot(target.id, model?.session);
+    return model;
   }
 
   function renderMarkdownInto(container, markdown) {
