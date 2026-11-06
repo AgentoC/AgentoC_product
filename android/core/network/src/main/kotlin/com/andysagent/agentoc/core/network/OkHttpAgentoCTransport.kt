@@ -83,7 +83,7 @@ class OkHttpAgentoCTransport(
     @Volatile private var closeRequested = true
     private var webSocket: WebSocket? = null
     private val p2pSession = AtomicReference<P2PSession?>(null)
-    private val turnSession = AtomicReference<P2PSession?>(null)
+    private val turnSession = TurnSessionSlot()
     private val recoveryRequested = java.util.concurrent.atomic.AtomicBoolean(false)
 
     override val invalidations: Flow<InvalidationHint> = invalidationEvents.asSharedFlow()
@@ -109,13 +109,17 @@ class OkHttpAgentoCTransport(
     }
 
     fun setTurnSession(session: P2PSession) {
-        turnSession.getAndSet(session)?.takeIf { it !== session }?.close()
+        turnSession.replace(session, drain = false)
+        recoveryRequested.set(false)
+    }
+
+    fun handoffTurnSession(session: P2PSession) {
+        turnSession.replace(session, drain = true)
         recoveryRequested.set(false)
     }
 
     fun clearTurnSession(session: P2PSession? = null) {
-        if (session == null) turnSession.set(null)
-        else turnSession.compareAndSet(session, null)
+        turnSession.clear(session)
     }
 
     private fun hasOpenCarrier(): Boolean = p2pSession.get()?.isOpen == true || turnSession.get()?.isOpen == true
@@ -134,7 +138,10 @@ class OkHttpAgentoCTransport(
         val serverRelativeRequest = !request.path.startsWith("http://") && !request.path.startsWith("https://")
         if (serverRelativeRequest) {
             p2pSession.get()?.takeIf { it.isOpen }?.let { return@withContext executeViaP2P(request, it) }
-            turnSession.get()?.takeIf { it.isOpen }?.let { return@withContext executeViaTurn(request, it) }
+            turnSession.acquire()?.let { carrier ->
+                try { return@withContext executeViaTurn(request, carrier) }
+                finally { turnSession.release(carrier) }
+            }
             if (requireVerifiedCarrier) {
                 reportUnavailableCarrier(null)
                 throw ApiException(0, "CARRIER_UNAVAILABLE", "The computer is reconnecting", retryable = true)
@@ -448,7 +455,7 @@ class OkHttpAgentoCTransport(
         reconnectJob = null
         webSocket?.close(1000, "client closed")
         webSocket = null
-        turnSession.getAndSet(null)?.close()
+        turnSession.closeAll()
         p2pSession.getAndSet(null)?.close()
         mutableConnectionState.value = RuntimeConnectionState.Disconnected
     }

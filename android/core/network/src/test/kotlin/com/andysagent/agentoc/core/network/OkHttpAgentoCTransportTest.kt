@@ -20,6 +20,40 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class OkHttpAgentoCTransportTest {
+    @Test fun carrierHandoffDrainsInFlightRequestsWithoutReplayingWrites() = runBlocking {
+        val entered = CompletableDeferred<Unit>()
+        val finish = CompletableDeferred<Unit>()
+        var oldCalls = 0
+        var oldCloses = 0
+        val old = object : P2PSession {
+            override val isOpen get() = oldCloses == 0
+            override suspend fun connect() = Result.success(Unit)
+            override fun close() { oldCloses++ }
+            override suspend fun request(request: P2PHttpRequest): Result<P2PHttpResponse> {
+                oldCalls++
+                entered.complete(Unit)
+                finish.await()
+                return Result.success(P2PHttpResponse(id = request.id, status = 200))
+            }
+        }
+        val replacement = RecordingP2PSession()
+        val transport = OkHttpAgentoCTransport({ "" }, { "rda_fixture" }, requireVerifiedCarrier = true)
+        try {
+            transport.setTurnSession(old)
+            val writing = async(Dispatchers.Default) { transport.execute(ApiRequest("POST", "/api/sessions", "{}")) }
+            withTimeout(5_000) { entered.await() }
+            transport.handoffTurnSession(replacement)
+            assertEquals(0, oldCloses)
+            assertEquals(200, transport.execute(ApiRequest("GET", "/api/projects")).statusCode)
+            assertEquals("/api/projects", replacement.request!!.path)
+            finish.complete(Unit)
+            assertEquals(200, writing.await().statusCode)
+            assertEquals(1, oldCalls, "handoff must not replay an in-flight write")
+            assertEquals(1, oldCloses)
+        } finally { finish.complete(Unit); transport.close() }
+        Unit
+    }
+
     @Test fun carrierFailureDiagnosticsUseOnlyKnownCategories() {
         assertEquals("transport_closed", carrierFailureCategory(Exception("P2P transport closed")))
         assertEquals("request_timeout", carrierFailureCategory(Exception("P2P request timed out")))
