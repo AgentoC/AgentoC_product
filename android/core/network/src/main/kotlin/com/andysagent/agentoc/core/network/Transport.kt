@@ -25,6 +25,8 @@ data class ApiRequest(
     val contentType: String? = null,
     /** Optional local body-write observation. Unsupported carriers leave it silent; never serialized. */
     val onBodyBytesWritten: ((Long) -> Unit)? = null,
+    /** Public device-key challenges do not authenticate or invalidate the current bearer. */
+    val isolateCredentialFailure: Boolean = false,
 )
 
 data class ApiResponse(

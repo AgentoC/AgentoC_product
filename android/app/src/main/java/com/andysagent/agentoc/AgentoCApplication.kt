@@ -1707,6 +1707,24 @@ class AndroidRuntimeGraph internal constructor(
             ).renew(runtime.instanceId, runtime.baseEndpoint, accountDeviceAlias, guard)
         }
 
+    private suspend fun renewTargetCarrierCredential(runtime: TargetRuntime, attemptedCredential: String?, deviceId: String,
+        stillCurrent: () -> Boolean) = targetPairingCommits.withTarget(runtime.instanceId) { removalGuard ->
+        val guard = com.andysagent.agentoc.core.auth.PairingWriteGuard { instanceId, writes ->
+            removalGuard.persist(instanceId) {
+                currentCoroutineContext().ensureActive()
+                if (stopped || targetRuntimes[instanceId] !== runtime || !stillCurrent()
+                    || configStore.directory.first().computers.none { it.instanceId == instanceId }
+                    || credentialStore.readToken(instanceId) != attemptedCredential) {
+                    throw CancellationException("Carrier credential renewal was superseded")
+                }
+                writes()
+            }
+        }
+        guard.persist(runtime.instanceId) { }
+        com.andysagent.agentoc.core.auth.DeviceCredentialRenewal(identityStore, credentialStore, p2pSecretStore)
+            .renewViaCarrier(runtime.instanceId, deviceId, runtime.transport, guard)
+    }
+
     private fun createTargetRuntime(target: LinkedComputer, childScope: CoroutineScope): TargetRuntime {
         lateinit var runtime: TargetRuntime
         lateinit var controller: BoundTargetConnection
@@ -1748,6 +1766,9 @@ class AndroidRuntimeGraph internal constructor(
                     || p2pSecretStore.read(target.instanceId) == null
             },
             renewCredential = { credential, current -> renewTargetCredential(runtime, credential, current) },
+            renewCarrierCredential = { credential, deviceId, current ->
+                renewTargetCarrierCredential(runtime, credential, deviceId, current)
+            },
             onEndpointResolved = { runtime.endpoint = it },
         )
         runtime = TargetRuntime(target.instanceId, target.endpoint.trimEnd('/'), "", targetTransport, repository, controller,

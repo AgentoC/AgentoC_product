@@ -49,6 +49,7 @@ internal class BoundTargetConnection(
     private val credentialRejectionHandler: CredentialRejectionHandler? = null,
     private val credentialRenewalRequired: () -> Boolean = { false },
     private val renewCredential: (suspend (String?, () -> Boolean) -> Unit)? = null,
+    private val renewCarrierCredential: (suspend (String?, String, () -> Boolean) -> Unit)? = null,
     private val releaseAccountReservation: (suspend (String) -> Unit)? = null,
     private val onNetworkRestored: () -> Unit = {},
 ) : TargetConnectionController {
@@ -58,6 +59,7 @@ internal class BoundTargetConnection(
     private var refreshJob: Job? = null
     private var refreshPlanApplied = false
     private var renewalMonitorJob: Job? = null
+    private var carrierRenewalJob: Job? = null
     private val refreshGeneration = AtomicLong()
     private val refreshLock = Any()
     @Volatile private var started = false
@@ -182,14 +184,23 @@ internal class BoundTargetConnection(
         transport.updateCarrierConnectionState(RuntimeConnectionState.Connecting)
         supervisor.start()
         refreshBootstrap(useCachedPlan = true)
-        // Endpoint-less targets renew through fresh Accounts rendezvous below;
-        // their short-lived device bearer needs the same proactive monitor.
+        // Prefer a device-key challenge on the healthy, verified carrier. A
+        // failed challenge never creates a new lease or replays business work.
         if (renewCredential != null) renewalMonitorJob = scope.launch {
             while (isActive && started) {
                 delay(30_000)
                 synchronized(refreshLock) {
                     if (started && !authenticationRequired && refreshJob?.isActive != true && credentialRenewalRequired()) {
-                        refreshBootstrap(forceRenewal = true)
+                        val session = activeTurnSession.get()
+                        val current = plan
+                        if (endpointProvider().isBlank() && renewCarrierCredential != null && session?.isOpen == true
+                            && current != null && current.turnConnectionId == session.carrier.connectionId
+                            && !credentialProvider().isNullOrBlank()
+                            && supervisor.state.value.status == ConnectionStatus.Connected) {
+                            renewOnCarrier(session, current)
+                        } else if (carrierRenewalJob?.isActive != true) {
+                            refreshBootstrap(forceRenewal = true)
+                        }
                     }
                 }
             }
@@ -203,6 +214,8 @@ internal class BoundTargetConnection(
         earlyHandoffJob?.cancelAndJoin(); earlyHandoffJob = null
         renewalMonitorJob?.cancelAndJoin()
         renewalMonitorJob = null
+        carrierRenewalJob?.cancelAndJoin()
+        carrierRenewalJob = null
         val pendingRefresh = synchronized(refreshLock) {
             preferTcpOnNextBootstrap = false
             refreshJob.also { cancelRefresh() }
@@ -238,6 +251,30 @@ internal class BoundTargetConnection(
     }
 
     fun carrierRequestFailed(failed: P2PSession?) = supervisor.carrierRequestFailed(failed)
+
+    /** Caller holds refreshLock. The guard prevents publishing to a replaced carrier. */
+    private fun renewOnCarrier(session: PlannedTurnSession, current: BootstrapConnectionPlan) {
+        if (carrierRenewalJob?.isActive == true) return
+        val attempted = credentialProvider()?.takeIf { it.isNotBlank() } ?: return
+        carrierRenewalJob = scope.launch {
+            try {
+                renewCarrierCredential!!.invoke(attempted, current.contract.deviceId) {
+                    started && !authenticationRequired && activeTurnSession.get() === session && session.isOpen
+                        && plan === current && supervisor.state.value.status == ConnectionStatus.Connected
+                }
+                connectionDebugTrace(application, instanceId, "carrier-credential-renewed")
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (upgrade: com.andysagent.agentoc.core.auth.DeviceAuthorityUpgradeRequired) {
+                synchronized(refreshLock) {
+                    if (started && activeTurnSession.get() === session && plan === current) refreshBootstrap(forceRenewal = true)
+                }
+            } catch (_: Exception) {
+                // The existing credential and carrier remain authoritative.
+                // Retry at the next monitor tick, or recover on actual loss.
+                connectionDebugTrace(application, instanceId, "carrier-credential-renewal-failed")
+            }
+        }
+    }
 
     override fun refresh() {
         if (started) {

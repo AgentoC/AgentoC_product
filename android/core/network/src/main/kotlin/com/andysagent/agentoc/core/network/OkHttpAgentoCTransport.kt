@@ -179,7 +179,7 @@ class OkHttpAgentoCTransport(
             apiResponse
         } catch (error: ApiException) {
             currentCoroutineContext().ensureActive()
-            throw if (serverRelativeRequest) handleAuthenticationFailure(error, attemptedCredential) else error
+            throw if (serverRelativeRequest && !request.isolateCredentialFailure) handleAuthenticationFailure(error, attemptedCredential) else error
         } catch (error: IOException) {
             currentCoroutineContext().ensureActive()
             val rootCause = generateSequence<Throwable>(error) { it.cause }.take(8).last()
@@ -261,7 +261,7 @@ class OkHttpAgentoCTransport(
         )
         if (!response.isSuccessful) {
             val error = response.toApiException(codec)
-            throw handleAuthenticationFailure(error, attemptedCredential)
+            throw if (request.isolateCredentialFailure) error else handleAuthenticationFailure(error, attemptedCredential)
         }
         return response
     }
@@ -309,7 +309,7 @@ class OkHttpAgentoCTransport(
         )
         if (!response.isSuccessful) {
             val error = response.toApiException(codec)
-            throw handleAuthenticationFailure(error, attemptedCredential)
+            throw if (request.isolateCredentialFailure) error else handleAuthenticationFailure(error, attemptedCredential)
         }
         return response
     }

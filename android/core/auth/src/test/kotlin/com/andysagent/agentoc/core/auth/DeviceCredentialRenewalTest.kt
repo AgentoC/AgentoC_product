@@ -1,6 +1,8 @@
 package com.andysagent.agentoc.core.auth
 
 import com.andysagent.agentoc.core.network.ApiException
+import com.andysagent.agentoc.core.network.ApiRequest
+import com.andysagent.agentoc.core.network.OkHttpAgentoCTransport
 import com.andysagent.agentoc.core.protocol.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
@@ -28,6 +30,37 @@ class DeviceCredentialRenewalTest {
     private fun MockWebServer.credentialResponse(deviceId: String = "rdev_phone", p2p: DeviceP2PDto? = null) = enqueue(MockResponse().setBody(
         codec.encode(VerifyDeviceChallengeResponse.serializer(), VerifyDeviceChallengeResponse(true, deviceId,
             VerifiedDeviceCredentialDto("Bearer", "rda_renewed", now.plusSeconds(900).toString()), deviceP2P = p2p))))
+
+    @Test fun `carrier renewal checks the same device and leaves the shared transport open`() = runBlocking {
+        val server = MockWebServer(); server.start(); val store = FakeCredentialStore(); store.write("rda_old")
+        val transport = OkHttpAgentoCTransport({ server.url("/").toString().trimEnd('/') }, { "rda_old" })
+        try {
+            server.challengeResponse(challenge()); server.credentialResponse(); server.enqueue(MockResponse().setBody("ok"))
+            DeviceCredentialRenewal(FakeDeviceIdentityStore(), store, now = { now })
+                .renewViaCarrier("pc-fixed", "rdev_phone", transport, PairingWriteGuard.Direct)
+            assertEquals("rda_renewed", store.lastToken)
+            assertEquals("ok", transport.execute(ApiRequest("GET", "/still-open")).body)
+            server.challengeResponse(challenge())
+            assertFailsWith<IllegalArgumentException> {
+                DeviceCredentialRenewal(FakeDeviceIdentityStore(), store, now = { now })
+                    .renewViaCarrier("pc-fixed", "rdev_other", transport, PairingWriteGuard.Direct)
+            }
+            assertEquals("rda_renewed", store.lastToken)
+        } finally { transport.close(); server.shutdown() }
+    }
+
+    @Test fun `challenge denial does not invalidate an existing bearer`() = runBlocking {
+        val server = MockWebServer(); server.start(); val store = FakeCredentialStore(); store.write("rda_old")
+        var rejected = 0
+        val transport = OkHttpAgentoCTransport({ server.url("/").toString().trimEnd('/') }, { "rda_old" },
+            onAuthenticationRequired = { rejected++ })
+        try {
+            server.enqueue(MockResponse().setResponseCode(401).setBody("""{"code":"DEVICE_REVOKED"}"""))
+            assertFailsWith<ApiException> { DeviceCredentialRenewal(FakeDeviceIdentityStore(), store, now = { now })
+                .renewViaCarrier("pc-fixed", "rdev_phone", transport, PairingWriteGuard.Direct) }
+            assertEquals(0, rejected); assertEquals("rda_old", store.lastToken)
+        } finally { transport.close(); server.shutdown() }
+    }
 
     @Test fun `renewal signs the fixed target transcript without sending either bearer`() = runBlocking {
         val server = MockWebServer(); server.start()

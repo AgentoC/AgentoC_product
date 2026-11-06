@@ -255,6 +255,30 @@ class OkHttpAgentoCTransportTest {
         }
     }
 
+    @Test fun publicChallengeDenialDoesNotInvalidateBearerOnEitherCarrier() = runBlocking {
+        for (turn in listOf(true, false)) {
+            var notifications = 0
+            val session = object : P2PSession {
+                override val isOpen = true
+                override suspend fun connect() = Result.success(Unit)
+                override fun close() = Unit
+                override suspend fun request(request: P2PHttpRequest) = Result.success(P2PHttpResponse(
+                    id = request.id, status = 401,
+                    bodyBase64 = com.andysagent.agentoc.core.p2p.P2PProtocol.encodeBody("""{"code":"DEVICE_REVOKED"}""")))
+            }
+            val transport = OkHttpAgentoCTransport({ "" }, { "rda_fixture" },
+                onAuthenticationRequired = { notifications++ }, requireVerifiedCarrier = true)
+            try {
+                if (turn) transport.setTurnSession(session) else transport.setP2PSession(session)
+                transport.updateCarrierConnectionState(RuntimeConnectionState.Connected)
+                val error = assertFailsWith<ApiException> { transport.execute(ApiRequest("POST", "/api/device-auth/verify", "{}",
+                    isolateCredentialFailure = true)) }
+                assertEquals(401, error.statusCode); assertEquals(0, notifications)
+                assertEquals(RuntimeConnectionState.Connected, transport.connectionState.value)
+            } finally { transport.close() }
+        }
+    }
+
     @Test fun externalStorageDenialCannotInvalidateTheComputerCredential() = runBlocking {
         val server = MockWebServer(); server.enqueue(MockResponse().setResponseCode(401)); server.start()
         var notifications = 0
