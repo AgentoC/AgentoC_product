@@ -13307,7 +13307,7 @@ async function submitHttpMessageInternal(sessionId, text, images, options = {}) 
     && effectiveProviderContract.providerCapabilities?.supportsManagedActionMcp === true
     && getGatedPermissionModeId(effectiveRuntimeFamily);
   const authenticatedPrincipalKind = trimString(options.authenticatedPrincipalKind);
-  const windowsOwnerDevice = process.platform === 'win32' && authenticatedPrincipalKind === 'trusted_device' &&
+  const windowsOwnerDevice = process.platform === 'win32' && Boolean(managedActionMcpEligible) && authenticatedPrincipalKind === 'trusted_device' &&
     canIssueSessionControl({ principalKind: authenticatedPrincipalKind, session,
       temporaryControlAuthority: options.temporaryControlAuthority, internalOperation: options.internalOperation })
     ? await captureWindowsOwnerDevice(options.authenticatedOwnerDevice).catch(() => null) : null;

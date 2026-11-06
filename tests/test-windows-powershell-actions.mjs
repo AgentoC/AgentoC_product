@@ -20,6 +20,7 @@ await mkdir(path.join(workspace, 'sensitive-folder', '.ssh'), { recursive: true 
 await mkdir(path.join(workspace, 'build', 'nested'), { recursive: true });
 await mkdir(path.join(workspace, 'build-sensitive', '.ssh'), { recursive: true });
 await writeFile(path.join(workspace, 'readme.txt'), 'fixture');
+await writeFile(path.join(workspace, 'another.txt'), 'fixture');
 await writeFile(path.join(root, 'ordinary.txt'), 'outside fixture');
 await mkdir(path.join(root, 'outside-folder'));
 await mkdir(path.join(root, 'profile', 'AppData', 'Roaming', 'Microsoft', 'Credentials'), { recursive: true });
@@ -67,6 +68,9 @@ assert.equal(result.actions.length, 2);
 assert.equal((await inspect('Get-Content readme.txt,..\\protected\\secret')).decision, 'review');
 assert.equal((await inspect('Get-Content readme.txt,$env:TEMP')).decision, 'review');
 assert.equal((await inspect('Remove-Item readme.txt,folder')).decision, 'review');
+assert.equal((await inspect('Remove-Item -Force -Confirm:$false readme.txt,another.txt')).decision, 'allow');
+assert.equal((await inspect('Remove-Item readme.txt,..\\protected\\secret')).decision, 'review');
+assert.equal((await inspect('Remove-Item -Recurse readme.txt,another.txt')).decision, 'review');
 assert.equal((await inspect('Get-ChildItem | Get-Content readme.txt,folder')).decision, 'review');
 assert.equal((await inspect('Get-Process -Name explorer | Select-Object -First 1')).decision, 'allow');
 assert.equal((await inspect('Get-Command')).decision, 'allow');
