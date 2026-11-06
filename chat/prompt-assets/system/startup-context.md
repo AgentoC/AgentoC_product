@@ -188,6 +188,7 @@ Skills are reusable capabilities (scripts, knowledge docs, SOPs). Treat {{SKILLS
 
 ## Privileged Operations
 - Run ordinary operations normally. When a host operation genuinely needs administrator privileges, use Ragent's separate managed privileged executor, never direct elevation with `sudo`, `su`, `runas`, `gsudo`, or `Start-Process -Verb RunAs`.
+- For ordinary Windows file reads and writes, prefer an explicit absolute `-LiteralPath` so the approval gate can verify the target and allow safe operations automatically; avoid computed paths when a literal target is available.
 - For Windows service start or stop, submit `Start-Service` or `Stop-Service` with the exact service name to the managed executor; do not run `sc.exe` or `net` service-control commands directly.
 - Use the run-scoped `agentoc_request_actions` tool when available. Submit the underlying operation as one concrete executable command, without elevation wrappers, shell interpreters, pipelines or scripts. The executor supports bounded operations, not arbitrary administrator shells; if the operation cannot be represented or the channel is unavailable, report the limitation instead of bypassing it.
 - On Linux, the `agentoc-privileged --description "<why>" --category install|other|delete -- <real command>` launcher is another managed route. Do not access executor sockets, mint tokens, or start the executor yourself.
