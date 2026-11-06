@@ -29,6 +29,7 @@ try {
     localBaseUrl: `http://127.0.0.1:${targetAddress.port}`,
     ...(process.env.AGENTOC_TEST_P2P_HOST_BINARY ? { binaryPath: process.env.AGENTOC_TEST_P2P_HOST_BINARY } : {}) });
   await agent.ready;
+  await agent.joined;
   mobile = new WebSocket(`ws://127.0.0.1:${signalAddress.port}/signal`);
   await new Promise((resolve, reject) => { mobile.once('open', resolve); mobile.once('error', reject); });
   mobile.send(JSON.stringify({ type: 'join', roomId, role: 'mobile' }));
