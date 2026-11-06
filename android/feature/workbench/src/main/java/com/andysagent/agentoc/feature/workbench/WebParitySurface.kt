@@ -689,6 +689,10 @@ private fun ProvidersPage(state: WebParityUiState, onEvent: (WebParityEvent) -> 
                     Text(stringResource(status), style = MaterialTheme.typography.labelSmall,
                         color = if (provider.ready && harnessInstalled) LocalAgentocColors.current.success else LocalAgentocColors.current.secondaryContent)
                 }
+                if (state.providerHarnessesLoaded && !harnessInstalled && !restrictedDemo && LocalRemoteSettingsWritable.current) {
+                    Text(stringResource(R.string.pi_harness_missing), style = MaterialTheme.typography.bodySmall,
+                        color = LocalAgentocColors.current.secondaryContent)
+                }
                 if (provider.baseUrl.isNotBlank()) Text(provider.baseUrl, style = MaterialTheme.typography.bodySmall,
                     color = LocalAgentocColors.current.tertiaryContent, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (provider.quotaSnapshot != null) ProviderQuotaSection(provider.quotaSnapshot)

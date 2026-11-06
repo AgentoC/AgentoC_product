@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.andysagent.agentoc.core.designsystem.AgentocTheme
 import org.junit.Rule
 import org.junit.Test
@@ -46,8 +47,8 @@ class ProviderManagementChoicesTest {
             providers = listOf(WebProvider("legacy", "Saved provider", "Claude", true, agentType = "claude")))
         rule.setContent { AgentocTheme { WebParitySurface(WebParityPage.ModelProviders, state, {}, {}) } }
         rule.onNodeWithText("Not installed").assertIsDisplayed()
-        rule.onNodeWithText("This instance has no matching Harness installed. You can still edit or delete its configuration.").assertIsDisplayed()
-        rule.onNodeWithText("Edit").assertIsDisplayed()
-        rule.onNodeWithText("Delete").assertIsDisplayed()
+        rule.onNodeWithText("This instance has no matching Harness installed. You can still edit or delete its configuration.").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Edit").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Delete").performScrollTo().assertIsDisplayed()
     }
 }

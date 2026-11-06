@@ -49,7 +49,7 @@ class AccountDataRequestsTest {
         println(rule.onRoot().printToString())
         // performScrollTo makes the row visible but does not account for the
         // product's overlay dock. Scroll the real list further before touching.
-        rule.onNode(hasScrollAction()).performTouchInput { swipeUp() }
+        rule.onNode(hasScrollAction()).performTouchInput { swipeUp(startY = centerY + 50f, endY = centerY - 50f) }
         val row = rule.onNodeWithTag("settings-account-data").fetchSemanticsNode().boundsInRoot
         val dock = rule.onNodeWithTag("bottom-navigation-shell").fetchSemanticsNode().boundsInRoot
         assertTrue(row.center.y < dock.top, "The tap must be above the overlay dock")

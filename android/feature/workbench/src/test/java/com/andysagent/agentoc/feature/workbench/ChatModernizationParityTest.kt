@@ -547,7 +547,8 @@ class ChatModernizationParityTest {
 
             assertTrue(viewModel.state.value.activeDecision!!.isSubmitted)
             assertEquals(1, repository.runtimeDecisionCalls.size)
-            assertEquals(listOf("canary"), repository.runtimeDecisionCalls.single().choices)
+            // The runtime protocol resolves option indexes against the original question.
+            assertEquals(listOf("0"), repository.runtimeDecisionCalls.single().choices)
             assertEquals("Run staging first", repository.runtimeDecisionCalls.single().customAnswer)
         } finally {
             Dispatchers.resetMain()
