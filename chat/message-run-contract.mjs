@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { parseSessionApiScope } from './session-api-scope-contract.mjs';
 import { sessionApiError, sessionApiIdentifier } from './session-api-mutation-contract.mjs';
 import { parseTemporaryOperationAuthority } from '../lib/temporary-operation-authority.mjs';
+import { parseOwnerDeviceDescriptor } from './windows-owner-device-authority.mjs';
 
 export const MESSAGE_CONFIGURATION_KEYS = Object.freeze([
   'folder', 'tool', 'model', 'effort', 'serviceTier', 'thinking', 'providerProfile',
@@ -14,20 +15,23 @@ export const MESSAGE_CONFIGURATION_KEYS = Object.freeze([
 ].sort());
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export function messageRunId(record) { return 'run_appapi_' + hash([record.sessionId, record.preparationId]).slice(0, 32); }
-export function createMessageRunBinding(record, meta, principalKind, { temporaryAuthority } = {}) {
+export function createMessageRunBinding(record, meta, principalKind, { temporaryAuthority, ownerDevice } = {}) {
   const configuration = Object.fromEntries(MESSAGE_CONFIGURATION_KEYS.map(key => [key,
     Object.hasOwn(meta, key) ? structuredClone(meta[key]) ?? null : null]));
-  const base = { version: principalKind === 'temporary_device' ? 2 : 1, preparationId: record.preparationId, requestId: record.requestId,
+  const boundOwnerDevice = principalKind === 'trusted_device' && ownerDevice ? parseOwnerDeviceDescriptor(ownerDevice) : null;
+  const base = { version: principalKind === 'temporary_device' ? 2 : boundOwnerDevice ? 3 : 1, preparationId: record.preparationId, requestId: record.requestId,
     fingerprint: record.fingerprint, scope: record.scope, configuration, principalKind,
-    ...(principalKind === 'temporary_device' ? { temporaryAuthority: parseTemporaryOperationAuthority(temporaryAuthority) } : {}) };
+    ...(principalKind === 'temporary_device' ? { temporaryAuthority: parseTemporaryOperationAuthority(temporaryAuthority) } : {}),
+    ...(boundOwnerDevice ? { ownerDevice: boundOwnerDevice } : {}) };
   return parseMessageRunBinding({ ...base, bindingHash: hash(base) });
 }
 export function parseMessageRunBinding(value) {
   try {
     const temporary = value?.version === 2 && value?.principalKind === 'temporary_device';
-    if (!value || typeof value !== 'object' || Array.isArray(value) || (!temporary && value.version !== 1) ||
-        Object.keys(value).length !== (temporary ? 9 : 8) || Object.keys(value).some(key =>
-          !['version', 'preparationId', 'requestId', 'fingerprint', 'scope', 'configuration', 'principalKind', 'bindingHash', ...(temporary ? ['temporaryAuthority'] : [])].includes(key)) ||
+    const boundOwnerDevice = value?.version === 3 && value?.principalKind === 'trusted_device';
+    if (!value || typeof value !== 'object' || Array.isArray(value) || (!temporary && !boundOwnerDevice && value.version !== 1) ||
+        Object.keys(value).length !== (temporary || boundOwnerDevice ? 9 : 8) || Object.keys(value).some(key =>
+          !['version', 'preparationId', 'requestId', 'fingerprint', 'scope', 'configuration', 'principalKind', 'bindingHash', ...(temporary ? ['temporaryAuthority'] : []), ...(boundOwnerDevice ? ['ownerDevice'] : [])].includes(key)) ||
         typeof value.preparationId !== 'string' || !/^mprep_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value.preparationId) ||
         !/^[a-f0-9]{64}$/.test(value.fingerprint) || (!temporary && !['owner', 'trusted_device'].includes(value.principalKind))) throw new Error();
     sessionApiIdentifier(value.requestId);
@@ -54,7 +58,8 @@ export function parseMessageRunBinding(value) {
       || configuration.permissionMode !== null || configuration.templateId !== null)) throw new Error();
     const base = { version: value.version, preparationId: value.preparationId, requestId: value.requestId,
       fingerprint: value.fingerprint, scope, configuration, principalKind: value.principalKind,
-      ...(temporary ? { temporaryAuthority: parseTemporaryOperationAuthority(value.temporaryAuthority) } : {}) };
+      ...(temporary ? { temporaryAuthority: parseTemporaryOperationAuthority(value.temporaryAuthority) } : {}),
+      ...(boundOwnerDevice ? { ownerDevice: parseOwnerDeviceDescriptor(value.ownerDevice) } : {}) };
     if (hash(base) !== value.bindingHash) throw new Error();
     return { ...base, bindingHash: value.bindingHash };
   } catch { throw sessionApiError('MESSAGE_RUN_BINDING_INVALID', 503, 'Scoped message Run binding is unavailable'); }

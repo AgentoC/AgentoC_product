@@ -59,7 +59,7 @@ function receipt(record, run, duplicate = false) {
     dispatched: Boolean(run?.runnerStartedAt || run?.runnerLifecycleAcceptedAt),
     failureCode: run?.messageFailureCode || null };
 }
-export async function commitSessionApiMessage(sessionId, scopeInput, requestId, payload, principalKind, { authorize, temporaryAuthority } = {}) {
+export async function commitSessionApiMessage(sessionId, scopeInput, requestId, payload, principalKind, { authorize, temporaryAuthority, ownerDevice } = {}) {
   sessionApiIdentifier(sessionId, 256); sessionApiIdentifier(requestId);
   const scope = parseSessionApiScope(scopeInput, sessionId);
   const input = parseMessageCommit(payload);
@@ -97,7 +97,7 @@ export async function commitSessionApiMessage(sessionId, scopeInput, requestId, 
       if (temporary) Object.assign(frozenMeta, { riskMode: 'safe', riskModeExplicit: true, privilegedMode: false,
         canDelegate: false, privilegeRoutingEnabled: false, permissionMode: null, templateId: null,
         templateName: null, templatePerMessageSystemPrompt: null });
-      const binding = createMessageRunBinding(record, frozenMeta, principalKind, { temporaryAuthority });
+      const binding = createMessageRunBinding(record, frozenMeta, principalKind, { temporaryAuthority, ownerDevice });
       await authorize?.(meta);
       // The actual Run, with immutable preparation inputs, is the durable queue.
       const run = await createRun({ status: { id: runId, sessionId, requestId, responseId: requestId,

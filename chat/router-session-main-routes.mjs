@@ -27,6 +27,7 @@ import { buildSessionBackgroundAiProjection } from './summarizer.mjs';
 import { buildProjectionModel, ensureSessionAuditProjection } from './session-audit-projection.mjs';
 import { resolveStarterPresetDefinition } from './starter-session-content.mjs';
 import { waitForSessionEvents } from './session-event-waiter.mjs';
+import { authenticatedOwnerDeviceDescriptor } from './windows-owner-device-authority.mjs';
 import { sessionLiveFeed, sessionRealtimeLiveFeed } from './session-live-feed.mjs';
 import {
   applyTemplateToSession,
@@ -171,7 +172,9 @@ function temporaryControlRunAuthority(authSession) {
 
 function authenticatedTurnOptions(authSession) {
   const authority = temporaryControlRunAuthority(authSession);
+  const ownerDevice = authenticatedOwnerDeviceDescriptor(authSession);
   return { authenticatedPrincipalKind: resolveAuthenticatedTurnPrincipalKind(authSession),
+    ...(ownerDevice ? { authenticatedOwnerDevice: ownerDevice } : {}),
     ...(authority ? { temporaryControlAuthority: authority } : {}) };
 }
 

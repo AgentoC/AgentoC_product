@@ -21,7 +21,7 @@ const client = {
 
 async function call({ method = 'POST', payload = binding, query, address = '127.0.0.1', secret = token,
   run = { id: binding.runId, sessionId: binding.sessionId, state: 'running' }, riskMode = 'full-auto',
-  runManifest = manifest, platform = 'win32' } = {}) {
+  runManifest = manifest, platform = 'win32', validateOwnerDevice } = {}) {
   const req = new PassThrough();
   req.method = method;
   req.socket = { remoteAddress: address };
@@ -34,7 +34,7 @@ async function call({ method = 'POST', payload = binding, query, address = '127.
     req, res, pathname: '/api/internal/windows-broker/service-restart',
     getRun: async () => run, getRunManifest: async () => runManifest,
     getSession: async () => ({ riskMode, privilegedMode: true }), resolveSessionRiskMode: (session) => session.riskMode,
-    brokerClient: client, platform,
+    brokerClient: client, platform, ...(validateOwnerDevice ? { validateOwnerDevice } : {}),
     writeJson(_res, status, body) { output = { status, body }; },
   });
   assert.equal(handled, true);
@@ -72,6 +72,14 @@ for (const input of [
   assert.notEqual(response.status, 200);
 }
 assert.equal(proposals.length, 2, 'denied requests must not reach Broker');
+const pairedManifest = { ...manifest, options: { ...manifest.options, authenticatedPrincipalKind: 'trusted_device',
+  windowsBrokerChannel: { ...manifest.options.windowsBrokerChannel, windowsOwnerDevice: { deviceId: 'paired' } } } };
+assert.equal((await call({ runManifest: pairedManifest, validateOwnerDevice: async () => true })).status, 200);
+assert.equal((await call({ runManifest: pairedManifest, validateOwnerDevice: async () => false })).body.code, 'BROKER_RUN_BINDING_INVALID');
+assert.equal((await call({ runManifest: { ...pairedManifest, options: { ...pairedManifest.options, temporaryControlAuthority: {} } },
+  validateOwnerDevice: async () => true })).body.code, 'BROKER_RUN_BINDING_INVALID');
+let checks = 0;
+assert.equal((await call({ runManifest: pairedManifest, validateOwnerDevice: async () => ++checks === 1 })).body.code, 'BROKER_RUN_BINDING_INVALID');
 const duplicateStatus = await call({ method: 'GET', query: `${new URLSearchParams(binding)}&requestKey=other` });
 assert.equal(duplicateStatus.status, 400);
 assert.equal(duplicateStatus.body.code, 'BROKER_RUN_REQUEST_INVALID');

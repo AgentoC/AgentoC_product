@@ -9,6 +9,7 @@ import { publishWindowsBrokerApprovalInvalidation } from './windows-broker-appro
 
 const id = /^[A-Za-z0-9._:-]{1,128}$/;
 const statuses = new Set(['awaiting_device', 'executing', 'succeeded', 'failed', 'denied', 'expired', 'unknown']);
+const ownerRunAuthorized = (kind, verified) => kind === 'owner' || (kind === 'trusted_device' && verified === true);
 function fail(code, message) { throw Object.assign(new Error(message), { code }); }
 function assertBrokerStatusAvailable(result) {
   if (result?.type === 'error') fail(result.code || 'SERVICE_STATUS_UNAVAILABLE', 'Windows service status is temporarily unavailable');
@@ -48,8 +49,8 @@ function matchesServiceResult(result, action, target, requestId, actionId) {
 }
 
 // Status is read-only and never retries a submission or consumes a grant.
-export async function queryWindowsServiceProposal({ action, projection, authenticatedPrincipalKind, client } = {}) {
-  if (authenticatedPrincipalKind !== 'owner') fail('SERVICE_PROFILE_DENIED', 'Service status requires the owner run');
+export async function queryWindowsServiceProposal({ action, projection, authenticatedPrincipalKind, verifiedOwnerDevice, client } = {}) {
+  if (!ownerRunAuthorized(authenticatedPrincipalKind, verifiedOwnerDevice)) fail('SERVICE_PROFILE_DENIED', 'Service status requires the owner run');
   const target = boundService(action, projection);
   const { requestId, actionId } = windowsServiceRequestIds(action);
   if (!client || typeof client.status !== 'function') fail('SERVICE_PROPOSAL_UNAVAILABLE', 'Service broker is unavailable');
@@ -67,8 +68,8 @@ export async function queryWindowsServiceProposal({ action, projection, authenti
 // Reconstruct the literal operation from the original command for status-only
 // requests. Do not re-resolve its service definition: it may have changed after
 // the operation completed, but the original outcome must remain queryable.
-export async function queryWindowsServiceProposalFromCommand({ action, trustedContext, authenticatedPrincipalKind, client } = {}) {
-  if (authenticatedPrincipalKind !== 'owner') fail('SERVICE_PROFILE_DENIED', 'Service status requires the owner run');
+export async function queryWindowsServiceProposalFromCommand({ action, trustedContext, authenticatedPrincipalKind, verifiedOwnerDevice, client } = {}) {
+  if (!ownerRunAuthorized(authenticatedPrincipalKind, verifiedOwnerDevice)) fail('SERVICE_PROFILE_DENIED', 'Service status requires the owner run');
   const { requestId, actionId } = windowsServiceRequestIds(action);
   const compiled = compileSemanticOperations({
     request: { sessionId: action.sessionId, runId: action.runId, turnId: action.turnId, requestKey: action.requestKey,
@@ -94,7 +95,7 @@ export async function queryWindowsServiceProposalFromCommand({ action, trustedCo
 
 // Observe only the original broker record. A cancelled wait or broken
 // transport cannot establish whether an operation has executed.
-export async function waitWindowsServiceProposal({ action, projection, authenticatedPrincipalKind, client, signal,
+export async function waitWindowsServiceProposal({ action, projection, authenticatedPrincipalKind, verifiedOwnerDevice, client, signal,
   timeoutMs = 10 * 60_000 + 10_000, intervalMs = 2_000, monotonicNow = () => performance.now(),
   delay = ms => new Promise(resolve => setTimeout(resolve, ms)), assertActive, onStatus } = {}) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || !Number.isFinite(intervalMs) || intervalMs <= 0 ||
@@ -110,7 +111,7 @@ export async function waitWindowsServiceProposal({ action, projection, authentic
     'BROKER_STORAGE_UNAVAILABLE', 'SERVICE_STATUS_UNAVAILABLE']);
   while (!signal?.aborted && monotonicNow() < deadline) {
     let result;
-    try { result = await queryWindowsServiceProposal({ action, projection, authenticatedPrincipalKind, client }); }
+    try { result = await queryWindowsServiceProposal({ action, projection, authenticatedPrincipalKind, verifiedOwnerDevice, client }); }
     catch (error) {
       if (['SERVICE_BINDING_CONFLICT', 'SERVICE_PROJECTION_INVALID', 'SERVICE_PROFILE_DENIED'].includes(error?.code)) throw error;
       if (!retryable.has(error?.code)) return unknown();
@@ -142,9 +143,9 @@ export async function waitWindowsServiceProposal({ action, projection, authentic
 
 // A failed or timed-out proposal is ambiguous. A retry reads the original
 // durable request ID before creating any new nonce, and matches every target.
-export async function submitOrResumeWindowsServiceProposal({ action, projection, riskMode, authenticatedPrincipalKind, client,
+export async function submitOrResumeWindowsServiceProposal({ action, projection, riskMode, authenticatedPrincipalKind, verifiedOwnerDevice, client,
   kid, privateKey, assertActive, now = Date.now() } = {}) {
-  if (!['safe', 'recommended'].includes(riskMode) || authenticatedPrincipalKind !== 'owner') {
+  if (!['safe', 'recommended'].includes(riskMode) || !ownerRunAuthorized(authenticatedPrincipalKind, verifiedOwnerDevice)) {
     fail('SERVICE_PROFILE_DENIED', 'This profile cannot request an owner service approval');
   }
   const target = boundService(action, projection);

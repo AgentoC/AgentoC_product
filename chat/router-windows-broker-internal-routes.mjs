@@ -3,6 +3,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { readBody } from '../lib/utils.mjs';
 import { isPrivilegeRoutingEnabled } from './approved-action-policy.mjs';
 import { publishWindowsBrokerApprovalInvalidation } from './windows-broker-approval-invalidation.mjs';
+import { validateWindowsOwnerDevice } from './windows-owner-device-authority.mjs';
 import {
   createWindowsPrivilegedBrokerClient,
   resolveWindowsBrokerProfileDecision,
@@ -29,7 +30,7 @@ function tokenMatches(provided, hash) {
 
 export async function handleWindowsBrokerInternalRoutes({
   req, res, pathname, writeJson, getRun, getRunManifest, getSession,
-  resolveSessionRiskMode, brokerClient = defaultClient, platform = process.platform,
+  resolveSessionRiskMode, brokerClient = defaultClient, platform = process.platform, validateOwnerDevice = validateWindowsOwnerDevice,
 } = {}) {
   if (pathname !== BASE || !['POST', 'GET'].includes(req.method)) return false;
   res.setHeader?.('Cache-Control', 'private, no-store');
@@ -59,10 +60,13 @@ export async function handleWindowsBrokerInternalRoutes({
     if (value(manifest?.sessionId) !== payload.sessionId ||
         value(manifest?.requestId) !== payload.turnId ||
         value(channel?.turnId) !== payload.turnId ||
-        value(manifest?.options?.authenticatedPrincipalKind) !== 'owner' ||
         !tokenMatches(token, channel?.tokenHash)) {
       throw error('BROKER_RUN_BINDING_INVALID');
     }
+    const principal = value(manifest?.options?.authenticatedPrincipalKind);
+    const ownerRun = principal === 'owner' || (principal === 'trusted_device' && channel?.windowsOwnerDevice &&
+      !manifest?.options?.temporaryControlAuthority && await validateOwnerDevice(channel.windowsOwnerDevice));
+    if (!ownerRun) throw error('BROKER_RUN_BINDING_INVALID');
     const requestId = requestIdFor(payload.runId, payload.turnId, payload.requestKey);
     if (req.method === 'POST') {
       if (value(run.state) !== 'running' || run.finalizedAt || run.cancelRequested) {
@@ -73,6 +77,9 @@ export async function handleWindowsBrokerInternalRoutes({
       if (!isPrivilegeRoutingEnabled(session)) throw error('BROKER_PERMISSION_PROFILE_DENIED');
       const decision = resolveWindowsBrokerProfileDecision(resolveSessionRiskMode(session), platform);
       if (decision.decision !== 'require_device') throw error(decision.code);
+      if (principal === 'trusted_device' && !await validateOwnerDevice(channel.windowsOwnerDevice)) {
+        throw error('BROKER_RUN_BINDING_INVALID');
+      }
       const response = await brokerClient.propose({
         requestId,
         sessionId: payload.sessionId,

@@ -33,6 +33,8 @@ assert.equal(submitted.grant.serviceName, 'Example');
 assert.equal(submitted.grant.action, 'restart-service');
 assert.equal((await submitOrResumeWindowsServiceProposal(options)).duplicate, true);
 assert.equal((await queryWindowsServiceProposal(options)).status, 'awaiting_device');
+assert.equal((await queryWindowsServiceProposal({ ...options, authenticatedPrincipalKind: 'trusted_device', verifiedOwnerDevice: true })).status, 'awaiting_device');
+await assert.rejects(queryWindowsServiceProposal({ ...options, authenticatedPrincipalKind: 'trusted_device' }), { code: 'SERVICE_PROFILE_DENIED' });
 assert.equal((await queryWindowsServiceProposalFromCommand({ ...options, trustedContext: context })).status, 'awaiting_device');
 assert.equal(count, 1); assert.equal(active, 1);
 const mismatchClient = { ...client, status: async id => ({ type: 'result', requestId: id, status: 'awaiting_device',

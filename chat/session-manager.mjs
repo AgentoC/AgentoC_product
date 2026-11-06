@@ -15,6 +15,7 @@ import {
   PUBLIC_BASE_URL,
 } from '../lib/config.mjs';
 import { accountPolicyToSessionRiskMode, loadAccountPermissionPolicy } from '../lib/account-policy.mjs';
+import { captureWindowsOwnerDevice, validateWindowsOwnerDevice } from './windows-owner-device-authority.mjs';
 import { isTemporaryControlApprovalActor, temporaryControlApprovalAudit } from '../lib/temporary-control-policy.mjs';
 import { getToolDefinitionAsync } from '../lib/tools.mjs';
 import { assertRunStartsAllowed } from '../lib/restart-interlock.mjs';
@@ -2022,6 +2023,9 @@ function sanitizeQueuedFollowUpOptions(options = {}) {
   if (typeof options.authenticatedPrincipalKind === 'string' && options.authenticatedPrincipalKind.trim()) {
     next.authenticatedPrincipalKind = options.authenticatedPrincipalKind.trim();
   }
+  if (next.authenticatedPrincipalKind === 'trusted_device' && options.authenticatedOwnerDevice) {
+    next.authenticatedOwnerDevice = structuredClone(options.authenticatedOwnerDevice);
+  }
   if (options.temporaryControlAuthority) next.temporaryControlAuthority = structuredClone(options.temporaryControlAuthority);
   if (options.internalOperation === 'approved_action_resume') {
     next.internalOperation = 'approved_action_resume';
@@ -3989,6 +3993,12 @@ async function proposeApprovedActionsUnlocked({
     throw error;
   }
 
+  const verifiedOwnerDevice = process.platform === 'win32' && binding?.authenticatedPrincipalKind === 'trusted_device' &&
+    Boolean(binding.windowsOwnerDevice) && await validateWindowsOwnerDevice(binding.windowsOwnerDevice);
+  if (process.platform === 'win32' && binding?.windowsOwnerDevice && !verifiedOwnerDevice) {
+    throw Object.assign(new Error('The paired owner device is no longer authorized for this run'), { code: 'OWNER_DEVICE_AUTHORITY_REVOKED' });
+  }
+
   const productActions = (Array.isArray(actions) ? actions : []).filter(isAgentCreateApprovedAction);
   if (productActions.length > 0) {
     if (!isAgentCreateApprovedActionEnabled()
@@ -4025,12 +4035,12 @@ async function proposeApprovedActionsUnlocked({
     if (process.platform === 'win32' && serverActions.length === 1) {
       const action = buildOptionalApprovedAction(serverActions[0], { requestKey: trimString(requestKey), sessionId: run.sessionId,
         runId: normalizedRunId, turnId: trustedTurnId, cwd: trustedCwd, projectRoot: trustedProjectRoot, home: trustedHome, platform: 'win32' });
-      const status = action && await queryWindowsServiceProposalFromCommand({ action, authenticatedPrincipalKind: binding.authenticatedPrincipalKind,
+      const status = action && await queryWindowsServiceProposalFromCommand({ action, authenticatedPrincipalKind: binding.authenticatedPrincipalKind, verifiedOwnerDevice,
         trustedContext: { cwd: trustedCwd, projectRoot: trustedProjectRoot, home: trustedHome }, client: createWindowsPrivilegedBrokerClient() });
       if (status) return { ...status, kind: 'windows_service_control', requestKey: trimString(requestKey) };
     }
     const status = await getWindowsManagedAutoInstallStatus({ binding: { sessionId: run.sessionId, runId: normalizedRunId,
-      turnId: trustedTurnId, requestKey: trimString(requestKey), authenticatedPrincipalKind: binding.authenticatedPrincipalKind } });
+      turnId: trustedTurnId, requestKey: trimString(requestKey), authenticatedPrincipalKind: binding.authenticatedPrincipalKind, verifiedOwnerDevice } });
     return { ...status, kind: 'automatic_install' };
   }
   const assertInstallActive = async () => {
@@ -4038,7 +4048,8 @@ async function proposeApprovedActionsUnlocked({
     const latestSession = await getSession(run.sessionId);
     if (!latestRun || isTerminalRunState(latestRun.state) || latestRun.cancelRequested === true || !latestSession || resolveSessionRiskMode(latestSession) !== riskMode
         || (run.windowsExecutionSid && latestRun.windowsExecutionSid !== run.windowsExecutionSid)
-        || (typeof run.windowsExecutionIsService === 'boolean' && latestRun.windowsExecutionIsService !== run.windowsExecutionIsService)) {
+        || (typeof run.windowsExecutionIsService === 'boolean' && latestRun.windowsExecutionIsService !== run.windowsExecutionIsService)
+        || (binding?.windowsOwnerDevice && !await validateWindowsOwnerDevice(binding.windowsOwnerDevice))) {
       const error = new Error('Run or permission policy changed before installation');
       error.code = 'AUTO_INSTALL_RUN_CHANGED';
       throw error;
@@ -4048,7 +4059,7 @@ async function proposeApprovedActionsUnlocked({
   if (autoInstallUserClaim === true || autoInstallUserFinish === true || autoInstallUserCheck === true) {
     const pinned = binding?.windowsUserInstallIdentity;
     const validationNow = autoInstallUserFinish === true ? Date.parse(userInstallCapability?.issuedAt || '') + 1 : Date.now();
-    if (binding?.authenticatedPrincipalKind !== 'owner' || !['recommended', 'full-auto'].includes(riskMode)
+    if ((binding?.authenticatedPrincipalKind !== 'owner' && !verifiedOwnerDevice) || !['recommended', 'full-auto'].includes(riskMode)
         || !Number.isFinite(validationNow)
         || !verifyWindowsManagedUserInstallAuthorization({ authorization: { capability: userInstallCapability, expectedExecutionSid: run.windowsExecutionSid },
           pinnedIdentity: pinned, binding: userInstallBinding, runExecutionSid: run.windowsExecutionSid, now: validationNow })) {
@@ -4069,7 +4080,7 @@ async function proposeApprovedActionsUnlocked({
     if (!pinned?.kid || !pinned?.publicKey) return null;
     const authorization = await prepareWindowsManagedUserInstall({
       actions: serverActions, riskMode, runExecutionSid: run.windowsExecutionSid, runExecutionIsService: run.windowsExecutionIsService,
-      binding: { ...userInstallBinding, authenticatedPrincipalKind: binding.authenticatedPrincipalKind },
+      binding: { ...userInstallBinding, authenticatedPrincipalKind: binding.authenticatedPrincipalKind, verifiedOwnerDevice },
       trustedContext: { cwd: trustedCwd, projectRoot: trustedProjectRoot, home: trustedHome },
     }, { assertActive: assertInstallActive });
     if (!verifyWindowsManagedUserInstallAuthorization({ authorization, pinnedIdentity: pinned,
@@ -4084,7 +4095,7 @@ async function proposeApprovedActionsUnlocked({
   }
   const automaticInstall = await tryWindowsManagedAutoInstall({
     actions: serverActions, riskMode, runExecutionIsService: run.windowsExecutionIsService, preflight: autoInstallPreflight === true,
-    binding: { sessionId: run.sessionId, runId: normalizedRunId, turnId: trustedTurnId, requestKey: trimString(requestKey), authenticatedPrincipalKind: binding.authenticatedPrincipalKind },
+    binding: { sessionId: run.sessionId, runId: normalizedRunId, turnId: trustedTurnId, requestKey: trimString(requestKey), authenticatedPrincipalKind: binding.authenticatedPrincipalKind, verifiedOwnerDevice },
     trustedContext: { cwd: trustedCwd, projectRoot: trustedProjectRoot, home: trustedHome },
   }, { assertActive: assertInstallActive });
   if (autoInstallPreflight === true) {
@@ -4211,6 +4222,7 @@ async function proposeApprovedActionsUnlocked({
     const serviceOptions = {
       action: preliminaryActions[0], projection: semanticProjections[0], riskMode,
       authenticatedPrincipalKind: binding?.authenticatedPrincipalKind,
+      verifiedOwnerDevice,
       client, kid: key.kid, privateKey: key.privateKey, assertActive: assertInstallActive,
     };
     const proposal = await submitOrResumeWindowsServiceProposal(serviceOptions);
@@ -12596,6 +12608,7 @@ async function executeScopedPreparingRun({ run, record, binding }) {
   return submitHttpMessageInternal(run.sessionId, record.request.text, [], {
     ...record.request.runOptions, requestId: run.requestId, responseId: run.responseId,
     authenticatedPrincipalKind: binding.principalKind,
+    authenticatedOwnerDevice: binding.ownerDevice,
     preSavedAttachments: record.request.attachments, preparationRunId: run.id,
     preparationSnapshot: snapshot, userMessageAlreadyRecorded: true, backgroundPreparation: true,
     skipDispatch: true, queueIfBusy: false, deferIfBusy: false,
@@ -12709,7 +12722,7 @@ const PREPARATION_OPTION_KEYS = Object.freeze([
   'tool', 'model', 'effort', 'serviceTier', 'thinking', 'providerProfile', 'uiLanguage',
   'interactionMode', 'permissionMode',
   'planAction', 'planId', 'sourceContext', 'templateId', 'agentId', 'browserMcpEnabled',
-  'authenticatedPrincipalKind', 'temporaryControlAuthority', 'internalOperation', 'collaborationCapability',
+  'authenticatedPrincipalKind', 'authenticatedOwnerDevice', 'temporaryControlAuthority', 'internalOperation', 'collaborationCapability',
   'compactionTargetSessionId', 'compactionSourceSeq', 'compactionToolIndex', 'compactionReason',
   'freshThread', 'skipSessionContinuation', 'transientProviderContext', 'codexResume',
   'skipDispatch', 'skipPendingDispatchLookup', 'queueIfBusy', 'deferIfBusy', 'recordUserMessage',
@@ -13294,6 +13307,11 @@ async function submitHttpMessageInternal(sessionId, text, images, options = {}) 
     && effectiveProviderContract.providerCapabilities?.supportsManagedActionMcp === true
     && getGatedPermissionModeId(effectiveRuntimeFamily);
   const authenticatedPrincipalKind = trimString(options.authenticatedPrincipalKind);
+  const windowsOwnerDevice = process.platform === 'win32' && authenticatedPrincipalKind === 'trusted_device' &&
+    canIssueSessionControl({ principalKind: authenticatedPrincipalKind, session,
+      temporaryControlAuthority: options.temporaryControlAuthority, internalOperation: options.internalOperation })
+    ? await captureWindowsOwnerDevice(options.authenticatedOwnerDevice).catch(() => null) : null;
+  const windowsOwnerAuthorized = authenticatedPrincipalKind === 'owner' || Boolean(windowsOwnerDevice);
   const productAgentCreateEligible = managedActionMcpEligible
     && isAgentCreateApprovedActionEnabled()
     && isAgentCreateSessionEligible(session)
@@ -13302,7 +13320,7 @@ async function submitHttpMessageInternal(sessionId, text, images, options = {}) 
     ? randomBytes(32).toString('base64url')
     : '';
   const windowsUserInstallIdentity = process.platform === 'win32' && approvedActionChannelToken
-    && authenticatedPrincipalKind === 'owner' && ['recommended', 'full-auto'].includes(sessionRiskMode)
+    && windowsOwnerAuthorized && ['recommended', 'full-auto'].includes(sessionRiskMode)
     ? await loadWindowsAutoInstallPublicIdentity().catch(() => null)
     : null;
   const approvedActionChannel = approvedActionChannelToken
@@ -13312,6 +13330,7 @@ async function submitHttpMessageInternal(sessionId, text, images, options = {}) 
         tokenHash: createHash('sha256').update(approvedActionChannelToken, 'utf8').digest('hex'),
         turnId: trimString(requestId),
         ...(authenticatedPrincipalKind ? { authenticatedPrincipalKind } : {}),
+        ...(windowsOwnerDevice ? { windowsOwnerDevice } : {}),
         ...(windowsUserInstallIdentity ? { windowsUserInstallIdentity } : {}),
         ...(productAgentCreateEligible ? { productAgentCreate: true } : {}),
       }
@@ -13320,7 +13339,7 @@ async function submitHttpMessageInternal(sessionId, text, images, options = {}) 
   // The Run never receives the privileged pipe or a general command executor.
   const windowsBrokerEligible = process.platform === 'win32'
     && isPrivilegeRoutingEnabled(session)
-    && authenticatedPrincipalKind === 'owner'
+    && windowsOwnerAuthorized
     && !options.temporaryControlAuthority
     && ['full-auto', 'recommended', 'safe'].includes(sessionRiskMode)
     && ['codex-app-server-json', 'claude-stream-json-bidi'].includes(effectiveRuntimeFamily)
@@ -13332,6 +13351,7 @@ async function submitHttpMessageInternal(sessionId, text, images, options = {}) 
     token: windowsBrokerToken,
     tokenHash: createHash('sha256').update(windowsBrokerToken, 'utf8').digest('hex'),
     turnId: trimString(requestId),
+    ...(windowsOwnerDevice ? { windowsOwnerDevice } : {}),
   } : null;
   const nextRunId = preparationRunId || createRunId();
   const attachmentInputStage = await stageRunAttachmentInputs({
@@ -15268,6 +15288,7 @@ export async function submitSessionConfirmationDecision(sessionId, approvalId, o
     messageOutcome = await submitHttpMessage(normalizedSessionId, followUpMessage, [], {
       requestId,
       authenticatedPrincipalKind: options.authenticatedPrincipalKind,
+      authenticatedOwnerDevice: options.authenticatedOwnerDevice,
       temporaryControlAuthority: options.temporaryControlAuthority,
       sourceContext: {
         kind: 'session_confirmation',
@@ -15308,6 +15329,7 @@ export async function submitPlanAction(sessionId, planId, options = {}) {
   return submitHttpMessage(sessionId, text, [], {
     requestId: trimString(options.requestId) || createInternalRequestId(`plan_${action}`),
     authenticatedPrincipalKind: options.authenticatedPrincipalKind,
+    authenticatedOwnerDevice: options.authenticatedOwnerDevice,
     temporaryControlAuthority: options.temporaryControlAuthority,
     tool: trimString(options.tool) || undefined,
     model: trimString(options.model) || undefined,

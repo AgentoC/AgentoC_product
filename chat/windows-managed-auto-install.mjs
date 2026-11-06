@@ -9,6 +9,13 @@ import { createWindowsUserInstallStore } from './windows-user-install-store.mjs'
 import { submitOrResumeWindowsMSIInstall } from './windows-msi-auto-install.mjs';
 import { submitOrResumeWindowsOwnerBrokerInstall } from './windows-owner-broker-install.mjs';
 
+// This flag is computed by the server after rechecking the run-bound paired
+// device. It must never be copied from a provider request.
+function ownerRunAuthorized(binding) {
+  return binding?.authenticatedPrincipalKind === 'owner' ||
+    (binding?.authenticatedPrincipalKind === 'trusted_device' && binding?.verifiedOwnerDevice === true);
+}
+
 export async function loadWindowsAutoInstallSigningKey(options = {}) {
   const identity = await loadInstanceIdentity(options);
   if (!identity?.instanceId || !identity?.privateKey) return null;
@@ -26,7 +33,7 @@ export async function loadWindowsAutoInstallPublicIdentity(options = {}) {
 }
 
 export async function getWindowsManagedAutoInstallStatus({ binding, platform = process.platform }, deps = {}) {
-  if (platform !== 'win32' || binding?.authenticatedPrincipalKind !== 'owner') {
+  if (platform !== 'win32' || !ownerRunAuthorized(binding)) {
     throw Object.assign(new Error('Automatic installation status is unavailable'), { code: 'AUTO_INSTALL_STATUS_UNAVAILABLE' });
   }
   const requestBinding = { sessionId: binding.sessionId, runId: binding.runId, turnId: binding.turnId, requestKey: binding.requestKey };
@@ -40,7 +47,7 @@ export async function getWindowsManagedAutoInstallStatus({ binding, platform = p
 // record bound by the supervisor, never from the provider's request payload.
 // Issuing this capability does not launch or claim an installation.
 export async function prepareWindowsManagedUserInstall({ actions, binding, riskMode, trustedContext, runExecutionSid, runExecutionIsService, platform = process.platform }, deps = {}) {
-  if (platform !== 'win32' || !['recommended', 'full-auto'].includes(riskMode) || binding?.authenticatedPrincipalKind !== 'owner'
+  if (platform !== 'win32' || !['recommended', 'full-auto'].includes(riskMode) || !ownerRunAuthorized(binding)
       || runExecutionIsService === true
       || !/^S-1-\d+(?:-\d+)+$/i.test(runExecutionSid || '') || !Array.isArray(actions) || actions.length !== 1
       || typeof actions[0]?.command !== 'string' || !/^\s*winget(?:\.exe)?\s+(?:install|add)(?:\s|$)/i.test(actions[0].command)) return null;
@@ -74,7 +81,7 @@ export function verifyWindowsManagedUserInstallAuthorization({ authorization, pi
 // This path is for a run-bound, owner-authenticated managed action channel.
 // Its input and context have already been checked by the control plane.
 export async function tryWindowsManagedAutoInstall({ actions, binding, riskMode, trustedContext, runExecutionIsService = false, preflight = false, platform = process.platform }, deps = {}) {
-  if (platform !== 'win32' || !['recommended', 'full-auto'].includes(riskMode) || binding?.authenticatedPrincipalKind !== 'owner' ||
+  if (platform !== 'win32' || !['recommended', 'full-auto'].includes(riskMode) || !ownerRunAuthorized(binding) ||
       !Array.isArray(actions) || actions.length !== 1 || typeof actions[0]?.command !== 'string' ||
       !/^\s*(?:winget(?:\.exe)?\s+(?:install|add)|msiexec(?:\.exe)?\s+\/i)(?:\s|$)/i.test(actions[0].command)) return null;
   const requestBinding = { sessionId: binding.sessionId, runId: binding.runId, turnId: binding.turnId, requestKey: binding.requestKey };

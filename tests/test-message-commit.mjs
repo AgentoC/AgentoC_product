@@ -21,6 +21,9 @@ await mkdir(process.env.AGENTOC_CONFIG_DIR, { recursive: true });
 await writeFile(join(process.env.AGENTOC_CONFIG_DIR, 'tools.json'), JSON.stringify([{
   id: 'scoped-fixture', name: 'Scoped fixture runtime', command: process.execPath,
   runtimeFamily: 'codex-json', models: [{ id: 'frozen-model', label: 'Fixture model' }],
+}, {
+  id: 'scoped-gated-fixture', name: 'Scoped gated fixture runtime', command: process.execPath,
+  runtimeFamily: 'codex-app-server-json', models: [{ id: 'frozen-model', label: 'Fixture model' }],
 }]));
 const meta = await import('../chat/session-meta-store.mjs');
 const preparation = await import('../chat/message-preparation-store.mjs');
@@ -138,6 +141,18 @@ if (process.argv[2] === 'cold-start') {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   process.send({ type: 'listening', port: server.address().port });
 } else {
+test('paired owner device identity survives scoped commit without accepting wire credentials', async () => {
+  const value = await seed();
+  const auth = { role: 'owner', principalKind: 'trusted_device', deviceId: 'phone-1', accountId: 'account-1', bindingAuthorityRevision: '3' };
+  const response = await route(value, 'POST', { auth });
+  assert.equal(response.status, 200);
+  const manifest = await runs.getRunManifest(response.body.runId);
+  assert.equal(manifest.appApiMessage.version, 3);
+  assert.deepEqual(manifest.appApiMessage.ownerDevice, { principalKind: 'trusted_device', deviceId: 'phone-1', accountId: 'account-1', bindingAuthorityRevision: '3' });
+  const forged = structuredClone(manifest.appApiMessage);
+  forged.ownerDevice.deviceId = 'other-phone';
+  assert.throws(() => binding.parseMessageRunBinding(forged), { code: 'MESSAGE_RUN_BINDING_INVALID' });
+});
 afterEach(async () => {
   manager.killAll();
   for (const id of tracked) {
@@ -454,8 +469,8 @@ test('production continuation reaches ordinary message validation and retains th
   assert.equal((await history.readEventsAfter(value.sessionId, 0)).filter(row => row.id === `message-run:${accepted.runId}`).length, 1);
 });
 
-test('production pipeline publishes immutable prepared inputs and logical launch admission before a real broker rejection', async () => {
-  const value = await seed({ tool: 'scoped-fixture', riskMode: 'full-auto', riskModeExplicit: true });
+test('production pipeline publishes immutable prepared inputs and logical launch admission before a real broker rejection', { timeout: 30000 }, async () => {
+  const value = await seed({ tool: 'scoped-gated-fixture', riskMode: 'full-auto', riskModeExplicit: true });
   const accepted = await commit(value); const requests = []; const entered = deferred(); const release = deferred();
   const socketPath = process.platform === 'win32' ? `\\\\.\\pipe\\agentoc-commit-fixture-${process.pid}` : join(root, 'broker.sock');
   const previous = { socket: process.env.AGENTOC_RUNNER_LIFECYCLE_SOCKET, required: process.env.AGENTOC_RUNNER_LIFECYCLE_REQUIRED };
@@ -533,7 +548,7 @@ test('actual HTTP process death after durable acceptance before reply recovers o
 });
 
 test('actual continuation process death after prepared manifest replacement recovers original Run and one user event', async () => {
-  const value = await seed({ tool: 'scoped-fixture', riskMode: 'full-auto', riskModeExplicit: true });
+  const value = await seed({ tool: 'scoped-gated-fixture', riskMode: 'full-auto', riskModeExplicit: true });
   const accepted = await commit(value); const input = { ...value, runId: accepted.runId };
   await meta.flushSessionsMetaNow();
   const child = fork(new URL(import.meta.url), ['crash-prepared'], { env: { ...process.env,

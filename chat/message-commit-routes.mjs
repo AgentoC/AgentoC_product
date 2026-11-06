@@ -3,6 +3,7 @@ import { commitSessionApiMessage, readSessionApiMessageCommit } from './message-
 import { scheduleScopedMessageRun } from './session-manager.mjs';
 import { readSessionApiScopeHeader } from './session-api-scope-contract.mjs';
 import { sessionApiError, sessionApiIdentifier } from './session-api-mutation-contract.mjs';
+import { authenticatedOwnerDeviceDescriptor } from './windows-owner-device-authority.mjs';
 
 const ERRORS = new Set(['INVALID_ARGUMENT', 'PERMISSION_DENIED', 'METHOD_NOT_ALLOWED', 'RESOURCE_LIMIT',
   'RESOURCE_NOT_FOUND', 'REVISION_CONFLICT', 'REQUEST_EXPIRED', 'CAPABILITY_UNSUPPORTED',
@@ -32,7 +33,7 @@ export async function handleMessageCommitRoutes({ req, res, pathname, parsedUrl,
     const result = req.method === 'GET'
       ? await readSessionApiMessageCommit(sessionId, scope, requestId)
       : await commitSessionApiMessage(sessionId, scope, requestId, await readPreparationBody(req, 4096),
-        authSession.principalKind || 'owner');
+        authSession.principalKind || 'owner', { ownerDevice: authenticatedOwnerDeviceDescriptor(authSession) });
     // Persistence precedes both continuation and reply. GET never resumes execution.
     if (req.method === 'POST' && result.accepted && result.runId) scheduleScopedMessageRun(sessionId, result.runId);
     writeJson(res, 200, result);
