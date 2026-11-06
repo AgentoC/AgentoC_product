@@ -1,9 +1,13 @@
 import { createHash } from 'node:crypto';
 import { getTrustedDeviceStatus } from './trusted-devices.mjs';
-import { authorizeDeviceBinding } from '../lib/binding-authority-runtime.mjs';
+import { authorizeDeviceBinding, assertDeviceBindingNow } from '../lib/binding-authority-runtime.mjs';
 
 const text = value => typeof value === 'string' ? value.trim() : '';
 const fingerprint = key => text(key) ? createHash('sha256').update(text(key)).digest('hex') : '';
+const matchesSnapshot = (device, snapshot) => Boolean(device && device.id === snapshot.deviceId && !device.revokedAt &&
+  ['bound', 'legacy_trusted'].includes(device.status) && fingerprint(device.devicePublicKey) === snapshot.keyFingerprint &&
+  text(device.boundAt) === text(snapshot.boundAt) && text(device.bindingAuthorityRevision) === text(snapshot.bindingAuthorityRevision) &&
+  (!text(snapshot.accountId) || !text(device.accountId) || text(snapshot.accountId) === text(device.accountId)));
 
 export function authenticatedOwnerDeviceDescriptor(authSession) {
   if (authSession?.role !== 'owner' || authSession?.principalKind !== 'trusted_device' || !text(authSession.deviceId)) return null;
@@ -36,21 +40,24 @@ export async function captureWindowsOwnerDevice(descriptor, deps = {}) {
     const authority = await (deps.authorize || authorizeDeviceBinding)(device, { credential: true, tokenRevision: descriptor.bindingAuthorityRevision });
     if (text(descriptor.accountId) && text(authority?.accountId) !== text(descriptor.accountId)) return null;
   } catch { return null; }
-  return { deviceId: device.id, accountId: text(descriptor.accountId),
+  const snapshot = { deviceId: device.id, accountId: text(descriptor.accountId),
     bindingAuthorityRevision: text(device.bindingAuthorityRevision),
     keyFingerprint: fingerprint(device.devicePublicKey), boundAt: text(device.boundAt) };
+  // The account check can perform I/O. Re-read the device after it finishes
+  // so a revocation or re-enrolment during that wait cannot issue a channel.
+  return await validateWindowsOwnerDevice(snapshot, deps) ? snapshot : null;
 }
 
 export async function validateWindowsOwnerDevice(snapshot, deps = {}) {
   if (!snapshot || !text(snapshot.deviceId) || !/^[a-f0-9]{64}$/.test(text(snapshot.keyFingerprint))) return false;
   const device = await (deps.getDevice || getTrustedDeviceStatus)(snapshot.deviceId);
-  if (!device || device.id !== snapshot.deviceId || device.revokedAt || !['bound', 'legacy_trusted'].includes(device.status) ||
-      fingerprint(device.devicePublicKey) !== snapshot.keyFingerprint || text(device.boundAt) !== text(snapshot.boundAt) ||
-      text(device.bindingAuthorityRevision) !== text(snapshot.bindingAuthorityRevision) ||
-      (text(snapshot.accountId) && text(device.accountId) && text(snapshot.accountId) !== text(device.accountId))) return false;
+  if (!matchesSnapshot(device, snapshot)) return false;
   try {
     const authority = await (deps.authorize || authorizeDeviceBinding)(device, { credential: true, tokenRevision: snapshot.bindingAuthorityRevision || undefined });
     if (text(snapshot.accountId) && text(authority?.accountId) !== text(snapshot.accountId)) return false;
+    const current = await (deps.getDevice || getTrustedDeviceStatus)(snapshot.deviceId);
+    if (!matchesSnapshot(current, snapshot)) return false;
+    (deps.assertNow || assertDeviceBindingNow)({ ...current, accountId: snapshot.accountId || current.accountId });
     return true;
   } catch { return false; }
 }

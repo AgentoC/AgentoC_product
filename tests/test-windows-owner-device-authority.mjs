@@ -6,10 +6,14 @@ const descriptor = { principalKind: 'trusted_device', deviceId: 'phone', account
 let device = { id: 'phone', status: 'bound', accountId: 'account', bindingAuthorityRevision: '3',
   boundAt: '2026-11-01T00:00:00Z', devicePublicKey: 'test-public-key' };
 let authorized = true;
-const deps = { getDevice: async () => device, authorize: async () => { if (!authorized) throw new Error('revoked'); return { accountId: 'account' }; } };
+const deps = { getDevice: async () => device, authorize: async () => { if (!authorized) throw new Error('revoked'); return { accountId: 'account' }; }, assertNow: () => {} };
 const binding = await captureWindowsOwnerDevice(descriptor, deps);
 assert.ok(binding);
 assert.equal(await validateWindowsOwnerDevice(binding, deps), true);
+let reads = 0;
+assert.equal(await validateWindowsOwnerDevice(binding, { ...deps, getDevice: async () => ++reads === 1 ? device : { ...device, revokedAt: 'now' } }), false);
+reads = 0;
+assert.equal(await captureWindowsOwnerDevice(descriptor, { ...deps, getDevice: async () => ++reads === 1 ? device : { ...device, revokedAt: 'now' } }), null);
 assert.equal(await captureWindowsOwnerDevice({ ...descriptor, principalKind: 'temporary_device' }, deps), null);
 for (const change of [{ revokedAt: 'now' }, { status: 'provisional' }, { devicePublicKey: 'rotated' },
   { boundAt: 'later' }, { bindingAuthorityRevision: '4' }, { accountId: 'other' }, { id: 'other' }]) {
