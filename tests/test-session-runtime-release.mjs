@@ -147,7 +147,20 @@ async function makeIdleRuntimeState(sessionId) {
   const blocked = await releaseSessionRuntimeState(sessionId);
   assert.equal(blocked.released, false, 'pending approval blocks release');
   assert.equal(blocked.reason, 'pending-approval', 'reason is pending-approval');
+  await updateRun(run.id, (draft) => ({ ...draft, state: 'completed' }));
+  const released = await releaseSessionRuntimeState(sessionId);
+  assert.deepEqual(released, { released: true, reason: 'idle' }, 'stale approvals cannot keep a completed run active');
   console.log('test-session-runtime-release: pending-approval guard ok');
+}
+
+{
+  const sessionId = await createTestSession();
+  await makeIdleRuntimeState(sessionId);
+  const run = await createRun({ status: { sessionId, requestId: 'responded', state: 'running' } });
+  await updateRun(run.id, { appServerPendingApprovals: [{ approvalId: 'done', state: 'responded' }] });
+  await mutateSessionMeta(sessionId, draft => { draft.activeRunId = run.id; return true; });
+  const blocked = await releaseSessionRuntimeState(sessionId);
+  assert.equal(blocked.reason, 'active-run', 'responded approval is not a pending approval');
 }
 
 // --- 4. pending send protection (queues, timers, in-flight promises) -------

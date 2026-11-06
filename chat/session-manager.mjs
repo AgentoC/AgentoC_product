@@ -2911,7 +2911,7 @@ async function collectSessionRuntimeReleaseGuard(sessionId, runtimeState) {
     if (activeRunId) {
       const run = await getRun(activeRunId).catch(() => null);
       if (run) {
-        if (Array.isArray(run.appServerPendingApprovals) && run.appServerPendingApprovals.length > 0) {
+        if (hasPendingRunApproval(run)) {
           return { blocked: true, reason: 'pending-approval' };
         }
         if (!isTerminalRunState(run.state)) {
