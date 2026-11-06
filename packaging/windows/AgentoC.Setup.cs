@@ -112,16 +112,15 @@ internal static class AgentoCSetup {
         } finally { MsiCloseHandle(database); }
     }
 
-    private static bool ShouldAddReinstall(string msi, string[] args) {
-        return !HasMsiProperty(args, "REINSTALL") && IsExactProductInstalled(msi);
-    }
-
     private static string BuildMsiCommand(string payloadPath, string[] args) {
         StringBuilder command = new StringBuilder("/i ").Append(Quote(payloadPath));
-        // A same-ProductCode minor update is rejected by Windows Installer
-        // unless REINSTALL is explicit. Detect only this exact product so a
-        // different installed product cannot be treated as a minor update.
-        if (ShouldAddReinstall(payloadPath, args)) command.Append(" REINSTALL=ALL");
+        // A same-ProductCode minor update needs both properties or Windows
+        // Installer rejects it as an older product. Detect only this exact
+        // product so another installed product cannot enter the minor lane.
+        if (IsExactProductInstalled(payloadPath)) {
+            if (!HasMsiProperty(args, "REINSTALL")) command.Append(" REINSTALL=ALL");
+            if (!HasMsiProperty(args, "REINSTALLMODE")) command.Append(" REINSTALLMODE=vomus");
+        }
         // Embedded UI discovers the previous installation interactively. MSI
         // does not load it in quiet mode, so resolve its registered location.
         // The installer's admission checks still validate the resulting path.
