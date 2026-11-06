@@ -118,6 +118,7 @@ fun TurnTimelineView(
     showMessageActions: Boolean = true,
     runDuration: (@Composable () -> Unit)? = null,
     runActive: Boolean = false,
+    runWaitingApproval: Boolean = false,
     activeAction: (@Composable () -> Unit)? = null,
 ) {
     Column(
@@ -158,7 +159,8 @@ fun TurnTimelineView(
                             onBranch?.takeIf { item.lastEventSeq > 0L }?.let { branch -> { branch(item.lastEventSeq, "assistant-continue") } },
                             item.requestId?.let { request -> onRestart?.let { restart -> { restart(request) } } },
                             onReport = onReport?.let { report -> { report(item.text) } },
-                            showMessageActions = showMessageActions)
+                            showMessageActions = showMessageActions,
+                            pauseStreaming = runWaitingApproval)
                     }
                     is TimelineItem.Plan -> PlanBlock(item, onPlanAction)
                     is TimelineItem.Operation -> {
@@ -222,6 +224,7 @@ fun TurnTimelineView(
                         onRestart = turn.requestId?.let { reqId -> onRestart?.let { restart -> { restart(reqId) } } },
                         onReport = onReport?.let { report -> { report(message.text) } },
                         showMessageActions = showMessageActions,
+                        pauseStreaming = runWaitingApproval,
                     )
                 }
             }
@@ -810,6 +813,7 @@ fun ResultBlock(
     modifier: Modifier = Modifier,
     onReport: (() -> Unit)? = null,
     showMessageActions: Boolean = true,
+    pauseStreaming: Boolean = false,
 ) {
     val displayText = displayAgentMessageText(message.text)
     if (displayText.isBlank()) return
@@ -818,10 +822,11 @@ fun ResultBlock(
             .fillMaxWidth()
             .padding(top = 2.dp, bottom = 4.dp),
     ) {
-        if (message.completed) {
-            AgentMarkdown(markdown = displayText)
+        if (message.completed || pauseStreaming) {
+            AgentMarkdown(markdown = displayText, modifier = Modifier.testTag("agent-settled-text"))
         } else {
-            AgentStreamingMessage(text = displayText, streaming = true, smoothCatchUp = message.lastEventSeq == 0L)
+            AgentStreamingMessage(text = displayText, streaming = true, smoothCatchUp = message.lastEventSeq == 0L,
+                modifier = Modifier.testTag("agent-live-text"))
         }
 
         if (showMessageActions && message.completed && (isLastTurn || onReport != null)) {

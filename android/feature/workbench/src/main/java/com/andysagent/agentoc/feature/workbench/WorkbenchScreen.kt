@@ -2798,6 +2798,7 @@ private fun ChatSurface(
                                     modifier = Modifier.testTag("run-elapsed"))
                             }} else null,
                             runActive = isRunTurn && showActiveRunAction,
+                            runWaitingApproval = isRunTurn && state.runStatus == AgentRunStatus.WaitingApproval,
                             activeAction = if (isRunTurn && showActiveRunAction) {{
                                 ActiveRunActionBar(status = state.runStatus,
                                     actionSummary = state.currentAction?.sentence,

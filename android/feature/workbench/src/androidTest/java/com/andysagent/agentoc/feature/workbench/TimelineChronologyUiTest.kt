@@ -18,6 +18,24 @@ import org.junit.Test
 class TimelineChronologyUiTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun waitingApprovalPausesOnlyTheTextAnimationAndResumes() {
+        var waiting by mutableStateOf(false)
+        var answer by mutableStateOf("Checking")
+        rule.setContent { AgentocTheme {
+            ResultBlock(TimelineItem.Message("answer", 2, TimelineRole.Agent, answer, false, runId = "run-1"),
+                isLastTurn = true, onBranch = null, onRestart = null, onReport = {}, pauseStreaming = waiting)
+        } }
+        rule.onNodeWithTag("agent-live-text").assertExists()
+        rule.runOnIdle { waiting = true }
+        rule.onNodeWithTag("agent-live-text").assertDoesNotExist()
+        rule.onNodeWithTag("agent-settled-text").assertExists()
+        rule.onNodeWithText("Checking").assertIsDisplayed()
+        rule.onNodeWithTag("report-ai-content").assertDoesNotExist()
+        rule.runOnIdle { waiting = false; answer = "Checking again" }
+        rule.onNodeWithTag("agent-live-text").assertExists()
+        rule.onNodeWithText("Checking again").assertIsDisplayed()
+    }
+
     @Test fun terminalRunProjectionFinishesTheVisibleReply() {
         val items = listOf(
             TimelineItem.Message("user", 1, TimelineRole.User, "Question", true, runId = "run-1"),
