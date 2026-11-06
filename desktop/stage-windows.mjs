@@ -1,5 +1,5 @@
-import { cp, mkdir, rename, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { cp, mkdir, realpath, rename, writeFile } from 'node:fs/promises';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import electronPath from 'electron';
 import { rcedit } from 'rcedit';
@@ -14,8 +14,26 @@ if (destination === desktopRoot || destination === repositoryRoot || brandRoot =
 }
 
 const distRoot = dirname(electronPath);
-await mkdir(destination, { recursive: true });
-await cp(distRoot, destination, { recursive: true });
+if (process.argv[6] === '--move-staged-electron') {
+  // The installer builds Electron in its own temporary staging directory.
+  // Move that disposable distribution into the payload on the same volume
+  // instead of keeping two copies until the whole build ends.
+  const staging = await realpath(dirname(desktopRoot));
+  const source = await realpath(distRoot);
+  const targetParent = await realpath(dirname(destination));
+  const inside = path => {
+    const part = relative(staging, path);
+    return part !== '' && part !== '..' && !part.startsWith(`..\\`) && !isAbsolute(part);
+  };
+  if (!inside(source) || !inside(targetParent) || dirname(source) !== join(desktopRoot, 'node_modules', 'electron')
+      || resolve(targetParent, 'Desktop') !== destination) {
+    throw new Error('Electron move must stay inside the installer staging directory.');
+  }
+  await rename(source, destination);
+} else {
+  await mkdir(destination, { recursive: true });
+  await cp(distRoot, destination, { recursive: true });
+}
 const originalExe = join(destination, 'electron.exe');
 const brandedExe = join(destination, 'AgentoC.exe');
 await rename(originalExe, brandedExe);

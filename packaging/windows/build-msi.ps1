@@ -149,7 +149,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Locked Electron desktop dependencies could not be staged.' }
     } finally { Pop-Location }
     $desktopPayloadRoot = Join-Path $payloadRoot 'Desktop'
-    & $node.Source (Join-Path $desktopBuildRoot 'stage-windows.mjs') $desktopPayloadRoot $brandRoot $Version $buildInputRoot
+    & $node.Source (Join-Path $desktopBuildRoot 'stage-windows.mjs') $desktopPayloadRoot $brandRoot $Version $buildInputRoot '--move-staged-electron'
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $desktopPayloadRoot 'AgentoC.exe') -PathType Leaf)) {
         throw 'Branded, unelevated Electron runtime staging failed.'
     }
