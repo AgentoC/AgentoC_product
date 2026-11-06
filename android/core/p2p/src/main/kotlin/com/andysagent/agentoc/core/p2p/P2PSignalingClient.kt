@@ -1,6 +1,8 @@
 package com.andysagent.agentoc.core.p2p
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
@@ -81,6 +83,7 @@ class P2PSignalingClient(
     private val sendLock = Any()
     private var reconnectAttempts = 0
     private var reconnectJob: Job? = null
+    private val reconnectLock = Any()
     @Volatile private var joined = false
 
     // ── Public API ────────────────────────────────────────────────────
@@ -90,8 +93,8 @@ class P2PSignalingClient(
      * Suspends until the socket is open (or throws on failure).
      */
     suspend fun connect() {
-        reconnectJob?.cancel()
-        reconnectJob = null
+        val priorReconnect = synchronized(reconnectLock) { reconnectJob.also { reconnectJob = null } }
+        priorReconnect?.cancel()
         try {
             webSocket?.close(1000, "reconnecting")
         } catch (_: Exception) {
@@ -140,8 +143,8 @@ class P2PSignalingClient(
     /** Graceful shutdown: cancel reconnect, close socket. */
     fun close() {
         stopped = true
-        reconnectJob?.cancel()
-        reconnectJob = null
+        val priorReconnect = synchronized(reconnectLock) { reconnectJob.also { reconnectJob = null } }
+        priorReconnect?.cancel()
         try {
             webSocket?.close(1000, "bye")
         } catch (_: Exception) {
@@ -206,6 +209,12 @@ class P2PSignalingClient(
                         callback.onError(error)
                         scheduleReconnect()
                     }
+                }
+
+                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                    // A peer can omit its close status (reported as 1005,
+                    // which is forbidden in an outgoing close frame).
+                    if (this@P2PSignalingClient.webSocket === webSocket) webSocket.close(1000, "")
                 }
 
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -322,24 +331,39 @@ class P2PSignalingClient(
     }
 
     private fun scheduleReconnect() {
-        if (stopped) return
-        if (reconnectJob?.isActive == true) return // already reconnecting
-
-        reconnectJob = scope.launch {
-            val delayMs = minOf(RECONNECT_MAX_MS, RECONNECT_BASE_MS * (1L shl reconnectAttempts.coerceAtMost(4)))
-            reconnectAttempts++
-
-            delay(delayMs)
-
-            if (!isActive || stopped) return@launch
-
-            incomingSeq = 0 // reset on reconnect (fresh connection)
-            incomingJoinId = 0
-            try {
-                openSocket()
-            } catch (_: Exception) {
-                scheduleReconnect()
+        synchronized(reconnectLock) {
+            if (stopped || reconnectJob?.isActive == true) return
+            val job = scope.launch(start = CoroutineStart.LAZY) {
+                while (isActive && !stopped) {
+                    val delayMs = minOf(RECONNECT_MAX_MS, RECONNECT_BASE_MS * (1L shl reconnectAttempts.coerceAtMost(4)))
+                    reconnectAttempts++
+                    delay(delayMs)
+                    if (!isActive || stopped) return@launch
+                    incomingSeq = 0
+                    incomingJoinId = 0
+                    try {
+                        openSocket()
+                        return@launch
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        // Continue in this job: scheduling recursively while it
+                        // is active would suppress every retry after the first.
+                    }
+                }
             }
+            reconnectJob = job
+            job.invokeOnCompletion {
+                val retry = synchronized(reconnectLock) {
+                    if (reconnectJob !== job) false else {
+                        reconnectJob = null
+                        !stopped && !joined && scope.isActive
+                    }
+                }
+                // A freshly joined socket can close before the job finishes.
+                if (retry) scheduleReconnect()
+            }
+            job.start()
         }
     }
 }
