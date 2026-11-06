@@ -126,19 +126,21 @@ try {
   const { resolveAccountsRateLimits } = await import(pathToFileURL(join(root, 'accounts/server.mjs')).href);
   check('默认限流 GET 60 / POST 60（实例常驻轮询不再撞 20/min 上限）', () => {
     const limits = resolveAccountsRateLimits({ env: {} });
-    assert.deepEqual(limits, { getMax: 60, postMax: 60 });
+    assert.deepEqual(limits, { getMax: 60, postMax: 60, authorityMax: 600 });
   });
   check('环境变量可覆盖限流上限', () => {
     const limits = resolveAccountsRateLimits({ env: { AGENTOC_ACCOUNTS_RATE_LIMIT_GET_MAX: '90', AGENTOC_ACCOUNTS_RATE_LIMIT_POST_MAX: '30' } });
-    assert.deepEqual(limits, { getMax: 90, postMax: 30 });
+    assert.deepEqual(limits, { getMax: 90, postMax: 30, authorityMax: 600 });
   });
   check('显式 options 优先于环境变量，非法值回退默认', () => {
     assert.deepEqual(
       resolveAccountsRateLimits({ options: { max: 120, postMax: 45 }, env: { AGENTOC_ACCOUNTS_RATE_LIMIT_POST_MAX: '30' } }),
-      { getMax: 120, postMax: 45 },
+      { getMax: 120, postMax: 45, authorityMax: 600 },
     );
-    assert.deepEqual(resolveAccountsRateLimits({ env: { AGENTOC_ACCOUNTS_RATE_LIMIT_POST_MAX: '-5' } }), { getMax: 60, postMax: 60 });
-    assert.deepEqual(resolveAccountsRateLimits({ env: { AGENTOC_ACCOUNTS_RATE_LIMIT_POST_MAX: '12.9' } }), { getMax: 60, postMax: 12 });
+    assert.deepEqual(resolveAccountsRateLimits({ env: { AGENTOC_ACCOUNTS_RATE_LIMIT_POST_MAX: '-5' } }), { getMax: 60, postMax: 60, authorityMax: 600 });
+    assert.deepEqual(resolveAccountsRateLimits({ env: { AGENTOC_ACCOUNTS_RATE_LIMIT_POST_MAX: '12.9' } }), { getMax: 60, postMax: 12, authorityMax: 600 });
+    assert.equal(resolveAccountsRateLimits({ env: { AGENTOC_ACCOUNTS_RATE_LIMIT_AUTHORITY_MAX: '900' } }).authorityMax, 900);
+    assert.equal(resolveAccountsRateLimits({ options: { authorityMax: 12 }, env: { AGENTOC_ACCOUNTS_RATE_LIMIT_AUTHORITY_MAX: '900' } }).authorityMax, 12);
   });
   console.log(`test-accounts-rate-limits: ok`);
 }

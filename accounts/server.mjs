@@ -364,6 +364,10 @@ export function resolveAccountsRateLimits({ options = {}, env = process.env } = 
   return {
     getMax: options.max ?? positiveInt(env.AGENTOC_ACCOUNTS_RATE_LIMIT_GET_MAX) ?? 60,
     postMax: options.postMax ?? positiveInt(env.AGENTOC_ACCOUNTS_RATE_LIMIT_POST_MAX) ?? 60,
+    // One instance refreshes its signed proof every 10 seconds. Allow a
+    // shared NAT substantially more than ten instances without letting
+    // unauthenticated requests run unbounded.
+    authorityMax: options.authorityMax ?? positiveInt(env.AGENTOC_ACCOUNTS_RATE_LIMIT_AUTHORITY_MAX) ?? 600,
   };
 }
 
@@ -447,14 +451,16 @@ export async function startAccountsServer(options = {}) {
   // separate per-IP buckets. High-volume pairing and connection recovery must
   // not starve the short-lived authority proofs used by active devices.
   const rateLimits = resolveAccountsRateLimits({ options: rateLimitOptions, env: process.env });
-  fastify.log.info({ getMax: rateLimits.getMax, postMax: rateLimits.postMax }, 'accounts rate limits');
+  fastify.log.info({ getMax: rateLimits.getMax, postMax: rateLimits.postMax, authorityMax: rateLimits.authorityMax }, 'accounts rate limits');
   const basePath = new URL(serverOptions.publicBaseUrl).pathname.replace(/\/+$/, '');
   const inboxPath = '/v1/owner-auth/rendezvous/inbox';
   const inboxPaths = new Set([inboxPath, ...(basePath && basePath !== '/' ? [`${basePath}${inboxPath}`] : [])]);
   const authorityPath = '/v1/owner-auth/instances/authority';
   const authorityPaths = new Set([authorityPath, ...(basePath && basePath !== '/' ? [`${basePath}${authorityPath}`] : [])]);
   const mount = (method, max, path = '/*') =>
-    fastify[method](path, { config: { rateLimit: { max, timeWindow: '1 minute',
+    fastify[method](path, { config: { rateLimit: { max: method === 'post' && path === '/*'
+      ? request => authorityPaths.has(String(request.url).split(/[?#]/, 1)[0]) ? rateLimits.authorityMax : max
+      : max, timeWindow: '1 minute',
       ...(method === 'post' && path === '/*' ? { keyGenerator: request => JSON.stringify([
         request.ip, inboxPaths.has(String(request.url).split(/[?#]/, 1)[0]) ? 'rendezvous-inbox'
           : authorityPaths.has(String(request.url).split(/[?#]/, 1)[0]) ? 'binding-authority' : 'account-control',

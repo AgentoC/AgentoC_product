@@ -11,7 +11,7 @@ test('inbox polling cannot consume the account control request budget', async ()
   try {
     app = await startAccountsServer({ dataFile: join(dir, 'accounts.json'), signingKeyFile: join(dir, 'signing-key.json'),
       publicBaseUrl: 'http://127.0.0.1:0/accounts', googleWebClientId: 'test.apps.googleusercontent.com',
-      allowInsecurePublicBaseUrl: true, port: 0, rateLimit: { max: 3, postMax: 3 } });
+      allowInsecurePublicBaseUrl: true, port: 0, rateLimit: { max: 3, postMax: 3, authorityMax: 3 } });
     const base = `http://127.0.0.1:${app.server.address().port}`;
     const post = async path => (await fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status;
     const inbox = ['/accounts/v1/owner-auth/rendezvous/inbox', '/v1/owner-auth/rendezvous/inbox'];
@@ -33,7 +33,7 @@ test('account control requests cannot consume the inbox polling budget', async (
   try {
     app = await startAccountsServer({ dataFile: join(dir, 'accounts.json'), signingKeyFile: join(dir, 'signing-key.json'),
       publicBaseUrl: 'http://127.0.0.1:0/accounts', googleWebClientId: 'test.apps.googleusercontent.com',
-      allowInsecurePublicBaseUrl: true, port: 0, rateLimit: { max: 3, postMax: 3 } });
+      allowInsecurePublicBaseUrl: true, port: 0, rateLimit: { max: 3, postMax: 3, authorityMax: 3 } });
     const base = `http://127.0.0.1:${app.server.address().port}`;
     const post = async path => (await fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status;
     const control = '/accounts/v1/owner-auth/transactions';
@@ -55,7 +55,7 @@ test('binding authority refresh has a bounded budget independent of account cont
   try {
     app = await startAccountsServer({ dataFile: join(dir, 'accounts.json'), signingKeyFile: join(dir, 'signing-key.json'),
       publicBaseUrl: 'http://127.0.0.1:0/accounts', googleWebClientId: 'test.apps.googleusercontent.com',
-      allowInsecurePublicBaseUrl: true, port: 0, rateLimit: { max: 3, postMax: 3 } });
+      allowInsecurePublicBaseUrl: true, port: 0, rateLimit: { max: 3, postMax: 3, authorityMax: 3 } });
     const base = `http://127.0.0.1:${app.server.address().port}`;
     const post = async path => (await fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status;
     const control = '/accounts/v1/owner-auth/transactions';
@@ -67,6 +67,27 @@ test('binding authority refresh has a bounded budget independent of account cont
     assert.equal(await post(inbox), 429);
     for (let i = 0; i < 3; i++) assert.notEqual(await post(authority[i % 2]), 429);
     assert.equal(await post(authority[0]), 429, 'authority requests remain bounded across both aliases');
+  } finally {
+    if (app) await app.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('authority refresh has its own configurable capacity while remaining bounded', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'agentoc-authority-capacity-'));
+  let app;
+  try {
+    app = await startAccountsServer({ dataFile: join(dir, 'accounts.json'), signingKeyFile: join(dir, 'signing-key.json'),
+      publicBaseUrl: 'http://127.0.0.1:0/accounts', googleWebClientId: 'test.apps.googleusercontent.com',
+      allowInsecurePublicBaseUrl: true, port: 0, rateLimit: { max: 3, postMax: 3, authorityMax: 7 } });
+    const base = `http://127.0.0.1:${app.server.address().port}`;
+    const post = async path => (await fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status;
+    const authority = '/accounts/v1/owner-auth/instances/authority';
+    const control = '/accounts/v1/owner-auth/transactions';
+    for (let i = 0; i < 3; i++) assert.notEqual(await post(control), 429);
+    assert.equal(await post(control), 429);
+    for (let i = 0; i < 7; i++) assert.notEqual(await post(authority), 429);
+    assert.equal(await post(authority), 429);
   } finally {
     if (app) await app.close();
     await rm(dir, { recursive: true, force: true });
