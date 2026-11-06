@@ -18,6 +18,7 @@ process.env.AGENTOC_RUN_SPOOL_DIR = path.join(root, 'instance', 'data', 'chat-ru
 const { createRun, getRun } = await import('../chat/runs.mjs');
 const { trackClaudeBidiApprovalRequest } = await import('../chat/runner-sidecar.mjs');
 const { buildWindowsSafeDeleteBridge } = await import('../chat/windows-safe-delete-bridge.mjs');
+const { planWindowsSafeDeleteList } = await import('../chat/windows-safe-delete-plan.mjs');
 const exec = promisify(execFile);
 try {
 for (const mode of ['recommended', 'full-auto', 'conservative-auto']) {
@@ -95,6 +96,34 @@ for (const mode of ['recommended', 'full-auto', 'conservative-auto']) {
     assert.deepEqual(JSON.parse(executed.stdout), { ok: true, deleted: 2 });
     await assert.rejects(readFile(path.join(bashDir, 'fixture.txt')), { code: 'ENOENT' });
   }
+}
+for (const mode of ['recommended', 'full-auto']) {
+  const workspace = path.join(root, `list-${mode}`);
+  await mkdir(path.join(workspace, 'build'), { recursive: true });
+  await writeFile(path.join(workspace, 'build', 'fixture.txt'), 'fixture');
+  await writeFile(path.join(workspace, 'one.txt'), 'fixture');
+  const run = await createRun({ status: { sessionId: `list-${mode}`, state: 'accepted', tool: 'claude' },
+    manifest: { folder: workspace, tool: 'claude', runtimeFamily: 'claude-stream-json-bidi', prompt: 'fixture', options: {} } });
+  const sent = [];
+  const proc = { stdin: { writable: true, write(value) { sent.push(JSON.parse(value)); return true; } } };
+  const state = { riskMode: mode, turnActive: true, cwd: workspace, riskContextValid: true,
+    riskContext: { trustedWorkspaceRoot: workspace, protectedRoots: [] }, pendingApprovals: new Map(), autoApprovedMcpRequestIds: new Set() };
+  await mkdir(path.join(workspace, 'danger', '.ssh'), { recursive: true });
+  for (const command of ['Remove-Item -LiteralPath one.txt,danger -Recurse -Force',
+    'Remove-Item -LiteralPath one.txt,..\\outside -Recurse -Force',
+    'Remove-Item -LiteralPath one.txt,$env:TEMP -Recurse -Force',
+    'Remove-Item -LiteralPath one.txt,build -Recurse -WhatIf']) {
+    assert.equal(await planWindowsSafeDeleteList({ command, state }), null, command);
+  }
+  const request = { type: 'control_request', request_id: 'list', request: { subtype: 'can_use_tool', tool_name: 'PowerShell', input: { command: 'Remove-Item -LiteralPath one.txt,build -Recurse -Force' } } };
+  await trackClaudeBidiApprovalRequest(run.id, state, request, proc, { safeDeleteHelperPath: helperPath });
+  assert.equal(sent[0]?.response?.response?.behavior, 'allow');
+  const encoded = /--request '([A-Za-z0-9_-]+)'$/.exec(sent[0].response.response.updatedInput.command)?.[1];
+  assert.ok(encoded);
+  await assert.rejects(exec(helperPath, ['--request', encoded], { cwd: root, windowsHide: true }));
+  assert.equal(await readFile(path.join(workspace, 'one.txt'), 'utf8'), 'fixture');
+  const result = await exec(helperPath, ['--request', encoded], { cwd: workspace, windowsHide: true });
+  assert.deepEqual(JSON.parse(result.stdout), { ok: true, deleted: 3 });
 }
 for (const mode of ['recommended', 'full-auto']) {
   for (const shell of ['PowerShell', 'Bash']) {

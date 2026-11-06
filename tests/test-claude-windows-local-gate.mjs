@@ -30,7 +30,9 @@ const installCase = process.env.AGENTOC_QA_CLAUDE_INSTALL === '1';
 const uninstallCase = process.env.AGENTOC_QA_CLAUDE_UNINSTALL === '1';
 const deleteCase = process.env.AGENTOC_QA_CLAUDE_DELETE === '1';
 const nativePowerShell = process.env.AGENTOC_QA_CLAUDE_NATIVE_POWERSHELL === '1';
+const deleteList = process.env.AGENTOC_QA_CLAUDE_DELETE_LIST === '1';
 if (nativePowerShell && !deleteCase) throw new Error('native PowerShell fixture requires deletion mode');
+if (deleteList && (!deleteCase || !nativePowerShell)) throw new Error('deletion list requires native PowerShell fixture');
 const outsideFileCase = process.env.AGENTOC_QA_CLAUDE_FILE_OUTSIDE === '1';
 const dotnetCase = process.env.AGENTOC_QA_CLAUDE_DOTNET === '1';
 const guidanceCase = process.env.AGENTOC_QA_CLAUDE_ELEVATION === '1';
@@ -54,10 +56,12 @@ const outsideRoot = outsideCase ? await mkdtemp(path.join(os.tmpdir(), 'agentoc-
 const outsideFileRoot = outsideFileCase ? await mkdtemp(path.join(os.tmpdir(), 'agentoc-claude-outside-file-')) : '';
 const deleteTarget = path.join(outsideCase ? outsideRoot : protectedCase ? protectedRoot : root, unicodeFixture ? '构建 输出' : 'delete-fixture');
 const keepFile = path.join(root, 'keep-fixture.txt');
+const extraFile = path.join(root, 'delete-extra.txt');
 if (deleteCase) {
   await mkdir(deleteTarget);
   await writeFile(path.join(deleteTarget, 'fixture.txt'), 'deletable fixture');
   await writeFile(keepFile, 'keep fixture');
+  if (deleteList) await writeFile(extraFile, 'deletable extra fixture');
 }
 const bashTarget = deleteTarget.replace(/^([A-Za-z]):\\/, (_, drive) => `/${drive.toLowerCase()}/`).replaceAll('\\', '/');
 const deleteCommand = nativePowerShell
@@ -106,7 +110,7 @@ const server = createServer((req, res) => {
     if (tool) {
       const input = JSON.stringify(installCase ? { command: installCommand, description: 'Fixture installation' } : uninstallCase
         ? { command: 'winget uninstall --id AgentoC.Nonexistent.Test.Fixture --exact', description: 'Fixture uninstall' } : deleteCase
-        ? { command: relativeDelete ? (nativePowerShell ? 'Remove-Item -LiteralPath delete-fixture -Recurse -Force' : 'rm -rf delete-fixture') : deleteCommand, description: 'Delete fixture' }
+        ? { command: deleteList ? (relativeDelete ? 'Remove-Item -LiteralPath delete-fixture,delete-extra.txt -Recurse -Force' : `Remove-Item -LiteralPath '${deleteTarget.replaceAll("'", "''")}','${extraFile.replaceAll("'", "''")}' -Recurse -Force`) : relativeDelete ? (nativePowerShell ? 'Remove-Item -LiteralPath delete-fixture -Recurse -Force' : 'rm -rf delete-fixture') : deleteCommand, description: 'Delete fixture' }
         : dotnetCase ? { command: dotnetCommand, description: 'Write isolated fixture' }
         : guidanceCase ? { command: guidanceCommand, description: 'Administrative fixture' }
         : readCase ? { command: readCommand, description: 'Read isolated fixture' } : { file_path: artifact, content: 'local fixture\n' });
@@ -205,6 +209,7 @@ try {
   } else if (deleteCase) {
     if (reviewCase) assert.equal(await readFile(path.join(deleteTarget, 'fixture.txt'), 'utf8'), 'deletable fixture');
     else await assert.rejects(access(deleteTarget), { code: 'ENOENT' });
+    if (deleteList && !reviewCase) await assert.rejects(access(extraFile), { code: 'ENOENT' });
     assert.equal(await readFile(keepFile, 'utf8'), 'keep fixture');
     if (!reviewCase) assert.ok(toolResultObserved, 'actual Claude must receive the safe deletion result');
   } else if (guidanceCase) {

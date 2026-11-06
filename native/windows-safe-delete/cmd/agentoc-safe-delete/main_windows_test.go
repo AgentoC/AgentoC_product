@@ -86,3 +86,24 @@ func TestRelativeTargetRequiresApprovedActualWorkingDirectory(t *testing.T) {
 		t.Fatalf("count=%d err=%v", count, err)
 	}
 }
+
+func TestMultipleTargetsRejectUnsafeEntryBeforeDeletion(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"one.txt", "two.txt"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(name), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	req := request{SchemaVersion: 1, Workspace: root, Relatives: []string{"one.txt", `..\outside`}, RequestKey: "gate:" + strings.Repeat("c", 64)}
+	if _, err := run([]string{"--request", envelope(t, req)}); err == nil {
+		t.Fatal("unsafe target accepted")
+	}
+	if _, err := os.Stat(filepath.Join(root, "one.txt")); err != nil {
+		t.Fatalf("first target changed: %v", err)
+	}
+	req.Relatives = []string{"one.txt", "two.txt"}
+	count, err := run([]string{"--request", envelope(t, req)})
+	if err != nil || count != 2 {
+		t.Fatalf("count=%d err=%v", count, err)
+	}
+}

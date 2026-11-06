@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { lstat } from 'node:fs/promises';
 import path from 'node:path';
-import { compileWindowsSafeDelete, planWindowsSafeDelete, compileWindowsBashSafeDelete, planWindowsBashSafeDelete } from './windows-safe-delete-plan.mjs';
+import { compileWindowsSafeDelete, planWindowsSafeDelete, compileWindowsSafeDeleteList, planWindowsSafeDeleteList, compileWindowsBashSafeDelete, planWindowsBashSafeDelete } from './windows-safe-delete-plan.mjs';
 
 export async function needsClaudeAbsoluteDeleteRetry({ approval, state, helperPath }, { inspect = lstat } = {}) {
   const params = approval?.params || {};
@@ -26,7 +26,8 @@ export async function buildWindowsSafeDeleteBridge({ approval, state, runId, hel
       !path.win32.isAbsolute(helperPath || '')) return null;
   const command = params.input?.command;
   if (typeof command !== 'string') return null;
-  const compiled = params.tool_name === 'Bash' ? compileWindowsBashSafeDelete(command) : await compileWindowsSafeDelete(command);
+  const compiled = params.tool_name === 'Bash' ? compileWindowsBashSafeDelete(command)
+    : await compileWindowsSafeDelete(command) || await compileWindowsSafeDeleteList(command);
   if (!compiled) return null;
   // Claude's normal PowerShell tool runs in the session directory. Do not
   // infer how an additional working-directory override is interpreted.
@@ -34,13 +35,13 @@ export async function buildWindowsSafeDeleteBridge({ approval, state, runId, hel
   let binary;
   try { binary = await inspect(helperPath); } catch { return null; }
   if (!binary?.isFile() || binary.isSymbolicLink()) return null;
-  const selected = await (plan || (params.tool_name === 'Bash' ? planWindowsBashSafeDelete : planWindowsSafeDelete))({ command, state });
+  const selected = await (plan || (params.tool_name === 'Bash' ? planWindowsBashSafeDelete : compiled.targets ? planWindowsSafeDeleteList : planWindowsSafeDelete))({ command, state });
   if (!selected) return null;
   const requestKey = `gate:${createHash('sha256').update(JSON.stringify([runId, approval.approvalId])).digest('hex')}`;
   // Relative paths are authorized against the run's trusted cwd, but the
   // provider can execute in a different cwd. The native helper checks its
   // actual cwd before resolving the target and rejects any mismatch.
-  const isRelative = !/^[a-z]:[\\/]/i.test(compiled.target);
+  const isRelative = !compiled.targets && !/^[a-z]:[\\/]/i.test(compiled.target);
   const request = { schemaVersion: 1, ...selected,
     ...(isRelative ? { relative: '', target: compiled.target, targetFromCwd: true, expectedCwd: path.win32.resolve(state.cwd) } : {}),
     requestKey, originalCommand: command };

@@ -5,6 +5,7 @@ package safedelete
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 
 	"golang.org/x/sys/windows"
@@ -16,6 +17,43 @@ type CapturedTree struct {
 	held     []*Pinned
 	order    []*Pinned
 	consumed bool
+}
+
+// CaptureForest validates every independent target before any deletion. It
+// shares the same handle and size bounds as a single captured tree.
+func CaptureForest(ctx context.Context, workspace string, relatives []string) (_ *CapturedTree, err error) {
+	if len(relatives) == 0 || len(relatives) > 32 {
+		return nil, errors.New("target count is invalid")
+	}
+	seen := make([]string, 0, len(relatives))
+	forest := &CapturedTree{}
+	defer func() {
+		if err != nil {
+			forest.Close()
+		}
+	}()
+	for _, relative := range relatives {
+		clean := strings.ToLower(filepath.Clean(relative))
+		for _, other := range seen {
+			if clean == other || strings.HasPrefix(clean, other+`\`) || strings.HasPrefix(other, clean+`\`) {
+				return nil, errors.New("overlapping targets are not supported")
+			}
+		}
+		seen = append(seen, clean)
+		tree, captureErr := CaptureTree(ctx, workspace, relative, false)
+		if captureErr != nil {
+			return nil, captureErr
+		}
+		forest.held = append(forest.held, tree.held...)
+		forest.order = append(forest.order, tree.order...)
+		tree.held = nil
+		tree.order = nil
+		tree.consumed = true
+		if len(forest.held) > 1024 {
+			return nil, errors.New("targets exceed safety limits")
+		}
+	}
+	return forest, nil
 }
 
 // CaptureTree pins a literal relative subtree without performing deletions.

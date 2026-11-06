@@ -22,16 +22,17 @@ import (
 )
 
 type request struct {
-	SchemaVersion   int    `json:"schemaVersion"`
-	Workspace       string `json:"workspace"`
-	Relative        string `json:"relative"`
-	Target          string `json:"target,omitempty"`
-	TargetFromCwd   bool   `json:"targetFromCwd,omitempty"`
-	ExpectedCwd     string `json:"expectedCwd,omitempty"`
-	ContentsOnly    bool   `json:"contentsOnly"`
-	Force           bool   `json:"force"`
-	RequestKey      string `json:"requestKey"`
-	OriginalCommand string `json:"originalCommand,omitempty"`
+	SchemaVersion   int      `json:"schemaVersion"`
+	Workspace       string   `json:"workspace"`
+	Relative        string   `json:"relative"`
+	Relatives       []string `json:"relatives,omitempty"`
+	Target          string   `json:"target,omitempty"`
+	TargetFromCwd   bool     `json:"targetFromCwd,omitempty"`
+	ExpectedCwd     string   `json:"expectedCwd,omitempty"`
+	ContentsOnly    bool     `json:"contentsOnly"`
+	Force           bool     `json:"force"`
+	RequestKey      string   `json:"requestKey"`
+	OriginalCommand string   `json:"originalCommand,omitempty"`
 }
 
 var requestKey = regexp.MustCompile(`^gate:[a-f0-9]{64}$`)
@@ -56,6 +57,24 @@ func run(args []string) (int, error) {
 	}
 	if input.SchemaVersion != 1 || len(input.Workspace) > 32767 || len(input.Relative) > 32767 || len(input.ExpectedCwd) > 32767 || len(input.OriginalCommand) > 8192 || !requestKey.MatchString(input.RequestKey) {
 		return 0, errors.New("invalid request fields")
+	}
+	if len(input.Relatives) > 0 {
+		if len(input.Relatives) > 32 || input.Relative != "" || input.Target != "" || input.TargetFromCwd || input.ContentsOnly {
+			return 0, errors.New("invalid multiple-target request")
+		}
+		if input.ExpectedCwd != "" {
+			cwd, cwdErr := os.Getwd()
+			if cwdErr != nil || !filepath.IsAbs(input.ExpectedCwd) || !strings.EqualFold(filepath.Clean(cwd), filepath.Clean(input.ExpectedCwd)) {
+				return 0, errors.New("working directory differs from approved context")
+			}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		forest, captureErr := safedelete.CaptureForest(ctx, input.Workspace, input.Relatives)
+		if captureErr != nil {
+			return 0, fmt.Errorf("target validation failed: %w", captureErr)
+		}
+		return forest.CommitWithOptions(ctx, input.Force)
 	}
 	if input.TargetFromCwd {
 		if input.Relative != "" || input.Target == "" || len(input.Target) > 8192 || !filepath.IsAbs(input.ExpectedCwd) {

@@ -1,10 +1,51 @@
 import path from 'node:path';
 import { lstat } from 'node:fs/promises';
 import { parseWindowsPowerShellAst } from './windows-powershell-ast.mjs';
-import { analyzeWindowsPowerShell } from './windows-powershell-actions.mjs';
+import { analyzeWindowsFileChanges, analyzeWindowsPowerShell } from './windows-powershell-actions.mjs';
 import { analyzeWindowsBash, gitBashPath, parseLiteralBashWords } from './windows-bash-actions.mjs';
 
 const win = path.win32;
+
+// PowerShell's literal path array names independent targets, all of which are
+// captured by the helper before it deletes any of them.
+export async function compileWindowsSafeDeleteList(command, { parse = parseWindowsPowerShellAst } = {}) {
+  if (typeof command !== 'string' || !command.trim() || command.length > 8192) return null;
+  let ast;
+  try { ast = await parse(command); } catch { return null; }
+  if (ast.errors?.length || ast.dynamicNodes?.length || ast.expressions?.length || ast.commands?.length !== 1) return null;
+  const entry = ast.commands[0];
+  if (!['remove-item', 'rm', 'del', 'ri'].includes(String(entry.name || '').toLowerCase()) || entry.invocation !== 'Unknown' || entry.redirections || entry.pipelineInput !== false || !Array.isArray(entry.elements)) return null;
+  let targets = null, recurse = false, force = false, pathParameter = false;
+  for (let i = 1; i < entry.elements.length; i++) {
+    const element = entry.elements[i];
+    if (element.kind === 'literal_list' && !targets) { targets = element.values; continue; }
+    if (element.kind !== 'parameter' || element.argumentType || element.value != null) return null;
+    const name = String(element.name || '').toLowerCase();
+    if (name === 'recurse' && !recurse) { recurse = true; continue; }
+    if (name === 'force' && !force) { force = true; continue; }
+    if (['path', 'literalpath'].includes(name) && !pathParameter && !targets && entry.elements[i + 1]?.kind === 'literal_list') { pathParameter = true; continue; }
+    return null;
+  }
+  if (!recurse || !Array.isArray(targets) || targets.length < 2 || targets.length > 32 ||
+      targets.some(target => typeof target !== 'string' || !target || /[*?\[\]`$]/.test(target) || /^(?:[\\/]|[a-z]:[^\\/])/i.test(target))) return null;
+  return { targets, force };
+}
+
+export async function planWindowsSafeDeleteList({ command, state }, { parse = parseWindowsPowerShellAst, analyze = analyzeWindowsFileChanges } = {}) {
+  if (!['recommended', 'full-auto'].includes(state?.riskMode) || state?.riskContextValid !== true) return null;
+  const context = { ...(state.riskContext || {}), cwd: state.cwd };
+  const root = context.trustedWorkspaceRoot;
+  if (!/^[a-z]:[\\/]/i.test(root || '') || !/^[a-z]:[\\/]/i.test(context.cwd || '')) return null;
+  const compiled = await compileWindowsSafeDeleteList(command, { parse });
+  if (!compiled) return null;
+  const relatives = compiled.targets.map(target => win.relative(win.resolve(root), win.resolve(context.cwd, target)));
+  if (relatives.some(relative => !relative || relative === '..' || relative.startsWith('..\\') || win.isAbsolute(relative))) return null;
+  let result;
+  try { result = await analyze(compiled.targets.map(target => ({ path: target, kind: 'delete' })), context); } catch { return null; }
+  if (!result?.complete || result.actions.length !== relatives.length || result.actions.some(action => !action.workspace || action.protected || action.workspaceRoot || (action.recursive && !action.recursiveVerified))) return null;
+  return { workspace: win.resolve(root), relative: '', relatives, force: compiled.force,
+    ...(compiled.targets.some(target => !/^[a-z]:[\\/]/i.test(target)) ? { expectedCwd: win.resolve(context.cwd) } : {}) };
+}
 
 // Compile one literal recursive deletion without guessing its working directory.
 export async function compileWindowsSafeDelete(command, { parse = parseWindowsPowerShellAst } = {}) {

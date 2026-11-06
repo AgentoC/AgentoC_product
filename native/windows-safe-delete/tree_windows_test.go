@@ -23,6 +23,42 @@ func createFixture(t *testing.T) (string, string) {
 	return root, build
 }
 
+func TestCaptureForestChecksAllTargetsBeforeDeleting(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"first.txt", "second.txt", ".ssh"} {
+		if name == ".ssh" {
+			if err := os.Mkdir(filepath.Join(root, name), 0700); err != nil {
+				t.Fatal(err)
+			}
+		} else if err := os.WriteFile(filepath.Join(root, name), []byte(name), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx := context.Background()
+	for _, paths := range [][]string{{"first.txt", ".ssh"}, {"first.txt", "FIRST.TXT"}, {"first.txt", "missing.txt"}} {
+		if forest, err := CaptureForest(ctx, root, paths); err == nil {
+			forest.Close()
+			t.Fatalf("accepted %v", paths)
+		}
+		if _, err := os.Stat(filepath.Join(root, "first.txt")); err != nil {
+			t.Fatalf("partial deletion: %v", err)
+		}
+	}
+	forest, err := CaptureForest(ctx, root, []string{"first.txt", "second.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	count, err := forest.Commit(ctx)
+	if err != nil || count != 2 {
+		t.Fatalf("count=%d err=%v", count, err)
+	}
+	for _, name := range []string{"first.txt", "second.txt"} {
+		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
+			t.Fatalf("%s remains: %v", name, err)
+		}
+	}
+}
+
 func TestCaptureRefusesWindowsProfileCredentialTree(t *testing.T) {
 	root, build := createFixture(t)
 	protected := filepath.Join(build, "profile", "AppData", "Roaming", "Microsoft", "Credentials")
