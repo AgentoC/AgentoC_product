@@ -691,6 +691,21 @@ class TimelineEngineTest {
     }
 
     @Test
+    fun claudeWriteResultRetainsTheSuccessfulFileChange() {
+        val events = listOf(
+            SessionEventDto(seq = 1, eventId = "e1", type = "tool_use", runId = "run-a", requestId = "request-a", providerToolUseId = "call-1", toolName = "Write"),
+            SessionEventDto(seq = 2, eventId = "e2", type = "file_change", runId = "run-a", requestId = "request-a", providerToolUseId = "call-1", operationLifecycle = "started", filePath = "G:\\qa\\preview check.md"),
+            SessionEventDto(seq = 3, eventId = "e3", type = "tool_result", runId = "run-a", requestId = "request-a", providerToolUseId = "call-1", toolName = "call-1", operationLifecycle = "completed", exitCode = 0),
+        )
+        val item = TimelineProjector.project(emptyList(), LiveTimelineProjector().projectPage(events))
+            .filterIsInstance<TimelineItem.Operation>().single()
+        assertEquals(TimelineOperationKind.Diff, item.kind)
+        assertEquals(TimelineOperationStatus.Completed, item.status)
+        assertEquals("Write", item.toolName)
+        assertEquals("G:\\qa\\preview check.md", item.fileChanges.single().path)
+    }
+
+    @Test
     fun projectsFailedToolResultCorrectly() {
         val projector = LiveTimelineProjector()
         val toolResult = SessionEventDto(

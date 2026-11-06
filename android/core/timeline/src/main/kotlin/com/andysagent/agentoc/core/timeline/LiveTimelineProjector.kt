@@ -326,7 +326,12 @@ class LiveTimelineProjector {
         val revision = event.revision ?: maxOf(renderSeq, revisionClock + 1L)
         revisionClock = maxOf(revisionClock, revision)
 
-        val toolName = event.toolName?.takeIf { it.isNotBlank() } ?: previous?.toolName ?: event.kind ?: event.title
+        // Claude tool results can put the opaque tool-use ID in toolName.
+        // Keep the actual tool name from the matching operation in that case.
+        val resultNameIsId = isToolResult && !event.toolName.isNullOrBlank() &&
+            event.toolName == event.providerToolUseId
+        val toolName = event.toolName?.takeIf { it.isNotBlank() && !resultNameIsId }
+            ?: previous?.toolName ?: event.kind ?: event.title
         val inputJson = event.toolInputText() ?: previous?.inputJson
         val preview = event.outputPreview as? JsonObject
         val previewLines = listOf("head", "tail").flatMap { key ->
@@ -368,6 +373,7 @@ class LiveTimelineProjector {
         val operationKind = when {
             isReasoning -> TimelineOperationKind.Tool
             isFileChange -> TimelineOperationKind.Diff
+            isToolResult && previous?.operationKind != null -> previous.operationKind
             isToolUse || isToolResult -> when {
                 event.kind in setOf("command", "execute") || normalizedToolName.contains("command") || normalizedToolName.contains("exec") || normalizedToolName.contains("bash") -> TimelineOperationKind.Command
                 event.kind in setOf("file_edit", "edit", "write") || normalizedToolName.contains("edit") || normalizedToolName.contains("write") || normalizedToolName.contains("replace") -> TimelineOperationKind.FileEdit
