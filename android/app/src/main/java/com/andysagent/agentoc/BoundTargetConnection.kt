@@ -90,6 +90,7 @@ internal class BoundTargetConnection(
             }
         },
         onTurnSessionReady = { lastFailedTurnCarrier = null; activeTurnSession.set(it as? PlannedTurnSession); transport.setTurnSession(it) },
+        onTurnHandoffReady = { lastFailedTurnCarrier = null; activeTurnSession.set(it as? PlannedTurnSession); transport.handoffTurnSession(it) },
         onTurnSessionClosed = {
             transport.clearTurnSession(it)
             if (it is PlannedTurnSession) activeTurnSession.compareAndSet(it, null)

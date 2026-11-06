@@ -43,7 +43,10 @@ interface P2PSession {
     fun setUnexpectedCloseListener(listener: ((String) -> Unit)?) {}
 
     /** A verified peer requests a new carrier while this session stays usable. */
-    fun setCarrierHandoffListener(listener: (() -> Unit)?) {}
+    fun setCarrierHandoffListener(listener: ((Long, String) -> Unit)?) {}
+
+    /** Bind a replacement offer to the standby that requested the handoff. */
+    fun configureHandoffOffer(handoffId: String): Boolean = false
 
     /** Release/reacquire signaling without intentionally closing the carrier. */
     fun suspendSignalingForHandoff(): Boolean = false
@@ -185,7 +188,8 @@ class WebRTCDataChannelTransport(
 
     // Signalling
     private var signaling: P2PSignalingClient? = null
-    @Volatile private var carrierHandoffListener: (() -> Unit)? = null
+    @Volatile private var carrierHandoffListener: ((Long, String) -> Unit)? = null
+    @Volatile private var handoffOfferId: String? = null
 
     @Volatile override var isOpen: Boolean = false
         private set
@@ -372,8 +376,8 @@ class WebRTCDataChannelTransport(
     // ── Signalling callback ───────────────────────────────────────────
 
     private val signalingCallback = object : P2PSignalingClient.SignalingCallback {
-        override fun onCarrierHandoffRequested() {
-            if (isOpen && !closeNotified) carrierHandoffListener?.invoke()
+        override fun onCarrierHandoffRequested(timeoutMs: Long, handoffId: String) {
+            if (isOpen && !closeNotified) carrierHandoffListener?.invoke(timeoutMs, handoffId)
         }
         override fun onAnswer(sdp: String) {
             traceConnect("answer_received")
@@ -434,8 +438,14 @@ class WebRTCDataChannelTransport(
         unexpectedCloseListener = listener
     }
 
-    override fun setCarrierHandoffListener(listener: (() -> Unit)?) {
+    override fun setCarrierHandoffListener(listener: ((Long, String) -> Unit)?) {
         carrierHandoffListener = listener
+    }
+
+    override fun configureHandoffOffer(handoffId: String): Boolean {
+        if (!handoffId.matches(Regex("[a-f0-9]{32}")) || isOpen || closeNotified) return false
+        handoffOfferId = handoffId
+        return true
     }
 
     override fun suspendSignalingForHandoff(): Boolean {
@@ -513,7 +523,7 @@ class WebRTCDataChannelTransport(
 
             // 5. Send the offer only after the signaling room is joined.
             synchronized(localCandidateLock) {
-                if (!signaling!!.sendSignal(P2PProtocol.offerPayloadJson(sdp))) {
+                if (!signaling!!.sendSignal(P2PProtocol.offerPayloadJson(sdp, handoffOfferId))) {
                     throw IllegalStateException("Unable to send WebRTC offer after signaling join")
                 }
                 offerSignalSent = true

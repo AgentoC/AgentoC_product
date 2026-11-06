@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { chromium } from '@playwright/test';
 import WebSocket from 'ws';
 import { runP2PHostAgent } from '../lib/p2p-host-agent.mjs';
-import { createP2PRoomId, verifyP2PSignal } from '../lib/p2p-signal-protocol.mjs';
+import { createP2PRoomId, signP2PSignal, verifyP2PSignal } from '../lib/p2p-signal-protocol.mjs';
 import { createP2PSignalingServer } from '../p2p/signaling-server.mjs';
 
 const listen = server => new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(server.address())));
@@ -26,6 +26,7 @@ try {
   const webAddress = await listen(web);
   const signalingUrl = `http://127.0.0.1:${signalAddress.port}`;
   agent = await runP2PHostAgent({ signalingUrl, roomId, secret,
+    handoffId: 'a'.repeat(32),
     localBaseUrl: `http://127.0.0.1:${targetAddress.port}`,
     ...(process.env.AGENTOC_TEST_P2P_HOST_BINARY ? { binaryPath: process.env.AGENTOC_TEST_P2P_HOST_BINARY } : {}) });
   await agent.ready;
@@ -35,12 +36,13 @@ try {
   mobile.send(JSON.stringify({ type: 'join', roomId, role: 'mobile' }));
   await new Promise(resolve => mobile.once('message', resolve));
   const handoffSignal = new Promise(resolve => mobile.once('message', raw => resolve(JSON.parse(raw))));
-  assert.equal(agent.requestCarrierHandoff(), true);
+  assert.equal(agent.requestCarrierHandoff(18_000), true);
   const handoff = await handoffSignal;
   assert.equal(verifyP2PSignal(handoff.envelope, { roomId, secret }), true);
-  assert.deepEqual(handoff.envelope.payload, { type: 'carrier_handoff_requested', version: 1 });
+  assert.deepEqual(handoff.envelope.payload, { type: 'carrier_handoff_requested', version: 1, timeoutMs: 18_000, handoffId: 'a'.repeat(32) });
   mobile.close();
   await new Promise(resolve => mobile.once('close', resolve));
+  agent.activateHandoff();
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${webAddress.port}/`);
@@ -51,6 +53,19 @@ try {
     await window.testClient.connect();
   }, { signalingUrl, roomId, secret });
   assert.equal(await status(), 200);
+  // A delayed offer from a rolled-back generation must never replace this
+  // working peer, even if its room MAC is valid.
+  mobile = new WebSocket(`ws://127.0.0.1:${signalAddress.port}/signal`);
+  await new Promise((resolve, reject) => { mobile.once('open', resolve); mobile.once('error', reject); });
+  mobile.send(JSON.stringify({ type: 'join', roomId, role: 'mobile' }));
+  await new Promise(resolve => mobile.once('message', resolve));
+  const staleOffer = signP2PSignal({ roomId, secret, seq: 1,
+    payload: { type: 'offer', sdp: 'stale', handoffId: 'b'.repeat(32) } });
+  mobile.send(JSON.stringify({ type: 'signal', roomId, envelope: staleOffer }));
+  await delay(250);
+  assert.equal(await status(), 200, 'stale handoff offers must not close the existing channel');
+  mobile.close();
+  await new Promise(resolve => mobile.once('close', resolve));
   agent.suspendSignaling();
   await delay(250);
   standby = new WebSocket(`ws://127.0.0.1:${signalAddress.port}/signal`);

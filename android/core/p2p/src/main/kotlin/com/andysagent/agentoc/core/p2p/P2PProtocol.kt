@@ -189,8 +189,11 @@ object P2PProtocol {
     // ── Signal-payload builders (key order matches JS reference) ──────
 
     /** {"type":"offer","sdp":"..."} */
-    fun offerPayloadJson(sdp: String): String =
-        """{"type":"offer","sdp":"${escapeJsonString(sdp)}"}"""
+    fun offerPayloadJson(sdp: String, handoffId: String? = null): String {
+        require(handoffId == null || handoffId.matches(Regex("[a-f0-9]{32}")))
+        val handoff = handoffId?.let { ",\"handoffId\":\"$it\"" }.orEmpty()
+        return """{"type":"offer","sdp":"${escapeJsonString(sdp)}"$handoff}"""
+    }
 
     /** {"type":"answer","sdp":"..."} */
     fun answerPayloadJson(sdp: String): String =

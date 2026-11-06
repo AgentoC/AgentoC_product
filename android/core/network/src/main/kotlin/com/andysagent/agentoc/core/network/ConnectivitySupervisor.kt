@@ -7,6 +7,7 @@ import com.andysagent.agentoc.core.p2p.P2PSession
 import com.andysagent.agentoc.core.p2p.P2PSessionFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -20,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -79,6 +81,7 @@ class ConnectivitySupervisor(
     private val credentialRejectionHandler: CredentialRejectionHandler? = null,
     private val onTurnReservationFailed: ((TurnCarrier?, String) -> Unit)? = null,
     private val bootstrapPending: () -> Boolean = { false },
+    private val onTurnHandoffReady: ((P2PSession) -> Unit)? = null,
 ) {
     companion object {
         // Visible for testing.
@@ -120,6 +123,12 @@ class ConnectivitySupervisor(
     @Volatile private var bootstrapPlan: BootstrapConnectionPlan? = null
     private var bootstrapTurnAttempted = false
     @Volatile private var activeProbeCredential: String? = null
+    private class Handoff(val old: P2PSession) {
+        val nextPlan = CompletableDeferred<BootstrapConnectionPlan>()
+        var job: Job? = null
+    }
+    private val handoffLock = Any()
+    private var handoff: Handoff? = null
 
     fun start() {
         if (started) return
@@ -212,6 +221,7 @@ class ConnectivitySupervisor(
         if (!started) return
         started = false
         stopped = true
+        cancelHandoff()
         monitor.unregister()
         probeJob?.cancel()
         probeJob = null
@@ -285,7 +295,10 @@ class ConnectivitySupervisor(
             probeJob?.isActive == true && activeProbeCredential == credentialProvider()?.takeIf { it.isNotBlank() }) return
         val hasLiveCarrier = turnSession?.isOpen == true || p2pSession?.isOpen == true
         bootstrapPlan = plan
-        if (hasLiveCarrier) return
+        if (hasLiveCarrier) {
+            synchronized(handoffLock) { handoff?.takeIf { it.old === turnSession }?.nextPlan?.complete(plan) }
+            return
+        }
         bootstrapTurnAttempted = false
         if (!stopped) recheck()
     }
@@ -531,6 +544,9 @@ class ConnectivitySupervisor(
     }
 
     private fun observeUnexpectedClose(session: P2PSession, isTurn: Boolean) {
+        if (isTurn && onTurnHandoffReady != null && onRecoveryRequired != null) {
+            session.setCarrierHandoffListener { timeoutMs, handoffId -> beginHandoff(session, timeoutMs, handoffId) }
+        }
         session.setUnexpectedCloseListener { reason ->
             scope.launch {
                 if (isTurn) handleUnexpectedTurnClose(session, reason)
@@ -556,6 +572,7 @@ class ConnectivitySupervisor(
     }
 
     private fun closeTurnSession() {
+        cancelHandoff()
         val session = turnSession ?: return
         turnSession = null
         activeTurnCarrier = null
@@ -567,6 +584,7 @@ class ConnectivitySupervisor(
         if (stopped || turnSession !== session || !handlingCarrierClose.compareAndSet(false, true)) return
         try {
             if (stopped || turnSession !== session) return
+            cancelHandoff()
             val closedCarrier = activeTurnCarrier
             cancelTurnRecheck()
             turnSession = null
@@ -587,6 +605,70 @@ class ConnectivitySupervisor(
     }
 
     // ── Initial-carrier / extension helpers ─
+
+    private fun cancelHandoff() {
+        val pending = synchronized(handoffLock) { handoff.also { handoff = null } }
+        pending?.job?.cancel()
+    }
+
+    private fun beginHandoff(old: P2PSession, timeoutMs: Long, handoffId: String) {
+        val requestRecovery = onRecoveryRequired ?: return
+        val ready = onTurnHandoffReady ?: return
+        val ticket = synchronized(handoffLock) {
+            if (stopped || turnSession !== old || !old.isOpen || handoff != null) return
+            Handoff(old).also { handoff = it }
+        }
+        val job = scope.launch(start = CoroutineStart.LAZY) {
+            var next: P2PSession? = null
+            var installed = false
+            try {
+                // The host will reclaim signaling at its deadline. Stop our
+                // attempt early so a delayed offer cannot evict the old peer.
+                withTimeoutOrNull((timeoutMs - 5_000L).coerceIn(1L, 15_000L)) {
+                    if (!old.suspendSignalingForHandoff()) return@withTimeoutOrNull
+                    requestRecovery("carrier-handoff")
+                    val plan = ticket.nextPlan.await()
+                    val carrier = plan.turnCarrier ?: return@withTimeoutOrNull
+                    val credential = credentialProvider()?.takeIf { it.isNotBlank() } ?: return@withTimeoutOrNull
+                    next = turnSessionFactory?.invoke(carrier) ?: return@withTimeoutOrNull
+                    val candidate = next ?: return@withTimeoutOrNull
+                    if (!candidate.configureHandoffOffer(handoffId)) return@withTimeoutOrNull
+                    if (candidate.connect().isFailure) return@withTimeoutOrNull
+                    val result = candidate.request(P2PHttpRequest(id = UUID.randomUUID().toString(), method = "GET",
+                        path = "/api/auth/me", headers = mapOf("Authorization" to "Bearer $credential"))).getOrNull()
+                    if (result == null || result.status !in 200..299 || !result.error.isNullOrBlank()) return@withTimeoutOrNull
+                    if (credentialProvider()?.takeIf { it.isNotBlank() } != credential) return@withTimeoutOrNull
+                    synchronized(handoffLock) {
+                        if (handoff !== ticket || stopped || turnSession !== old || !old.isOpen || !candidate.isOpen) return@synchronized
+                        cancelTurnRecheck()
+                        turnSession = candidate
+                        activeTurnCarrier = carrier
+                        observeUnexpectedClose(candidate, isTurn = true)
+                        ready(candidate)
+                        installed = true
+                    }
+                    if (installed) scheduleTurnRecheck()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // Keep the original carrier if a standby cannot be verified.
+            } finally {
+                if (!installed) {
+                    next?.close()
+                    if (!stopped && turnSession === old && old.isOpen) {
+                        withContext(kotlinx.coroutines.NonCancellable) { old.resumeSignalingAfterHandoff() }
+                    }
+                }
+                synchronized(handoffLock) { if (handoff === ticket) handoff = null }
+            }
+        }
+        synchronized(handoffLock) {
+            if (handoff !== ticket || stopped) { job.cancel(); return }
+            ticket.job = job
+        }
+        job.start()
+    }
 
     /**
      * A TURN-first contract is intentionally TURN-only for the lifetime of a

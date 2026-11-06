@@ -28,6 +28,87 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ConnectivitySupervisorTest {
+    @Test fun `verified handoff switches only after the new carrier answers`() = runTest {
+        val old = FakeSession(Result.success(Unit)).apply { supportsHandoff = true }
+        val replacement = FakeSession(Result.success(Unit))
+        var ready: P2PSession? = null
+        var handoffReady: P2PSession? = null
+        var recovery: String? = null
+        var creates = 0
+        val supervisor = ConnectivitySupervisor({ "" }, { "rda_fixture" }, FakeNetworkMonitor(), this,
+            turnSessionFactory = { if (creates++ == 0) old else replacement },
+            onTurnSessionReady = { ready = it }, onTurnHandoffReady = { handoffReady = it },
+            onRecoveryRequired = { recovery = it })
+        try {
+            supervisor.start(); supervisor.applyBootstrap(plan()); runCurrent()
+            assertTrue(ready === old)
+            old.requestHandoff(); runCurrent()
+            assertEquals("carrier-handoff", recovery)
+            assertTrue(old.isOpen)
+            assertEquals(1, old.suspensions)
+            supervisor.applyBootstrap(plan()); runCurrent()
+            assertTrue(handoffReady === replacement)
+            assertTrue(old.isOpen, "old carrier belongs to the transport until requests drain")
+            assertTrue(replacement.isOpen)
+            assertEquals(ConnectionStatus.Connected, supervisor.state.value.status)
+        } finally { supervisor.stop(); old.close() }
+    }
+
+    @Test fun `failed handoff resumes the still healthy old carrier`() = runTest {
+        val old = FakeSession(Result.success(Unit)).apply { supportsHandoff = true }
+        val replacement = FakeSession(Result.failure(IllegalStateException("standby unavailable")))
+        var creates = 0
+        var switched = false
+        val supervisor = ConnectivitySupervisor({ "" }, { "rda_fixture" }, FakeNetworkMonitor(), this,
+            turnSessionFactory = { if (creates++ == 0) old else replacement },
+            onTurnHandoffReady = { switched = true }, onRecoveryRequired = {})
+        try {
+            supervisor.start(); supervisor.applyBootstrap(plan()); runCurrent()
+            old.requestHandoff(); runCurrent()
+            supervisor.applyBootstrap(plan()); runCurrent()
+            assertFalse(switched)
+            assertTrue(old.isOpen)
+            assertEquals(1, old.resumptions)
+            assertEquals(ConnectionStatus.Connected, supervisor.state.value.status)
+        } finally { supervisor.stop() }
+    }
+
+    @Test fun `unauthenticated standby cannot replace the live carrier`() = runTest {
+        val old = FakeSession(Result.success(Unit)).apply { supportsHandoff = true }
+        val replacement = FakeSession(Result.success(Unit), Result.success(P2PHttpResponse(id = "probe", status = 401)))
+        var creates = 0
+        var switched = false
+        val supervisor = ConnectivitySupervisor({ "" }, { "rda_fixture" }, FakeNetworkMonitor(), this,
+            turnSessionFactory = { if (creates++ == 0) old else replacement },
+            onTurnHandoffReady = { switched = true }, onRecoveryRequired = {})
+        try {
+            supervisor.start(); supervisor.applyBootstrap(plan()); runCurrent()
+            old.requestHandoff(); runCurrent()
+            supervisor.applyBootstrap(plan()); runCurrent()
+            assertFalse(switched)
+            assertTrue(old.isOpen)
+            assertFalse(replacement.isOpen)
+            assertEquals(1, old.resumptions)
+        } finally { supervisor.stop() }
+    }
+
+    @Test fun `timed out handoff restores signaling and shutdown fences late plans`() = runTest {
+        val old = FakeSession(Result.success(Unit)).apply { supportsHandoff = true }
+        var creates = 0
+        val supervisor = ConnectivitySupervisor({ "" }, { "rda_fixture" }, FakeNetworkMonitor(), this,
+            turnSessionFactory = { creates++; old }, onTurnHandoffReady = { error("must not switch") },
+            onRecoveryRequired = {})
+        supervisor.start(); supervisor.applyBootstrap(plan()); runCurrent()
+        old.requestHandoff(); runCurrent()
+        advanceTimeBy(15_001); runCurrent()
+        assertEquals(1, old.resumptions)
+        assertTrue(old.isOpen)
+        old.requestHandoff(); runCurrent()
+        supervisor.stop(); runCurrent()
+        supervisor.applyBootstrap(plan()); runCurrent()
+        assertFalse(old.isOpen)
+        assertEquals(1, creates, "a late plan must not recreate a carrier after shutdown")
+    }
     @Test fun `initial ICE failure requests alternate recovery without treating other errors as ICE`() = runTest {
         for ((message, expected) in listOf(
             "ICE connection entered FAILED" to "turn-ice-failed",
@@ -942,6 +1023,10 @@ class ConnectivitySupervisorTest {
         private val connectDelayMs: Long = 0L,
     ) : P2PSession {
         private var unexpectedCloseListener: ((String) -> Unit)? = null
+        private var handoffListener: ((Long, String) -> Unit)? = null
+        var supportsHandoff = false
+        var suspensions = 0
+        var resumptions = 0
 
         override var isOpen: Boolean = false
             private set
@@ -949,6 +1034,12 @@ class ConnectivitySupervisorTest {
         override fun setUnexpectedCloseListener(listener: ((String) -> Unit)?) {
             unexpectedCloseListener = listener
         }
+
+        override fun setCarrierHandoffListener(listener: ((Long, String) -> Unit)?) { handoffListener = listener }
+        override fun configureHandoffOffer(handoffId: String): Boolean = handoffId == "a".repeat(32)
+        override fun suspendSignalingForHandoff(): Boolean { suspensions++; return supportsHandoff }
+        override suspend fun resumeSignalingAfterHandoff(): Boolean { resumptions++; return supportsHandoff }
+        fun requestHandoff() { handoffListener?.invoke(20_000L, "a".repeat(32)) }
 
         override suspend fun connect(): Result<Unit> {
             if (connectDelayMs > 0) delay(connectDelayMs)

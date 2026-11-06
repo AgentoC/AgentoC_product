@@ -64,7 +64,7 @@ class P2PSignalingClient(
         fun onAnswer(sdp: String)
         fun onIceCandidate(candidate: String, sdpMid: String?, sdpMLineIndex: Int)
         fun onError(error: String)
-        fun onCarrierHandoffRequested() = Unit
+        fun onCarrierHandoffRequested(timeoutMs: Long, handoffId: String) = Unit
     }
 
     // ── State ─────────────────────────────────────────────────────────
@@ -304,7 +304,11 @@ class P2PSignalingClient(
             if (envPayload is JSONObject) {
                 when (envPayload.optString("type")) {
                     "carrier_handoff_requested" -> {
-                        if (envPayload.optInt("version", 0) == 1) callback.onCarrierHandoffRequested()
+                        val timeout = envPayload.optLong("timeoutMs", 0L)
+                        val handoffId = envPayload.optString("handoffId", "")
+                        if (envPayload.optInt("version", 0) == 1 && timeout in 5_001L..20_000L && handoffId.matches(Regex("[a-f0-9]{32}"))) {
+                            callback.onCarrierHandoffRequested(timeout, handoffId)
+                        }
                     }
                     "answer" -> {
                         val sdp = envPayload.optString("sdp", "")

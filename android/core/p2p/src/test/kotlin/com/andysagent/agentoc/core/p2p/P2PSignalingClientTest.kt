@@ -25,10 +25,10 @@ class P2PSignalingClientTest {
                 override fun onAnswer(sdp: String) = Unit
                 override fun onIceCandidate(candidate: String, sdpMid: String?, sdpMLineIndex: Int) = Unit
                 override fun onError(error: String) = Unit
-                override fun onCarrierHandoffRequested() { requests++ }
+                override fun onCarrierHandoffRequested(timeoutMs: Long, handoffId: String) { requests++ }
             }, this)
-        fun signal(seq: Int, version: Int, signingKey: String): String {
-            val payload = JSONObject().put("type", "carrier_handoff_requested").put("version", version)
+        fun signal(seq: Int, version: Int, signingKey: String, timeout: Int = 18_000): String {
+            val payload = JSONObject().put("type", "carrier_handoff_requested").put("version", version).put("timeoutMs", timeout).put("handoffId", "a".repeat(32))
             val timestamp = System.currentTimeMillis()
             val mac = P2PProtocol.sign(room, signingKey, seq, payload.toString(), timestamp)
             return JSONObject().put("type", "signal").put("roomId", room).put("envelope",
@@ -37,17 +37,18 @@ class P2PSignalingClientTest {
         }
         client.handleMessage(signal(1, 1, "wrong-secret"))
         client.handleMessage(signal(1, 2, secret))
+        client.handleMessage(signal(2, 1, secret, 20_001))
         assertEquals(0, requests)
-        client.handleMessage(signal(2, 1, secret))
-        client.handleMessage(signal(2, 1, secret))
+        client.handleMessage(signal(3, 1, secret))
+        client.handleMessage(signal(3, 1, secret))
         assertEquals(1, requests, "invalid and replayed handoff requests must not be delivered")
         client.close()
     }
 
     @Test fun `handoff signature matches the Windows host wire format`() {
-        val payload = """{"type":"carrier_handoff_requested","version":1}"""
+        val payload = """{"type":"carrier_handoff_requested","version":1,"timeoutMs":18000,"handoffId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"""
         assertTrue(P2PProtocol.verify("handoff-room", "handoff-secret", 1, 1793934000000L,
-            payload, "1xT1JzIYXh8Hg6zRIl9486dXcCyyLHO9UFqcNmHx52s", maxSkewMs = Long.MAX_VALUE))
+            payload, "rHBuvmraHhkcDPw6RXYNUKfCEvacrA_hY1TQTsMiZhs", maxSkewMs = Long.MAX_VALUE))
     }
 
     // ── Signal dispatch: answer ───────────────────────────────────────
