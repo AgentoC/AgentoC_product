@@ -11,6 +11,8 @@ class RunActionFormatterTest {
         val result = RunActionFormatter.forOperation(operation)
         assertEquals("delete", result.presentationVerb)
         assertEquals("example", result.presentationSubject)
+        val activity = kotlinx.serialization.json.Json.parseToJsonElement("""{"state":"running","kind":"delete","detail":"G:/test/example"}""") as kotlinx.serialization.json.JsonObject
+        assertEquals("delete", RunActionFormatter.fromServer(activity)?.presentationVerb)
     }
     @Test fun genericCommandAndReadSubjectsUseHumanReadableFallbacks() {
         val json = kotlinx.serialization.json.Json

@@ -112,7 +112,7 @@ object RunActionFormatter {
             "command", "execute", "execute_composite" -> "execute"
             "question" -> "question"
             "file_edit", "edit" -> "edit"
-            "read", "list", "inspect", "search" -> kind
+            "read", "list", "inspect", "search", "delete" -> kind
             else -> null
         }
         return RunActionUiState(kind, sentence.safeDisplay(), detail.safeDisplay(), value("operationId").takeIf { it.isNotBlank() }, count,
