@@ -47,6 +47,24 @@ class ConnectivitySupervisorTest {
             } finally { supervisor.stop(); old.close() }
         }
     }
+    @Test fun `repeated uncertain commit never switches the old carrier`() = runTest {
+        val old = FakeSession(Result.success(Unit)).apply { supportsHandoff = true }
+        val replacement = FakeSession(Result.success(Unit)).apply { failAllCommits = true }
+        var creates = 0; var switched = false
+        val supervisor = ConnectivitySupervisor({ "" }, { "rda_fixture" }, FakeNetworkMonitor(), this,
+            turnSessionFactory = { if (creates++ == 0) old else replacement },
+            onTurnHandoffReady = { switched = true }, onRecoveryRequired = {},
+            useSignedHandoff = { true }, signedHandoffPlan = { plan() })
+        try {
+            supervisor.start(); supervisor.applyBootstrap(plan()); runCurrent()
+            old.requestHandoff(); runCurrent()
+            assertEquals(2, replacement.commitAttempts)
+            assertFalse(switched)
+            assertTrue(old.isOpen)
+            assertFalse(replacement.isOpen)
+            assertEquals(1, old.resumptions)
+        } finally { supervisor.stop(); old.close() }
+    }
     @Test fun `signed handoff waits for standby commit and keeps old carrier on rejection`() = runTest {
         for (status in listOf(200, 409)) {
             val old = FakeSession(Result.success(Unit)).apply { supportsHandoff = true }
@@ -62,6 +80,7 @@ class ConnectivitySupervisorTest {
                 assertFalse(switched); assertTrue(old.isOpen)
                 replacement.commitGate!!.complete(status); runCurrent()
                 assertEquals(status == 200, switched); assertEquals(status == 200, finished)
+                assertEquals(1, replacement.commitAttempts, "An explicit response must not be retried")
                 assertTrue(old.isOpen)
                 if (status != 200) { assertFalse(replacement.isOpen); assertEquals(1, old.resumptions) }
             } finally { supervisor.stop(); old.close() }
@@ -1069,6 +1088,7 @@ class ConnectivitySupervisorTest {
         var commitGate: CompletableDeferred<Int>? = null
         var loseFirstCommit = false
         var hangFirstCommit = false
+        var failAllCommits = false
         var commitAttempts = 0
 
         override var isOpen: Boolean = false
@@ -1093,6 +1113,7 @@ class ConnectivitySupervisorTest {
         override suspend fun request(request: P2PHttpRequest): Result<P2PHttpResponse> {
             if (request.path == "/api/device-auth/turn/handoff/commit") {
                 commitAttempts++
+                if (failAllCommits) return Result.failure(IllegalStateException("commit response lost"))
                 if (loseFirstCommit && commitAttempts == 1) {
                     if (hangFirstCommit) delay(60_000)
                     return Result.failure(IllegalStateException("commit response lost"))
