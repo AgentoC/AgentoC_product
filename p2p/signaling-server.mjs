@@ -21,6 +21,14 @@ export function createP2PSignaling({ authorizeJoin = null, onEvent = null } = {}
   wss.on('connection', (ws) => {
     let membership = null;
     let joining = false;
+    // A joined peer's WebSocket heartbeat is real room activity. Check that
+    // it is still the registered peer so a replaced socket cannot keep a
+    // room alive while its close handshake is pending.
+    ws.on('ping', () => {
+      if (!membership) return;
+      const room = rooms.get(membership.roomId);
+      if (room?.peers.get(membership.role) === ws) room.touchedAt = Date.now();
+    });
     ws.on('message', async (raw) => {
       let message; try { message = JSON.parse(raw.toString('utf8')); } catch { return; }
       if (!membership) {
