@@ -312,6 +312,7 @@ class AndroidRuntimeGraph internal constructor(
     val identityStore = AndroidDeviceIdentityStore(application)
     val accountDeviceAlias: String = identityStore.defaultDeviceAlias()
     private val targetRuntimes = java.util.concurrent.ConcurrentHashMap<String, TargetRuntime>()
+    @Volatile private var tabletChatTargetId: String? = null
     private val connectionUses = TargetConnectionLeases<TargetRuntime> { instanceId ->
         val target = configStore.directory.first().computers.firstOrNull { it.instanceId == instanceId }
             ?: throw AppApiException(ApiError(ApiErrorCode.TARGET_NOT_FOUND, "Computer was unpaired"))
@@ -1141,7 +1142,9 @@ class AndroidRuntimeGraph internal constructor(
             } else control.sessions.stopLiveSync()
             return@withLock
         }
-        if (activeInstanceId != selected?.instanceId) activeTargetRuntime()?.sessions?.stopLiveSync()
+        if (activeInstanceId != selected?.instanceId && activeInstanceId != tabletChatTargetId) {
+            activeTargetRuntime()?.sessions?.stopLiveSync()
+        }
         activeInstanceId = selected?.instanceId
         val runtime = selected?.let(::ensureTargetRuntime)
         transport.switchTo(runtime?.transport)
@@ -1161,7 +1164,33 @@ class AndroidRuntimeGraph internal constructor(
                 scope.launch { refreshBackgroundSummary(it) }
             }
         }
-        if (foreground) runtime?.sessions?.startLiveSync() else targetRuntimes.values.forEach { it.sessions.stopLiveSync() }
+        if (foreground) {
+            runtime?.sessions?.startLiveSync()
+            tabletChatTargetId?.let { targetRuntimes[it]?.sessions?.startLiveSync() }
+        } else targetRuntimes.values.forEach { it.sessions.stopLiveSync() }
+    }
+
+    /** Retain the detail computer independently while the left pane switches. */
+    internal suspend fun retainTabletChatTarget(instanceId: String?) {
+        initialized.await()
+        configurationMutex.withLock {
+            val previous = tabletChatTargetId
+            val target = instanceId?.takeIf { id -> configStore.directory.first().computers.any { it.instanceId == id } }
+            connectionUses.setOwnerTargets("tablet-chat", setOfNotNull(target))
+            tabletChatTargetId = target
+            if (previous != null && previous != target && previous != activeInstanceId) {
+                targetRuntimes[previous]?.sessions?.stopLiveSync()
+            }
+            if (foreground) target?.let { targetRuntimes[it]?.sessions?.startLiveSync() }
+        }
+    }
+
+    internal fun retryComputerConnection(instanceId: String?) {
+        if (instanceId == null) return
+        scope.launch {
+            initialized.await()
+            targetRuntimes[instanceId]?.controller?.refresh()
+        }
     }
 
     private suspend fun establishPrimaryBinding() {
@@ -1247,7 +1276,7 @@ class AndroidRuntimeGraph internal constructor(
     }
 
     /** Owner UI navigation: verify against the fixed PC before changing any visible target. */
-    internal suspend fun navigateToSession(request: SessionNavigationRequest, open: (String) -> Unit) {
+    internal suspend fun navigateToSession(request: SessionNavigationRequest, open: suspend (String) -> Unit) {
         request.validated()
         val target = request.targetInstanceId
             ?: throw AppApiException(ApiError(ApiErrorCode.AMBIGUOUS_TARGET, "Choose the source computer"))

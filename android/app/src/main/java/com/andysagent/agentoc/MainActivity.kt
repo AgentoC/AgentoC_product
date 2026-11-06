@@ -453,9 +453,10 @@ class MainActivity : ComponentActivity() {
                 ) { }
                 var notificationPermissionRequested by remember { mutableStateOf(false) }
                 val shell: AppShellViewModel = viewModel(factory = AppShellViewModelFactory(app.runtime.sessions))
+                val tabletChatBinding: TabletChatBinding = viewModel()
                 val chat: ChatViewModel = viewModel(
                     factory = ChatViewModelFactory(
-                        app.runtime.sessions,
+                        tabletChatBinding.sessions,
                         passkeyProvider = { publicKeyJson -> nativePasskeyHelper.getAssertion(publicKeyJson) },
                         readRuntimeCache = { targetId, sessionId ->
                             app.runtime.configStore.readChatRuntimeCache(targetId, sessionId)?.let {
@@ -469,6 +470,12 @@ class MainActivity : ComponentActivity() {
                                 )) }
                         },
                     ),
+                )
+                // Left-pane menus always operate on the foreground computer,
+                // independently of the computer retained by the chat pane.
+                val listActions: ChatViewModel = viewModel(
+                    key = "foreground-list-actions",
+                    factory = ChatViewModelFactory(app.runtime.sessions),
                 )
                 val windowsBrokerController = remember(app) {
                     WindowsBrokerApprovalController(applicationContext, app)
@@ -487,12 +494,15 @@ class MainActivity : ComponentActivity() {
                     try {
                         app.runtime.navigateToSession(request) { sessionId ->
                             if (pendingSessionNavigation == request) {
-                                shell.onEvent(AppShellEvent.OpenChat)
-                                chat.onEvent(ChatEvent.SelectSession(sessionId))
-                                consumedNotificationKeys.add(request.identity())
-                                navigationIntakeKey?.let(consumedNotificationKeys::add)
-                                pendingSessionNavigation = null
-                                sessionNavigationError = null
+                                tabletChatBinding.bind(app.runtime.sessions.delegate.value, request.targetInstanceId, app.runtime.transport.delegate.value)
+                                if (pendingSessionNavigation == request) {
+                                    shell.onEvent(AppShellEvent.OpenChat)
+                                    chat.onEvent(ChatEvent.SelectSession(sessionId))
+                                    consumedNotificationKeys.add(request.identity())
+                                    navigationIntakeKey?.let(consumedNotificationKeys::add)
+                                    pendingSessionNavigation = null
+                                    sessionNavigationError = null
+                                }
                             }
                         }
                     } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
@@ -590,6 +600,14 @@ class MainActivity : ComponentActivity() {
                         onRuntimeCatalogChanged = {
                             chat.onEvent(ChatEvent.RefreshRuntimeCatalog)
                         },
+                    ),
+                )
+                val chatWebParity: WebParityViewModel = viewModel(
+                    key = "tablet-chat-parity",
+                    factory = WebParityViewModelFactory(
+                        transport = tabletChatBinding.transport,
+                        currentTargetIdProvider = { tabletChatBinding.targetId.value },
+                        onRuntimeCatalogChanged = { chat.onEvent(ChatEvent.RefreshRuntimeCatalog) },
                     ),
                 )
                 LaunchedEffect(webParity) {
@@ -857,6 +875,7 @@ class MainActivity : ComponentActivity() {
                 }
                 val shellState by shell.state.collectAsStateWithLifecycle()
                 val chatState by chat.state.collectAsStateWithLifecycle()
+                val listActionState by listActions.state.collectAsStateWithLifecycle()
                 val projectState by projects.state.collectAsStateWithLifecycle()
                 val computerState by computers.state.collectAsStateWithLifecycle()
                 val pairingOnboardingState by pairingOnboarding.state.collectAsStateWithLifecycle()
@@ -919,6 +938,21 @@ class MainActivity : ComponentActivity() {
                 val localStartup by localStartupFlow.collectAsStateWithLifecycle(initialValue = null)
                 val computerDirectory = localStartup?.first ?: com.andysagent.agentoc.core.datastore.ComputerDirectory()
                 val currentWorkbenchTargetId = temporaryControlTargetId ?: computerDirectory.activeTargetId
+                val tabletDualPane = windowSizeClass.widthSizeClass == androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Expanded &&
+                    androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp -
+                        com.andysagent.agentoc.core.designsystem.AgentocSizes.PhoneShell >= 320.dp
+                val foregroundChatRepository by app.runtime.sessions.delegate.collectAsStateWithLifecycle()
+                val foregroundChatTransport by app.runtime.transport.delegate.collectAsStateWithLifecycle()
+                val detailTargetId by tabletChatBinding.targetId.collectAsStateWithLifecycle()
+                LaunchedEffect(foregroundChatRepository, foregroundChatTransport, currentWorkbenchTargetId, tabletDualPane, shellState.chatOpen) {
+                    chat.preserveSelectedSessionOnRefresh = tabletDualPane && shellState.chatOpen
+                    if (!tabletDualPane || !shellState.chatOpen) {
+                        tabletChatBinding.bind(foregroundChatRepository, currentWorkbenchTargetId, foregroundChatTransport)
+                    }
+                }
+                LaunchedEffect(tabletDualPane, shellState.chatOpen, detailTargetId) {
+                    app.runtime.retainTabletChatTarget(detailTargetId.takeIf { tabletDualPane && shellState.chatOpen })
+                }
                 val pendingGoogleBinding = localStartup?.third
                 val accountSessionMetadata = localStartup?.second
                 val directoryLoaded = localStartup != null
@@ -932,6 +966,9 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(currentWorkbenchTargetId) {
                     webParity.onEvent(com.andysagent.agentoc.feature.workbench.WebParityEvent.TargetChanged(currentWorkbenchTargetId))
+                }
+                LaunchedEffect(detailTargetId) {
+                    chatWebParity.onEvent(com.andysagent.agentoc.feature.workbench.WebParityEvent.TargetChanged(detailTargetId))
                 }
                 LaunchedEffect(runtimeConnectionState, currentWorkbenchTargetId) {
                     if (runtimeConnectionState == RuntimeConnectionState.Connected) {
@@ -1091,6 +1128,8 @@ class MainActivity : ComponentActivity() {
                     agentOpen = shellState.agentOpen,
                     sessionSearchQuery = shellState.sessionSearchQuery,
                     connection = shellState.connection,
+                    chatConnection = chatState.connection,
+                    chatTargetId = detailTargetId,
                     runStatus = chatState.runStatus,
                     stopRequest = chatState.stopRequest,
                     currentAction = chatState.currentAction,
@@ -1137,7 +1176,7 @@ class MainActivity : ComponentActivity() {
                     isLoading = chatState.isLoading,
                     loadingOlder = chatState.loadingOlder,
                     hasOlder = chatState.hasOlder,
-                    error = chatState.error ?: projectState.error ?: computerState.error,
+                    error = chatState.error ?: listActionState.error ?: projectState.error ?: computerState.error,
                     computers = computerState.computers,
                     projects = projectState.projects,
                     sessions = projectState.sessions,
@@ -1190,9 +1229,10 @@ class MainActivity : ComponentActivity() {
                 )
                 // The session currently on screen never surfaces as a global
                 // attention popup; its approvals stay in the timeline card.
-                LaunchedEffect(state.chatOpen, state.sessionId) {
+                LaunchedEffect(state.chatOpen, state.sessionId, detailTargetId, currentWorkbenchTargetId, tabletDualPane) {
                     attention.onEvent(
-                        AttentionEvent.SetVisibleSession(if (state.chatOpen) state.sessionId else null),
+                        AttentionEvent.SetVisibleSession(if (state.chatOpen &&
+                            (!tabletDualPane || detailTargetId == currentWorkbenchTargetId)) state.sessionId else null),
                     )
                 }
                 if (pendingSessionNavigation?.targetInstanceId == null && pendingSessionNavigation != null || sessionNavigationError != null) {
@@ -1221,6 +1261,7 @@ class MainActivity : ComponentActivity() {
                     state = com.andysagent.agentoc.feature.workbench.restrictDemoWorkbenchState(state, accountsState.isRestrictedDemoAccount),
                     accountsViewModel = accounts,
                     webParityViewModel = webParity,
+                    chatWebParityViewModel = if (tabletDualPane) chatWebParity else webParity,
                     brokerEnrollmentController = windowsBrokerController,
                     pairingOnboardingState = pairingOnboardingState.takeIf { it.open },
                     onPairingOnboardingEvent = pairingOnboarding::onEvent,
@@ -1362,9 +1403,9 @@ class MainActivity : ComponentActivity() {
                     onEvent = eventHandler@{ event ->
                         when (event) {
                             WorkbenchEvent.OpenComputerSetup -> pendingPairingScanFromWelcome = false
-                            is WorkbenchEvent.SelectDestination -> shell.onEvent(AppShellEvent.SelectDestination(event.destination))
+                            is WorkbenchEvent.SelectDestination -> shell.onEvent(AppShellEvent.SelectDestination(event.destination, keepChat = tabletDualPane))
                             is WorkbenchEvent.OpenSettingsPage -> {
-                                shell.onEvent(AppShellEvent.OpenSettingsPage(event.page))
+                                shell.onEvent(AppShellEvent.OpenSettingsPage(event.page, keepChat = tabletDualPane))
                                 if (event.page == SettingsPage.ComputerManagement && accounts.state.value.hasVerifiedAccountSession) {
                                     runtimeScope.launch { runCatching { refreshAccountDirectory(app) } }
                                 }
@@ -1501,24 +1542,29 @@ class MainActivity : ComponentActivity() {
                                         }
                                 }
                             }
-                            WorkbenchEvent.OpenAgents -> shell.onEvent(AppShellEvent.OpenAgents)
+                            WorkbenchEvent.OpenAgents -> shell.onEvent(AppShellEvent.OpenAgents(keepChat = tabletDualPane))
                             WorkbenchEvent.CloseAgents -> shell.onEvent(AppShellEvent.CloseAgents)
                             is WorkbenchEvent.OpenNewSession -> {
-                                shell.onEvent(AppShellEvent.OpenChat)
-                                chat.onEvent(ChatEvent.CreateSession(event.projectId))
+                                runtimeScope.launch {
+                                    val foreground = app.runtime.sessions.delegate.value
+                                    if (foreground == null || foreground.runtimeTargetId != currentWorkbenchTargetId) return@launch
+                                    tabletChatBinding.bind(foreground, currentWorkbenchTargetId, app.runtime.transport.delegate.value)
+                                    shell.onEvent(AppShellEvent.OpenChat)
+                                    chat.onEvent(ChatEvent.CreateSession(event.projectId))
+                                }
                             }
                             WorkbenchEvent.CloseChat -> shell.onEvent(AppShellEvent.CloseChat)
                             is WorkbenchEvent.SessionSearchChanged -> shell.onEvent(AppShellEvent.SessionSearchChanged(event.value))
                             is WorkbenchEvent.OpenProjectSessions -> {
                                 projects.onEvent(ProjectsEvent.SelectProject(event.projectId))
-                                shell.onEvent(AppShellEvent.OpenProjectSessions(event.projectId))
+                                shell.onEvent(AppShellEvent.OpenProjectSessions(event.projectId, keepChat = tabletDualPane))
                             }
                             is WorkbenchEvent.OpenOtherDeviceProject -> {
                                 runtimeScope.launch {
                                     runCatching { app.runtime.selectTarget(event.targetId) }
                                         .onSuccess {
                                             projects.onEvent(ProjectsEvent.SelectProject(event.projectId))
-                                            shell.onEvent(AppShellEvent.OpenProjectSessions(event.projectId))
+                                            shell.onEvent(AppShellEvent.OpenProjectSessions(event.projectId, keepChat = tabletDualPane))
                                         }
                                         .onFailure { error ->
                                             googleSignInError = error.message ?: "Could not open the project."
@@ -1556,28 +1602,28 @@ class MainActivity : ComponentActivity() {
                             is WorkbenchEvent.RenameSession -> chat.onEvent(ChatEvent.RenameSession(event.name))
                             WorkbenchEvent.DeleteSession -> chat.onEvent(ChatEvent.DeleteSession)
                             is WorkbenchEvent.PrepareListedSessionAction -> if (event.targetId == currentWorkbenchTargetId) {
-                                chat.onEvent(ChatEvent.PrepareListedSessionAction(event.sessionId))
+                                listActions.onEvent(ChatEvent.PrepareListedSessionAction(event.sessionId))
                             }
                             is WorkbenchEvent.RenameListedSession -> if (event.targetId == currentWorkbenchTargetId) {
-                                chat.onEvent(ChatEvent.RenameListedSession(event.sessionId, event.name))
+                                listActions.onEvent(ChatEvent.RenameListedSession(event.sessionId, event.name))
                             }
                             is WorkbenchEvent.DeleteListedSession -> if (event.targetId == currentWorkbenchTargetId) {
-                                chat.onEvent(ChatEvent.DeleteListedSession(event.sessionId))
+                                listActions.onEvent(ChatEvent.DeleteListedSession(event.sessionId))
                             }
                             is WorkbenchEvent.PinListedSession -> if (event.targetId == currentWorkbenchTargetId) {
-                                chat.onEvent(ChatEvent.PinListedSession(event.sessionId, event.pinned))
+                                listActions.onEvent(ChatEvent.PinListedSession(event.sessionId, event.pinned))
                             }
                             is WorkbenchEvent.PrepareListedProjectAction -> if (event.targetId == currentWorkbenchTargetId) {
-                                chat.onEvent(ChatEvent.PrepareListedProjectAction(event.projectId))
+                                listActions.onEvent(ChatEvent.PrepareListedProjectAction(event.projectId))
                             }
                             is WorkbenchEvent.RenameListedProject -> if (event.targetId == currentWorkbenchTargetId) {
-                                chat.onEvent(ChatEvent.RenameListedProject(event.projectId, event.name))
+                                listActions.onEvent(ChatEvent.RenameListedProject(event.projectId, event.name))
                             }
                             is WorkbenchEvent.PinListedProject -> if (event.targetId == currentWorkbenchTargetId) {
-                                chat.onEvent(ChatEvent.PinListedProject(event.projectId, event.pinned))
+                                listActions.onEvent(ChatEvent.PinListedProject(event.projectId, event.pinned))
                             }
                             is WorkbenchEvent.DeleteListedProject -> if (event.targetId == currentWorkbenchTargetId) {
-                                chat.onEvent(ChatEvent.DeleteListedProject(event.projectId, event.deleteSessions))
+                                listActions.onEvent(ChatEvent.DeleteListedProject(event.projectId, event.deleteSessions))
                             }
                             WorkbenchEvent.CompactSession -> chat.onEvent(ChatEvent.CompactSession)
                             WorkbenchEvent.DropTools -> chat.onEvent(ChatEvent.DropTools)
@@ -1596,8 +1642,13 @@ class MainActivity : ComponentActivity() {
                             is WorkbenchEvent.Deny -> chat.onEvent(ChatEvent.Deny(event.approvalId))
                             is WorkbenchEvent.PlanAction -> chat.onEvent(ChatEvent.PlanAction(event.planId, event.action))
                     is WorkbenchEvent.SelectSession -> {
-                                shell.onEvent(AppShellEvent.OpenChat)
-                                chat.onEvent(ChatEvent.SelectSession(event.sessionId))
+                                runtimeScope.launch {
+                                    val foreground = app.runtime.sessions.delegate.value
+                                    if (foreground == null || foreground.runtimeTargetId != currentWorkbenchTargetId) return@launch
+                                    tabletChatBinding.bind(foreground, currentWorkbenchTargetId, app.runtime.transport.delegate.value)
+                                    shell.onEvent(AppShellEvent.OpenChat)
+                                    chat.onEvent(ChatEvent.SelectSession(event.sessionId))
+                                }
                             }
                             WorkbenchEvent.LoadOlderTimeline -> chat.onEvent(ChatEvent.LoadOlderTimeline)
                             is WorkbenchEvent.MarkSessionRead -> projects.onEvent(ProjectsEvent.MarkSessionRead(event.sessionId))
@@ -1610,9 +1661,13 @@ class MainActivity : ComponentActivity() {
                             }
                             WorkbenchEvent.Retry -> {
                                 app.runtime.retryActiveConnection()
-                                chat.onEvent(ChatEvent.Retry)
+                                if (!tabletDualPane || !shellState.chatOpen) chat.onEvent(ChatEvent.Retry)
                                 projects.onEvent(ProjectsEvent.Retry)
                                 computers.onEvent(ComputersEvent.Retry)
+                            }
+                            WorkbenchEvent.RetryChat -> {
+                                app.runtime.retryComputerConnection(detailTargetId)
+                                chat.onEvent(ChatEvent.Retry)
                             }
                             WorkbenchEvent.DismissError -> {
                                 // Workbench renders the first error from three
@@ -1622,6 +1677,7 @@ class MainActivity : ComponentActivity() {
                                 // a swipe) because a lower-priority source is
                                 // still reporting the same failure.
                                 chat.onEvent(ChatEvent.DismissError)
+                                listActions.onEvent(ChatEvent.DismissError)
                                 projects.onEvent(ProjectsEvent.DismissError)
                                 computers.onEvent(ComputersEvent.DismissError)
                             }
@@ -1649,8 +1705,11 @@ class MainActivity : ComponentActivity() {
                     attentionState = attentionState,
                     onAttentionEvent = attention::onEvent,
                     onAttentionOpenSession = { sessionId ->
-                        shell.onEvent(AppShellEvent.OpenChat)
-                        chat.onEvent(ChatEvent.SelectSession(sessionId))
+                        runtimeScope.launch {
+                            tabletChatBinding.bind(app.runtime.sessions.delegate.value, currentWorkbenchTargetId, app.runtime.transport.delegate.value)
+                            shell.onEvent(AppShellEvent.OpenChat)
+                            chat.onEvent(ChatEvent.SelectSession(sessionId))
+                        }
                     },
                 )
 

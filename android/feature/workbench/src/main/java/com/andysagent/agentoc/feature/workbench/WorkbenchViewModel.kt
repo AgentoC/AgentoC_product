@@ -77,6 +77,9 @@ data class WorkbenchUiState(
     val agentOpen: Boolean = false,
     val sessionSearchQuery: String = "",
     val connection: AgentConnectionStatus = AgentConnectionStatus.Disconnected,
+    /** In a split view the visible conversation can belong to another computer. */
+    val chatConnection: AgentConnectionStatus? = null,
+    val chatTargetId: String? = null,
     val runStatus: AgentRunStatus = AgentRunStatus.Idle,
     val currentAction: RunActionUiState? = null,
     val serverRunActivity: JsonObject? = null,
@@ -295,6 +298,7 @@ sealed interface WorkbenchEvent {
     /** Refreshes the Home catalog without replacing the cached surface with a spinner. */
     data object RefreshHome : WorkbenchEvent
     data object Retry : WorkbenchEvent
+    data object RetryChat : WorkbenchEvent
     data object DismissError : WorkbenchEvent
 }
 
@@ -318,17 +322,17 @@ data class AppShellUiState(
 )
 
 sealed interface AppShellEvent {
-    data class SelectDestination(val destination: AgentoDestination) : AppShellEvent
-    data class OpenSettingsPage(val page: SettingsPage) : AppShellEvent
+    data class SelectDestination(val destination: AgentoDestination, val keepChat: Boolean = false) : AppShellEvent
+    data class OpenSettingsPage(val page: SettingsPage, val keepChat: Boolean = false) : AppShellEvent
     data object CloseSettingsPage : AppShellEvent
     data class SelectTheme(val theme: AppTheme) : AppShellEvent
     data class SelectLanguage(val language: AppLanguage) : AppShellEvent
-    data object OpenAgents : AppShellEvent
+    data class OpenAgents(val keepChat: Boolean = false) : AppShellEvent
     data object CloseAgents : AppShellEvent
     data object OpenChat : AppShellEvent
     data object CloseChat : AppShellEvent
     data class SessionSearchChanged(val value: String) : AppShellEvent
-    data class OpenProjectSessions(val projectId: String) : AppShellEvent
+    data class OpenProjectSessions(val projectId: String, val keepChat: Boolean = false) : AppShellEvent
     data object CloseProjectSessions : AppShellEvent
 }
 
@@ -356,7 +360,7 @@ class AppShellViewModel(private val repository: SessionRepository) : ViewModel()
                     destination = event.destination,
                     settingsPage = SettingsPage.Overview,
                     settingsBackStack = emptyList(),
-                    chatOpen = false,
+                    chatOpen = chatOpen && event.keepChat,
                     agentOpen = false,
                     projectSessionsOpen = false,
                     browsingProjectId = null,
@@ -370,7 +374,7 @@ class AppShellViewModel(private val repository: SessionRepository) : ViewModel()
                     settingsBackStack = if (event.page == settingsPage) settingsBackStack
                         else if (event.page == SettingsPage.Overview) emptyList()
                         else settingsBackStack + settingsPage,
-                    chatOpen = false,
+                    chatOpen = chatOpen && event.keepChat,
                     agentOpen = false,
                     projectSessionsOpen = false,
                     browsingProjectId = null,
@@ -385,13 +389,13 @@ class AppShellViewModel(private val repository: SessionRepository) : ViewModel()
             is AppShellEvent.SelectLanguage -> updateState { copy(appLanguage = event.language) }
             AppShellEvent.OpenChat -> updateState { copy(chatOpen = true) }
             AppShellEvent.CloseChat -> updateState { copy(chatOpen = false) }
-            AppShellEvent.OpenAgents -> updateState { copy(agentOpen = true, chatOpen = false) }
+            is AppShellEvent.OpenAgents -> updateState { copy(agentOpen = true, chatOpen = chatOpen && event.keepChat) }
             AppShellEvent.CloseAgents -> updateState { copy(agentOpen = false) }
             is AppShellEvent.SessionSearchChanged -> updateState { copy(sessionSearchQuery = event.value) }
             is AppShellEvent.OpenProjectSessions -> updateState {
                 copy(
                     destination = AgentoDestination.Sessions,
-                    chatOpen = false,
+                    chatOpen = chatOpen && event.keepChat,
                     agentOpen = false,
                     projectSessionsOpen = true,
                     browsingProjectId = event.projectId,
@@ -661,6 +665,8 @@ class ChatViewModel(
     private var knownSessions: List<Session> = emptyList()
     private var knownSessionsRepository: SessionRepository? = null
     private var selectedRepository: SessionRepository? = null
+    /** An open tablet detail is dismissed only by an explicit navigation action. */
+    var preserveSelectedSessionOnRefresh: Boolean = false
     private val stopRequests = mutableMapOf<Pair<SessionRepository, String>, PendingStopRequest>()
     private val approvalResolutionLock = Any()
     private val sessionDrafts = mutableMapOf<Pair<SessionRepository, String>, String>()
@@ -762,6 +768,8 @@ class ChatViewModel(
                 }.forEach { stopRequests.remove(fixed to it.id) }
                 knownSessionsRepository = fixed
                 val currentId = mutableState.value.sessionId
+                if (preserveSelectedSessionOnRefresh && fixed === selectedRepository && currentId != null &&
+                    sessions.none { it.id == currentId }) return@collectLatest
                 val selected = sessions.firstOrNull { it.id == currentId }
                     ?: sessions.firstOrNull().takeUnless { newSessionRequested && fixed === selectedRepository }
                 if (selected != null && (selected.id != currentId || fixed !== selectedRepository)) selectSession(selected.id)

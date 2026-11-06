@@ -47,6 +47,50 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class WorkbenchViewModelTest {
     @Test
+    fun `tablet shell keeps its open chat while navigating the list until explicit back`() = runTest {
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        try {
+            val shell = AppShellViewModel(FakeSessionRepository())
+            shell.onEvent(AppShellEvent.OpenChat)
+            shell.onEvent(AppShellEvent.SelectDestination(com.andysagent.agentoc.core.navigation.AgentoDestination.Settings, keepChat = true))
+            assertTrue(shell.state.value.chatOpen)
+            shell.onEvent(AppShellEvent.OpenSettingsPage(SettingsPage.ComputerManagement, keepChat = true))
+            assertTrue(shell.state.value.chatOpen)
+            shell.onEvent(AppShellEvent.OpenProjectSessions("project-b", keepChat = true))
+            assertTrue(shell.state.value.chatOpen)
+            shell.onEvent(AppShellEvent.CloseChat)
+            assertFalse(shell.state.value.chatOpen)
+        } finally { Dispatchers.resetMain() }
+    }
+
+    @Test
+    fun `tablet conversation remains bound to its computer while foreground and refresh change`() = runTest {
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        try {
+            val a = FakeSessionRepository(sessions = listOf(Session("same", "Computer A")), targetId = "a")
+            val b = FakeSessionRepository(sessions = listOf(Session("same", "Computer B")), targetId = "b")
+            val foreground = com.andysagent.agentoc.core.domain.SwitchingSessionRepository(backgroundScope)
+            val detail = com.andysagent.agentoc.core.domain.SwitchingSessionRepository(backgroundScope)
+            foreground.switchTo(a); detail.switchTo(a)
+            val chat = ChatViewModel(detail)
+            chat.preserveSelectedSessionOnRefresh = true
+            advanceUntilIdle()
+            chat.onEvent(ChatEvent.SelectSession("same")); advanceUntilIdle()
+            foreground.switchTo(b); advanceUntilIdle()
+            assertEquals("Computer A", chat.state.value.sessionTitle)
+            val beforeA = a.sessionRefreshCalls; val beforeB = b.sessionRefreshCalls
+            chat.onEvent(ChatEvent.Retry); advanceUntilIdle()
+            assertTrue(a.sessionRefreshCalls > beforeA)
+            assertEquals(beforeB, b.sessionRefreshCalls)
+            a.setSessions(emptyList()); advanceUntilIdle()
+            assertEquals("same", chat.state.value.sessionId)
+            assertEquals("Computer A", chat.state.value.sessionTitle)
+            detail.switchTo(b); chat.onEvent(ChatEvent.SelectSession("same")); advanceUntilIdle()
+            assertEquals("Computer B", chat.state.value.sessionTitle)
+        } finally { Dispatchers.resetMain() }
+    }
+
+    @Test
     fun `stop waits for authoritative completion and suppresses repeated requests`() = runTest {
         Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
         try {
@@ -373,7 +417,7 @@ class WorkbenchViewModelTest {
             advanceUntilIdle()
 
             viewModel.onEvent(AppShellEvent.OpenProjectSessions("project-1"))
-            viewModel.onEvent(AppShellEvent.OpenAgents)
+            viewModel.onEvent(AppShellEvent.OpenAgents())
             viewModel.onEvent(AppShellEvent.OpenChat)
             assertTrue(viewModel.state.value.chatOpen)
             assertTrue(viewModel.state.value.agentOpen)

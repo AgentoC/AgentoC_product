@@ -71,6 +71,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.andysagent.agentoc.core.designsystem.AgentoBreathingDot
+import com.andysagent.agentoc.core.designsystem.AgentoButton
 import com.andysagent.agentoc.core.designsystem.AgentoColors
 import com.andysagent.agentoc.core.designsystem.AgentoDialog
 import com.andysagent.agentoc.core.designsystem.AgentoFrostedGlassBox
@@ -123,6 +124,7 @@ internal fun SessionsSurface(
     folderBrowser: ProjectFolderBrowser = UnavailableProjectFolderBrowser,
     backProgress: Float = 0f,
     modifier: Modifier = Modifier,
+    showProjectCreateAction: Boolean = false,
     presentation: ProjectSessionsPresentation = rememberProjectSessionsPresentation(state),
     motion: WorkbenchBackStackMotion = rememberWorkbenchBackStackMotion(state.projectSessionsOpen && presentation.detail != null, backProgress),
 ) {
@@ -178,6 +180,7 @@ internal fun SessionsSurface(
                     group = displayedChildGroup,
                     onEvent = onEvent,
                     onSessionLongClick = openListMenu,
+                    showCreateSession = showProjectCreateAction,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -421,6 +424,7 @@ private fun CompactProjectSessionsSurface(
     group: ProjectGroupUi,
     onEvent: (WorkbenchEvent) -> Unit,
     onSessionLongClick: (String) -> Unit,
+    showCreateSession: Boolean = false,
     modifier: Modifier,
 ) {
     val colors = LocalAgentocColors.current
@@ -460,6 +464,15 @@ private fun CompactProjectSessionsSurface(
                 onBack = { onEvent(WorkbenchEvent.CloseProjectSessions) },
                 onOpenAgents = { onEvent(WorkbenchEvent.OpenAgents) },
             )
+
+            if (showCreateSession) {
+                AgentoButton(
+                    text = stringResource(NavigationR.string.navigation_new_session),
+                    onClick = { onEvent(WorkbenchEvent.OpenNewSession(group.project.id)) },
+                    modifier = Modifier.padding(start = 28.dp, top = 8.dp, bottom = 4.dp)
+                        .testTag("tablet-project-new-session"),
+                )
+            }
 
             // Conversations are content, not a settings group. Keeping them
             // directly on the canvas prevents the project view from becoming

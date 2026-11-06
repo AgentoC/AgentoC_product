@@ -320,6 +320,7 @@ fun WorkbenchScreen(
     state: WorkbenchUiState,
     accountsViewModel: AccountsViewModel? = null,
     webParityViewModel: WebParityViewModel? = null,
+    chatWebParityViewModel: WebParityViewModel? = null,
     pairingOnboardingState: PairingOnboardingUiState? = null,
     onPairingOnboardingEvent: (PairingOnboardingEvent) -> Unit = {},
     onScanPairing: () -> Unit = {},
@@ -466,6 +467,11 @@ fun WorkbenchScreen(
     val parityEvent: (WebParityEvent) -> Unit = remember(webParityViewModel) {
         { event -> webParityViewModel?.onEvent(event) }
     }
+    val detailParityViewModel = chatWebParityViewModel ?: webParityViewModel
+    val detailParityState = detailParityViewModel?.state?.collectAsState()?.value ?: WebParityUiState()
+    val detailParityEvent: (WebParityEvent) -> Unit = remember(detailParityViewModel) {
+        { event -> detailParityViewModel?.onEvent(event) }
+    }
     val projectFolderBrowser = remember(webParityViewModel) {
         ProjectFolderBrowser(
             loadRoots = {
@@ -492,22 +498,22 @@ fun WorkbenchScreen(
     }
 
     // Screen-side interactive states for composer, attachments, queue, steer, decision, run sheet, agent & connector panels
-    var composerActionSheetOpen by remember { mutableStateOf(false) }
-    var agentPanelOpen by remember { mutableStateOf(false) }
-    var connectorPanelOpen by remember { mutableStateOf(false) }
-    var attachments by remember { mutableStateOf<List<ComposerAttachment>>(emptyList()) }
-    var editingTurnId by remember { mutableStateOf<String?>(null) }
-    var editingTurnText by remember { mutableStateOf<String?>(null) }
+    var composerActionSheetOpen by remember(state.chatTargetId, state.sessionId) { mutableStateOf(false) }
+    var agentPanelOpen by remember(state.chatTargetId, state.sessionId) { mutableStateOf(false) }
+    var connectorPanelOpen by remember(state.chatTargetId, state.sessionId) { mutableStateOf(false) }
+    var attachments by remember(state.chatTargetId, state.sessionId) { mutableStateOf<List<ComposerAttachment>>(emptyList()) }
+    var editingTurnId by remember(state.chatTargetId, state.sessionId) { mutableStateOf<String?>(null) }
+    var editingTurnText by remember(state.chatTargetId, state.sessionId) { mutableStateOf<String?>(null) }
     val queuedMessages = state.queuedMessages
-    var activeDecision by remember { mutableStateOf<DecisionQuestionUiState?>(null) }
-    var runSheetOpen by remember { mutableStateOf(false) }
-    var selectedDiffFile by remember { mutableStateOf<FileDiffDetail?>(null) }
-    var planMode by remember(state.sessionId, state.planMode) { mutableStateOf(state.planMode) }
+    var activeDecision by remember(state.chatTargetId, state.sessionId) { mutableStateOf<DecisionQuestionUiState?>(null) }
+    var runSheetOpen by remember(state.chatTargetId, state.sessionId) { mutableStateOf(false) }
+    var selectedDiffFile by remember(state.chatTargetId, state.sessionId) { mutableStateOf<FileDiffDetail?>(null) }
+    var planMode by remember(state.chatTargetId, state.sessionId, state.planMode) { mutableStateOf(state.planMode) }
 
-    LaunchedEffect(state.sessionId, state.activeDecision) {
+    LaunchedEffect(state.chatTargetId, state.sessionId, state.activeDecision) {
         activeDecision = state.activeDecision
     }
-    LaunchedEffect(state.sessionId, state.planMode) {
+    LaunchedEffect(state.chatTargetId, state.sessionId, state.planMode) {
         planMode = state.planMode
     }
 
@@ -522,12 +528,12 @@ fun WorkbenchScreen(
         }
     }
 
-    LaunchedEffect(state.sessionId) {
-        webParityViewModel?.setOpenSessionId(state.sessionId)
+    LaunchedEffect(detailParityViewModel, state.chatTargetId, state.sessionId) {
+        detailParityViewModel?.setOpenSessionId(state.sessionId)
     }
 
-    LaunchedEffect(state.sessionId, state.runtimeTool, state.runtimeModel, state.selectedEffort) {
-        webParityViewModel?.setTriggerRuntime(
+    LaunchedEffect(detailParityViewModel, state.chatTargetId, state.sessionId, state.runtimeTool, state.runtimeModel, state.selectedEffort) {
+        detailParityViewModel?.setTriggerRuntime(
             tool = state.runtimeTool,
             model = state.runtimeModel,
             effort = state.selectedEffort.orEmpty(),
@@ -556,7 +562,8 @@ fun WorkbenchScreen(
     var attentionRetained by remember { mutableStateOf(false) }
     val showAttention = attentionState?.takeIf { attention ->
         val active = attention.activeItem ?: return@takeIf false
-        !(state.chatOpen && state.sessionId == active.sessionId)
+        !(state.chatOpen && state.sessionId == active.sessionId &&
+            (state.chatTargetId == null || state.chatTargetId == state.activeRemoteTargetId))
     }
     Box(
         modifier = modifier
@@ -593,7 +600,14 @@ fun WorkbenchScreen(
                     browsingProjectId = null,
                 )
             } else {
-                navigationState.copy(agentOpen = false)
+                navigationState.copy(
+                    agentOpen = false,
+                    // Session IDs can coincide across computers; never mark a
+                    // foreground row selected for a detail owned by another PC.
+                    sessionId = navigationState.sessionId.takeIf {
+                        state.chatTargetId == null || state.chatTargetId == state.activeRemoteTargetId
+                    },
+                )
             }
             Row(Modifier.fillMaxSize()) {
                 PrimaryNavigationSurface(
@@ -614,9 +628,15 @@ fun WorkbenchScreen(
                 AgentoVerticalDivider(Modifier.padding(vertical = AgentocSpacing.Gutter))
                 TabletDetailSurface(
                     navigationState = navigationState,
-                    chatState = state,
+                    chatState = state.copy(
+                        connection = state.chatConnection ?: state.connection,
+                        activeRemoteTargetId = state.chatTargetId ?: state.activeRemoteTargetId,
+                        selectedProjectId = state.selectedProjectId.takeIf { state.chatTargetId == state.activeRemoteTargetId },
+                    ),
                     parityState = parityState,
                     onParityEvent = parityEvent,
+                    chatParityState = detailParityState,
+                    onChatParityEvent = detailParityEvent,
                     onEvent = stableOnEvent,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     backProgress = backProgress,
@@ -639,8 +659,8 @@ fun WorkbenchScreen(
                     selectedDiffFile = selectedDiffFile,
                     onSetSelectedDiffFile = { file ->
                         selectedDiffFile = file
-                        if (file == null) parityEvent(WebParityEvent.CloseFile)
-                        else parityEvent(WebParityEvent.OpenFile(file.path, state.sessionId))
+                        if (file == null) detailParityEvent(WebParityEvent.CloseFile)
+                        else detailParityEvent(WebParityEvent.OpenFile(file.path, state.sessionId))
                     },
                     planMode = planMode,
                     onSetPlanMode = { planMode = it },
@@ -671,8 +691,8 @@ fun WorkbenchScreen(
                 childContent = {
                     ChatSurface(
                         state = state,
-                        parityState = parityState,
-                        onParityEvent = parityEvent,
+                        parityState = detailParityState,
+                        onParityEvent = detailParityEvent,
                         onEvent = stableOnEvent,
                         modifier = Modifier.fillMaxSize(),
                         composerActionSheetOpen = composerActionSheetOpen,
@@ -694,8 +714,8 @@ fun WorkbenchScreen(
                         selectedDiffFile = selectedDiffFile,
                         onSetSelectedDiffFile = { file ->
                         selectedDiffFile = file
-                        if (file == null) parityEvent(WebParityEvent.CloseFile)
-                        else parityEvent(WebParityEvent.OpenFile(file.path, state.sessionId))
+                        if (file == null) detailParityEvent(WebParityEvent.CloseFile)
+                        else detailParityEvent(WebParityEvent.OpenFile(file.path, state.sessionId))
                     },
                         planMode = planMode,
                         onSetPlanMode = { planMode = it },
@@ -772,7 +792,7 @@ fun WorkbenchScreen(
                 WorkbenchBackLayer.SubscriptionInfo -> onCloseSubscriptionInfo()
                 WorkbenchBackLayer.GoogleSignInSuccess -> onGoogleSignInSuccessBack()
                 WorkbenchBackLayer.PairingSignIn -> onPairingOnboardingEvent(PairingOnboardingEvent.BackToWelcome)
-                WorkbenchBackLayer.DiffViewer -> { selectedDiffFile = null; parityEvent(WebParityEvent.CloseFile) }
+                WorkbenchBackLayer.DiffViewer -> { selectedDiffFile = null; detailParityEvent(WebParityEvent.CloseFile) }
                 WorkbenchBackLayer.RunSheet -> runSheetOpen = false
                 WorkbenchBackLayer.AgentPanel -> agentPanelOpen = false
                 WorkbenchBackLayer.ConnectorPanel -> connectorPanelOpen = false
@@ -859,6 +879,8 @@ private fun TabletDetailSurface(
     chatState: WorkbenchUiState,
     parityState: WebParityUiState,
     onParityEvent: (WebParityEvent) -> Unit,
+    chatParityState: WebParityUiState,
+    onChatParityEvent: (WebParityEvent) -> Unit,
     onEvent: (WorkbenchEvent) -> Unit,
     modifier: Modifier,
     backProgress: Float,
@@ -903,6 +925,7 @@ private fun TabletDetailSurface(
                         state = navigationState.copy(projectDialogOpen = false, chatOpen = false),
                         onEvent = onEvent,
                         windowSizeClass = AgentoWindowSizeClass.Compact,
+                        showProjectCreateAction = true,
                         backProgress = nestedBackProgress,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -913,9 +936,9 @@ private fun TabletDetailSurface(
         childContent = {
             ChatSurface(
                 state = chatState,
-                parityState = parityState,
-                onParityEvent = onParityEvent,
-                onEvent = onEvent,
+                parityState = chatParityState,
+                onParityEvent = onChatParityEvent,
+                onEvent = { event -> onEvent(if (event == WorkbenchEvent.Retry) WorkbenchEvent.RetryChat else event) },
                 modifier = Modifier.fillMaxSize(),
                 composerActionSheetOpen = composerActionSheetOpen,
                 onSetComposerActionSheetOpen = onSetComposerActionSheetOpen,
@@ -1961,8 +1984,10 @@ private fun ChatSurface(
         state.projects.find { it.id == state.selectedProjectId }?.name ?: state.projectName.takeIf { it.isNotBlank() }
     }
     val currentDeviceName = remember(state.computers, state.remoteTargets, state.activeRemoteTargetId) {
-        state.computers.firstOrNull { it.connected }?.name
-            ?: state.remoteTargets.firstOrNull { it.instanceId == state.activeRemoteTargetId }?.label
+        state.remoteTargets.firstOrNull { it.instanceId == state.activeRemoteTargetId }?.label
+            ?: state.computers.firstOrNull { it.id == state.activeRemoteTargetId }?.name
+            ?: state.activeRemoteTargetId
+            ?: state.computers.firstOrNull { it.connected }?.name
             ?: state.remoteTargets.firstOrNull()?.label
             ?: state.computers.firstOrNull()?.name
     }
