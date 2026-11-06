@@ -556,6 +556,27 @@ private fun preferTimelineItem(current: TimelineItem, incoming: TimelineItem): T
         return newer.copy(seq = minOf(current.seq, incoming.seq),
             beforeAssistantAtSameSeq = current.beforeAssistantAtSameSeq || incoming.beforeAssistantAtSameSeq)
     }
+    if (current is TimelineItem.Operation && incoming is TimelineItem.Operation) {
+        val terminal = setOf(TimelineOperationStatus.Completed, TimelineOperationStatus.Failed)
+        val newer = when {
+            current.status in terminal && incoming.status !in terminal -> current
+            incoming.status in terminal && current.status !in terminal -> incoming
+            current.status == TimelineOperationStatus.Pending && incoming.status == TimelineOperationStatus.InProgress -> incoming
+            else -> current
+        }
+        val other = if (newer === current) incoming else current
+        return newer.copy(
+            seq = minOf(current.seq, incoming.seq),
+            toolName = newer.toolName ?: other.toolName,
+            inputJson = newer.inputJson ?: other.inputJson,
+            outputJson = newer.outputJson ?: other.outputJson,
+            exitCode = newer.exitCode ?: other.exitCode,
+            durationMs = newer.durationMs ?: other.durationMs,
+            fileChanges = newer.fileChanges.ifEmpty { other.fileChanges },
+            runId = newer.runId ?: other.runId,
+            beforeAssistantAtSameSeq = current.beforeAssistantAtSameSeq || incoming.beforeAssistantAtSameSeq,
+        )
+    }
     if (current !is TimelineItem.Message || incoming !is TimelineItem.Message) return current
     val newer = when {
         current.completed && !incoming.completed -> current

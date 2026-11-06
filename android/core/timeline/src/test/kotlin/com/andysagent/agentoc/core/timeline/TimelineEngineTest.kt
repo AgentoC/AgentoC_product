@@ -11,6 +11,20 @@ import com.andysagent.agentoc.core.protocol.SessionEventDto
 import com.andysagent.agentoc.core.model.Message
 
 class TimelineEngineTest {
+    @Test fun toolResultOverridesStaleRunningProjectionRegardlessOfArrivalOrder() {
+        val running = TimelineItem.Operation("tool:1", 4, TimelineOperationKind.Tool, "Command", "Running",
+            TimelineOperationStatus.InProgress, requiresApproval = true, toolName = "Bash", inputJson = "input", runId = "run")
+        val denied = running.copy(seq = 7, detail = "Denied", status = TimelineOperationStatus.Failed,
+            requiresApproval = false, inputJson = null, outputJson = "denied")
+        for ((first, second) in listOf(running to denied, denied to running)) {
+            val result = mergeTimelineItems(listOf(first), listOf(second)).single() as TimelineItem.Operation
+            assertEquals(TimelineOperationStatus.Failed, result.status)
+            assertEquals(false, result.requiresApproval)
+            assertEquals("input", result.inputJson)
+            assertEquals("denied", result.outputJson)
+            assertEquals(4L, result.seq)
+        }
+    }
     @Test fun historyThinkingAnchorRemainsBeforeAssistantAtSamePosition() {
         val events = listOf(
             SessionEventDto(seq = 4, displaySeq = 3, blockStartSeq = 4, blockEndSeq = 4, type = "thinking_block", runId = "r",
