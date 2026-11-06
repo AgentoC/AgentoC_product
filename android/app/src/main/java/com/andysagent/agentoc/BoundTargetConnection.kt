@@ -105,7 +105,15 @@ internal class BoundTargetConnection(
     override val connectivityState get() = supervisor.state
 
     internal fun requestRecovery(reason: String) {
-        connectionDebugTrace(application, instanceId, "recovery-requested")
+        val category = when {
+            reason == "carrier-handoff" -> "handoff"
+            reason == "network-restored" -> "network-restored"
+            reason == "default-network-changed" -> "network-changed"
+            reason == "turn-health-probe-failed" -> "health-probe-failed"
+            reason == "turn-request-failed" || reason == "p2p-request-failed" -> "request-failed"
+            else -> "other"
+        }
+        connectionDebugTrace(application, instanceId, "recovery-$category")
         val routeChanged = reason == "network-restored" || reason == "default-network-changed"
         // Keep an existing retry (including a server-directed cooldown) for
         // duplicate carrier failures. A new route must wake it immediately.
@@ -211,7 +219,12 @@ internal class BoundTargetConnection(
         coalesceInFlight: Boolean = false): Unit = synchronized(refreshLock) {
         if (!started) return@synchronized
         if (coalesceInFlight && refreshJob?.isActive == true && !refreshPlanApplied) return@synchronized
-        connectionDebugTrace(application, instanceId, "bootstrap-refresh")
+        connectionDebugTrace(application, instanceId, when {
+            forceRenewal -> "bootstrap-renewal"
+            useCachedPlan -> "bootstrap-start"
+            coalesceInFlight -> "bootstrap-recovery"
+            else -> "bootstrap-refresh"
+        })
         cancelRefresh()
         refreshPlanApplied = false
         val generation = refreshGeneration.get()
@@ -331,6 +344,10 @@ internal class BoundTargetConnection(
 
     /** Caller holds refreshLock and has checked the current generation. */
     private fun discardPlan(reason: String = "bootstrap-refresh-failed") {
+        connectionDebugTrace(application, instanceId, when (reason) {
+            "retained-carrier-window-ended" -> "carrier-retention-expired"
+            else -> "carrier-plan-discarded"
+        })
         plan?.turnConnectionId?.let { releaseTurnConnection(it, reason) }
         plan = null
         onEndpointResolved("")
