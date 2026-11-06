@@ -104,6 +104,19 @@ for (const mode of ['full-auto', 'recommended', 'conservative-auto']) {
     assert.equal(sent[5].response?.response?.behavior, 'deny');
   }
 }
+for (const mode of ['recommended', 'full-auto']) {
+  const { run, state, sent, proc } = await fixture(mode);
+  state.turnActive = true;
+  const target = path.join(workspace, 'approval-write-chain.txt');
+  const command = `Set-Content -LiteralPath '${target}' -Value PASS && Get-Content -LiteralPath '${target}' 2>&1 | Out-String`;
+  const request = { type: 'control_request', request_id: `ps7-success-chain-${mode}`, request: {
+    subtype: 'can_use_tool', tool_name: 'PowerShell', input: { command },
+  } };
+  await trackClaudeBidiApprovalRequest(run.id, state, request, proc);
+  assert.equal(sent[0]?.response?.response?.behavior, 'allow', `${mode} should auto-approve a safe PowerShell 7 workspace write/read chain`);
+  const current = await getRun(run.id);
+  assert.ok(!current.appServerPendingApprovals?.some((entry) => entry.state !== 'responded'), `${mode} should not leave the safe chain waiting`);
+}
 let preflightReady = true;
 const preflightCommands = [];
 const preflightServer = createServer((req, res) => {
