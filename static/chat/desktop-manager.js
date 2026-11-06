@@ -132,8 +132,8 @@
     if (updateButton) updateButton.hidden = !state.updateAvailable;
     if (checkButton) checkButton.disabled = state.status === "checking";
     if (updateStatus) {
-      const key = state.status === "checking" ? "checking" : state.status === "error" ? "error" : state.updateAvailable ? "available" : "current";
-      const fallback = { checking: "Checking for updates…", error: "Could not check for updates. Please try again.", available: "A new version is available.", current: "You are up to date." };
+      const key = state.status === "checking" ? "checking" : state.status === "error" ? "error" : state.buildChanged ? "buildChanged" : state.updateAvailable ? "available" : state.buildIdentityUnavailable ? "buildUnknown" : "current";
+      const fallback = { checking: "Checking for updates…", error: "Could not check for updates. Please try again.", available: "A new version is available.", buildChanged: "The published build differs from this installation.", buildUnknown: "The published build could not be compared with this installation.", current: "You are up to date." };
       updateStatus.textContent = translate(`desktopManager.updateStatus.${key}`, fallback[key]);
     }
   }

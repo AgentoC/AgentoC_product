@@ -12,6 +12,17 @@ function compare(a, b) {
   for (let i = 0; i < 4; i++) if (a[i] !== b[i]) return a[i] > b[i] ? 1 : -1;
   return 0;
 }
+function sourceCommit(value) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(normalized) ? normalized : "";
+}
+function releaseBuildInfo(release, asset) {
+  const matches = [...String(release?.body || "").matchAll(/<!--\s*agentoc-build:(\d+\.\d+\.\d+):([a-f0-9]{40}|[a-f0-9]{64}):sha256:([a-f0-9]{64})\s*-->/g)];
+  if (matches.length !== 1 || asset?.digest !== `sha256:${matches[0][3]}`) return null;
+  const match = matches[0];
+  const build = match && version(match[1]);
+  return build ? { build, commit: match[2] } : null;
+}
 function windowsAsset(asset) {
   if (!asset || typeof asset.name !== "string") return false;
   if (!/^(?:Ragent-[0-9]+(?:\.[0-9]+){2,3}-windows-x64-setup\.exe|(?:Ragent|AgentoC)-[0-9]+(?:\.[0-9]+){2,3}-windows-x64\.msi)$/i.test(asset.name)) return false;
@@ -28,7 +39,7 @@ function windowsAssetUrl(value) {
   } catch { return false; }
 }
 
-async function check(currentVersion, fetchImpl = fetch) {
+async function check(currentVersion, fetchImpl = fetch, { currentCommit = "", currentBuild = "" } = {}) {
   const installed = version(currentVersion);
   if (!installed) throw new Error("invalid-current-version");
   let newest = null;
@@ -41,12 +52,26 @@ async function check(currentVersion, fetchImpl = fetch) {
       if (!release || release.draft || release.prerelease) continue;
       const parsed = version(release.tag_name);
       const asset = Array.isArray(release.assets) && release.assets.find(windowsAsset);
-      if (parsed && asset && (!newest || compare(parsed, newest.parsed) > 0)) newest = { parsed, tag: release.tag_name, url: asset.browser_download_url };
+      if (parsed && asset && (!newest || compare(parsed, newest.parsed) > 0)) newest = { parsed, tag: release.tag_name, url: asset.browser_download_url, buildInfo: releaseBuildInfo(release, asset) };
     }
     if (releases.length < 100) break;
     if (page === 10) throw new Error("release-list-too-long");
   }
   if (!newest) throw new Error("no-windows-release");
-  return { currentVersion, latestVersion: newest.tag, updateAvailable: compare(newest.parsed, installed) > 0, downloadUrl: newest.url };
+  const versionOrder = compare(newest.parsed, installed);
+  const installedCommit = sourceCommit(currentCommit);
+  const installedBuild = version(currentBuild);
+  const buildOrder = installedBuild && newest.buildInfo ? compare(newest.buildInfo.build, installedBuild) : null;
+  // Release assets can be replaced while the public version stays 0.0.1.
+  // Prefer the internal MSI version for ordering; legacy installs can still
+  // report a different source identity without claiming which one is newer.
+  const buildChanged = versionOrder === 0 && (buildOrder !== null
+    ? buildOrder > 0 || (buildOrder === 0 && Boolean(installedCommit && installedCommit !== newest.buildInfo.commit))
+    : Boolean(installedCommit && newest.buildInfo && installedCommit !== newest.buildInfo.commit));
+  const buildIdentityUnavailable = versionOrder === 0 && (!newest.buildInfo ||
+    ((buildOrder === null || buildOrder === 0) && !installedCommit));
+  return { currentVersion, latestVersion: newest.tag, updateAvailable: versionOrder > 0 || buildChanged,
+    downloadUrl: newest.url, ...(buildChanged ? { buildChanged: true } : {}),
+    ...(buildIdentityUnavailable ? { buildIdentityUnavailable: true } : {}) };
 }
-module.exports = { check, version, compare, windowsAsset, windowsAssetUrl };
+module.exports = { check, version, compare, windowsAsset, windowsAssetUrl, sourceCommit, releaseBuildInfo };

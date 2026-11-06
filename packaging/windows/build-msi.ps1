@@ -131,7 +131,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Windows safe deletion helper could not be built.' }
     Assert-BuildFreeSpace 'after runtime staging'
     # Keep the host's displayed build version aligned with the actual package.
-    & (Join-Path $scriptRoot 'write-package-version.ps1') -PayloadRoot $payloadRoot -Version $Version
+    & (Join-Path $scriptRoot 'write-package-version.ps1') -PayloadRoot $payloadRoot -Version $Version -BuildVersion $MsiProductVersion
     # Build Electron in a temporary, locked install so npm never mutates the
     # developer checkout. The staged tree contains only Electron's runtime and
     # the three desktop shell files, not npm or its build-only dependencies.
@@ -433,6 +433,13 @@ try {
         }finally{
             foreach($com in @($costRecord,$costView,$modeSequenceRecord,$modeSequenceView,$modeRecord,$modeView,$versionRecord,$versionView,$propertyRecord,$propertyView,$sequenceRecord,$sequenceView,$upgradeRecord,$upgradeView,$tableRecord,$tablesView,$database,$installer)){if($com -and [Runtime.InteropServices.Marshal]::IsComObject($com)){[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($com)}}
         }
+    }
+    if ($CommittedTree) {
+        $sourceCommit = (Get-Content -LiteralPath (Join-Path $payloadRoot '.agentoc-source-commit') -Raw).Trim()
+        if ($sourceCommit -cne $frozenRevision -or $sourceCommit -cnotmatch '^(?:[a-f0-9]{40}|[a-f0-9]{64})$') { throw 'MSI_RELEASE_SOURCE_IDENTITY_INVALID' }
+        $record = [ordered]@{ schemaVersion = 1; publicVersion = $displayVersion; buildVersion = $MsiProductVersion;
+            sourceCommit = $sourceCommit; msiSha256 = (Get-FileHash -LiteralPath $OutputPath -Algorithm SHA256).Hash.ToLowerInvariant() }
+        [IO.File]::WriteAllText(($OutputPath + '.build.json'), (($record | ConvertTo-Json -Compress) + "`n"), [Text.UTF8Encoding]::new($false))
     }
 } finally {
     $stagingFull = [IO.Path]::GetFullPath($staging)

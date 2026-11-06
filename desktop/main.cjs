@@ -29,7 +29,9 @@ async function refreshUpdate() {
     let currentVersion;
     try {
       currentVersion = (await fs.readFile(path.resolve(app.getAppPath(), "../../../.agentoc-package-version"), "utf8")).trim();
-      updateState = { status: "ready", ...(await updateCheck.check(currentVersion)) };
+      const currentCommit = await fs.readFile(path.resolve(app.getAppPath(), "../../../.agentoc-source-commit"), "utf8").catch(() => "");
+      const currentBuild = await fs.readFile(path.resolve(app.getAppPath(), "../../../.agentoc-package-build"), "utf8").catch(() => "");
+      updateState = { status: "ready", ...(await updateCheck.check(currentVersion, undefined, { currentCommit, currentBuild })) };
     } catch {
       updateState = { status: "error", ...(currentVersion ? { currentVersion } : {}) };
     }
