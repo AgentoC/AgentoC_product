@@ -63,7 +63,10 @@ func childEnvironment(env []string, base string) ([]string, error) {
 		return nil, errors.New("session identity mismatch")
 	}
 	u, _ := url.Parse(base)
-	result = append(result, "AGENTOC_CHAT_BASE_URL="+base, "CHAT_PORT="+u.Port())
+	// This fixed read-only helper runs inside the managed Windows service
+	// environment, whose profile legitimately lives under ProgramData.
+	// Set the mode ourselves rather than trusting an inherited value.
+	result = append(result, "AGENTOC_WINDOWS_SERVICE_MODE=1", "AGENTOC_CHAT_BASE_URL="+base, "CHAT_PORT="+u.Port())
 	return result, nil
 }
 

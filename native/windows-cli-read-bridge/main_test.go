@@ -89,7 +89,7 @@ func TestExecutableUsesInstalledCliWithoutNodeStartupHooks(t *testing.T) {
 func TestChildEnvironmentStripsNodeHooksAndBindsSession(t *testing.T) {
 	input := []string{"SYSTEMROOT=C:\\Windows", "AGENTOC_SESSION_ID=s", "AGENTOC_SESSION_CONTROL_TOKEN=token",
 		"AGENTOC_SESSION_CONTROL_RUN_ID=r", "AGENTOC_SESSION_CONTROL_SESSION_ID=s", "AGENTOC_SESSION_CONTROL_TURN_ID=t",
-		"NODE_OPTIONS=--require evil.js", "NODE_PATH=attacker", "HTTP_PROXY=http://attacker", "AGENTOC_CHAT_BASE_URL=http://attacker"}
+		"NODE_OPTIONS=--require evil.js", "NODE_PATH=attacker", "HTTP_PROXY=http://attacker", "AGENTOC_CHAT_BASE_URL=http://attacker", "AGENTOC_WINDOWS_SERVICE_MODE=0"}
 	result, err := childEnvironment(input, "http://127.0.0.1:7690")
 	if err != nil {
 		t.Fatal(err)
@@ -102,6 +102,9 @@ func TestChildEnvironmentStripsNodeHooksAndBindsSession(t *testing.T) {
 	}
 	if !strings.Contains(joined, "AGENTOC_CHAT_BASE_URL=http://127.0.0.1:7690") {
 		t.Fatal("trusted endpoint missing")
+	}
+	if !strings.Contains(joined, "AGENTOC_WINDOWS_SERVICE_MODE=1") || strings.Contains(joined, "AGENTOC_WINDOWS_SERVICE_MODE=0") {
+		t.Fatal("managed service mode must be fixed by the helper")
 	}
 	if _, err := childEnvironment(append(input, "agentoc_session_id=other"), "http://127.0.0.1:7690"); err == nil {
 		t.Fatal("duplicate session identity accepted")

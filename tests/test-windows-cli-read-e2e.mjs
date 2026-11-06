@@ -4,8 +4,12 @@ import { createServer } from 'node:http';
 import { copyFile, cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { resolveWindowsPerUserPaths } from '../lib/windows-runtime-paths.mjs';
 
 if (process.platform !== 'win32') { console.log('windows-cli-read-e2e: skipped (requires Windows)'); process.exit(0); }
+const serviceProfile = { LOCALAPPDATA: 'C:\\ProgramData\\AgentoC-test-profile\\Local' };
+assert.throws(() => resolveWindowsPerUserPaths({ env: serviceProfile }), /LOCALAPPDATA must not be under Windows ProgramData/);
+assert.doesNotThrow(() => resolveWindowsPerUserPaths({ env: { ...serviceProfile, AGENTOC_WINDOWS_SERVICE_MODE: '1' } }));
 const payload = process.env.AGENTOC_TEST_INSTALLED_PAYLOAD;
 const helper = process.env.AGENTOC_TEST_CLI_READ_BINARY;
 if (!path.isAbsolute(payload || '') || !path.isAbsolute(helper || '')) throw new Error('installed payload and helper paths required');
@@ -40,6 +44,7 @@ try {
   const child = spawn(exe, ['trigger-list', base, '--json'], { windowsHide: true, env: { ...process.env,
     AGENTOC_SESSION_ID: 'session', AGENTOC_SESSION_CONTROL_TOKEN: 'expired', AGENTOC_SESSION_CONTROL_RENEWAL_TOKEN: 'renewal',
     AGENTOC_SESSION_CONTROL_RUN_ID: 'run', AGENTOC_SESSION_CONTROL_SESSION_ID: 'session', AGENTOC_SESSION_CONTROL_TURN_ID: 'turn',
+    LOCALAPPDATA: path.join(root, 'service-profile', 'Local'), AGENTOC_WINDOWS_SERVICE_MODE: '0',
     NODE_OPTIONS: '--require nonexistent-malicious-module', AGENTOC_CHAT_BASE_URL: 'http://attacker.invalid', HTTP_PROXY: 'http://attacker.invalid',
   } });
   let stdout = '', stderr = '';
