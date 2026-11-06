@@ -3,6 +3,7 @@ package com.andysagent.agentoc.core.network
 import com.andysagent.agentoc.core.model.RuntimeConnectionState
 import com.andysagent.agentoc.core.p2p.P2PHttpRequest
 import com.andysagent.agentoc.core.p2p.P2PHttpResponse
+import com.andysagent.agentoc.core.p2p.P2PRequestTimeoutException
 import com.andysagent.agentoc.core.p2p.P2PSession
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.CompletableDeferred
@@ -20,6 +21,34 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class OkHttpAgentoCTransportTest {
+    @Test fun approvalTimeoutDoesNotTearDownAnOpenCarrierOrReplayTheDecision() = runBlocking {
+        for (turn in listOf(true)) {
+            var calls = 0
+            var recoveries = 0
+            val peer = object : P2PSession {
+                override val isOpen = true
+                override suspend fun connect() = Result.success(Unit)
+                override fun close() = Unit
+                override suspend fun request(request: P2PHttpRequest): Result<P2PHttpResponse> {
+                    calls++
+                    return if (calls == 1) Result.failure(P2PRequestTimeoutException())
+                    else Result.success(P2PHttpResponse(id = request.id, status = 200))
+                }
+            }
+            val transport = OkHttpAgentoCTransport({ "" }, { "rda_fixture" }, requireVerifiedCarrier = true,
+                onCarrierUnavailable = { recoveries++ })
+            try {
+                if (turn) transport.setTurnSession(peer) else transport.setP2PSession(peer)
+                transport.updateCarrierConnectionState(RuntimeConnectionState.Connected)
+                assertFailsWith<ApiException> { transport.execute(ApiRequest("POST", "/api/runs/run/approvals/approval", "{}")) }
+                assertEquals(1, calls)
+                assertEquals(0, recoveries)
+                assertEquals(RuntimeConnectionState.Connected, transport.connectionState.value)
+                assertEquals(200, transport.execute(ApiRequest("GET", "/api/auth/me")).statusCode)
+            } finally { transport.close() }
+        }
+    }
+
     @Test fun carrierHandoffDrainsInFlightRequestsWithoutReplayingWrites() = runBlocking {
         val entered = CompletableDeferred<Unit>()
         val finish = CompletableDeferred<Unit>()

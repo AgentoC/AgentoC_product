@@ -29,6 +29,9 @@ import kotlin.coroutines.resume
 
 // ── Public abstraction (injectable / fake-able) ───────────────────────
 
+/** The individual request expired; this alone does not prove the carrier is dead. */
+class P2PRequestTimeoutException : IllegalStateException("P2P request timed out")
+
 /** A P2P transport session that can tunnel HTTP requests over a DataChannel. */
 interface P2PSession {
     val isOpen: Boolean
@@ -654,7 +657,7 @@ class WebRTCDataChannelTransport(
                         sendJob.cancel()
                     }
                 }
-            } ?: Result.failure(IllegalStateException("P2P request timed out"))
+            } ?: Result.failure(P2PRequestTimeoutException())
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

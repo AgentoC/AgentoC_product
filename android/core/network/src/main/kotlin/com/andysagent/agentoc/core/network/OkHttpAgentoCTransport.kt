@@ -6,6 +6,7 @@ import com.andysagent.agentoc.core.protocol.SessionEventDto
 import com.andysagent.agentoc.core.protocol.WebSocketPushDto
 import com.andysagent.agentoc.core.p2p.P2PHttpRequest
 import com.andysagent.agentoc.core.p2p.P2PProtocol
+import com.andysagent.agentoc.core.p2p.P2PRequestTimeoutException
 import com.andysagent.agentoc.core.p2p.P2PSession
 import com.andysagent.agentoc.core.model.RuntimeConnectionState
 import kotlinx.coroutines.CoroutineScope
@@ -293,7 +294,9 @@ class OkHttpAgentoCTransport(
         )).getOrElse { failure ->
             if (failure is kotlinx.coroutines.CancellationException) throw failure
             recordCarrierFailure("turn", failure, session.isOpen)
-            reportUnavailableCarrier(session)
+            // A slow business response does not by itself prove that the TURN
+            // carrier is dead. Its independent health watchdog checks that.
+            if (failure !is P2PRequestTimeoutException || !session.isOpen) reportUnavailableCarrier(session)
             throw ApiException(0, "TURN_NETWORK_ERROR", "TURN request failed", retryable = true)
         }
         val remoteError = result.error
