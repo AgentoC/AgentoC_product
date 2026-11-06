@@ -188,7 +188,12 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
     return { complete: false, actions: [], reason: 'PowerShell parser unavailable', error: error.message };
   }
   const expressions = Array.isArray(ast.expressions) ? ast.expressions : [];
-  if (ast.errors.length || ast.dynamicNodes.length || (!ast.commands.length && !expressions.length)) {
+  // A conditional can be classified without evaluating it if every branch
+  // consists solely of independently verified reads. Other dynamic nodes
+  // (variables, assignments, script blocks, member invocation, loops, etc.)
+  // remain unsupported, and any write in any branch is rejected below.
+  const conditional = ast.dynamicNodes.includes('IfStatementAst');
+  if (ast.errors.length || ast.dynamicNodes.some(node => node !== 'IfStatementAst') || (!ast.commands.length && !expressions.length)) {
     return { complete: false, actions: [], reason: ast.errors.length ? 'PowerShell syntax error' : 'dynamic or unsupported PowerShell syntax' };
   }
   const actions = [];
@@ -408,6 +413,9 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
     } catch (error) {
       if (error?.code !== 'ENOENT') return { complete: false, actions, reason: 'file target cannot be inspected' };
     }
+  }
+  if (conditional && actions.some(action => action.kind !== 'read')) {
+    return { complete: false, actions, reason: 'conditional file changes require review' };
   }
   return { complete: true, actions, parserVersion: ast.parserVersion, psVersion: ast.psVersion };
 }

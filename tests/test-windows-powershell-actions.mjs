@@ -287,6 +287,15 @@ for (const command of [
   'Get-ChildItem . | Select-Object -Property Name,Length | ft -AutoSize',
   'Get-ChildItem . | Sort-Object Name,Length | Format-Table Name,Length',
 ]) assert.equal((await inspect(command)).decision, 'allow', command);
+const conditionalRead = `if (Test-Path -LiteralPath '${workspace.replaceAll("'", "''")}\\build') { Get-ChildItem -LiteralPath '${workspace.replaceAll("'", "''")}\\build' -Force | Select-Object Mode,LastWriteTime,Length,Name | Format-Table -AutoSize | Out-String } else { 'TARGET_MISSING' }`;
+assert.equal((await inspect(conditionalRead)).decision, 'allow', 'read-only existence check and listing should not require approval');
+for (const command of [
+  "if (Test-Path readme.txt) { Remove-Item readme.txt } else { 'missing' }",
+  "if (Test-Path readme.txt) { Set-Content output.txt changed }",
+  "if (Test-Path readme.txt) { 'text' > output.txt }",
+  "if ($env:DO_DELETE) { Get-Content readme.txt }",
+  "if (Test-Path readme.txt) { Get-Content ..\\protected\\secret }",
+]) assert.equal((await inspect(command)).decision, 'review', command);
 for (const command of [
   'Get-ChildItem . | Select-Object Name,$env:TEMP | Format-Table -AutoSize',
   'Get-ChildItem . | Select-Object @{Name="x";Expression={Remove-Item readme.txt}}',
