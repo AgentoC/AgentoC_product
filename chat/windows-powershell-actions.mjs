@@ -228,7 +228,31 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
     if (reason) return { complete: false, actions, reason };
     if (!expression.redirections) actions.push({ kind: 'read', program: 'literal', target: null });
   }
+  // Only expand static lists in explicit read-path positions. Other cmdlets
+  // can bind arrays to values, destinations, or pipeline input differently;
+  // treating those as independent operations would misrepresent execution.
+  const commands = [];
   for (const entry of ast.commands) {
+    const lists = entry.elements.map((element, index) => element.kind === 'literal_list' ? index : -1).filter(index => index >= 0);
+    if (!lists.length) { commands.push(entry); continue; }
+    const index = lists[0];
+    const program = BUILTIN_ALIASES.get(String(entry.name || '').toLowerCase()) || String(entry.name || '').toLowerCase();
+    const previous = entry.elements[index - 1];
+    const pathPosition = index === 1 || (previous?.kind === 'parameter' && !previous.argumentType &&
+      ['path', 'literalpath'].includes(String(previous.name || '').toLowerCase()));
+    const values = entry.elements[index].values;
+    if (lists.length !== 1 || !['get-content', 'get-item', 'get-filehash', 'test-path', 'resolve-path'].includes(program) ||
+        entry.pipelineInput !== false || !pathPosition || !Array.isArray(values) || !values.length || values.length > 128 ||
+        values.some(value => typeof value !== 'string' || !value)) {
+      return { complete: false, actions, reason: 'unsupported or ambiguous literal list' };
+    }
+    for (const value of values) {
+      const elements = entry.elements.slice();
+      elements[index] = { kind: 'literal', value };
+      commands.push({ ...entry, elements });
+    }
+  }
+  for (const entry of commands) {
     const rawProgram = String(entry.name || '').toLowerCase();
     const program = BUILTIN_ALIASES.get(rawProgram) || rawProgram;
     if (!program || entry.invocation !== 'Unknown' || entry.elements.some((x) => x.kind === 'dynamic')) {

@@ -71,6 +71,12 @@ $commands = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Lang
       @{ kind = 'parameter'; name = $_.ParameterName; value = $value; argumentType = $argumentType }
     } elseif ($_ -is [System.Management.Automation.Language.StringConstantExpressionAst] -or $_ -is [System.Management.Automation.Language.ConstantExpressionAst]) {
       @{ kind = 'literal'; value = [string]$_.Value }
+    } elseif ($_ -is [System.Management.Automation.Language.ArrayLiteralAst] -and
+        @($_.Elements).Count -gt 0 -and @($_.Elements | Where-Object {
+          $_ -isnot [System.Management.Automation.Language.StringConstantExpressionAst] -and
+          $_ -isnot [System.Management.Automation.Language.ConstantExpressionAst]
+        }).Count -eq 0) {
+      @{ kind = 'literal_list'; values = @($_.Elements | ForEach-Object { [string]$_.Value }) }
     } else {
       @{ kind = 'dynamic'; node = $_.GetType().Name }
     }

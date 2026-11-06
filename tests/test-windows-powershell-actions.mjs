@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, link, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, link, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
@@ -61,6 +61,13 @@ assert.equal(decideWindowsPowerShellActions(await analyzeWindowsFileChanges([{ p
 let result = await inspect('Get-Content readme.txt | Select-Object -First 1');
 assert.equal(result.decision, 'allow');
 assert.equal(result.actions.length, 2);
+result = await inspect('Get-Content -LiteralPath readme.txt,folder');
+assert.equal(result.decision, 'allow');
+assert.equal(result.actions.length, 2);
+assert.equal((await inspect('Get-Content readme.txt,..\\protected\\secret')).decision, 'review');
+assert.equal((await inspect('Get-Content readme.txt,$env:TEMP')).decision, 'review');
+assert.equal((await inspect('Remove-Item readme.txt,folder')).decision, 'review');
+assert.equal((await inspect('Get-ChildItem | Get-Content readme.txt,folder')).decision, 'review');
 assert.equal((await inspect('Get-Process -Name explorer | Select-Object -First 1')).decision, 'allow');
 assert.equal((await inspect('Get-Command')).decision, 'allow');
 assert.equal((await inspect('Get-Command -ListImported')).decision, 'allow');
@@ -341,4 +348,5 @@ if (process.env.AGENTOC_TEST_PWSH) {
     assert.equal((await readFile(utf8Target, 'utf8')).replace(/^\uFEFF/, ''), '中文');
   }
 }
+await rm(root, { recursive: true, force: true });
 console.log('windows-powershell-actions: native AST and file policy checks passed');

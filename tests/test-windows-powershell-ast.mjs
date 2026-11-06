@@ -16,6 +16,10 @@ assert.deepEqual(plain.commands[0].elements.map((x) => x.kind), ['literal', 'par
 assert.equal(plain.commands[0].elements[2].value, 'a b.txt');
 const unicode = await parseWindowsPowerShellAst('Get-Content "中文 文档.md"');
 assert.equal(unicode.commands[0].elements[1].value, '中文 文档.md');
+const literalPaths = await parseWindowsPowerShellAst('Get-Content -LiteralPath first.txt,second.txt');
+assert.deepEqual(literalPaths.commands[0].elements[2], { kind: 'literal_list', values: ['first.txt', 'second.txt'] });
+assert.equal(literalPaths.dynamicNodes.length, 0);
+assert.ok((await parseWindowsPowerShellAst('Get-Content first.txt,$env:TEMP')).dynamicNodes.length);
 const pipeline = await parseWindowsPowerShellAst('Get-Content README.md | Select-Object -First 1');
 assert.deepEqual(pipeline.commands.map((x) => x.name), ['Get-Content', 'Select-Object']);
 assert.deepEqual(pipeline.commands.map((x) => x.pipelineInput), [false, true]);
