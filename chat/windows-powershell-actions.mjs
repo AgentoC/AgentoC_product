@@ -187,6 +187,30 @@ export async function analyzeWindowsPowerShell(command, context = {}, { parse = 
   try { ast = await parse(command, { executable }); } catch (error) {
     return { complete: false, actions: [], reason: 'PowerShell parser unavailable', error: error.message };
   }
+  // PowerShell 7 added command-chain operators which the inbox Windows
+  // PowerShell 5.1 parser tokenizes but reports as syntax errors. Split only
+  // top-level literal `&&` operators reported by that native tokenizer, then
+  // parse and independently classify every segment with the same AST policy.
+  // `||`, nested operators, malformed segments, and any unsafe segment remain
+  // review requests. This keeps compatibility without evaluating command text.
+  if (ast.errors.length && Array.isArray(ast.chainOperators) && ast.chainOperators.length
+      && ast.chainOperators.every((item) => item.operator === 'AndAnd') && ast.chainOperators.length <= 16) {
+    const segments = [];
+    let offset = 0;
+    for (const item of ast.chainOperators) {
+      segments.push(command.slice(offset, item.start).trim());
+      offset = item.end;
+    }
+    segments.push(command.slice(offset).trim());
+    if (segments.every(Boolean)) {
+      const results = [];
+      for (const segment of segments) results.push(await analyzeWindowsPowerShell(segment, context, { parse, fsApi, executable }));
+      if (results.every((result) => result.complete && result.actions.length)) {
+        return { complete: true, actions: results.flatMap((result) => result.actions),
+          parserVersion: ast.parserVersion, psVersion: ast.psVersion, chainOperator: 'AndAnd' };
+      }
+    }
+  }
   const expressions = Array.isArray(ast.expressions) ? ast.expressions : [];
   // A conditional can be classified without evaluating it if every branch
   // consists solely of independently verified reads. Other dynamic nodes

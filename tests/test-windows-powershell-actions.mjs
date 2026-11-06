@@ -62,6 +62,12 @@ assert.equal(decideWindowsPowerShellActions(await analyzeWindowsFileChanges([{ p
 let result = await inspect('Get-Content readme.txt | Select-Object -First 1');
 assert.equal(result.decision, 'allow');
 assert.equal(result.actions.length, 2);
+result = await inspect(`Set-Content -LiteralPath '${path.join(workspace, 'chain.txt')}' -Value PASS && Get-Content -LiteralPath '${path.join(workspace, 'chain.txt')}' 2>&1 | Out-String`);
+assert.equal(result.decision, 'allow', 'a literal PowerShell 7 success chain of safe workspace operations is eligible');
+assert.deepEqual(result.actions.map(action => action.kind), ['write', 'read', 'read']);
+assert.equal((await inspect(`Remove-Item -LiteralPath '${path.join(workspace, 'readme.txt')}' && Write-Output done`)).decision, 'allow');
+assert.equal((await inspect(`Get-Content -LiteralPath '${path.join(workspace, 'readme.txt')}' && Remove-Item -LiteralPath '${path.join(root, 'protected', 'secret')}'`)).decision, 'review', 'a safe chain cannot hide an unsafe later action');
+assert.equal((await inspect(`Set-Content -LiteralPath '${path.join(workspace, 'chain.txt')}' -Value PASS || Remove-Item -LiteralPath '${path.join(workspace, 'readme.txt')}'`)).decision, 'review', 'failure chains remain explicit review requests');
 result = await inspect('Get-Content -LiteralPath readme.txt,folder');
 assert.equal(result.decision, 'allow');
 assert.equal(result.actions.length, 2);

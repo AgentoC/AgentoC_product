@@ -13,6 +13,15 @@ $raw = [Console]::In.ReadToEnd()
 $request = ConvertFrom-Json -InputObject $raw
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseInput([string]$request.command, [ref]$tokens, [ref]$errors)
+$chainOperators = @(); $delimiterDepth = 0
+foreach ($token in $tokens) {
+  $kind = $token.Kind.ToString()
+  if ($kind -in @('RParen','RCurly','RBracket')) { $delimiterDepth = [Math]::Max(0, $delimiterDepth - 1) }
+  if ($delimiterDepth -eq 0 -and $kind -in @('AndAnd','OrOr')) {
+    $chainOperators += @{ operator = $kind; start = $token.Extent.StartOffset; end = $token.Extent.EndOffset }
+  }
+  if ($kind -in @('LParen','LCurly','LBracket','AtParen','AtCurly')) { $delimiterDepth++ }
+}
 function Get-RedirectionFacts($node) {
   @($node.Redirections | ForEach-Object {
     $location = $null; $locationType = $null
@@ -102,7 +111,7 @@ $dynamicNodes = @($ast.FindAll({ param($n)
   ($n -is [System.Management.Automation.Language.ExpandableStringExpressionAst] -and @($n.NestedExpressions).Count -gt 0)
 }, $true) | ForEach-Object { $_.GetType().Name })
 $errorMessages = @($errors | ForEach-Object { $_.Message })
-@{ commands = $commands; expressions = $expressions; dynamicNodes = $dynamicNodes; errors = $errorMessages; psVersion = $PSVersionTable.PSVersion.ToString() } | ConvertTo-Json -Depth 12 -Compress
+@{ commands = $commands; expressions = $expressions; dynamicNodes = $dynamicNodes; errors = $errorMessages; chainOperators = $chainOperators; psVersion = $PSVersionTable.PSVersion.ToString() } | ConvertTo-Json -Depth 12 -Compress
 `;
 
 export const WINDOWS_POWERSHELL_AST_VERSION = 'powershell-native-ast/v1';
@@ -140,6 +149,9 @@ export function parseWindowsPowerShellAst(command, { executable, timeoutMs = 500
       try {
         const result = JSON.parse(stdout.replace(/^\uFEFF/, ''));
         if (!Array.isArray(result.commands) || !Array.isArray(result.errors) || !Array.isArray(result.dynamicNodes)) throw new Error('Invalid PowerShell parser response');
+        if (result.chainOperators !== undefined && (!Array.isArray(result.chainOperators) || result.chainOperators.some((item) =>
+          !item || !['AndAnd', 'OrOr'].includes(item.operator) || !Number.isInteger(item.start) || !Number.isInteger(item.end)
+          || item.start < 0 || item.end <= item.start || item.end > command.length))) throw new Error('Invalid PowerShell chain operator response');
         finish(null, { ...result, parserVersion: WINDOWS_POWERSHELL_AST_VERSION });
       } catch (error) { finish(error); }
     });

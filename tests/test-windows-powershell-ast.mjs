@@ -11,6 +11,7 @@ if (process.platform !== 'win32') {
 }
 const plain = await parseWindowsPowerShellAst('Get-Content -LiteralPath "a b.txt"');
 assert.equal(plain.errors.length, 0);
+assert.deepEqual(plain.chainOperators, []);
 assert.equal(plain.commands[0].name, 'Get-Content');
 assert.deepEqual(plain.commands[0].elements.map((x) => x.kind), ['literal', 'parameter', 'literal']);
 assert.equal(plain.commands[0].elements[2].value, 'a b.txt');
@@ -59,6 +60,13 @@ const literal = await parseWindowsPowerShellAst("Write-Output '$env:TEMP'");
 assert.equal(literal.dynamicNodes.length, 0);
 const nested = await parseWindowsPowerShellAst('Get-ChildItem . | ForEach-Object { $_.Name }');
 assert.ok(nested.dynamicNodes.length > 0);
+const commandChain = await parseWindowsPowerShellAst("Set-Content -LiteralPath 'a.txt' -Value 'PASS' && Get-Content -LiteralPath 'a.txt'");
+assert.ok(commandChain.errors.length > 0, 'Windows PowerShell 5.1 reports PowerShell 7 chain syntax as an error');
+assert.deepEqual(commandChain.chainOperators.map((item) => item.operator), ['AndAnd']);
+const quotedChain = await parseWindowsPowerShellAst("Write-Output 'literal && text'");
+assert.deepEqual(quotedChain.chainOperators, [], 'quoted operators are not command chains');
+const nestedChain = await parseWindowsPowerShellAst('Write-Output (1 && 2)');
+assert.deepEqual(nestedChain.chainOperators, [], 'nested operators are not top-level chains');
 const where = spawnSync('where.exe', ['pwsh.exe'], { encoding: 'utf8', windowsHide: true });
 const pwsh = process.env.AGENTOC_TEST_PWSH || (where.status === 0 ? where.stdout.split(/\r?\n/).find(Boolean) : '');
 if (pwsh && existsSync(pwsh)) {
