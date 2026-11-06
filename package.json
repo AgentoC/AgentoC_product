@@ -135,7 +135,7 @@
     "test:shared-tools:raw": "node tests/test-shared-tools-directory.mjs && node tests/test-shared-tool-env-overrides.mjs",
     "test:integration": "node scripts/run-with-clean-instance-env.mjs npm run test:integration:raw",
     "test:app-api-uploads": "node tests/test-file-asset-upload-recovery.mjs",
-    "test:p2p": "node tests/test-p2p-signaling.mjs && node tests/test-p2p-signaling-heartbeat.mjs && node tests/test-p2p-host-diagnostics.mjs && node tests/test-p2p-datachannel-e2e.mjs && node tests/test-p2p-attached-e2e.mjs && node tests/test-p2p-frontend-bootstrap.mjs && node tests/test-browser-chat-server-e2e.mjs",
+    "test:p2p": "node tests/test-p2p-signaling.mjs && node tests/test-p2p-signaling-heartbeat.mjs && node tests/test-p2p-host-diagnostics.mjs && node tests/test-p2p-host-replacement-retry.mjs && node tests/test-p2p-datachannel-e2e.mjs && node tests/test-p2p-attached-e2e.mjs && node tests/test-p2p-frontend-bootstrap.mjs && node tests/test-browser-chat-server-e2e.mjs",
     "test:browser-connectivity": "node tests/test-browser-connection-grant.mjs && node tests/test-browser-connectivity-security.mjs && node tests/test-browser-chat-ws-signaling.mjs && node tests/test-browser-connectivity-poc.mjs && node tests/test-browser-chat-server-e2e.mjs",
     "test:integration:raw": "node tests/test-file-asset-input-staging.mjs && node tests/test-file-asset-run-input-staging.mjs && node tests/test-http-session-templates.mjs && node tests/test-http-session-media-upload.mjs && node tests/test-http-file-assets.mjs && node tests/test-http-result-file-assets.mjs && node tests/test-http-voice-cleanup.mjs",
     "test:live:agenda-agent": "node tests/test-agenda-agent-live-smoke.mjs",
