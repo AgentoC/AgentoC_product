@@ -17,7 +17,7 @@
 // onto the Run record asynchronously after the client command has returned.
 
 import { chmod, mkdir, rm, writeFile } from 'fs/promises';
-import { join } from 'path';
+import { delimiter, join } from 'path';
 import { createServer } from 'net';
 
 import { classifyRisk } from './risk-classifier.mjs';
@@ -78,7 +78,7 @@ export function buildPrivilegedShimLauncherScript(nodePath, commandEntryPath) {
 export function applyPrivilegedShimSpawnEnv(spawnEnv, channel) {
   if (!spawnEnv || !channel?.binDir || !channel?.socketPath) return spawnEnv || null;
   const existing = trimString(spawnEnv.PATH);
-  spawnEnv.PATH = existing ? `${channel.binDir}:${existing}` : channel.binDir;
+  spawnEnv.PATH = existing ? `${channel.binDir}${delimiter}${existing}` : channel.binDir;
   spawnEnv[PRIVILEGED_SHIM_SOCKET_ENV] = channel.socketPath;
   return spawnEnv;
 }

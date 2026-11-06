@@ -6,6 +6,7 @@ import { accessSync, constants, rmSync, statSync } from 'fs';
 import { createInterface } from 'readline';
 import { dirname, isAbsolute, join, relative, resolve, win32 } from 'path';
 import { ownerWindowsOsPaths } from '../lib/windows-owner-os-paths.mjs';
+import { installWindowsRunCliShim } from './windows-run-cli-shim.mjs';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { createToolInvocation, prependAttachmentPaths, resolveCommandSpawnSpec } from './process-runner.mjs';
 import { readPiTerminalOutcome } from './adapters/pi.mjs';
@@ -3455,6 +3456,17 @@ async function main() {
     await logSidecarDiagnostic(runId, 'Privileged shim channel unavailable; sentinel commands will report a channel error', {
       error: normalizeErrorMessage(error),
     });
+  }
+  if (process.platform === 'win32') {
+    try {
+      await installWindowsRunCliShim(spawnEnv, {
+        runDirectory: runDir(runId), nodePath: process.execPath, entryPath: join(PROJECT_ROOT, 'cli.js'),
+      });
+    } catch (error) {
+      await logSidecarDiagnostic(runId, 'Run CLI launcher unavailable; use the documented Node fallback', {
+        error: normalizeErrorMessage(error),
+      });
+    }
   }
   // 'exit' handlers must be synchronous: stop the accept loop implicitly by
   // process teardown and remove the socket/bin links so no stale listener path

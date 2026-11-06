@@ -6,7 +6,7 @@
 import assert from 'assert/strict';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { delimiter, join } from 'path';
 
 import {
   DEFAULT_PRIVILEGED_SHIM_TIMEOUT_MS,
@@ -169,8 +169,8 @@ check('join empty token', joinShimCommandTokens(['']) === "''");
 
   const env = { PATH: '/usr/bin:/bin' };
   applyPrivilegedShimSpawnEnv(env, { binDir: join(dir, 'shim-bin'), socketPath: join(dir, 'shim.sock') });
-  check('spawn env prepends shim bin dir', env.PATH.startsWith(`${join(dir, 'shim-bin')}:`));
-  check('spawn env keeps existing PATH', env.PATH.endsWith(':/usr/bin:/bin'));
+  check('spawn env prepends shim bin dir', env.PATH.startsWith(`${join(dir, 'shim-bin')}${delimiter}`));
+  check('spawn env keeps existing PATH', env.PATH.endsWith(`${delimiter}/usr/bin:/bin`));
   check('spawn env exports socket', env[PRIVILEGED_SHIM_SOCKET_ENV] === join(dir, 'shim.sock'));
 }
 
