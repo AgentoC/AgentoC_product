@@ -25,6 +25,7 @@ function fixture(extra = {}) {
     'templates/chat.html': '<html></html>', '.gitignore': '*.local-secret.json\n',
     'accounts/package.json': '{"name":"accounts-fixture"}', 'accounts/package-lock.json': '{}',
     'accounts/server.mjs': 'export {};\n', 'scripts/accounts-migrate.mjs': 'export {};\n',
+    'accounts/turn-handoff-policy.mjs': 'export {};\n', 'accounts/turn-lease-policy.mjs': 'export {};\n',
     ...extra,
   };
   for (const [name, contents] of Object.entries(files)) {
@@ -65,8 +66,11 @@ try {
     const result = await stageRuntimePayload({ ...f, profile: 'desktop' });
     assert.equal(result.sourceRevision.length, 40);
     assert.equal(existsSync(join(f.destination, 'chat-server.mjs')), true);
-    for (const name of ['tracked-development-key.json', 'firebase.local-secret.json', 'android', 'tests', 'accounts']) {
+    for (const name of ['tracked-development-key.json', 'firebase.local-secret.json', 'android', 'tests', 'accounts/server.mjs', 'accounts/internal-not-client.mjs']) {
       assert.equal(existsSync(join(f.destination, name)), false, name);
+    }
+    for (const name of ['accounts/turn-handoff-policy.mjs', 'accounts/turn-lease-policy.mjs']) {
+      assert.equal(existsSync(join(f.destination, name)), true, name);
     }
     assert.equal((await scanRuntimePayload(f.destination)).ok, true);
     assert.equal(readFileSync(join(f.destination, '.agentoc-source-commit'), 'utf8').trim(), result.sourceRevision);
