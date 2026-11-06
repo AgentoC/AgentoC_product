@@ -27,6 +27,8 @@ test('rollback and expiry never revoke the old generation or admit replay', () =
   assert.throws(() => commitTurnHandoff(rows, 'new', now + 2), { code: 'turn_handoff_commit_invalid' });
   assert.throws(() => prepare(rows), { code: 'turn_handoff_generation_exists' });
   prepare(rows, lease('newer'), now + 3);
+  assert.equal(activeTurnConnectionState({ turnConnectionLeases: rows }, 'a', now + 60_003).leases.length, 1,
+    'An expired standby is excluded even before the next cleanup mutation');
   expireTurnHandoffs(rows, now + 60_003);
   assert.equal(rows[2].releaseReason, 'handoff-expired');
   assert.equal(rows[0].status, 'reserved');

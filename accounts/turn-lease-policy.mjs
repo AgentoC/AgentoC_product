@@ -26,6 +26,10 @@ export function effectiveDeviceKind(device) {
 
 export function isActiveTurnConnectionLease(lease, nowMs) {
   if (!lease || !['reserved', 'connected'].includes(text(lease.status))) return false;
+  if (lease.handoffFrom && !lease.handoffCommittedAt) {
+    const deadline = Date.parse(lease.handoffDeadline || '');
+    if (!Number.isFinite(deadline) || deadline <= nowMs) return false;
+  }
   const expiresMs = Date.parse(lease.expiresAt || '');
   return Number.isFinite(expiresMs) && expiresMs > nowMs;
 }

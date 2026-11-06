@@ -80,8 +80,8 @@ try {
   await listenFetchLoopback(server);
   const base = `http://127.0.0.1:${server.address().port}/accounts/v1/owner-auth/turn/connections/`;
   const logical = deviceId => createTurnConnectionId({ accountId, instanceId: identity.instanceId, deviceId });
-  function request(connectionId, purpose, { deviceId = phoneId, actor = identity, expiresAt = new Date(now + 300_000).toISOString(), reason = '' } = {}) {
-    const body = { protocolVersion: 2, accountId, deviceId, deviceKind: 'phone', connectionId, expiresAt, reason,
+  function request(connectionId, purpose, { deviceId = phoneId, actor = identity, expiresAt = new Date(now + 300_000).toISOString(), reason = '', protocolVersion = 2 } = {}) {
+    const body = { protocolVersion, accountId, deviceId, deviceKind: 'phone', connectionId, expiresAt, reason,
       instance: publicInstanceIdentity(actor), issuedAt: iso(), audience: 'agentoc-owner-auth-device' };
     body.requestId = createTurnOperationRequestId({ ...body, instanceId: actor.instanceId, purpose });
     body.signature = signOwnerAuthDeviceProof(actor, { transactionId: body.requestId, purpose,
@@ -183,6 +183,51 @@ try {
   assert.equal(retryRequests[0].expiresAt, retryRequests[1].expiresAt);
   assert.equal((await client.releaseOwnerAccountTurnConnection({ deviceId: phoneId, connectionId: retryLease,
     reason: 'retry-test-complete', fetchImpl, clock: () => now })).released, true);
+  const oldHandoff = createTurnLeaseId(logical(phoneId), undefined, now);
+  const newHandoff = createTurnLeaseId(logical(phoneId), undefined, now);
+  assert.equal((await post('reserve', request(oldHandoff, 'turn-reserve'))).status, 201);
+  const offer = request(newHandoff, 'turn-reserve', { protocolVersion: 3,
+    reason: `handoff:${oldHandoff}:${now + 40_000}` });
+  assert.equal((await post('reserve', { ...offer, protocolVersion: 2 })).status, 401, 'Version downgrade changes the signed digest');
+  assert.equal((await post('reserve', { ...offer, reason: `handoff:${oldHandoff}:${now + 80_000}` })).status, 401);
+  const offered = await post('reserve', offer);
+  assert.equal(offered.status, 201);
+  assert.equal(offered.body.lease.handoffDeadline, new Date(now + 40_000).toISOString());
+  let handoffSnapshot = (await snapshot()).turnConnectionLeases;
+  assert.equal(handoffSnapshot.find(x => x.connectionId === oldHandoff).status, 'reserved');
+  assert.equal(handoffSnapshot.find(x => x.connectionId === newHandoff).handoffFrom, oldHandoff);
+  const commit = request(newHandoff, 'turn-handoff-commit', { protocolVersion: 3 });
+  assert.equal((await post('handoff/commit', commit)).body.committed, true);
+  assert.equal((await post('handoff/commit', commit)).body.committed, true, 'Lost commit replies can be retried');
+  assert.equal((await post('release', request(oldHandoff, 'turn-release'))).body.released, true);
+  assert.equal((await post('release', request(newHandoff, 'turn-release', { protocolVersion: 3 }))).body.released, true);
+  const expiringOld = createTurnLeaseId(logical(phoneId), undefined, now);
+  const expiringNext = createTurnLeaseId(logical(phoneId), undefined, now);
+  assert.equal((await post('reserve', request(expiringOld, 'turn-reserve'))).status, 201);
+  assert.equal((await post('reserve', request(expiringNext, 'turn-reserve', { protocolVersion: 3,
+    reason: `handoff:${expiringOld}:${now + 2_000}` }))).status, 201);
+  now += 2_000;
+  assert.equal((await post('handoff/commit', request(expiringNext, 'turn-handoff-commit', { protocolVersion: 3 }))).status, 409);
+  handoffSnapshot = (await snapshot()).turnConnectionLeases;
+  assert.equal(handoffSnapshot.find(x => x.connectionId === expiringOld).status, 'reserved');
+  assert.equal((await post('release', request(expiringOld, 'turn-release'))).body.released, true);
+  const clientOld = createTurnLeaseId(logical(phoneId), undefined, now);
+  const clientNext = createTurnLeaseId(logical(phoneId), undefined, now);
+  const v3Fetch = async (url, options) => {
+    const target = new URL(url);
+    return fetch(`http://127.0.0.1:${server.address().port}${target.pathname}`, options);
+  };
+  await client.reserveOwnerAccountTurnConnection({ deviceId: phoneId, connectionId: clientOld,
+    expiresAt: new Date(now + 300_000).toISOString(), fetchImpl: v3Fetch, clock: () => now });
+  const v3Lease = await client.reserveOwnerAccountTurnConnection({ deviceId: phoneId, connectionId: clientNext,
+    protocolVersion: 3, reason: `handoff:${clientOld}:${now + 40_000}`,
+    expiresAt: new Date(now + 300_000).toISOString(), fetchImpl: v3Fetch, clock: () => now });
+  assert.equal(v3Lease.authorization.connectionId, clientNext);
+  assert.equal((await client.commitOwnerAccountTurnHandoff({ deviceId: phoneId, connectionId: clientNext,
+    fetchImpl: v3Fetch, clock: () => now })).committed, true);
+  await client.releaseOwnerAccountTurnConnection({ deviceId: phoneId, connectionId: clientOld, fetchImpl: v3Fetch, clock: () => now });
+  await client.releaseOwnerAccountTurnConnection({ deviceId: phoneId, connectionId: clientNext,
+    protocolVersion: 3, fetchImpl: v3Fetch, clock: () => now });
   now += 181_000;
   const e = createTurnLeaseId(logical(phoneId), undefined, now);
   assert.equal((await post('reserve', request(e, 'turn-reserve'))).status, 201);

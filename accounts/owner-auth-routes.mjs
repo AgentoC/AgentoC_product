@@ -519,7 +519,7 @@ export async function handleOwnerAuthRoutes({
   const isNativeApi = path.startsWith('/v1/owner-auth/native/');
   const isDiscoveryApi = path === '/v1/owner-auth/discovery';
   const isBindingAuthorityApi = path === '/v1/owner-auth/instances/authority';
-  const isTurnConnectionApi = ['/v1/owner-auth/turn/connections/reserve', '/v1/owner-auth/turn/connections/release'].includes(path);
+  const isTurnConnectionApi = ['/v1/owner-auth/turn/connections/reserve', '/v1/owner-auth/turn/connections/release', '/v1/owner-auth/turn/connections/handoff/commit'].includes(path);
   const isProviderSyncApi = path === '/v1/owner-auth/provider-sync/authorize';
   const isAccountSyncCatalogApi = /^\/v1\/owner-auth\/sync\/catalog\/[^/]+$/.test(path);
   const isAccountJoinApi = path === '/v1/owner-auth/account-intents'
@@ -1008,6 +1008,12 @@ export async function handleOwnerAuthRoutes({
 
     if (path === '/v1/owner-auth/turn/connections/release' && req.method === 'POST') {
       const result = await broker.releaseTurnConnection(await readJsonBody(req));
+      jsonResponse(res, 200, result);
+      return true;
+    }
+
+    if (path === '/v1/owner-auth/turn/connections/handoff/commit' && req.method === 'POST') {
+      const result = await broker.commitTurnConnectionHandoff(await readJsonBody(req));
       jsonResponse(res, 200, result);
       return true;
     }

@@ -36,6 +36,7 @@ import {
 } from '../lib/turn-authorization.mjs';
 import { getTurnConnectionLeases, resolveAccountEntitlement, effectiveDeviceKind,
   isActiveTurnConnectionLease, activeTurnConnectionState } from './turn-lease-policy.mjs';
+import { prepareTurnHandoff, commitTurnHandoff, expireTurnHandoffs } from './turn-handoff-policy.mjs';
 import { issueTurnBrokerCapability } from '../lib/turn-broker-capability.mjs';
 import { assertAccountNotDeleting } from './account-deletion-policy.mjs';
 import { isTurnLeaseId, matchesTurnLeasePair, createTurnOperationRequestId, canAdmitTurnLeaseId, pruneTurnLeases,
@@ -707,7 +708,7 @@ function validateDeviceOpInstance(input, { transactionId, purpose, clock }) {
   const publicEndpoint = normalizeClaimPublicEndpoint(requestedPublicEndpoint);
   const endpointMatchesCanonical = requestedPublicEndpoint === publicEndpoint;
   if (!instanceId || !publicKey || !keyFingerprint || !trimString(transactionId)
-    || !['devices', 'history', 'unbind', 'publish-endpoint', 'publish-identity', 'turn-reserve', 'turn-release'].includes(purpose)
+    || !['devices', 'history', 'unbind', 'publish-endpoint', 'publish-identity', 'turn-reserve', 'turn-release', 'turn-handoff-commit'].includes(purpose)
     || !issuedMs || audience !== 'agentoc-owner-auth-device') {
     throw createError('owner_auth_request_invalid', 'Invalid device management request.', 400);
   }
@@ -3414,12 +3415,12 @@ export function createOwnerAuthBroker({
       instanceId: instance.instanceId,
       deviceId,
     });
-    const protocolVersion = input?.protocolVersion === 2 ? 2 : 1;
-    if (!expectedConnectionId || (protocolVersion === 2
+    const protocolVersion = input?.protocolVersion === 3 ? 3 : input?.protocolVersion === 2 ? 2 : 1;
+    if (!expectedConnectionId || (protocolVersion >= 2
       ? !matchesTurnLeasePair(connectionId, expectedConnectionId) : expectedConnectionId !== connectionId)) {
       throw createError('turn_connection_identity_invalid', 'TURN connection identity is invalid.', 400);
     }
-    const expectedRequestId = protocolVersion === 2 ? createTurnOperationRequestId({ purpose,
+    const expectedRequestId = protocolVersion >= 2 ? createTurnOperationRequestId({ purpose, protocolVersion,
       accountId, instanceId: instance.instanceId, deviceId, deviceKind, connectionId,
       expiresAt: input?.expiresAt, reason: input?.reason }) : connectionId;
     if (requestId !== expectedRequestId) throw createError('turn_connection_proof_mismatch', 'TURN operation parameters differ from the signed proof.', 401);
@@ -3437,6 +3438,8 @@ export function createOwnerAuthBroker({
         deviceKind: lease.deviceKind,
         status: lease.status,
         expiresAt: lease.expiresAt,
+        ...(lease.handoffFrom ? { handoffFrom: lease.handoffFrom, handoffDeadline: lease.handoffDeadline,
+          ...(lease.handoffCommittedAt ? { handoffCommittedAt: lease.handoffCommittedAt } : {}) } : {}),
       },
     };
   }
@@ -3498,7 +3501,8 @@ export function createOwnerAuthBroker({
       const leases = pruneTurnLeases(getTurnConnectionLeases(draft), clock());
       draft.turnConnectionLeases = leases;
       const existing = leases.find((lease) => lease.connectionId === normalized.connectionId);
-      if (normalized.protocolVersion === 2 && !existing && !canAdmitTurnLeaseId(normalized.connectionId, clock(), turnLeasePairClock(leases, normalized.connectionId, clock()))) {
+      expireTurnHandoffs(leases, clock());
+      if (normalized.protocolVersion >= 2 && !existing && !canAdmitTurnLeaseId(normalized.connectionId, clock(), turnLeasePairClock(leases, normalized.connectionId, clock()))) {
         throw createError('turn_connection_generation_retired', 'TURN reservation admission window ended.', 409);
       }
       if (existing && (existing.accountId !== normalized.accountId
@@ -3512,7 +3516,7 @@ export function createOwnerAuthBroker({
         && lease.instanceId === normalized.instance.instanceId
         && lease.deviceId === normalized.deviceId
         && lease.connectionId !== normalized.connectionId);
-      if (conflictingPair && normalized.protocolVersion !== 2) {
+      if (conflictingPair && normalized.protocolVersion === 1) {
         throw createError('turn_connection_identity_conflict', 'The device pair already has an active TURN connection.', 409);
       }
       const active = activeTurnConnectionState(draft, normalized.accountId, clock(), {
@@ -3545,7 +3549,13 @@ export function createOwnerAuthBroker({
         error.details = publicTurnAuthorization(authorization);
         throw error;
       }
-      if (normalized.protocolVersion === 2) {
+      if (normalized.protocolVersion >= 2) {
+        const handoff = normalized.protocolVersion === 3
+          ? /^handoff:(turn_[a-f0-9]{32}_[0-9]{13}_[a-f0-9]{32}):([0-9]{13})$/.exec(trimString(input?.reason)) : null;
+        if (normalized.protocolVersion === 3 && !handoff) throw createError('turn_handoff_request_invalid', 'Invalid signed handoff request.', 400);
+        if (existing && normalized.protocolVersion === 3 && existing.handoffFrom !== handoff[1]) {
+          throw createError('turn_handoff_request_invalid', 'Handoff generation does not match.', 409);
+        }
         if (existing && !isActiveTurnConnectionLease(existing, clock())) {
           throw createError('turn_connection_generation_retired', 'This TURN reservation has already ended.', 409);
         }
@@ -3570,7 +3580,7 @@ export function createOwnerAuthBroker({
         }
         if (!existing) {
           const now = new Date(turnLeasePairClock(leases, normalized.connectionId, clock())).toISOString();
-          for (const previous of leases) {
+          for (const previous of normalized.protocolVersion === 2 ? leases : []) {
             if (previous.accountId === normalized.accountId && previous.instanceId === normalized.instance.instanceId
               && previous.deviceKind === normalized.deviceKind
               && (previous.deviceId === normalized.deviceId || (normalized.deviceKind === 'phone' && previous.quotaDeviceId === quotaDeviceId))
@@ -3583,8 +3593,10 @@ export function createOwnerAuthBroker({
             instanceId: normalized.instance.instanceId, deviceId: normalized.deviceId, deviceKind: normalized.deviceKind,
             quotaDeviceId, plan: authorization.plan, status: 'reserved', createdAt: now, updatedAt: now,
             expiresAt: new Date(deadline).toISOString(), releasedAt: '', releaseReason: '' };
-          leases.push(lease);
-          return { ...publicTurnLease(lease, authorization), brokerCredential };
+          const reserved = handoff
+            ? prepareTurnHandoff(leases, handoff[1], lease, clock(), new Date(Number(handoff[2])).toISOString())
+            : (leases.push(lease), lease);
+          return { ...publicTurnLease(reserved, authorization), brokerCredential };
         }
         existing.updatedAt = new Date(Math.max(clock(), turnLeaseObservedAt(existing))).toISOString();
         return { ...publicTurnLease(existing, authorization), brokerCredential };
@@ -3617,7 +3629,7 @@ export function createOwnerAuthBroker({
       if (!existing) leases.push(lease);
       return publicTurnLease(lease, authorization);
     });
-    if (normalized.protocolVersion === 2) {
+    if (normalized.protocolVersion >= 2) {
       audit({ event: 'turn.connection.reserved', accountId: normalized.accountId,
         instanceId: normalized.instance.instanceId, deviceId: normalized.deviceId,
         connectionId: normalized.connectionId, plan: result.authorization.plan });
@@ -3679,7 +3691,7 @@ export function createOwnerAuthBroker({
       if (!lease || !isActiveTurnConnectionLease(lease, clock())) {
         return { released: false, connectionId: normalized.connectionId };
       }
-      const now = normalized.protocolVersion === 2 ? new Date(Math.max(clock(), turnLeaseObservedAt(lease))).toISOString() : nowIso(clock);
+      const now = normalized.protocolVersion >= 2 ? new Date(Math.max(clock(), turnLeaseObservedAt(lease))).toISOString() : nowIso(clock);
       lease.status = 'released';
       lease.updatedAt = now;
       lease.releasedAt = now;
@@ -3695,6 +3707,27 @@ export function createOwnerAuthBroker({
       released: result.released,
     });
     return result;
+  }
+
+  async function commitTurnConnectionHandoff(input) {
+    const normalized = normalizeTurnConnectionInput(input, 'turn-handoff-commit');
+    if (normalized.protocolVersion !== 3) throw createError('turn_handoff_request_invalid', 'Handoff protocol is required.', 400);
+    return store.mutate(async (draft) => {
+      assertBoundAccount(draft, normalized.instance, normalized.accountId);
+      resolveTurnConnectionDevice(draft, { ...normalized, instanceId: normalized.instance.instanceId });
+      const leases = getTurnConnectionLeases(draft);
+      const next = leases.find(lease => lease.connectionId === normalized.connectionId
+        && lease.accountId === normalized.accountId && lease.instanceId === normalized.instance.instanceId
+        && lease.deviceId === normalized.deviceId && lease.deviceKind === normalized.deviceKind);
+      if (!next || !next.handoffFrom) throw createError('turn_handoff_commit_invalid', 'Handoff is unavailable.', 409);
+      const old = leases.find(lease => lease.connectionId === next.handoffFrom);
+      const observed = Math.max(clock(), turnLeaseObservedAt(next), old ? turnLeaseObservedAt(old) : 0);
+      if (next.handoffCommittedAt && isActiveTurnConnectionLease(next, observed)) {
+        return { committed: true, connectionId: next.connectionId, committedAt: next.handoffCommittedAt };
+      }
+      const committed = commitTurnHandoff(leases, normalized.connectionId, observed);
+      return { committed: true, connectionId: committed.connectionId, committedAt: committed.handoffCommittedAt };
+    });
   }
 
   async function authorizeProviderSync(input) {
@@ -3930,6 +3963,7 @@ export function createOwnerAuthBroker({
     revokeAccountDirectoryDevice,
     listDevices,
     reserveTurnConnection,
+    commitTurnConnectionHandoff,
     releaseTurnConnection,
     authorizeProviderSync,
     authorizeTargetRuntime,
