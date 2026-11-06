@@ -5,6 +5,7 @@ import com.andysagent.agentoc.core.p2p.P2PCandidate
 import com.andysagent.agentoc.core.protocol.ConnectionBootstrapContractDto
 import com.andysagent.agentoc.core.protocol.ConnectionBootstrapTurnAuthorizationDto
 import com.andysagent.agentoc.core.protocol.ConnectionBootstrapTurnDto
+import com.andysagent.agentoc.core.protocol.ConnectionBootstrapPublicKeyDto
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
@@ -22,6 +23,7 @@ data class BootstrapConnectionPlan(
     val contract: ConnectionBootstrapContractDto,
     val p2pCandidate: P2PCandidate?,
     val turnCarrier: TurnCarrier?,
+    val publicKey: ConnectionBootstrapPublicKeyDto? = null,
 ) {
     val connectionMode: String get() = contract.connectionMode
     val turnConnectionId: String?
@@ -76,6 +78,7 @@ object BootstrapConnectionPlanFactory {
             contract = contract,
             p2pCandidate = p2p,
             turnCarrier = turn,
+            publicKey = verified.publicKey,
         )
     }
 

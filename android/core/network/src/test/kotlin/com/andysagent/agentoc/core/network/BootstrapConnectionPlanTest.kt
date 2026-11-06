@@ -53,6 +53,7 @@ class BootstrapConnectionPlanTest {
         assertEquals("turn-connection-1", plan.turnConnectionId)
         assertEquals(plan.turnConnectionId, carrier.connectionId)
         assertEquals("http://192.168.1.10:7690", plan.preferredEndpoint)
+        assertEquals("key-1", plan.publicKey?.keyId, "A replacement plan must use the originally verified key")
     }
 
     @Test

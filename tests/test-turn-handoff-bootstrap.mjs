@@ -46,7 +46,19 @@ globalThis.fetch = async (url, options = {}) => {
 try {
   const { buildDeviceConnectionBootstrapContract } = await import('../chat/connection-bootstrap-service.mjs');
   const { TURN_CONNECTION_LEASES_FILE } = await import('../lib/config.mjs');
+  const { loadOrCreateInstanceIdentity } = await import('../lib/instance-identity.mjs');
+  const { validateTurnHandoffRequest } = await import('../chat/turn-handoff-request.mjs');
   const old = await buildDeviceConnectionBootstrapContract({ deviceId });
+  const identity = await loadOrCreateInstanceIdentity();
+  const validated = validateTurnHandoffRequest({ contract: old, identity, accountId, deviceId });
+  assert.equal(validated.from, old.turn.connectionId);
+  assert.equal(validated.signedExpiry, Date.parse(old.expiresAt));
+  for (const input of [
+    { contract: { ...old, expiresAt: new Date(Date.now() + 600_000).toISOString() }, identity, accountId, deviceId },
+    { contract: old, identity, accountId, deviceId: 'different-phone' },
+    { contract: old, identity: { ...identity, keyFingerprint: 'different-key' }, accountId, deviceId },
+    { contract: old, identity, accountId, deviceId, now: Date.parse(old.expiresAt) },
+  ]) assert.throws(() => validateTurnHandoffRequest(input), { code: 'turn_handoff_plan_invalid' });
   const handoff = { from: old.turn.connectionId, signedExpiry: Date.now() + 45_000 };
   const host = await buildDeviceConnectionBootstrapContract({ deviceId, handoff });
   const phone = await buildDeviceConnectionBootstrapContract({ deviceId, handoff: { ...handoff, connectionId: host.turn.connectionId } });

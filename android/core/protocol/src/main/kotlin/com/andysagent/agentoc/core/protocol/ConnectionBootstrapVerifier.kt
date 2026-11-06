@@ -32,6 +32,27 @@ object ConnectionBootstrapVerifier {
     private const val CONTRACT_VERSION = 2
     private val json = AgentocProtocol.json
 
+    /** A standby plan must be signed by the already paired instance and target the same device. */
+    fun verifyHandoff(rawContract: String, pinnedKey: ConnectionBootstrapPublicKeyDto,
+        instanceId: String, deviceId: String, previousConnectionId: String,
+        nowMs: Long = System.currentTimeMillis()): VerifiedConnectionBootstrap {
+        val verified = verify(rawContract, pinnedKey, nowMs)
+        val contract = verified.contract
+        val nextId = contract.turn?.connectionId.orEmpty()
+        val candidateExpiry = contract.candidates.firstOrNull { it.id == contract.initialCarrier?.candidateId }?.expiresAt
+        val carrierBoundsValid = listOf(contract.turn?.expiresAt, candidateExpiry).all { expiry ->
+            runCatching { Instant.parse(expiry).toEpochMilli() > nowMs }.getOrDefault(false)
+        }
+        if (instanceId.isBlank() || deviceId.isBlank() || previousConnectionId.isBlank()
+            || contract.instanceId != instanceId || contract.deviceId != deviceId
+            || nextId.isBlank() || nextId == previousConnectionId || !carrierBoundsValid
+            || contract.turnAuthorization?.connectionId?.let { it != nextId } == true
+            || contract.turn?.authorization?.connectionId?.let { it != nextId } == true) {
+            throw ConnectionBootstrapVerificationException("Handoff plan identity does not match the active carrier")
+        }
+        return verified
+    }
+
     fun verify(
         rawContract: String,
         publicKey: ConnectionBootstrapPublicKeyDto,
