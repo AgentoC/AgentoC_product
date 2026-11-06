@@ -180,6 +180,23 @@ try {
     } else {
         & (Join-Path $SourceRoot 'packaging\windows\stage-node-toolchain.ps1') -NodePath $node.Source -PayloadRoot $payloadRoot
     }
+    # Prune the staged declarations before adding the private PowerShell
+    # runtime, so both do not need to occupy disk space at the same time.
+    $nodeModulesRoot = [IO.Path]::GetFullPath((Join-Path $payloadRoot 'node_modules'))
+    $nodeModulesPrefix = $nodeModulesRoot.TrimEnd('\') + '\'
+    $typeDeclarationFiles = @(Get-ChildItem -LiteralPath $nodeModulesRoot -Filter '*.d.ts' -File -Recurse -Force)
+    $typeDeclarationBytes = [long](($typeDeclarationFiles | Measure-Object -Property Length -Sum).Sum)
+    foreach ($typeDeclaration in $typeDeclarationFiles) {
+        $declarationPath = [IO.Path]::GetFullPath($typeDeclaration.FullName)
+        if (-not $declarationPath.StartsWith($nodeModulesPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Refusing to prune a declaration outside the staged node_modules tree.'
+        }
+        if (($typeDeclaration.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw 'Refusing to prune a declaration reparse point.'
+        }
+        Remove-Item -LiteralPath $declarationPath -Force
+    }
+    Write-Output ('Removed {0:N0} runtime-irrelevant TypeScript declarations ({1:N0} bytes).' -f $typeDeclarationFiles.Count, $typeDeclarationBytes)
     # Keep the Windows CLI feature-parity surface self-contained. The source
     # package intentionally does not carry qrcode-terminal in package.json;
     # Debian stages this same pinned tarball, so Windows must use the same
@@ -264,24 +281,7 @@ try {
         $runtimeManifestSha256 = [string]$runtimeManifest.sha256
         if ($runtimeManifestSha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Windows runtime integrity manifest hash is invalid.' }
     }
-    # Production npm packages ship TypeScript declaration bundles for editor
-    # tooling. They are not executable runtime inputs and add nearly 200 MB to
-    # this MSI; keep shipped JavaScript and run the bundled tools after pruning.
-    $nodeModulesRoot = [IO.Path]::GetFullPath((Join-Path $payloadRoot 'node_modules'))
-    $nodeModulesPrefix = $nodeModulesRoot.TrimEnd('\') + '\'
-    $typeDeclarationFiles = @(Get-ChildItem -LiteralPath $nodeModulesRoot -Filter '*.d.ts' -File -Recurse -Force)
-    $typeDeclarationBytes = [long](($typeDeclarationFiles | Measure-Object -Property Length -Sum).Sum)
-    foreach ($typeDeclaration in $typeDeclarationFiles) {
-        $declarationPath = [IO.Path]::GetFullPath($typeDeclaration.FullName)
-        if (-not $declarationPath.StartsWith($nodeModulesPrefix, [StringComparison]::OrdinalIgnoreCase)) {
-            throw 'Refusing to prune a declaration outside the staged node_modules tree.'
-        }
-        if (($typeDeclaration.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-            throw 'Refusing to prune a declaration reparse point.'
-        }
-        Remove-Item -LiteralPath $declarationPath -Force
-    }
-    Write-Output ('Removed {0:N0} runtime-irrelevant TypeScript declarations ({1:N0} bytes).' -f $typeDeclarationFiles.Count, $typeDeclarationBytes)
+    # Verify the staged tools after declaration pruning.
     $stagedNode = Join-Path $payloadRoot 'node.exe'
     foreach ($entrypoint in @('node_modules\npm\bin\npm-cli.js', 'node_modules\corepack\dist\corepack.js')) {
         $stagedEntrypoint = Join-Path $payloadRoot $entrypoint
