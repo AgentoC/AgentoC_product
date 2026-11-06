@@ -20,6 +20,7 @@
     <string name="temporary_control_computer">Temporary computer · 10 minutes</string>
     <string name="computer_connection_unsuccessful">Computer connection unsuccessful</string>
     <string name="computer_connection_unavailable">Could not connect the computer. Try again.</string>
+    <string name="request_failed_title">Request failed</string>
     <string name="computer_connection_busy_retry_after">The connection service is busy. Try again in about %1$d seconds.</string>
     <string name="computer_connection_busy">The connection service is busy. Wait a moment, then try again.</string>
     <string name="computer_connection_quota_reached">This account has reached its active connection limit. Free a connection slot, then try again.</string>

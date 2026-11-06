@@ -9,6 +9,7 @@
 
     <string name="computer_connection_unsuccessful">连接电脑失败</string>
     <string name="computer_connection_unavailable">无法连接电脑，请重试。</string>
+    <string name="request_failed_title">请求失败</string>
     <string name="computer_connection_busy_retry_after">连接服务繁忙，请约 %1$d 秒后重试。</string>
     <string name="computer_connection_busy">连接服务繁忙，请稍后重试。</string>
     <string name="computer_connection_quota_reached">此账号的活动连接数已达到上限。请释放一个连接名额后重试。</string>

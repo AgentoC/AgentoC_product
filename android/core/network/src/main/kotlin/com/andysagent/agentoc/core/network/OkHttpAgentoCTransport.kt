@@ -48,6 +48,18 @@ internal fun carrierFailureCategory(error: Throwable): String = when (error.mess
     else -> "other"
 }
 
+internal fun networkFailureCategory(error: Throwable): String {
+    val causes = generateSequence<Throwable>(error) { it.cause }.take(8).toList()
+    return when {
+        causes.any { it is java.net.UnknownHostException } -> "UnknownHostException"
+        causes.any { it is java.net.SocketTimeoutException } -> "SocketTimeoutException"
+        causes.any { it is java.net.ConnectException } -> "ConnectException"
+        causes.any { it is javax.net.ssl.SSLException } -> "SSLException"
+        causes.any { it is java.net.SocketException } -> "SocketException"
+        else -> "IOException"
+    }
+}
+
 private fun carrierHeaders(request: ApiRequest): MutableMap<String, String> = request.headers.toMutableMap().apply {
     if (keys.none { it.equals("Content-Type", ignoreCase = true) }) {
         val type = request.contentType ?: when {
@@ -182,17 +194,9 @@ class OkHttpAgentoCTransport(
             throw if (serverRelativeRequest && !request.isolateCredentialFailure) handleAuthenticationFailure(error, attemptedCredential) else error
         } catch (error: IOException) {
             currentCoroutineContext().ensureActive()
-            val rootCause = generateSequence<Throwable>(error) { it.cause }.take(8).last()
             // Exception messages can contain arbitrary credentials, URLs and
             // response data. Expose only a fixed, non-user-controlled category.
-            val diagnostic = when (rootCause) {
-                is java.net.UnknownHostException -> "UnknownHostException"
-                is java.net.SocketTimeoutException -> "SocketTimeoutException"
-                is java.net.ConnectException -> "ConnectException"
-                is javax.net.ssl.SSLException -> "SSLException"
-                is java.net.SocketException -> "SocketException"
-                else -> "IOException"
-            }
+            val diagnostic = networkFailureCategory(error)
             throw ApiException(0, "NETWORK_ERROR", "Network request failed ($diagnostic)", retryable = true)
         }
     }

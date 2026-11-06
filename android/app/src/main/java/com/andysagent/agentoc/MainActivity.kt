@@ -286,7 +286,7 @@ class MainActivity : ComponentActivity() {
     private var pendingComputerConnectionIsPrimary by mutableStateOf(true)
     private var welcomeSuppressedBySignIn by mutableStateOf(false)
     private var subscriptionInfoOpen by mutableStateOf(false)
-    private var googleSignInError by mutableStateOf<String?>(null)
+    private var requestError by mutableStateOf<String?>(null)
     private var pendingPairingScanFromWelcome by mutableStateOf<Boolean?>(null)
     private var computerConnectionError by mutableStateOf<ConnectionErrorCopy?>(null)
     private var pendingSessionNavigation by mutableStateOf<SessionNavigationRequest?>(null)
@@ -301,7 +301,7 @@ class MainActivity : ComponentActivity() {
                 pendingGoogleSignIn = GoogleSignInRequest.ManageDevices
             }
             is ComputerConnectionFailureUi.ShowConnectionError -> {
-                googleSignInError = null
+                requestError = null
                 computerConnectionError = failure.message
             }
         }
@@ -710,7 +710,7 @@ class MainActivity : ComponentActivity() {
                                 } catch (error: Exception) {
                                     pendingComputerConnectionId = null
                                     pendingComputerConnectionIsPrimary = true
-                                    googleSignInError = error.message ?: "Could not manage computers."
+                                    requestError = error.message ?: "Could not manage computers."
                                 }
                             }
                         }
@@ -746,7 +746,7 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 pairingOnboarding.onEvent(PairingOnboardingEvent.GoogleSignInCancelled)
                             }
-                            googleSignInError = message
+                            requestError = message
                         }
                     }
                     // Keep the effect key stable until Credential Manager has returned.
@@ -823,7 +823,7 @@ class MainActivity : ComponentActivity() {
                                     }.onFailure { error ->
                                         pendingComputerConnectionId = null
                                         pendingComputerConnectionIsPrimary = true
-                                        googleSignInError = error.message ?: "Could not manage computers."
+                                        requestError = error.message ?: "Could not manage computers."
                                     }
                                 }
                             }
@@ -1252,7 +1252,7 @@ class MainActivity : ComponentActivity() {
                         runtimeScope.launch {
                             try { app.runtime.logoutAccountSession() }
                             catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-                            catch (_: Exception) { googleSignInError = getString(WorkbenchR.string.demo_connection_sign_out_failed) }
+                            catch (_: Exception) { requestError = getString(WorkbenchR.string.demo_connection_sign_out_failed) }
                             finally { accounts.onEvent(AccountsEvent.Refresh) }
                         }
                     },
@@ -1268,7 +1268,7 @@ class MainActivity : ComponentActivity() {
                     subscriptionInfoOpen = subscriptionInfoOpen,
                     onCloseSubscriptionInfo = { subscriptionInfoOpen = false },
                     onRequestGoogleSignIn = { request ->
-                        googleSignInError = null
+                        requestError = null
                         if (!accounts.state.value.hasVerifiedAccountSession) {
                             pendingGoogleSignIn = request
                         } else {
@@ -1307,17 +1307,17 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onRequestBrowserSignIn = { request ->
-                        googleSignInError = null
+                        requestError = null
                         browserSignInRequest = request
                     },
                     onRequestDemoSignIn = demoSignIn::open,
                     onRequestComputerDiscovery = {
-                        googleSignInError = null
+                        requestError = null
                         runtimeScope.launch {
                             val hasStoredAccountSession = runCatching {
                                 app.runtime.configStore.accountSession.first() != null
                             }.getOrElse { error ->
-                                googleSignInError = error.message ?: "Could not read the account session."
+                                requestError = error.message ?: "Could not read the account session."
                                 return@launch
                             }
                             val canReuseAccountSession = shouldReuseStoredAccountSession(
@@ -1339,7 +1339,7 @@ class MainActivity : ComponentActivity() {
                                 if (isAccountReauthorizationFailure(error)) {
                                     pendingGoogleSignIn = GoogleSignInRequest.ManageDevices
                                 } else {
-                                    googleSignInError = error.message ?: "Could not load computers."
+                                    requestError = error.message ?: "Could not load computers."
                                 }
                             }
                         }
@@ -1428,7 +1428,7 @@ class MainActivity : ComponentActivity() {
                                     if (linked) {
                                         runCatching { app.runtime.selectTarget(event.instanceId) }
                                             .onFailure { error ->
-                                                googleSignInError = error.message ?: "Could not switch computers."
+                                                requestError = error.message ?: "Could not switch computers."
                                             }
                                     } else {
                                         pendingComputerConnectionId = event.instanceId
@@ -1473,7 +1473,7 @@ class MainActivity : ComponentActivity() {
                                     pendingComputerConnectionId = event.instanceId
                                     pendingComputerConnectionIsPrimary =
                                         computerDirectory.activeTarget?.instanceId == event.instanceId
-                                    googleSignInError = null
+                                    requestError = null
                                     computerConnectionError = null
                                     runtimeScope.launch {
                                         val hasStoredAccountSession = runCatching {
@@ -1481,7 +1481,7 @@ class MainActivity : ComponentActivity() {
                                         }.getOrElse { error ->
                                             pendingComputerConnectionId = null
                                             pendingComputerConnectionIsPrimary = true
-                                            googleSignInError = error.message ?: "Could not read the account session."
+                                            requestError = error.message ?: "Could not read the account session."
                                             return@launch
                                         }
                                         val canReuseAccountSession = shouldReuseStoredAccountSession(
@@ -1538,7 +1538,7 @@ class MainActivity : ComponentActivity() {
                                 runtimeScope.launch {
                                     runCatching { app.runtime.disconnectTarget(event.instanceId) }
                                         .onFailure { error ->
-                                            googleSignInError = error.message ?: "Could not disconnect the computer."
+                                            requestError = error.message ?: "Could not disconnect the computer."
                                         }
                                 }
                             }
@@ -1567,7 +1567,7 @@ class MainActivity : ComponentActivity() {
                                             shell.onEvent(AppShellEvent.OpenProjectSessions(event.projectId, keepChat = tabletDualPane))
                                         }
                                         .onFailure { error ->
-                                            googleSignInError = error.message ?: "Could not open the project."
+                                            requestError = error.message ?: "Could not open the project."
                                         }
                                 }
                             }
@@ -1803,12 +1803,12 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                googleSignInError?.let { message ->
+                requestError?.let { message ->
                     AgentoDialog(
-                        title = "Google sign-in unavailable",
+                        title = stringResource(R.string.request_failed_title),
                         confirmLabel = "OK",
-                        onConfirm = { googleSignInError = null },
-                        onDismiss = { googleSignInError = null },
+                        onConfirm = { requestError = null },
+                        onDismiss = { requestError = null },
                         actionLayout = AgentoDialogActionLayout.PrimaryOnly,
                     ) {
                         Text(

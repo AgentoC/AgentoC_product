@@ -363,6 +363,13 @@ class OkHttpAgentoCTransportTest {
         } finally { transport.close() }
     }
 
+    @Test fun tlsFailureCategorySurvivesNestedEndOfStreamCause() {
+        val handshake = javax.net.ssl.SSLHandshakeException("TLS handshake failed").apply {
+            initCause(java.io.EOFException("unexpected end of stream"))
+        }
+        assertEquals("SSLException", networkFailureCategory(java.io.IOException("request failed", handshake)))
+    }
+
     @Test fun circularNetworkCauseRemainsBounded() = runBlocking {
         val first = java.io.IOException("first"); val second = java.io.IOException("second")
         first.initCause(second); second.initCause(first)
