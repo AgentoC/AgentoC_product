@@ -188,6 +188,34 @@ class RoomSessionRepositoryEventTest {
         repository.close()
     }
 
+    @Test fun stalePendingApprovalDoesNotHideCurrentRequest() = runBlocking {
+        database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 10, 0)))
+        database.dao().upsertCursor(SyncCursorEntity("session-1", 10, null, updatedAt = 0))
+        database.dao().upsertApprovals(listOf(ApprovalEntity(id = "old", sessionId = "session-1", title = "Old", status = "pending",
+            runId = "old-run", kind = "approval_request", detailsJson = """{"sourceSeq":5}""", updatedAt = 1)))
+        val activity = """{"actionRequired":true,"kind":"approval","sourceSeq":10,"runId":"run-1"}"""
+        val transport = QueuedTransport(listOf(
+            """{"sessionId":"session-1","events":[],"latestSeq":10,"runActivity":$activity}""",
+            """{"sessionId":"session-1","events":[{"seq":10,"type":"approval_request","approvalId":"current","runId":"run-1","title":"Current","status":"pending"}],"latestSeq":10}""",
+            """{"sessionId":"session-1","events":[],"latestSeq":10,"runActivity":$activity}""",
+        ))
+        val repository = RoomSessionRepository(database, transport)
+        repository.refreshEvents("session-1")
+        assertEquals(listOf("current", "old"), repository.observePendingApprovals("session-1").first().map { it.id })
+        repository.close()
+    }
+
+    @Test fun terminalRunResolvesOnlyItsOwnOutstandingApprovals() = runBlocking {
+        database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 0, 0)))
+        val transport = QueuedTransport(listOf(
+            """{"sessionId":"session-1","events":[{"seq":1,"type":"approval_request","approvalId":"old","runId":"old-run"},{"seq":2,"type":"approval_request","approvalId":"current","runId":"current-run"},{"seq":3,"type":"run_completed","runId":"old-run"}],"latestSeq":3}""",
+        ))
+        val repository = RoomSessionRepository(database, transport)
+        repository.refreshEvents("session-1")
+        assertEquals(listOf("current"), repository.observePendingApprovals("session-1").first().map { it.id })
+        repository.close()
+    }
+
     @Test fun restoresExplanationForExistingPendingApprovalWithoutReopeningResolved() = runBlocking {
         database.dao().upsertSessions(listOf(SessionEntity("session-1", "Task", null, "working", 10, 0)))
         database.dao().upsertCursor(SyncCursorEntity("session-1", 10, null, updatedAt = 0))
@@ -700,12 +728,12 @@ class RoomSessionRepositoryEventTest {
     fun liveAliasThenDurableCompletionRendersOneMessage() = runBlocking {
         val repository = RoomSessionRepository(database, QueuedTransport(listOf(
             """{"sessionId":"session-1","events":[
-              {"seq":1,"type":"assistant_delta","runId":"run-alias","providerItemId":"live-item","text":"Synthetic response"},
-              {"seq":2,"type":"message","role":"assistant","runId":"run-alias","providerMessageId":"final-message","content":"Synthetic response"}
+              {"seq":1,"type":"assistant_delta","canonicalMessageId":"canonical-alias","runId":"run-alias","providerItemId":"live-item","text":"Synthetic response"},
+              {"seq":2,"type":"message","canonicalMessageId":"canonical-alias","role":"assistant","runId":"run-alias","providerMessageId":"final-message","content":"Synthetic response"}
             ],"latestSeq":2}""",
         )))
         repository.applyLiveEvents("session-1", listOf(
-            SessionEventDto(seq = 1, type = "assistant_delta", runId = "run-alias", providerItemId = "live-item", text = "Synthetic response"),
+            SessionEventDto(seq = 1, type = "assistant_delta", canonicalMessageId = "canonical-alias", runId = "run-alias", providerItemId = "live-item", text = "Synthetic response"),
         ))
         assertEquals(1, repository.observeTimeline("session-1").first().filterIsInstance<TimelineItem.Message>().size)
         assertEquals(RefreshResult.Applied(2, 2), repository.refreshEvents("session-1"))
@@ -1300,7 +1328,7 @@ private class LiveSyncTransport : AgentoCTransport {
 
     override suspend fun execute(request: ApiRequest): ApiResponse {
         requests += request
-        if (request.path == "/api/sessions") {
+        if (request.path == "/api/sessions" || request.path == "/api/sessions?view=summary") {
             val status = if (detailCount >= 2) "completed" else "working"
             return ApiResponse(200, """{"sessions":[{"id":"session-1","name":"Task","status":"$status","latestSeq":0}]}""")
         }

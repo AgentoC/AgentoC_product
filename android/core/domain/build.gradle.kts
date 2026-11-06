@@ -10,6 +10,9 @@ android {
     defaultConfig {
         minSdk = 26
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Allow local device runs to coexist with independently signed test
+        // packages from other checkouts without uninstalling their data.
+        providers.gradleProperty("agentocDomainTestApplicationId").orNull?.let { testApplicationId = it }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

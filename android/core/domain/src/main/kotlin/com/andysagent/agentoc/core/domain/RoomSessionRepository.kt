@@ -549,9 +549,17 @@ class RoomSessionRepository(
     override fun observeTimelinePaging(sessionId: String): Flow<TimelinePagingState> =
         timelinePagingState.map { it[sessionId] ?: TimelinePagingState() }.distinctUntilChanged()
 
-    override fun observePendingApprovals(sessionId: String): Flow<List<Approval>> = observeRows(dao.observePendingApprovals(sessionId)).map { items ->
-        items.map { it.toDomainApproval() }
-    }
+    override fun observePendingApprovals(sessionId: String): Flow<List<Approval>> =
+        combine(observeRows(dao.observePendingApprovals(sessionId)), observeRunActivity(sessionId)) { items, activity ->
+            val sourceSeq = (activity?.get("sourceSeq") as? JsonPrimitive)?.contentOrNull?.toLongOrNull()
+            val runId = (activity?.get("runId") as? JsonPrimitive)?.contentOrNull
+            val isWaiting = (activity?.get("actionRequired") as? JsonPrimitive)?.booleanOrNull == true &&
+                (activity["kind"] as? JsonPrimitive)?.contentOrNull == "approval"
+            val ordered = if (isWaiting && sourceSeq != null) items.sortedByDescending {
+                it.approvalSourceSequence() == sourceSeq && (runId.isNullOrBlank() || it.runId == runId)
+            } else items
+            ordered.map { it.toDomainApproval() }
+        }
 
     override fun observeAllPendingApprovals(): Flow<List<Approval>> = observeRows(dao.observeAllPendingApprovals()).map { items ->
         items.map { it.toDomainApproval() }
@@ -1401,8 +1409,14 @@ class RoomSessionRepository(
                     (activity["kind"] as? JsonPrimitive)?.contentOrNull == "approval"
                 val now = android.os.SystemClock.elapsedRealtime()
                 val pendingApprovals = if (waitingForApproval) dao.getPendingApprovals(sessionId) else emptyList()
-                val needsRecovery = pendingApprovals.isEmpty() || pendingApprovals.any { it.needsExplanationRecovery() }
-                val recoveryInterval = if (pendingApprovals.isEmpty()) 5_000L else 300_000L
+                val sourceSeq = (activity?.get("sourceSeq") as? JsonPrimitive)?.contentOrNull?.toLongOrNull()
+                val runId = (activity?.get("runId") as? JsonPrimitive)?.contentOrNull
+                val currentApproval = pendingApprovals.firstOrNull { approval ->
+                    sourceSeq != null && approval.approvalSourceSequence() == sourceSeq &&
+                        (runId.isNullOrBlank() || approval.runId == runId)
+                }
+                val needsRecovery = currentApproval == null || currentApproval.needsExplanationRecovery()
+                val recoveryInterval = if (currentApproval == null) 5_000L else 300_000L
                 if (waitingForApproval && needsRecovery &&
                     (approvalRecoveryAttempts[sessionId]?.let { now - it >= recoveryInterval } != false)) {
                     approvalRecoveryAttempts[sessionId] = now
@@ -1532,13 +1546,15 @@ class RoomSessionRepository(
             val existing = dao.getApproval(sessionId, request.approvalId!!)
             if (existing == null) {
                 RoomEventSink(database, dao).apply(sessionId, request)
-            } else if (existing.status == "pending" && existing.runId == request.runId &&
-                existing.needsExplanationRecovery() && request.explanation.toApprovalExplanation() != null) {
-                val original = runCatching { existing.detailsJson?.let { AgentocProtocol.json.parseToJsonElement(it) as? JsonObject } }.getOrNull()
-                if (original != null) {
-                    val restored = JsonObject(original + ("explanation" to request.explanation!!))
-                    dao.upsertApprovals(listOf(existing.copy(detailsJson = restored.toString())))
+            } else if (existing.status == "pending" && existing.runId == request.runId) {
+                val original = runCatching { existing.detailsJson?.let { AgentocProtocol.json.parseToJsonElement(it) as? JsonObject } }.getOrNull() ?: JsonObject(emptyMap())
+                val restored = original.toMutableMap()
+                restored["sourceSeq"] = JsonPrimitive(request.boundarySeq())
+                if (existing.needsExplanationRecovery() && request.explanation.toApprovalExplanation() != null) {
+                    restored["explanation"] = request.explanation!!
                 }
+                val details = JsonObject(restored).toString()
+                if (details != existing.detailsJson) dao.upsertApprovals(listOf(existing.copy(detailsJson = details)))
             }
         }
     }
@@ -2766,6 +2782,14 @@ private class RoomEventSink(
                 lastEventSeq = maxOf(it.lastEventSeq, event.boundarySeq()),
                 updatedAt = System.currentTimeMillis(),
             ) })
+            // A terminal run can no longer accept its outstanding approvals.
+            // Never resolve requests belonging to a different run.
+            event.runId?.takeIf(String::isNotBlank)?.let { runId ->
+                val pending = dao.getPendingApprovals(scope).filter { it.runId == runId }
+                if (pending.isNotEmpty()) dao.upsertApprovals(pending.map {
+                    it.copy(status = "resolved", updatedAt = System.currentTimeMillis())
+                })
+            }
         }
         val session = dao.getSession(scope)
         if (session != null) {
@@ -2915,6 +2939,11 @@ private fun SessionEventDto.legacyStorageEventId(): String = dedupeKey()
     ?: "fingerprint:${fingerprint()}"
 
 private fun SessionEventDto.fingerprint(): String = sessionEventFingerprint()
+
+private fun ApprovalEntity.approvalSourceSequence(): Long? = runCatching {
+    val details = detailsJson?.let { AgentocProtocol.json.parseToJsonElement(it) as? JsonObject }
+    (details?.get("sourceSeq") as? JsonPrimitive)?.contentOrNull?.toLongOrNull()
+}.getOrNull()
 
 private fun ApprovalEntity.needsExplanationRecovery(): Boolean {
     if (status != "pending" || kind != "approval_request") return false
@@ -3080,6 +3109,7 @@ private fun buildApprovalDetails(event: SessionEventDto): String? {
     }
 
     val details = buildJsonObject {
+        if (event.boundarySeq() > 0) put("sourceSeq", JsonPrimitive(event.boundarySeq()))
         event.id?.let { put("id", JsonPrimitive(it)) }
         event.approvalId?.let { put("approvalId", JsonPrimitive(it)) }
         event.batchId?.let { put("batchId", JsonPrimitive(it)) }
