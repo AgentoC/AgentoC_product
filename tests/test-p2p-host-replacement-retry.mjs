@@ -48,6 +48,19 @@ try {
   stopP2PHost('cancelled-device');
   await delay(1_200);
   assert.equal(cancelledStarts, 2, 'revocation must cancel a queued retry');
+
+  let finishOldRefresh;
+  let brokerCalls = 0;
+  let expiryStarts = 0;
+  await startP2PHostForDevice('expired-device', { ...base,
+    expiresAt: new Date(Date.now() + 2_200).toISOString(),
+    refreshHost: () => ++brokerCalls === 1 ? new Promise(resolve => { finishOldRefresh = resolve; }) : Promise.resolve(credentials),
+    runHostAgent: async () => { expiryStarts++; return host(); } });
+  await until(() => expiryStarts === 2 && p2pHostCount() === 1);
+  finishOldRefresh(credentials);
+  await delay(100);
+  assert.equal(expiryStarts, 2, 'a late refresh for the expired host cannot replace its recovery');
+  stopP2PHost('expired-device');
   console.log('P2P host replacement retries transient startup failures and honors revocation');
 } finally {
   await stopAllP2PHosts();
